@@ -47821,3 +47821,60 @@ left to validation.
 
 **Not yet run on a cluster.** The rebuilt image itself, until its pin moves: the web-terminal pod on the new tag's
 digest, then `verify/test_terminal_ws_auth_live.py`.
+## 2026-11-09 · #1267 · run 19585 · code-of-conduct floor: a term list on every surface, a Bedrock classifier on the /chat prompt
+
+The spike is `docs/research/2026-11-09-coc-floor/` (README.md, the scripts, results.json). The issue left the choice
+to the spike, and this is it.
+
+**The floor is a term list, on every surface, whatever the toggles.** It has 144 terms: expletives, slurs, sexual
+terms, threat and hate phrases, and five other languages' commonest. Spellings are folded before matching. It flagged
+none of 5,198 stage texts: every `/kubecon` prompt, HC-666 and every desk ticket, the tools' data, the pages, the
+agent prompt, 768 witch names, and 1,130 distinct prompts and replies from 1,099 observed turns on
+watch-it-burn-private. It caught 111 of the 155-text abuse set. guard-proxy's 40 terms today catch 37. It adds 1.1 ms
+median and 11.4 ms p99 to a `/chat` turn whose median is 3.8 s. It runs in Python, Go, OTTL and CEL, so one list covers
+`/chat` input (refused before the model) and reply (masked), the desk (#1268), `deploy_app` and the deployments page
+(#1269), the traces before Tempo and Datadog, and object names at admission.
+
+**A classifier is added on the /chat prompt only: Bedrock Guardrails, Standard tier.** HATE, INSULTS and SEXUAL are
+at MEDIUM and VIOLENCE at LOW; MISCONDUCT and PROMPT_ATTACK are off. It flagged none of the 1,591 stage texts a
+`/chat` classifier sees. With the term floor it catches 151 of 155. Hate without a slur goes from 4 to 20 of 20,
+insults from 0 to 13 of 15, threats from 4 to 14 of 15. It costs 466 ms median per turn from the run's host (327 ms
+of it Bedrock's processing) and $0.15 per 1,000 turns. It sits in guard-proxy, once per turn, not in agentgateway,
+which would run it on every model call (2.1 a turn) and on tool output. It needs a guardrail resource and IAM on the
+fleet, so it follows the term floor rather than gating it.
+
+**Rejected.** LLM Guard's Toxicity scanner: 9 stage false positives (Bedrock model ARNs scored "obscene" up to
+0.91), "kill the pod" flagged, 0 of 20 non-English texts, and 144 ms a text on CPU. Bedrock MISCONDUCT: at MEDIUM it
+flags 25 stage texts, among them the Tron ask and the HC-666 and HC-7731 payloads, so it would stop the talk's
+attacks. Bedrock Classic: one stage false positive and three languages. Bedrock at HIGH: it flags five of Nova's own
+replies as INSULTS.
+
+**Live work.** These were read-only or temporary:
+
+- Tempo on watch-it-burn-private was read through a port-forward by `pull_turns.py`, 7 days to 2026-11-09.
+- Two temporary detect-mode guardrails were made in accen-dev us-west-2: `rhl2pzzbe6ww` (Classic) and
+  `1t2l9wj4sgia` (Standard). They took 3,612 ApplyGuardrail calls (3,688 content-policy units, about $0.55) and were
+  then deleted; `list-guardrails` is empty again.
+- No cluster object was changed, and the `agent/terminal-auth` Secret was not read.
+
+**Not yet run on a cluster.** The KubeCon probe's community and admin runs with the floor deployed and every
+guardrail off at the start: `python3 verify/kubecon_probe.py community attackme.burritobot.co --context
+watch-it-burn-community --switch-context watch-it-burn-private ...` and `python3 verify/kubecon_probe.py admin
+burritobot-private.burritobot.co --context watch-it-burn-private ...`. The floor reaches no cluster until
+guard-proxy-agenticburn#78, #1268 and #1269 land. Offline, the term floor touches none of the 4,121 string literals of
+the two probes, `topic_cases`, `challenge_traces` and the stage's servers, so no prompt or judge marker is masked.
+`verify/test_coc_floor_spike.py` holds the term floor's half on every change. It reads `/kubecon`'s page, not every
+page, and not `verify/kubecon_probe.py`. The chat page names that script, the scope map would then count the test as
+one of more than 30 readers, and a file read that widely must be listed in `full`. The measurement itself
+(`measure.py`) reads every page and the probe's two own prompts.
+
+**Dependencies.** The classifier measurement used a venv under `$HOME/venvs/wib-1267-spike`, not this repo: boto3
+1.43.126, onnxruntime 1.31.1, tokenizers 0.23.3, huggingface_hub 2.4.0 and numpy 2.5.4, pinned 2026-11-09. They are
+the minimum to run the Toxicity ONNX model without torch and to call ApplyGuardrail. Nothing the repo runs or tests
+needs them: the term floor and its test are standard library and PyYAML.
+
+**Abuse text in a public repo.** The term lists and the abuse set are ROT13-encoded, so the tree and its search do
+not display slurs; `corpus.py` decodes them.
+
+**Tests.** `python3 verify/test_coc_floor_spike.py` passed (0 failures). The prose gate passed on the README and on
+this entry. The whole Test and E2E commands were not run; validation runs what the scope map selects.

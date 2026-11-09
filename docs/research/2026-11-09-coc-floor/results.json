@@ -1,0 +1,778 @@
+{
+ "measured": "2026-11-09",
+ "texts": {
+  "kubecon-prompt": 11,
+  "page-text": 1690,
+  "replay-prompt": 12,
+  "catalog-prompt": 11,
+  "probe-prompt": 24,
+  "desk-ticket": 14,
+  "witch-name": 1536,
+  "tool-data": 32,
+  "agent-prompt": 381,
+  "cluster-data": 357,
+  "observed-prompt": 69,
+  "observed-reply": 1061,
+  "hard-negative": 60,
+  "abuse": 155
+ },
+ "timing": {
+  "term-current": {
+   "per_text_us_median": 6.4,
+   "per_text_us_p99": 129.3,
+   "per_text_us_max": 9564.3
+  },
+  "term-proposed": {
+   "per_text_us_median": 74.0,
+   "per_text_us_p99": 1804.5,
+   "per_text_us_max": 15286.3
+  },
+  "chat-turn": {
+   "turns": 1099,
+   "turn_ms_median": 3802.6,
+   "turn_ms_p90": 6266.0,
+   "proposed_floor_us_per_turn_median": 1072.6,
+   "proposed_floor_us_per_turn_p99": 11427.5,
+   "proposed_floor_us_per_turn_max": 16019.5
+  },
+  "toxicity": {
+   "model": "ProtectAI/unbiased-toxic-roberta-onnx@16fd63c0e51000f407fb7d28ce655e41495ebc8b",
+   "per_text_ms_median": 143.8,
+   "per_text_ms_p99": 914.7,
+   "host": "the run's host, 4 onnxruntime threads"
+  },
+  "bedrock-classic": {
+   "guardrail": "rhl2pzzbe6ww",
+   "calls": 1806,
+   "round_trip_ms_median": 233.7,
+   "round_trip_ms_p90": 279.3,
+   "guardrail_processing_ms_median": 95.0,
+   "content_policy_units": 1844,
+   "from": "the run's host to bedrock-runtime.us-west-2, 6 calls at a time"
+  },
+  "bedrock-standard": {
+   "guardrail": "1t2l9wj4sgia",
+   "calls": 1806,
+   "round_trip_ms_median": 483.4,
+   "round_trip_ms_p90": 586.3,
+   "guardrail_processing_ms_median": 338.0,
+   "content_policy_units": 1844,
+   "from": "the run's host to bedrock-runtime.us-west-2, 6 calls at a time"
+  }
+ },
+ "candidates": {
+  "term-current": {
+   "stage_texts": 5198,
+   "stage_false_positives": 0,
+   "stage_false_positives_by_source": {},
+   "hard_negatives_flagged": 1,
+   "hard_negatives": 60,
+   "abuse_caught": 37,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "2/25",
+    "expletive": "20/20",
+    "foreign": "0/20",
+    "hate": "1/20",
+    "insult": "0/15",
+    "sexual": "4/20",
+    "slur": "9/20",
+    "threat": "1/15"
+   }
+  },
+  "term-proposed": {
+   "stage_texts": 5198,
+   "stage_false_positives": 0,
+   "stage_false_positives_by_source": {},
+   "hard_negatives_flagged": 1,
+   "hard_negatives": 60,
+   "abuse_caught": 111,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "25/25",
+    "expletive": "20/20",
+    "foreign": "19/20",
+    "hate": "4/20",
+    "insult": "0/15",
+    "sexual": "20/20",
+    "slur": "19/20",
+    "threat": "4/15"
+   }
+  },
+  "toxicity-0.5": {
+   "stage_texts": 1591,
+   "stage_false_positives": 9,
+   "stage_false_positives_by_source": {
+    "tool-data": 1,
+    "cluster-data": 8
+   },
+   "hard_negatives_flagged": 6,
+   "hard_negatives": 60,
+   "abuse_caught": 95,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "12/25",
+    "expletive": "20/20",
+    "foreign": "0/20",
+    "hate": "12/20",
+    "insult": "14/15",
+    "sexual": "15/20",
+    "slur": "11/20",
+    "threat": "11/15"
+   }
+  },
+  "toxicity-0.7": {
+   "stage_texts": 1591,
+   "stage_false_positives": 9,
+   "stage_false_positives_by_source": {
+    "tool-data": 1,
+    "cluster-data": 8
+   },
+   "hard_negatives_flagged": 3,
+   "hard_negatives": 60,
+   "abuse_caught": 84,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "11/25",
+    "expletive": "19/20",
+    "foreign": "0/20",
+    "hate": "10/20",
+    "insult": "14/15",
+    "sexual": "12/20",
+    "slur": "8/20",
+    "threat": "10/15"
+   }
+  },
+  "bedrock-classic-coc-high": {
+   "stage_texts": 1591,
+   "stage_false_positives": 2,
+   "stage_false_positives_by_source": {
+    "cluster-data": 1,
+    "observed-prompt": 1
+   },
+   "hard_negatives_flagged": 1,
+   "hard_negatives": 60,
+   "abuse_caught": 116,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "20/25",
+    "expletive": "18/20",
+    "foreign": "11/20",
+    "hate": "18/20",
+    "insult": "13/15",
+    "sexual": "20/20",
+    "slur": "15/20",
+    "threat": "1/15"
+   }
+  },
+  "bedrock-classic-coc-medium": {
+   "stage_texts": 1591,
+   "stage_false_positives": 1,
+   "stage_false_positives_by_source": {
+    "cluster-data": 1
+   },
+   "hard_negatives_flagged": 1,
+   "hard_negatives": 60,
+   "abuse_caught": 116,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "20/25",
+    "expletive": "18/20",
+    "foreign": "11/20",
+    "hate": "18/20",
+    "insult": "13/15",
+    "sexual": "20/20",
+    "slur": "15/20",
+    "threat": "1/15"
+   }
+  },
+  "bedrock-classic-coc-low": {
+   "stage_texts": 1591,
+   "stage_false_positives": 0,
+   "stage_false_positives_by_source": {},
+   "hard_negatives_flagged": 1,
+   "hard_negatives": 60,
+   "abuse_caught": 107,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "19/25",
+    "expletive": "18/20",
+    "foreign": "11/20",
+    "hate": "15/20",
+    "insult": "11/15",
+    "sexual": "18/20",
+    "slur": "14/20",
+    "threat": "1/15"
+   }
+  },
+  "bedrock-classic-coc-medium+violence-low": {
+   "stage_texts": 1591,
+   "stage_false_positives": 1,
+   "stage_false_positives_by_source": {
+    "cluster-data": 1
+   },
+   "hard_negatives_flagged": 1,
+   "hard_negatives": 60,
+   "abuse_caught": 122,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "20/25",
+    "expletive": "18/20",
+    "foreign": "11/20",
+    "hate": "18/20",
+    "insult": "13/15",
+    "sexual": "20/20",
+    "slur": "15/20",
+    "threat": "7/15"
+   }
+  },
+  "bedrock-classic-coc+violence-medium": {
+   "stage_texts": 1591,
+   "stage_false_positives": 1,
+   "stage_false_positives_by_source": {
+    "cluster-data": 1
+   },
+   "hard_negatives_flagged": 1,
+   "hard_negatives": 60,
+   "abuse_caught": 126,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "20/25",
+    "expletive": "18/20",
+    "foreign": "11/20",
+    "hate": "18/20",
+    "insult": "13/15",
+    "sexual": "20/20",
+    "slur": "15/20",
+    "threat": "11/15"
+   }
+  },
+  "bedrock-classic-all5-high": {
+   "stage_texts": 1591,
+   "stage_false_positives": 6,
+   "stage_false_positives_by_source": {
+    "tool-data": 2,
+    "cluster-data": 2,
+    "observed-prompt": 1,
+    "observed-reply": 1
+   },
+   "hard_negatives_flagged": 4,
+   "hard_negatives": 60,
+   "abuse_caught": 128,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "20/25",
+    "expletive": "18/20",
+    "foreign": "11/20",
+    "hate": "18/20",
+    "insult": "13/15",
+    "sexual": "20/20",
+    "slur": "15/20",
+    "threat": "13/15"
+   }
+  },
+  "bedrock-classic-all5-medium": {
+   "stage_texts": 1591,
+   "stage_false_positives": 1,
+   "stage_false_positives_by_source": {
+    "cluster-data": 1
+   },
+   "hard_negatives_flagged": 1,
+   "hard_negatives": 60,
+   "abuse_caught": 126,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "20/25",
+    "expletive": "18/20",
+    "foreign": "11/20",
+    "hate": "18/20",
+    "insult": "13/15",
+    "sexual": "20/20",
+    "slur": "15/20",
+    "threat": "11/15"
+   }
+  },
+  "bedrock-classic-profanity-list-only": {
+   "stage_texts": 1591,
+   "stage_false_positives": 0,
+   "stage_false_positives_by_source": {},
+   "hard_negatives_flagged": 1,
+   "hard_negatives": 60,
+   "abuse_caught": 62,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "13/25",
+    "expletive": "16/20",
+    "foreign": "11/20",
+    "hate": "1/20",
+    "insult": "0/15",
+    "sexual": "11/20",
+    "slur": "10/20",
+    "threat": "0/15"
+   }
+  },
+  "bedrock-classic-only-hate-high": {
+   "stage_texts": 1591,
+   "stage_false_positives": 1,
+   "stage_false_positives_by_source": {
+    "cluster-data": 1
+   },
+   "hard_negatives_flagged": 0,
+   "hard_negatives": 60,
+   "abuse_caught": 28,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "0/25",
+    "expletive": "0/20",
+    "foreign": "0/20",
+    "hate": "18/20",
+    "insult": "0/15",
+    "sexual": "0/20",
+    "slur": "10/20",
+    "threat": "0/15"
+   }
+  },
+  "bedrock-classic-only-insults-high": {
+   "stage_texts": 1591,
+   "stage_false_positives": 0,
+   "stage_false_positives_by_source": {},
+   "hard_negatives_flagged": 0,
+   "hard_negatives": 60,
+   "abuse_caught": 47,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "10/25",
+    "expletive": "16/20",
+    "foreign": "1/20",
+    "hate": "0/20",
+    "insult": "13/15",
+    "sexual": "2/20",
+    "slur": "5/20",
+    "threat": "0/15"
+   }
+  },
+  "bedrock-classic-only-sexual-high": {
+   "stage_texts": 1591,
+   "stage_false_positives": 1,
+   "stage_false_positives_by_source": {
+    "observed-prompt": 1
+   },
+   "hard_negatives_flagged": 0,
+   "hard_negatives": 60,
+   "abuse_caught": 19,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "1/25",
+    "expletive": "0/20",
+    "foreign": "0/20",
+    "hate": "0/20",
+    "insult": "0/15",
+    "sexual": "17/20",
+    "slur": "0/20",
+    "threat": "1/15"
+   }
+  },
+  "bedrock-classic-only-violence-high": {
+   "stage_texts": 1591,
+   "stage_false_positives": 1,
+   "stage_false_positives_by_source": {
+    "observed-reply": 1
+   },
+   "hard_negatives_flagged": 2,
+   "hard_negatives": 60,
+   "abuse_caught": 13,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "0/25",
+    "expletive": "0/20",
+    "foreign": "0/20",
+    "hate": "0/20",
+    "insult": "0/15",
+    "sexual": "0/20",
+    "slur": "0/20",
+    "threat": "13/15"
+   }
+  },
+  "bedrock-classic-only-misconduct-high": {
+   "stage_texts": 1591,
+   "stage_false_positives": 3,
+   "stage_false_positives_by_source": {
+    "tool-data": 2,
+    "cluster-data": 1
+   },
+   "hard_negatives_flagged": 1,
+   "hard_negatives": 60,
+   "abuse_caught": 0,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "0/25",
+    "expletive": "0/20",
+    "foreign": "0/20",
+    "hate": "0/20",
+    "insult": "0/15",
+    "sexual": "0/20",
+    "slur": "0/20",
+    "threat": "0/15"
+   }
+  },
+  "bedrock-standard-coc-high": {
+   "stage_texts": 1591,
+   "stage_false_positives": 5,
+   "stage_false_positives_by_source": {
+    "observed-reply": 5
+   },
+   "hard_negatives_flagged": 1,
+   "hard_negatives": 60,
+   "abuse_caught": 135,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "22/25",
+    "expletive": "19/20",
+    "foreign": "14/20",
+    "hate": "20/20",
+    "insult": "15/15",
+    "sexual": "20/20",
+    "slur": "19/20",
+    "threat": "6/15"
+   }
+  },
+  "bedrock-standard-coc-medium": {
+   "stage_texts": 1591,
+   "stage_false_positives": 0,
+   "stage_false_positives_by_source": {},
+   "hard_negatives_flagged": 1,
+   "hard_negatives": 60,
+   "abuse_caught": 121,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "19/25",
+    "expletive": "17/20",
+    "foreign": "11/20",
+    "hate": "20/20",
+    "insult": "13/15",
+    "sexual": "18/20",
+    "slur": "18/20",
+    "threat": "5/15"
+   }
+  },
+  "bedrock-standard-coc-low": {
+   "stage_texts": 1591,
+   "stage_false_positives": 0,
+   "stage_false_positives_by_source": {},
+   "hard_negatives_flagged": 1,
+   "hard_negatives": 60,
+   "abuse_caught": 113,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "19/25",
+    "expletive": "16/20",
+    "foreign": "11/20",
+    "hate": "17/20",
+    "insult": "9/15",
+    "sexual": "18/20",
+    "slur": "18/20",
+    "threat": "5/15"
+   }
+  },
+  "bedrock-standard-coc-medium+violence-low": {
+   "stage_texts": 1591,
+   "stage_false_positives": 0,
+   "stage_false_positives_by_source": {},
+   "hard_negatives_flagged": 1,
+   "hard_negatives": 60,
+   "abuse_caught": 129,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "19/25",
+    "expletive": "17/20",
+    "foreign": "11/20",
+    "hate": "20/20",
+    "insult": "13/15",
+    "sexual": "18/20",
+    "slur": "18/20",
+    "threat": "13/15"
+   }
+  },
+  "bedrock-standard-coc+violence-medium": {
+   "stage_texts": 1591,
+   "stage_false_positives": 0,
+   "stage_false_positives_by_source": {},
+   "hard_negatives_flagged": 3,
+   "hard_negatives": 60,
+   "abuse_caught": 129,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "19/25",
+    "expletive": "17/20",
+    "foreign": "11/20",
+    "hate": "20/20",
+    "insult": "13/15",
+    "sexual": "18/20",
+    "slur": "18/20",
+    "threat": "13/15"
+   }
+  },
+  "bedrock-standard-all5-high": {
+   "stage_texts": 1591,
+   "stage_false_positives": 30,
+   "stage_false_positives_by_source": {
+    "kubecon-prompt": 1,
+    "replay-prompt": 1,
+    "catalog-prompt": 1,
+    "desk-ticket": 2,
+    "tool-data": 4,
+    "cluster-data": 5,
+    "observed-prompt": 5,
+    "observed-reply": 11
+   },
+   "hard_negatives_flagged": 12,
+   "hard_negatives": 60,
+   "abuse_caught": 143,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "22/25",
+    "expletive": "19/20",
+    "foreign": "14/20",
+    "hate": "20/20",
+    "insult": "15/15",
+    "sexual": "20/20",
+    "slur": "19/20",
+    "threat": "14/15"
+   }
+  },
+  "bedrock-standard-all5-medium": {
+   "stage_texts": 1591,
+   "stage_false_positives": 25,
+   "stage_false_positives_by_source": {
+    "kubecon-prompt": 1,
+    "replay-prompt": 1,
+    "catalog-prompt": 1,
+    "desk-ticket": 2,
+    "tool-data": 4,
+    "cluster-data": 5,
+    "observed-prompt": 5,
+    "observed-reply": 6
+   },
+   "hard_negatives_flagged": 12,
+   "hard_negatives": 60,
+   "abuse_caught": 129,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "19/25",
+    "expletive": "17/20",
+    "foreign": "11/20",
+    "hate": "20/20",
+    "insult": "13/15",
+    "sexual": "18/20",
+    "slur": "18/20",
+    "threat": "13/15"
+   }
+  },
+  "bedrock-standard-profanity-list-only": {
+   "stage_texts": 1591,
+   "stage_false_positives": 0,
+   "stage_false_positives_by_source": {},
+   "hard_negatives_flagged": 1,
+   "hard_negatives": 60,
+   "abuse_caught": 62,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "13/25",
+    "expletive": "16/20",
+    "foreign": "11/20",
+    "hate": "1/20",
+    "insult": "0/15",
+    "sexual": "11/20",
+    "slur": "10/20",
+    "threat": "0/15"
+   }
+  },
+  "bedrock-standard-only-hate-high": {
+   "stage_texts": 1591,
+   "stage_false_positives": 0,
+   "stage_false_positives_by_source": {},
+   "hard_negatives_flagged": 0,
+   "hard_negatives": 60,
+   "abuse_caught": 42,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "2/25",
+    "expletive": "0/20",
+    "foreign": "0/20",
+    "hate": "20/20",
+    "insult": "0/15",
+    "sexual": "1/20",
+    "slur": "17/20",
+    "threat": "2/15"
+   }
+  },
+  "bedrock-standard-only-insults-high": {
+   "stage_texts": 1591,
+   "stage_false_positives": 5,
+   "stage_false_positives_by_source": {
+    "observed-reply": 5
+   },
+   "hard_negatives_flagged": 0,
+   "hard_negatives": 60,
+   "abuse_caught": 97,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "18/25",
+    "expletive": "19/20",
+    "foreign": "11/20",
+    "hate": "8/20",
+    "insult": "15/15",
+    "sexual": "2/20",
+    "slur": "19/20",
+    "threat": "5/15"
+   }
+  },
+  "bedrock-standard-only-sexual-high": {
+   "stage_texts": 1591,
+   "stage_false_positives": 0,
+   "stage_false_positives_by_source": {},
+   "hard_negatives_flagged": 0,
+   "hard_negatives": 60,
+   "abuse_caught": 20,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "1/25",
+    "expletive": "0/20",
+    "foreign": "0/20",
+    "hate": "0/20",
+    "insult": "0/15",
+    "sexual": "18/20",
+    "slur": "0/20",
+    "threat": "1/15"
+   }
+  },
+  "bedrock-standard-only-violence-high": {
+   "stage_texts": 1591,
+   "stage_false_positives": 0,
+   "stage_false_positives_by_source": {},
+   "hard_negatives_flagged": 2,
+   "hard_negatives": 60,
+   "abuse_caught": 15,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "0/25",
+    "expletive": "1/20",
+    "foreign": "0/20",
+    "hate": "2/20",
+    "insult": "0/15",
+    "sexual": "0/20",
+    "slur": "0/20",
+    "threat": "12/15"
+   }
+  },
+  "bedrock-standard-only-misconduct-high": {
+   "stage_texts": 1591,
+   "stage_false_positives": 25,
+   "stage_false_positives_by_source": {
+    "kubecon-prompt": 1,
+    "replay-prompt": 1,
+    "catalog-prompt": 1,
+    "desk-ticket": 2,
+    "tool-data": 4,
+    "cluster-data": 5,
+    "observed-prompt": 5,
+    "observed-reply": 6
+   },
+   "hard_negatives_flagged": 11,
+   "hard_negatives": 60,
+   "abuse_caught": 7,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "0/25",
+    "expletive": "0/20",
+    "foreign": "0/20",
+    "hate": "0/20",
+    "insult": "0/15",
+    "sexual": "0/20",
+    "slur": "0/20",
+    "threat": "7/15"
+   }
+  },
+  "term-proposed+bedrock-standard-coc-medium+violence-low": {
+   "stage_texts": 1591,
+   "stage_false_positives": 0,
+   "stage_false_positives_by_source": {},
+   "hard_negatives_flagged": 1,
+   "hard_negatives": 60,
+   "abuse_caught": 151,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "25/25",
+    "expletive": "20/20",
+    "foreign": "19/20",
+    "hate": "20/20",
+    "insult": "13/15",
+    "sexual": "20/20",
+    "slur": "20/20",
+    "threat": "14/15"
+   }
+  },
+  "term-proposed+bedrock-standard-coc-medium": {
+   "stage_texts": 1591,
+   "stage_false_positives": 0,
+   "stage_false_positives_by_source": {},
+   "hard_negatives_flagged": 1,
+   "hard_negatives": 60,
+   "abuse_caught": 144,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "25/25",
+    "expletive": "20/20",
+    "foreign": "19/20",
+    "hate": "20/20",
+    "insult": "13/15",
+    "sexual": "20/20",
+    "slur": "20/20",
+    "threat": "7/15"
+   }
+  },
+  "term-proposed+bedrock-classic-coc-medium": {
+   "stage_texts": 1591,
+   "stage_false_positives": 1,
+   "stage_false_positives_by_source": {
+    "cluster-data": 1
+   },
+   "hard_negatives_flagged": 1,
+   "hard_negatives": 60,
+   "abuse_caught": 139,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "25/25",
+    "expletive": "20/20",
+    "foreign": "19/20",
+    "hate": "19/20",
+    "insult": "13/15",
+    "sexual": "20/20",
+    "slur": "19/20",
+    "threat": "4/15"
+   }
+  },
+  "term-proposed+toxicity-0.7": {
+   "stage_texts": 1591,
+   "stage_false_positives": 9,
+   "stage_false_positives_by_source": {
+    "tool-data": 1,
+    "cluster-data": 8
+   },
+   "hard_negatives_flagged": 4,
+   "hard_negatives": 60,
+   "abuse_caught": 141,
+   "abuse": 155,
+   "abuse_by_category": {
+    "evasion": "25/25",
+    "expletive": "20/20",
+    "foreign": "19/20",
+    "hate": "13/20",
+    "insult": "14/15",
+    "sexual": "20/20",
+    "slur": "19/20",
+    "threat": "11/15"
+   }
+  }
+ }
+}

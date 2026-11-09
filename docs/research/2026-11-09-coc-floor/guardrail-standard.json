@@ -1,0 +1,60 @@
+{
+ "name": "wib-1267-coc-spike-standard",
+ "description": "Temporary: Unleash_an_Agent_Watch_It_Burn#1267 research spike, detect mode only; deleted after measurement",
+ "blockedInputMessaging": "Keep it kind.",
+ "blockedOutputsMessaging": "Keep it kind.",
+ "contentPolicyConfig": {
+  "filtersConfig": [
+   {
+    "type": "HATE",
+    "inputStrength": "HIGH",
+    "outputStrength": "HIGH",
+    "inputAction": "NONE",
+    "outputAction": "NONE"
+   },
+   {
+    "type": "INSULTS",
+    "inputStrength": "HIGH",
+    "outputStrength": "HIGH",
+    "inputAction": "NONE",
+    "outputAction": "NONE"
+   },
+   {
+    "type": "SEXUAL",
+    "inputStrength": "HIGH",
+    "outputStrength": "HIGH",
+    "inputAction": "NONE",
+    "outputAction": "NONE"
+   },
+   {
+    "type": "VIOLENCE",
+    "inputStrength": "HIGH",
+    "outputStrength": "HIGH",
+    "inputAction": "NONE",
+    "outputAction": "NONE"
+   },
+   {
+    "type": "MISCONDUCT",
+    "inputStrength": "HIGH",
+    "outputStrength": "HIGH",
+    "inputAction": "NONE",
+    "outputAction": "NONE"
+   }
+  ],
+  "tierConfig": {
+   "tierName": "STANDARD"
+  }
+ },
+ "wordPolicyConfig": {
+  "managedWordListsConfig": [
+   {
+    "type": "PROFANITY",
+    "inputAction": "NONE",
+    "outputAction": "NONE"
+   }
+  ]
+ },
+ "crossRegionConfig": {
+  "guardrailProfileIdentifier": "us.guardrail.v1:0"
+ }
+}
