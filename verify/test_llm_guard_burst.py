@@ -60,6 +60,11 @@ def cpu(v) -> float:
 MODE = {"kind": "fast"}
 SEEN: list[tuple[dict, str]] = []
 SERIAL = threading.Lock()
+# The serial case's burst size. The fake holds every scan until all of them have arrived (#1225), so the check on
+# the queue holds however the client's threads are scheduled. Before, it needed all 20 sent within 0.05 s of each
+# other, and on run 19503's host one run cleared its 0.95 s bound by 0.04 s.
+QUEUE = 20
+ARRIVED = threading.Barrier(QUEUE)
 
 
 class Fake(http.server.BaseHTTPRequestHandler):
@@ -78,6 +83,7 @@ class Fake(http.server.BaseHTTPRequestHandler):
             if mode == "slow":
                 time.sleep(0.3)
             elif mode == "serial":
+                ARRIVED.wait(timeout=15)
                 with SERIAL:
                     time.sleep(0.05)
             code, out = 200, {"sanitized_prompt": body.get("prompt"), "is_valid": True, "scanners": {}}
@@ -89,7 +95,13 @@ class Fake(http.server.BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 
-srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Fake)
+class Server(http.server.ThreadingHTTPServer):
+    # socketserver's listen backlog is 5, and the bursts here send 12 and 20 at once. On a loaded host the calls past
+    # it were held a second for a SYN retry or reset, and one reset is a status other than 200 (#1225).
+    request_queue_size = 64
+
+
+srv = Server(("127.0.0.1", 0), Fake)
 srv.daemon_threads = True
 threading.Thread(target=srv.serve_forever, daemon=True).start()
 URL = f"http://127.0.0.1:{srv.server_address[1]}"
@@ -139,9 +151,10 @@ code, rows, out = tool("slow", [{"name": "s", "burst": 4, "mix": ["short"]}], "-
 check("a 200 past --timeout reads BURST RED", code == 1 and "s: 0 not 200, 4 of the 200s" in out, out[-400:])
 check("and is counted in over_timeout", rows and rows[0]["over_timeout"] == 4, str(rows))
 
-code, rows, out = tool("serial", [{"name": "q", "burst": 20, "mix": ["long"]}])
+code, rows, out = tool("serial", [{"name": "q", "burst": QUEUE, "mix": ["long"]}])
 # Which thread the fake serves first is the scheduler's choice, so the check is on what holds for every order:
-# 20 scans of 0.05 s one at a time take 1 s, and the one served last, sent with the rest, waited all of it.
+# no scan starts before all 20 calls are in, 20 scans of 0.05 s one at a time take 1 s, and the one served last
+# was sent before the first scan began, so it waited all of it.
 check("a one-at-a-time LLM Guard shows the queue: the slowest of a burst of 20 waits for all 20 scans",
       rows and rows[0]["statuses"] == {"200": 20} and rows[0]["max"] >= 0.95 and rows[0]["wall_s"] >= 0.95, str(rows))
 
