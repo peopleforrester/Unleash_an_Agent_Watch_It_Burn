@@ -3568,6 +3568,7 @@ reads:
     - verify/front_door_tls_live.py
     - verify/git_mirror.py
     - verify/run-e2e-tools.sh
+    - verify/ttyd_ws.py
   test_gate_commands.py:
     - AGENTS.md
     - verify/run-e2e-tools.sh
