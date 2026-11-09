@@ -42501,3 +42501,32 @@ found none; `verify/test_stage_switch_night_before.py` reads the verdict words a
 **Not yet run on a cluster.** The full pass, `python3 verify/stage_switch_run.py --context watch-it-burn-private`
 ending `STAGE SWITCH CHECK GREEN`, once the `gitops/ai-layer/guard-proxy` pin carries `agency_scoped`
 (guard-proxy-agenticburn#76, #1151).
+## 2026-11-09 · #1161 · run 19092 · The /kubecon header drops its "Joker wall" link to the desk's wall
+
+**Decision: drop the link.** The /kubecon page's header (`gitops/ai-layer/web/kubecon.html`) linked "Joker wall →" to
+`https://support.burritobot.co/wall`. Since #1098 and #1100 no segment of the run-of-show or the page projects the
+desk's wall, and neither says "Joker"; the optional views during play are the deployments page and the prompt wall,
+both still in the header. A link to a page no step opens is a wrong click for a presenter under the clock, and renaming
+it would keep that click while hiding what it opens, so it goes rather than being renamed or kept. The desk's `/wall`
+page itself stays (#1101): it answers 200 and anyone who types it gets it. Segment 3's guardrail note on "Segment 4's
+Jokers" is #1065's and is left alone.
+
+The run-of-show's paragraph on the title slide's speaker notes still says, as the deck does, that the notes list the
+Joker wall among what to have ready; one sentence after it now says no segment opens it and the /kubecon header has no
+link to it. The deck's notes are rounds-agenticburn's to change, not this repo's.
+
+`verify/test_kubecon_seg4_flow.py` holds the choice: a new check reads the page between `<header>` and `</header>` and
+fails on `support.burritobot.co/wall`, `/wall` or "Joker" there, and on the run-of-show missing its sentence. Two
+self-checks put the link back in the header, and drop the run-of-show's sentence, and each fails the check.
+
+**Live check.** Read on 2026-11-09, before promotion: the private cluster's `console-src` ConfigMap serves
+`kubecon.html` with the old link (line 87, "Joker wall →"), as expected until Argo CD syncs staging; the community
+cluster's `console-src` carries no `kubecon.html` (the no-kubecon-brief component), so it has no such link to drop.
+`https://support.burritobot.co/wall` answered 200. No cluster was changed.
+
+**Not yet run on a cluster.** After promotion: the private cluster's `console-src` `kubecon.html` has no
+`support.burritobot.co/wall` (`kubectl --context watch-it-burn-private get cm -A | grep console-src`, then read its
+`kubecon.html` key).
+
+**Tests run.** `python3 verify/test_kubecon_seg4_flow.py`, green, and the prose gate. The whole Test and E2E commands
+are left to validation, which runs the tests that read the changed files.

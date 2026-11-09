@@ -20,6 +20,8 @@ to `#/72`; #1196 moved them to `#/43` to `#/64` and `#/65` to `#/98` after round
      rows 4 and 5.
   7. Segment 4's copy blocks, its one prompt, two toggles and two fallback commands, are the ones #1100 found, word
      for word, and the block's `data-beat` is still C6; segment 5's prompt is unchanged (#1063's children own it).
+  8. The page's header has no link to the desk's wall and says no "Joker" (#1161): no step projects the wall, so the
+     header's old "Joker wall" link went, and the run-of-show says so.
 
 Segment 3's hand-off on the page is verify/test_instructor_brief.py's. Each cut on page text checks its literal first
 and exits naming it when it is gone ("Tests own their inputs"), and each check is run again on a copy with the old
@@ -37,6 +39,9 @@ PAGE_PATH = REPO / "gitops/ai-layer/web/kubecon.html"
 ROS_PATH = REPO / "facilitation/kubecon-na-2026-run-of-show.md"
 SEG4_OPEN, SEG5_OPEN, SEG6_OPEN = "<!-- SEGMENT 4:", "<!-- SEGMENT 5:", "<!-- SEGMENT 6:"
 PREMISE_OPEN = '<p class="premise">'
+HEADER_OPEN, HEADER_CLOSE = "<header>", "</header>"
+DESK_WALL = "support.burritobot.co/wall"
+ROS_NO_WALL_LINK = "the /kubecon page's header has no link to it (#1161)"
 C6_OPEN = '<article class="beat" data-beat="C6" data-segment="4">'
 ROW4_OPEN, ROW5_OPEN = "<tr><td>4</td><td>7</td>", "<tr><td>5</td><td>5</td>"
 ROS_SEG4, ROS_SEG5, ROS_SEG6 = "### Segment 4:", "### Segment 5:", "### Segment 6:"
@@ -186,6 +191,8 @@ def problems(page: str, ros: str) -> dict[str, list[str]]:
         need(page, lit, PAGE_PATH)
     for lit in (ROS_SEG4, ROS_SEG6):
         need(ros, lit, ROS_PATH)
+    for lit in (HEADER_OPEN, HEADER_CLOSE):
+        need(page, lit, PAGE_PATH)
     head, rest = page.split(SEG4_OPEN, 1)
     seg_html, rest5 = rest.split(SEG5_OPEN, 1)
     seg5_html, tail = rest5.split(SEG6_OPEN, 1)
@@ -216,6 +223,10 @@ def problems(page: str, ros: str) -> dict[str, list[str]]:
     out["the Challenge 3 block shows the attack, then its trace, then the fixes"] = in_order(block, BLOCK_ORDER)
     out["segment 4 says no Joker and puts no desk wall on screen"] = [
         w for w in ("Joker", "joker", "/wall") if w in seg_html]
+    header = page.split(HEADER_OPEN, 1)[1].split(HEADER_CLOSE, 1)[0]
+    out["the header has no link to the desk's wall, and the run-of-show says why (#1161)"] = (
+        [w for w in (DESK_WALL, "/wall", "Joker", "joker") if w in header]
+        + ([] if ROS_NO_WALL_LINK in flat(ros) else [f"the run-of-show lacks {ROS_NO_WALL_LINK!r}"]))
     out["segment 4 names the optional views, the number-only desk and the facts that hold"] = [
         f"{label}: {p!r}" for label, p in KEPT if p not in seg]
     out["segment 5 drops \"The setup\" and names #1132 at #/71's retry"] = (
@@ -289,6 +300,10 @@ fails_on("the desk's wall put back on screen",
               "and the prompt wall, <code>https://prompts.burritobot.co</code>. Project "
               "<code>https://support.burritobot.co/wall</code>."),
          "segment 4 says no Joker and puts no desk wall on screen")
+fails_on("the header's Joker wall link put back",
+         swap(page, "</header>", '  <a href="https://support.burritobot.co/wall" target="_blank" rel="noopener">'
+                                 "Joker wall →</a>\n</header>"),
+         "the header has no link to the desk's wall, and the run-of-show says why (#1161)")
 fails_on("a Joker put back in the marker",
          swap(page, "under their witch name. The bot", "under their witch name, as joker-agatha-the-banshee. The bot"),
          "segment 4 says no Joker and puts no desk wall on screen")
@@ -314,6 +329,9 @@ fails_on("the Challenge 3 prompt reworded",
 fails_on("the C6 beat key changed",
          swap(page, C6_OPEN, '<article class="beat" data-beat="C6-desk" data-segment="4">'),
          "segment 4's copy blocks are #1100's, word for word, under data-beat C6")
+check("self-check: the run-of-show's line on the header's link dropped fails the header check",
+      bool(problems(page, ros.replace("has no link\nto it (#1161)", "links it", 1))[
+          "the header has no link to the desk's wall, and the run-of-show says why (#1161)"]))
 check("self-check: segment 3's slides 28 to 42 and a shifted slide 65 pass the outside check",
       not stray_numbers("slide 28, slides 30 to 42, slides 40 to 42, slide 65"))
 check("self-check: and a #/43 hash does not", bool(stray_numbers("the deck's #/43")))

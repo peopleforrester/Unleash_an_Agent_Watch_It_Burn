@@ -1032,6 +1032,8 @@ slides, the admin BurritoBot, the Datadog traces (also the "Ophelia Thorn" link)
 admin cluster's terminal and the Joker wall. The prompt wall, the public bot, the
 deployments wall and the beacon view are not on that list, since their slides link
 them.
+No segment opens the Joker wall since #1100, so the /kubecon page's header has no link
+to it (#1161); the desk's `/wall` page still works for anyone who types it.
 
 The opening order:
 
