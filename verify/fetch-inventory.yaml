@@ -19,6 +19,27 @@
 # A new fetch: run `python3 verify/fetch_inventory.py draft`, which prints a stub for each unclaimed line, class it and
 # give it the right count. `python3 verify/fetch_inventory.py summary` prints the counts decisions.md's #1115 entry gives.
 sites:
+  .github/workflows/build-kagent-mcp-traceparent.yml:
+  - match: setup-go
+    lines: 1
+    class: pinned
+    kind: tool
+    pin: .github/workflows/build-kagent-mcp-traceparent.yml (its go-version, and build.sh's GOTOOLCHAIN=go1.27.1)
+    cached: false
+  - match: pinned crane|\^crane|= crane \]|artifact-cache\.sh get
+    lines: 4
+    class: pinned
+    kind: tool
+    pin: verify/e2e-tools.lock (crane's row, fetched through artifact-cache.sh get)
+    cached: true
+  - match: 127\.0\.0\.1:5000/v2/
+    lines: 2
+    class: loopback
+    why: crane's own registry on 127.0.0.1:5000, which the job starts
+  - match: .
+    lines: 3
+    class: none
+    why: 'a step name, a comment on where build.sh reads its base and source (#1222), and the call that hands scripts/ghcr_version_tag.py a crane: build on loopback, whose fetches are classed there'
   .github/workflows/build-kyverno-counter-fix.yml:
   - match: setup-go
     lines: 1
@@ -99,6 +120,31 @@ sites:
     kind: tool
     pin: .github/workflows/weaver-registry-check.yml (WEAVER_SHA256, weaver's archive)
     cached: true
+  images/kagent-mcp-traceparent/build.sh:
+  - match: git_mirror\.py" ensure
+    lines: 1
+    class: pinned
+    kind: git-commit
+    pin: images/kagent-mcp-traceparent/build.sh (KAGENT_COMMIT, from git_mirror.py's bare mirror of KAGENT_URL; GitHub only on a miss)
+    cached: true
+  - match: git clone --quiet --shared
+    lines: 1
+    class: loopback
+    why: a clone of the host artifact cache's kagent mirror, a repository on this host, that reads its objects in place
+  - match: image_cache\.py" platform-layout
+    lines: 1
+    class: pinned
+    kind: container-image
+    pin: images/kagent-mcp-traceparent/build.sh (BASE, golang-adk 0.10.1 by the index digest images.lock records, from image_cache.py's OCI layout; ghcr.io only on a miss)
+    cached: true
+  - match: '"\$\{crane\}" --insecure (push|append|mutate|digest)'
+    lines: 4
+    class: loopback
+    why: crane's own registry on 127.0.0.1, the caller's (build-kagent-mcp-traceparent.yml), the only address build.sh accepts
+  - match: .
+    lines: 5
+    class: none
+    why: the usage text, comments, the CRANE variable and its `crane version` check, which reads the binary and fetches nothing
   images/kyverno-counter-fix/build.sh:
   - match: git_mirror\.py" ensure
     lines: 1
@@ -1418,6 +1464,11 @@ sites:
     kind: container-image
     pin: images/villains/build.sh (JOKER_BASE, the busybox base by digest, from image_cache.py's OCI layout; ghcr.io only on a miss)
     cached: true
+  verify/test_kagent_mcp_traceparent.py:
+  - match: .
+    lines: 9
+    class: none
+    why: checks on build.sh's and the workflow's text that name crane, git_mirror.py, image_cache.py and ghcr_version_tag.py; nothing leaves the host
   verify/test_kagent_service_name_collector.py:
   - match: urlopen
     lines: 1
@@ -1839,7 +1890,7 @@ sites:
     why: a shell fixture string whose FROM line the test parses for its digest pin; nothing is built or pulled
   verify/test_workflow_artifact_cache.py:
   - match: .
-    lines: 16
+    lines: 17
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   verify/test_workflow_registry_writes.py:
