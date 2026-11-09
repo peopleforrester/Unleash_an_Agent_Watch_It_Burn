@@ -48782,3 +48782,24 @@ what the scope map selects. No dependency was added.
 **Not yet run on a cluster.** The deployed check, once hecaton promotes this and Argo CD rolls workshop-mcp and
 fake-ticket: `python3 verify/deploy_coc_live.py --context watch-it-burn-community` and the same with
 `--context watch-it-burn-private`, with no `--source`, each expected to print 3 of 3 checks passed.
+## 2026-11-09 · #1269 · run 19699 · Why run 19650's tests gate failed, and the fix
+
+Run 19650's `tests` gate failed on three tests. Each was run alone to find its cause.
+
+- `test_coc_admission.py`: not from #1269. #1277 (99f9803e) widened `floor.portable_pattern()` with JSON-escape word
+  edges after #1278's policy file was written, so the policy's pattern no longer equalled it on 19650's base
+  (31d03d8d). Staging fixed that in 9ca2ebf5 (run 19681). This run rebased its two commits onto staging 6b57eb9f,
+  with no conflict, rather than redo the fix.
+- `test_desk_removed_rows.py`: #1269's. It holds `ticket_site.py` to a list of standard modules, and the mask added
+  `codecs` (to decode its ROT13 term list) and `unicodedata` (to fold look-alike letters). Neither reaches the network,
+  and the test's client check is unchanged, so both were added to the list with a comment naming #1269.
+- `test_no_docker_hub.py`: #1269's. `test_deploy_coc.py` built two made-up images on `docker.io/`, which the sweep
+  allows only where a line refuses Docker Hub. They are on `ghcr.io/` now; a term in the image is refused the same way.
+
+The `FAIL: --context is empty` line at the head of the gate's output is `test_burritobot_cluster_live_logic.py`
+testing its own error path on stderr, not a failure.
+
+After the fix each of the three, `test_deploy_coc.py`, `test_kubecon_probe.py`, `test_coc_floor_spike.py`,
+`test_fetch_inventory.py` and `test_scope_tests.py` passed, run alone. The live check is as run 19650 recorded it: the
+rebase changed neither `deploy_app` nor `record_landing`, so it was not run again. The whole Test and E2E commands are
+left to validation.
