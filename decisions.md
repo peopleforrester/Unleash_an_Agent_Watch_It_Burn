@@ -42143,3 +42143,47 @@ terraform reads either the same way.
 `test_event_tag.py`, `test_iam_policy_pipeline.py`, `test_iam_policy_coverage.py`, `test_iam_plan_render_cache.py`
 and `scope_tests.py check`, each green. The scoped Test and tools-tier commands are left to validation. No new
 package or dependency.
+## 2026-11-09 · #1228 · run 19086 · The run-of-show runs `desk-reset`, `beacon-reset` and `start-check` after the wall reset
+
+**What.** #1144 asked for the room to open on an empty deployments page and a zero beacon count; #1159 built
+`desk-reset`, #1226 `beacon-reset` and #1227 `start-check`. The run-of-show ran only `desk-reset`. Its run-through
+record's reset block, after `./fleet.sh wall-reset` and `./fleet.sh wall-check --empty`, now runs `./fleet.sh
+desk-reset`, `./fleet.sh beacon-reset` and `./fleet.sh start-check`, in that order, before run 1, run 2 and the
+delivered session. The prose after it says `start-check` must pass and names its passing line, that `desk-reset
+--tickets` also clears the filed tickets at the presenters' choice and is off by default, and that every built-in
+ticket, HC-666 included, stays. The record's table gained a row: "Deployments page and beacon count at zero first
+(`start-check` passed? `desk-reset --tickets` used?)". In the Night Before, the wall item now points at the two items
+after it, the desk item says `--tickets` is the presenters' choice and off by default, and a new item, "Zero the beacon
+count and check the start state, after the desk", runs `beacon-reset` then `start-check` before each run-through and
+before the delivered session.
+
+**The admin token.** Both places say where `beacon-reset` finds it, in the order `resolve_admin_token` in
+`infra/terraform/fleet/fleet.sh` tries: an exported `WIB_ADMIN_TOKEN`, the `ADMIN_TOKEN` variable of the
+`watch-it-burn-provisioning` app on a host logged in to Railway, then `ADMIN_TOKEN` in
+`~/secrets/projects/watch-it-burn-provisioning.env`. The token is in no file this change touches, and the Night Before
+item says never to write it into one.
+
+**Choices.** The new Night Before item sits after the desk item, not between the wall and desk items, because
+`start-check` reads the deployments page that `desk-reset` clears, so it has to run after it. The wall item names the
+two items after it, so the four run together. `wall-check --empty` is now called the wall's start-state check, since
+`start-check` is the one for the page and the beacon.
+
+**Tests read first.** `git grep -nF` over `verify/` and `scripts/` for each changed literal (`./fleet.sh desk-reset`,
+`./fleet.sh wall-check --empty`, `wall-check --empty`, `desk-reset`, `beacon-reset`, `start-check`, `HC-666 among`,
+`always stay`, the table's row labels) found `verify/test_fleet_wall_reset.sh` reading the order of `reset-bot`,
+`wall-reset` and `wall-check --empty` in the record and the Night Before and the "Prompt wall empty first" row,
+`verify/test_fleet_wall_check.sh` reading `wall-check`'s line in the Night Before, and `verify/test_challenge_traces.py`
+and `verify/test_reset_bot.sh` reading the record. No literal they read changed; the new lines sit after the ones they
+order.
+
+**Tests run.** `HECATON_BASE_SHA=12313ed1 python3 verify/scope_tests.py select offline` selected 122 offline tests and
+`select tools` none (the change is prose). The 45 of them that read the run-of-show or PROGRESS.md all passed, among
+them `test_fleet_wall_reset.sh` 35/35, `test_fleet_wall_check.sh` 21/21, `test_reset_bot.sh` 58/58,
+`test_one_desk_tools.py`, `test_challenge_traces.py`, `test_kubecon_dates.py` and `test_progress_entries.py`. Five of
+them (`test_finale_cap.py`, `test_fleet_monitors.py`, `test_room_view.py`, `test_kubecon_probe.py`,
+`test_trace_walkthrough_view.py`) first failed opening `gitops/ai-layer/guard-proxy/proxy.py`, since this worktree had
+the guard-proxy submodule not checked out; after `git submodule update --init gitops/ai-layer/guard-proxy` at its pin
+`5772a5d8` each passed alone. The selection's tests that run on every change are left to validation. The prose gate
+passes on the run-of-show, PROGRESS.md and this entry.
+
+**Live check.** Skipped: the change touches only `facilitation/`, PROGRESS.md and decisions.md.
