@@ -712,9 +712,9 @@ COC_TERMS = tuple(codecs.decode(_COC_TERMS_ROT13, "rot13").split(","))
 _COC_LEET = {"a": "4@", "b": "8", "c": "(", "e": "3", "g": "9", "i": "1!|", "l": "1|", "o": "0", "s": "5$", "t": "7+"}
 _COC_SEP = r"[\s._*\-]"
 _COC_ZERO_WIDTH = frozenset("\u00ad\u200b\u200c\u200d\u2060\ufeff")
-# Cyrillic and Greek letters that render as Latin ones
-_COC_HOMOGLYPH = str.maketrans("аеорсухіјѕԁԛԝкмтвнАЕОРСУХІЈЅКМТВНαοερτυνκιΑΒΕΖΗΙΚΜΝΟΡΤΥΧ",
-                               "aeopcyxijsdqwkmtbhaeopcyxijskmtbhaoeptuvkiabezhikmnoptyx")
+# Cyrillic and Greek letters that render as Latin ones, and the dotless i, which Python's re.IGNORECASE reads as i
+_COC_HOMOGLYPH = str.maketrans("аеорсухіјѕԁԛԝкмтвнАЕОРСУХІЈЅКМТВНαοερτυνκιΑΒΕΖΗΙΚΜΝΟΡΤΥΧı",
+                               "aeopcyxijsdqwkmtbhaeopcyxijskmtbhaoeptuvkiabezhikmnoptyxi")
 
 
 def _coc_fold(text: str) -> tuple[str, list[int]]:

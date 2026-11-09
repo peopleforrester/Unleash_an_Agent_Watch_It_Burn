@@ -139,6 +139,12 @@ pattern = floor.portable_pattern()
 check(expr == f"r'{pattern}'" and "'" not in pattern,
       f"variables.floor is floor.portable_pattern() as one CEL raw string ({len(pattern)} characters)")
 P = re.compile(pattern)
+# RE2's (?i), which CEL's matches() runs, keeps the dotless i (U+0131) apart from i; re.ASCII has Python fold the same
+# way, so this reads the copy as the cluster does. A term spelt with it is refused as guard-proxy's match reads it (#1301).
+_dotless = [t.replace("i", "ı") for t in corpus.terms("proposed") if "i" in t]
+check(bool(_dotless) and all(re.compile(pattern, re.ASCII).search(f"x={t}") for t in _dotless),
+      f"the pattern, folding case as RE2 does, matches each of the {len(_dotless)} terms holding an i spelt with a "
+      "dotless i")
 folded = floor.Floor("proposed")
 said = [vals[0].get("message", "") if vals else "", variables.get("labelSets", ""), variables.get("text", ""),
         VALIDATION, WHO]
