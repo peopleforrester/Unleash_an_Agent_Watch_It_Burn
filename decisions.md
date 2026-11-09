@@ -47631,3 +47631,22 @@ exit 0). With the ROOTS and pattern change undone it failed 12 checks, each new 
 `python3 verify/fetch_inventory.py check` read `every call site classed`, with no NOTE line. `python3
 verify/scope_tests.py write` left the map unchanged. No live check: the change touches verify/ files no cluster runs
 and decisions.md. The scoped Test and E2E commands are left to validation.
+## 2026-11-09 · #1251 · run 19588 · Run 19556's gate failed on test_package_cache.py's install scan, now fixed
+
+**Cause.** Run 19556's change failed hecaton's `tests` gate on one check, `verify/test_package_cache.py`'s "no other
+file runs ... `pip install` ... `yarn install`". That check reads every tracked file under verify/, scripts/, infra/
+and .github/workflows/ for an install command and allows only the files its ALLOWED map names. Classing images/ put
+three `match: pip install` entries (tool-pin's, web-terminal's and workshop-mcp's Dockerfiles) and the words
+`yarn install` in a `why` into verify/fetch-inventory.yaml, and `yarn install` into verify/fetch_inventory.py's
+docstring. Neither file was allowed. Run 19556 ran only the tests it changed, and this one was not among them.
+
+**Fix.** ALLOWED now names verify/fetch-inventory.yaml: the inventory quotes an install line in a `match` or `why` to
+class it and runs none, so allowing it beats rewording each regex around the scan. The docstring line in
+fetch_inventory.py is reworded to name no install command, so the module stays out of ALLOWED. The rest of run
+19556's change is as its entry above says. Its branch merges onto staging 00ac68fd with no conflict; on that merge
+`python3 verify/test_fetch_inventory.py`, `test_package_cache.py` and `test_scope_tests.py` each passed.
+
+**Tests run.** On this branch, `python3 verify/test_package_cache.py` printed `All package cache checks passed.`,
+`python3 verify/test_fetch_inventory.py` printed `All fetch inventory checks passed.` and `python3
+verify/test_scope_tests.py` printed `ALL PASS`, each exit 0. No live check: the change touches verify/ files no
+cluster runs and decisions.md. The scoped Test and E2E commands are left to validation.
