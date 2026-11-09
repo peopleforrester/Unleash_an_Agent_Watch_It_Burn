@@ -49462,3 +49462,81 @@ Not yet run on a cluster:
   must return no trace whose root is the gateway's `tools/call`, evil-mcp's included.
 - Then `CONTEXT=watch-it-burn-private python3 verify/one_root_probe.py`, and on watch-it-burn-community the same turn
   read through APM, since the issue names APM too.
+
+## 2026-11-09 · #1222 · run 19476 · run 19447's patched golang-adk draft ported to staging 06323bc4, and the four offline tests that failed its gate
+
+**Why run 19447 did not land.** Hecaton wrote "Not merged: run 19447 ended failed (validation)" with the `tests` gate
+red and its output not quoted. `bash verify/prior-drafts.sh 1222 origin/staging` printed START for
+`origin/agent/1222-19434` (2ec9710f, 10e4b424, 0c86b282), with one drift line, `verify/scope-map.yaml`, edited in place
+by 93c5abd3, and decisions.md as APPEND. The three commits cherry-picked onto 06323bc4 with no conflict. The draft's
+design is unchanged: the patch, build.sh, the pinned digest, kagent.yaml's goAgentImage, the workflow, and the
+comments in agent.yaml and the collector values are run 19447's.
+
+**What failed, found by running the 302 offline tests the scoped selector names for this change.** Four tests, two
+from the draft and two from staging itself:
+
+- `test_workflow_artifact_cache.py` (the draft): `build-kagent-mcp-traceparent.yml build: not in JOBS; class it as
+  fetching a pinned artifact or not`. The test's JOBS now classes it as fetching (crane, its base, the kagent mirror),
+  as it classes the Kyverno counter-fix build.
+- `test_fetch_inventory.py` (the draft): the new workflow's ten fetch call sites and the new test's eight had no entry
+  in `verify/fetch-inventory.yaml`. They are classed as the Kyverno build's are: setup-go and crane pinned, the
+  loopback registry loopback, and the rest lines that run nothing. The JOBS row above names crane, so
+  `test_workflow_artifact_cache.py`'s count goes from 16 to 17.
+- `test_desk_ticket_live.py` (staging): `AttributeError: module 'desk_ticket_live' has no attribute 'PUBLIC_DESK'`.
+  93c5abd3 (#1220) added checks on `PUBLIC_DESK`, `ADMIN_DESK` and `Side(label, desk, None)`, and f526bf22 (#1224)
+  had already given `desk_ticket_live.py` one desk for both bots, `DESK_URL`, and `Side(label, probe, desk)`. This
+  change selects it through `gitops/workshop-agent/agent.yaml`.
+- `test_public_desk.py` (staging): `TimeoutError` in `oversized()`. 1960a3af (#1252) made `oversized()` send the
+  headers of an oversize POST and no body, because the relay answered 413 unread and a client still writing raced its
+  close. 810fa4d9 (#1220) then made the relay read and drop an oversize body up to `DRAIN_MAX` before its 413, so it
+  waited for a body that never came and the client timed out at 5 seconds.
+
+This run fixed both, and staging fixed both the same way in 964892e5 while it ran: the desk test reads the one
+`DESK`, and `oversized()` sends the whole body it declares. Its branch took staging's version at the merge, and run
+19729's entry below says why the branch carries only staging's.
+
+Run alone after the fixes, each exit 0: the four above, `test_scope_tests.py` (after `scope_tests.py write` added
+`verify/support_desk_hosts.py` to `test_desk_ticket_live.py`'s entry), and `test_kagent_mcp_traceparent.py`. The
+other 296 selected offline tests passed in the same parallel pass that found the four. The 44 tools-tier tests the
+selector names are left to validation, as run 19447 left them.
+
+**Live check.** The change touches `gitops/` and `images/`. Read live on 2026-11-09, changing nothing: the
+workshop-agent Deployment on watch-it-burn-private and on watch-it-burn-community runs
+`ghcr.io/kagent-dev/kagent/golang-adk:0.10.1`, and the controller `ghcr.io/kagent-dev/kagent/controller:0.10.1`.
+ghcr.io answered 404, anonymously, for `peopleforrester/watch-it-burn:golang-adk-0.10.1-mcptrace` and for its digest
+`sha256:59bc5777...`, and 200 for `kyverno-v1.19.1-pr17085`, so the build is not pushed yet, as expected before
+promotion.
+
+**The signature.** Question 1139's answer sends the cosign signature back to the runs, through the `sources-elevated` wrapper.
+It cannot be made before the image exists, and the image exists only once `build-kagent-mcp-traceparent` runs on the
+promoted push. So it is owed to the next run on #1222, after that push, with the Challenge 1 turn.
+
+Not yet run on a cluster: everything run 19447's entry names under that heading, in order. First the push by
+`build-kagent-mcp-traceparent` and the digest's cosign signature. Then the Pod on watch-it-burn-private running the
+pinned digest. Then one Challenge 1 turn
+(`bash verify/c1-exfil-block.sh burritobot-private watch-it-burn-private accen-dev`) read from Tempo, with each gateway
+`tools/call` under an `execute_tool` span and no trace rooted at the gateway's `tools/call`.
+
+## 2026-11-09 · #1222 · run 19729 · why run 19476's promotion was refused, and the branch rebuilt in a line on staging 4c53bb38
+
+**The cause.** Run 19476 passed its gates on staging fd5b3629, then staging moved to 762de799 and hecaton's promotion
+failed: "replaying 0f4d0a83e75e onto staging failed". The replay puts the branch's own commits on staging one by
+one, and a merge commit on top changes nothing about that. Commit 6c76c51f edited the same lines of
+`verify/test_desk_ticket_live.py` and `verify/test_public_desk.py` that staging's 964892e5 had fixed in its own
+words. Cherry-picking e0c9332b, 21a64b4f, 00d5963f and then 6c76c51f onto 762de799, and again onto 4c53bb38,
+conflicted on 6c76c51f in those two files both times. So every branch that holds 6c76c51f fails the replay.
+
+**The fix.** The branch now starts at staging 4c53bb38: the three draft commits cherry-picked unchanged, 6c76c51f
+carried without its two test edits (staging's fixes stand), and this record. Run 19476's tip was 0f4d0a83.
+
+**What staging's move needed.** `verify/fetch_inventory.py` now scans `images/` too, so `test_fetch_inventory.py`
+named build.sh's call sites, the failure the coordinator's note on #1222 points at. They are classed as
+`images/kyverno-counter-fix/build.sh`'s are: the git mirror and the base's OCI layout pinned and cached, the shared
+clone and crane's four registry calls loopback, and five lines that fetch nothing. `test_kagent_mcp_traceparent.py`
+now has nine lines that name a fetch command, not eight. Then the test ended `All fetch inventory checks passed.`
+
+Live check, read again on 2026-11-09 and changing nothing: the workshop-agent Deployment on watch-it-burn-private and
+on watch-it-burn-community still runs `ghcr.io/kagent-dev/kagent/golang-adk:0.10.1`, and ghcr.io answers 404 for
+`peopleforrester/watch-it-burn:golang-adk-0.10.1-mcptrace`, so the patched image runs nowhere before promotion and the
+workflow's push. What
+run 19476's entry names under "Not yet run on a cluster" is still owed, in its order.
