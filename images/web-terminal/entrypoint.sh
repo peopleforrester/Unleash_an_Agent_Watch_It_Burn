@@ -478,13 +478,20 @@ EOS
 cat > "$HOME/guards-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-# Both KubeCon clusters, as guard-input-on and guard-mcp-on do (#1132); a lone cluster alone.
+# Both KubeCon clusters, as guard-input-on and guard-mcp-on do (#1132); a lone cluster alone. Every step runs even
+# when one before it fails, then each step that failed is named and the run exits 1 (#1203).
+failed=""
 if ! _both _toggle "output=on&input_blocklist=on&input_classifier=on&budget=on"; then
-  echo "⚠️  The guard-proxy guards did not switch on everywhere. Run 'guards-on' again; it is safe to repeat."; exit 1
+  echo "⚠️  The guard-proxy guards did not switch on everywhere. Run 'guards-on' again; it is safe to repeat."
+  failed="${failed:+$failed, }the guard-proxy guards"
 fi
 if ! _both _mcp on >/dev/null; then
-  echo "⚠️  The MCP tool restriction did not switch on everywhere. The other AI guards were"
-  echo "    switched on. Run 'guard-mcp-on' to retry it."; exit 1
+  echo "⚠️  The MCP tool restriction did not switch on everywhere. Run 'guard-mcp-on' to retry it."
+  failed="${failed:+$failed, }the MCP tool restriction"
+fi
+if [ -n "$failed" ]; then
+  echo "⚠️  guards-on ran every step; these did not switch on: $failed."
+  exit 1
 fi
 echo "🛡️  ALL AI guards ON: output scrubbing, input block-list + injection classifier, MCP tool"
 echo "    restriction, and the spend budget. Re-run any challenge to watch it get blocked, redacted,"
@@ -493,13 +500,21 @@ EOS
 cat > "$HOME/guards-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-# Both KubeCon clusters back to wide open (#1132); a lone cluster alone.
+# Both KubeCon clusters back to wide open (#1132); a lone cluster alone. Every step runs even when one before it
+# fails, so a refused peer toggle still turns the MCP tool restriction off, then each step that failed is named and
+# the run exits 1 (#1203).
+failed=""
 if ! _both _toggle "output=off&input_blocklist=off&input_classifier=off&budget=off&topic=off"; then
-  echo "⚠️  The guard-proxy guards did not switch off everywhere. Run 'guards-off' again; it is safe to repeat."; exit 1
+  echo "⚠️  The guard-proxy guards did not switch off everywhere. Run 'guards-off' again; it is safe to repeat."
+  failed="${failed:+$failed, }the guard-proxy guards"
 fi
 if ! _both _mcp off >/dev/null; then
-  echo "⚠️  The MCP tool restriction did not switch off everywhere. The other AI guards were"
-  echo "    switched off. Run 'guard-mcp-off' to retry it."; exit 1
+  echo "⚠️  The MCP tool restriction did not switch off everywhere. Run 'guard-mcp-off' to retry it."
+  failed="${failed:+$failed, }the MCP tool restriction"
+fi
+if [ -n "$failed" ]; then
+  echo "⚠️  guards-off ran every step; these did not switch off: $failed."
+  exit 1
 fi
 echo "🔓 ALL AI guards OFF: the agent is back to wide open. Re-run any challenge prompt to see the weakness."
 EOS

@@ -1,5 +1,5 @@
 # ABOUTME: Offline gate for #1132: guards-on and guards-off send every AI guard through _both, so the terminal's
-# ABOUTME: one-command reset reaches this cluster and the KubeCon peer, and each fails loudly when a step does not land.
+# ABOUTME: one-command reset reaches this cluster and the KubeCon peer, and each runs every step, then names each that failed.
 """guards-on and guards-off used to set the guard-proxy guards with _px and C7 with _mcp, on this cluster alone. Since
 #1132 they run `_both _toggle <query>` and `_both _mcp on|off`, the same steps guard-input-on and guard-mcp-on use, so
 the room's public bot is reset too. What _both, _toggle and _mcp do on two clusters is held by
@@ -9,7 +9,8 @@ that guards-on and guards-off call them, and nothing else:
   * guards-on calls `_both _toggle` once with output, both input stages and budget on, then `_both _mcp on`;
   * guards-off calls `_both _toggle` once with output, both input stages, budget and topic off, then `_both _mcp off`;
   * neither calls _px or _mcp outside _both;
-  * a refused toggle stops the run before C7 and exits 1; a refused C7 step exits 1 naming guard-mcp-on/off;
+  * a refused toggle still runs C7 after it (#1203), and each refused step is named in the closing line with exit 1;
+  * a refused C7 step exits 1 naming guard-mcp-on/off;
   * the images/ twin is byte-identical.
 
 The scripts are run by bash from the entrypoint's own heredocs, with a ~/.guardlib whose _both records its arguments.
@@ -42,9 +43,10 @@ for name in ("guards-on", "guards-off"):
     if name not in scripts:
         sys.exit(f"ANCHOR MISSING: no `cat > \"$HOME/{name}\"` heredoc in {ENTRYPOINT}")
 
-# A .guardlib whose _both records what it was asked and fails on the step FAIL names.
+# A .guardlib whose _both records what it was asked and fails on each step FAIL names (space-separated).
 STUB = r'''
-_both() { printf '%s\n' "$*" >> "$CALLS"; case " $* " in *" $FAIL "*) return 1 ;; esac; return 0; }
+_both() { local f; printf '%s\n' "$*" >> "$CALLS"
+  for f in $FAIL; do case " $* " in *" $f "*) return 1 ;; esac; done; return 0; }
 _px() { printf 'BARE _px %s\n' "$*" >> "$CALLS"; }
 _mcp() { printf 'BARE _mcp %s\n' "$*" >> "$CALLS"; }
 '''
@@ -76,9 +78,21 @@ for name in ("guards-on", "guards-off"):
     bare = [ln for ln in body.splitlines() if re.search(r"(^|[;&|]\s*|if !?\s*)_(px|mcp)\b", ln.strip())]
     check(f"{name} calls neither _px nor _mcp outside _both", not bare, str(bare))
 
-rc, out, got = run("guards-on", fail="_toggle")
-check("a refused guard-proxy toggle stops guards-on before C7 and exits 1",
-      rc == 1 and got == [ON_Q] and "did not switch on everywhere" in out, f"exit {rc}, calls {got}: {out}")
+# #1203: a failing first step does not stop the run. The toggle refused, C7 still runs, and the closing line names
+# the step that failed, for each script.
+for name, query, word, mcp in (("guards-on", ON_Q, "on", "_mcp on"), ("guards-off", OFF_Q, "off", "_mcp off")):
+    rc, out, got = run(name, fail="_toggle")
+    check(f"a refused guard-proxy toggle still runs {name}'s C7 step after it",
+          got == [query, mcp], f"exit {rc}, calls {got}: {out}")
+    check(f"{name} exits 1 and names the guard-proxy guards alone when only the toggle was refused",
+          rc == 1 and f"{name} ran every step; these did not switch {word}: the guard-proxy guards." in out
+          and "the MCP tool restriction did not" not in out, f"exit {rc}: {out}")
+    rc, out, got = run(name, fail="_toggle _mcp")
+    check(f"{name} with both steps refused runs both and names both",
+          rc == 1 and got == [query, mcp]
+          and f"these did not switch {word}: the guard-proxy guards, the MCP tool restriction." in out
+          and f"guard-mcp-{word}" in out, f"exit {rc}, calls {got}: {out}")
+    check(f"{name} does not claim success when a step was refused", "ALL AI guards" not in out, out)
 rc, out, got = run("guards-off", fail="_mcp")
 check("a refused C7 step makes guards-off exit 1 and name guard-mcp-off",
       rc == 1 and "guard-mcp-off" in out, f"exit {rc}, calls {got}: {out}")
@@ -87,6 +101,15 @@ check("a refused C7 step makes guards-on exit 1 and name guard-mcp-on",
       rc == 1 and "guard-mcp-on" in out, f"exit {rc}, calls {got}: {out}")
 
 check("images/web-terminal/entrypoint.sh is kept byte-identical", TWIN.read_bytes() == ENTRYPOINT.read_bytes())
+
+# The check can fail: guards-off with its pre-#1203 early exit put back stops before C7, which the check above reads.
+early = scripts["guards-off"].replace(
+    '  failed="${failed:+$failed, }the guard-proxy guards"\n', '  exit 1\n', 1)
+if early == scripts["guards-off"]:
+    sys.exit(f"ANCHOR MISSING: guards-off's guard-proxy failure line in {ENTRYPOINT}")
+scripts["guards-off-early"] = early
+rc, out, got = run("guards-off-early", fail="_toggle")
+check("self-check: a guards-off that exits on its first failing step is caught", got == [OFF_Q], f"calls {got}")
 
 # The check can fail: guards-off with its old bare _px line put back.
 old = scripts["guards-off"].replace(
@@ -98,4 +121,4 @@ check("self-check: the pre-#1132 bare _px line is caught", bool(bare_old))
 if failures:
     print(f"\n{len(failures)} check(s) failed")
     sys.exit(1)
-print("\nguards-on and guards-off send every AI guard through _both (#1132)")
+print("\nguards-on and guards-off send every AI guard through _both (#1132) and run every step (#1203)")

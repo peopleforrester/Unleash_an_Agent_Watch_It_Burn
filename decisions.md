@@ -44282,3 +44282,48 @@ reads them. Run alone, each exit 0: `test_stage_trace_slides.py`, `test_ros_seg4
 passes.
 
 **Live check.** Skipped: the change touches only `facilitation/`, `verify/` tests no cluster runs, and this file.
+
+## 2026-11-09 · #1203 · run 19391 · guards-on and guards-off run every step, then name each one that failed
+
+**What changed.** The terminal's guards-on and guards-off (`gitops/ai-layer/web-terminal/entrypoint.sh`, with its
+byte-identical twin `images/web-terminal/entrypoint.sh`) used to `exit 1` as soon as `_both _toggle ...` failed, so
+`_both _mcp on|off` never ran. Run 18714 (#1183) saw what that does: the peer's guard-proxy toggle timed out and the
+MCP tool restriction stayed on on both clusters. Now each step runs whatever the one before it did. A failed step
+prints its own line, as before (the guard-proxy one says to run guards-on or guards-off again, the MCP one names
+guard-mcp-on or guard-mcp-off), and a closing line names every step that failed, for example
+"guards-off ran every step; these did not switch off: the guard-proxy guards, the MCP tool restriction.", with exit 1.
+The "ALL AI guards" line prints only when every step switched.
+
+**The test.** `verify/test_guards_all_both.py` held the old early exit ("a refused toggle stops guards-on before
+C7"). It now holds, for each script, that a refused toggle still calls `_both _mcp`, that the closing line names the
+guard-proxy guards alone when only the toggle failed, and that with both steps refused both run and both are named.
+Its `_both` stub now refuses each step named in a space-separated FAIL. A self-check puts the old `exit 1` back in
+guards-off and finds the MCP step skipped. Against the base entrypoint the test fails six checks; with this change it
+passes 17 of 17.
+
+**Live check.** The change touches `gitops/`, and the clusters still run the old scripts until Argo CD syncs this
+one, so the run took the two new heredoc bodies from the entrypoint and ran them in watch-it-burn-private's terminal
+(`kubectl --context watch-it-burn-private -n agent exec -i deploy/web-terminal -c ttyd -- env HOME=/home/student bash
+-s < <body>`), holding the guard lock on both clusters (`verify/guard_lease.py hold --with-peer`). Logs are
+`/var/lib/hecaton/runs/19391/live.log` and `live2.log`.
+
+| Step | exit | private /controls after | community /controls after |
+|---|---|---|---|
+| before | | every AI guard false, tool_allowlist false, falco true | every AI guard false, tool_allowlist false |
+| new guards-on | 0 | output, input_blocklist, input_classifier, budget, tool_allowlist true | the same |
+| new guards-off, peer toggle refused | 1 | every AI guard false, tool_allowlist false | output, both input stages, budget true; tool_allowlist false |
+| new guards-off | 0 | as before | as before |
+
+The third row is the issue's case. Its body was the new guards-off with `_toggle` redefined after
+`source "$HOME/.guardlib"` to refuse the peer call and run `_px` for this cluster. `_both` printed "Switched on this
+cluster, but not on watch-it-burn-community", the closing line read "guards-off ran every step; these did not switch
+off: the guard-proxy guards.", and `tool_allowlist` read false on both clusters. Before this change it would have
+stayed true on both. Both /controls read after the last row exactly as before the first, private's falco true included.
+
+**Not yet run on a cluster.** The deployed guards-on and guards-off from the synced ConfigMap, once hecaton promotes
+this: `python3 verify/stage_switch_run.py --context watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile
+accen-dev`, whose closing guards-off is this script.
+
+**Tests run.** `python3 verify/test_guards_all_both.py` (17 PASS). `verify/test_topic_guard.py` stops on a missing
+`gitops/ai-layer/guard-proxy/proxy.py` because the submodule is not checked out in this worktree. That is the same at
+the base and has nothing to do with this change. Validation runs the scoped suites.
