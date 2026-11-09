@@ -45487,7 +45487,9 @@ MiB still closes, by design. The relay's routes, limits and token handling are u
 twice `MAX_READ`, and a raw request declaring `DRAIN_MAX + 1` bytes and sending none is answered 413 and closed without
 the relay waiting for the body. Run once with the fix: exit 0, every check PASS. Run once with `HEAD`'s `desk_relay.py`
 put back: exit 1 on the same `BrokenPipeError` the gate printed, then the fix restored. `python3
-verify/test_fetch_inventory.py` passed, and `python3 verify/scope_tests.py write` changed nothing. The rest of the
+verify/test_fetch_inventory.py` passed, and `python3 verify/scope_tests.py write` changed nothing.
+`bash verify/run-e2e-tools.sh test_bootstrap_chart_render.py`, the other test that reads `desk_relay.py`: `1 checks ran
+(the 1 tier tests named, no offline suite) in 0m36s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The rest of the
 scoped suite is left to validation. No dependency was added.
 
 **Not yet run on a cluster.** Once hecaton promotes this and Argo CD rolls `desk-relay` on watch-it-burn-private
