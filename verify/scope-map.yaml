@@ -6482,12 +6482,31 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
   test_purge_647_record.py:
+    - CLAUDE.md
     - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet/dashboard.yaml
     - infra/datadog-fleet/fleet_monitors.py
     - infra/datadog-fleet/leaderboard.yaml
     - infra/datadog-fleet/monitors.yaml
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/chart_fetch.py
+    - verify/charts.lock
+    - verify/charts_lock.py
     - verify/dd_purge_public.py
+    - verify/gh_comments.py
+    - verify/purge_647.py
     - verify/test_dd_purge_public_live.py
   test_readme_current.py:
     - README.md
