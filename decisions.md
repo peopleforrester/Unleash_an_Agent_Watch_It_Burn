@@ -46679,3 +46679,24 @@ the new test's `urlopen` was a fetch call site with no entry in `verify/fetch-in
 inventory now lists the line as `live`, kind `lab-endpoint`, reading attackme's storefront and the feedback form.
 `python3 verify/test_fetch_inventory.py` passes, as do the 9 other offline tests that read the inventory or the new
 test, and `test_scope_tests.py`. The live test, run again on watch-it-burn-community, passed 21 of 21.
+
+**Run 19532, after run 19523's validation failed.** The `tests` gate failed on `verify/test_scope_tests.py`, and
+the cause was on staging, not in this draft. #1235's commit e4bdbc8a made `verify/test_kubearmor_config_tracked.py`
+read `policies/kyverno/require-resource-limits.yaml` and check the namespaceSelector #1235 wrote there. When #1235
+landed after #1236 (c768d47a), staging kept #1236's version of the policy, a matchCondition
+`!(request.namespace == 'kubearmor' && request.kind.kind != 'Pod')` with no namespaceSelector. #1235's map line for
+the policy was dropped too. So staging 2aa274f1 failed two ways: test_scope_tests.py found the map behind that test,
+and the test itself failed two checks, on the selector and on "no matchConditions". This run did three things:
+`python3 verify/scope_tests.py write` added the policy to the test's map entry, and the test's #1235 section now holds
+#1236's landed design. It checks that the policy has exactly one matchCondition, that the condition skips a non-Pod
+object in the namespace the kubearmor Application installs into, and that the policy has no namespaceSelector or
+objectSelector. It no longer checks the selector #1235 wrote.
+The landed design is the one #1236 checked live, and `verify/test_kyverno_cel_policies.py` and
+`verify/test_kubearmor_snitch_admission.py` hold it already. The new check failed once the condition named
+`kube-system`. The draft's three commits went onto staging 2aa274f1 by cherry-pick with no conflict
+(`verify/prior-drafts.sh` read CLEAN, APPEND). Nothing else in the draft changed.
+
+Passed: `python3 verify/test_scope_tests.py` with `HECATON_BASE_SHA` set, `test_kubearmor_config_tracked.py`,
+`test_kubearmor_snitch_admission.py` and `test_fetch_inventory.py`. The live test on watch-it-burn-community passed
+21 of 21 again. This run's change has no cluster-side part: the live test and the policy test are files under
+`verify/` that no cluster runs, so it had no live check of its own.
