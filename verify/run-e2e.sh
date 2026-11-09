@@ -38,6 +38,10 @@
 # #783's trace-id fix (test_otel_trace_id_fix_live.py, #812) is checked on staging and on both KubeCon clusters, so it
 # also needs PRIVATE_CONTEXT, the kube-context of the private admin cluster (watch-it-burn-private). It only reads.
 #
+# #1052's guard_toggle line (test_guard_toggle_log_live.py, #1068) runs on PRIVATE_CONTEXT too: under the guard lock it
+# flips the output guard on and back off through /toggle, with reads between, and holds guard-proxy's log to one
+# guard_toggle line per change and none for a read. No model call; the guards are left as found.
+#
 # #954's recipe block (test_recipe_block_live.py) runs on PRIVATE_CONTEXT too: the terminal's guardrails-on, the card
 # BurritoBot's prompt names read back Permission denied with KubeArmor's Block alert, one marked model call asking for
 # it, then guardrails-off. The switch reaches the community cluster as well, for the minute or two it runs.

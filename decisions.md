@@ -41839,3 +41839,47 @@ seed line classed `loopback`, the other two `none`. `python3 verify/test_fetch_i
 `FAIL: --context is empty` line in the same gate output comes from `test_burritobot_cluster_live_logic.py`, which
 passes and prints that line on purpose (see the #1008 entry of run 18789). `fleet.sh` and the test are unchanged, so
 the live check stands as run 18800 recorded it: the live reset to zero is still owed on a host holding the admin token.
+## 2026-11-09 · #1068 · run 18958 · A test holds #1046's guard_toggle read on watch-it-burn-private (#1052's check), run green there
+
+**What was missing.** #1046's fourth criterion is that one `guard_toggle` log line is read on watch-it-burn-private
+after a verify toggle, recorded here. Run 18491 read it by hand (its entry above), but test review run 18210 found
+that no test in `verify/` named the line, so nothing failed if guard-proxy stopped writing it, a repin dropped
+guard-proxy-agenticburn#67 (0e7f15b, the toggle log), or the record went. `verify/prior-drafts.sh 1068
+origin/staging` printed `NONE`, so there was no draft to port.
+
+**What holds it now.**
+- `verify/guard_toggle_log.py`: the parser and judge both tests share. It reads guard-proxy's JSON log lines, keeps the
+  `"event": "guard_toggle"` objects, and owes exactly one per change, in order, none for a read, each naming the guard,
+  the value it took and had, a non-empty peer, and the X-WIB-Caller header cut to proxy.py's 200 characters.
+- `verify/test_guard_toggle_log_live.py` (`# SUITE: e2e`, on PRIVATE_CONTEXT, so `verify/run-e2e.sh` runs it): it
+  checks the context is burritobot-private and guard-proxy runs git's checksum/proxy-py with one replica rolled out,
+  then under the private cluster's guard lock sends five `/toggle` requests through `kubectl exec` with the holder as
+  X-WIB-Caller (a read, the output guard flipped, a read, flipped back, a read), holds the last read equal to the
+  first, and judges `kubectl logs deploy/guard-proxy -c proxy --since-time=<start>`. A failure between the flips
+  still flips the guard back. It prints one `guard_toggle read:` line. No model call.
+- `verify/test_guard_toggle_record.py` (offline): the newest `guard_toggle read:` line here sits under a #1046 or
+  #1068 heading, names watch-it-burn-private and the output guard, has lines equal to changes and every line matched,
+  at a checksum that is the proxy.py of a guard-proxy commit from 0e7f15b to the pin. It holds run 18491's entry to
+  the line it quoted at 5772a5d. It runs the pinned proxy.py's own `_TraceJsonFormatter` and `_log_toggles` from the
+  pinned source on a fake handler, so the line the judge reads is the one the pinned build writes, and it fails the
+  judge on each made-up wrong log: no line, a line for a read, a change with no line, the wrong guard or value, no
+  caller, another caller, an empty peer.
+
+**Live run on watch-it-burn-private (00:46Z).** After `. "$HECATON_CLUSTER_ENV"`, `python3 verify/guard_lease.py show
+--context watch-it-burn-private` printed `wib-guard-lock is free (no Lease in agent)`. Then
+`PRIVATE_CONTEXT=watch-it-burn-private python3 verify/test_guard_toggle_log_live.py` held the lock, passed all 11
+checks and exited 0. guard-proxy ran checksum/proxy-py `ddf97ec452c0` (the 5772a5d pin) with one replica, and the log
+held two lines, one per change and none for the three reads:
+- `2026-11-09 00:46:53,128`: `"event": "guard_toggle", "guard": "output", "value": true, "was": false, "peer":
+  "127.0.0.1", "caller": "verify/test_guard_toggle_log_live.py pid 2059701 by hecaton-s4-claude-certkraken@... in
+  1270196839-1068-18958"`
+- `2026-11-09 00:47:12,026`: the same with `"value": false, "was": true`.
+
+It printed:
+
+guard_toggle read: watch-it-burn-private proxy-py ddf97ec452c0 guard output changes 2 reads 3 lines 2 matched 2
+
+Left as found: the last `/toggle` read equalled the first (every guard false), and the lock was released.
+
+**Not yet run on a cluster.** Nothing: the live test ran from this checkout, and the change touches nothing the
+clusters run.
