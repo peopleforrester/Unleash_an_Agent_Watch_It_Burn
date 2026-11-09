@@ -49609,3 +49609,65 @@ on watch-it-burn-community still runs `ghcr.io/kagent-dev/kagent/golang-adk:0.10
 `peopleforrester/watch-it-burn:golang-adk-0.10.1-mcptrace`, so the patched image runs nowhere before promotion and the
 workflow's push. What
 run 19476's entry names under "Not yet run on a cluster" is still owed, in its order.
+## 2026-11-09 · #1256 · run 19546 · The admin chat page's /deployments.json reads its private rows on the one page through desk-relay
+
+**What.** The admin chat page (`burritbot.html`, `checkMyDeployments`) shows its "see your deployments" link once
+`/deployments.json` on the bot's own host lists a row for the visitor. On kubecon-private that read went to the
+cluster's own fake-ticket, which has held no rows since #1158 sent the admin bot's deploy reports to
+deployments.burritobot.co, so the link never showed. Now:
+
+- `desk_relay.py` has one more route, `GET /deployments.json?witch=<slug>`. It asks
+  `DESK_DEPLOYMENTS_URL/deployments.json?witch=<slug>` (https://deployments.burritobot.co, set in `desk-relay.yaml`),
+  with no token, and answers with the rows labelled `private` alone. It takes exactly one `witch` and no other
+  parameter, and the slug must be lower-case letters and digits joined by single dashes, 80 characters at most. Any
+  other request is a 400 and sends nothing. An answer that is not the page's list of rows, or is over 256 KiB, is a
+  502. A non-200 answer from the page is passed back unchanged.
+- console.conf's `/deployments.json` location still sets `$wib_deployments` to fake-ticket. Then it includes the glob
+  `conf.d/chat-deployments-relay*.set`. The public-desk component merges `chat-deployments-relay.set` into
+  console-conf, and that file's single `set` points the read at desk-relay's Service. On every other profile the glob
+  matches no file and the read stays in-cluster. The file name is not `*.conf`, so nginx's http-level include does
+  not read it. The same glob pattern is how desk-remote-reports adds its routes.
+
+**Why the relay and not the console straight to the page.** The page lists both clusters' rows. Only the relay can cut
+them to the ones labelled private, and only the relay has the egress to reach the page. Labelling is the public desk's
+job (`DESK_REMOTE_CLUSTER: private`), and the new test checks that the relay's `PRIVATE_LABEL` matches it.
+
+**#1077 still holds.** The relay reads the deployments page, which serves nothing of the desk's (console.conf), and
+only for one witch. workshop-mcp never calls `/deployments.json`, so the bot gains no new read. Every desk path is
+still a 404 at the relay, `/ticket?id=` still reads one ticket, and `/healthz` is unchanged.
+
+**Tests.** The new `verify/test_private_chat_deployments.py` runs the real relay in front of the real `ticket_site.py`
+as the public desk. It shows that a witch's private rows come back, never a community row or another witch's, and it
+covers the refusals and the bad answers. `verify/test_private_desk_redirect.py`, `verify/test_desk_remote_reports.py`
+and `verify/test_bootstrap_chart_render.py` pinned console-conf's files and console.conf's single include. Each now
+names the new file. All of these exit 0, as do `verify/test_public_desk.py`, `verify/test_presenter_ticket_range.py`,
+`verify/test_one_desk_tools.py` and `verify/test_scope_tests.py`. `bash verify/run-e2e-tools.sh
+test_bootstrap_chart_render.py` ran the render test alone under the pinned kustomize: `1 checks ran ... in 0m36s`,
+`ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. `python3 verify/scope_tests.py write` added the new test's entry. The
+scoped Test and E2E commands are left to validation.
+
+**Live check, watch-it-burn-private and watch-it-burn-community, 14:04 to 14:05 UTC.**
+
+1. Before the check, `https://burritobot-private.burritobot.co/deployments.json?witch=agatha-the-gargoyle` answered
+   `200 []`.
+2. The running relay's `/landed` posted one row for Agatha the Gargoyle, and it landed labelled private. The community
+   desk's own loopback `/landed` posted one row for the same witch, and it landed labelled community. The one page
+   listed both. The admin bot host still answered `200 []`: that is the bug.
+3. The new `desk_relay.py` ran in the relay pod, in memory, on 127.0.0.1:18080, against the live page. For her slug
+   it answered `200` with the private row alone. `edgar-the-kelpie` gave `200 []`. `/deployments.json` with no witch
+   and `?witch=...&id=HC-7731` each gave 400, and `/tickets` and `/wall.json` gave 404.
+4. In the console pod, a throwaway nginx 1.27.5 ran the new console.conf on ports 18080 and 18443, and
+   `nginx -t` passed. Without the `.set` file, the private bot host's `/deployments.json` answered `200 OK` from
+   fake-ticket. With it, the answer was `404 Not Found` from the running relay, which does not yet have the route.
+   That shows the include sends the read to desk-relay.
+5. Cleanup: the community desk's `/desk-forget` removed this check's two rows (`rows_removed: 2, named_left: 0`), the
+   throwaway nginx quit, and `/tmp/wib1256` was removed. Afterwards `ps` in the console pod showed only its own
+   nginx.
+
+The page listed 0 rows afterwards, against 2 unnamed community rows read at 14:03. The desk's log shows two
+`/desk-forget` calls at 14:03:26 and 14:03:33 that were not this run's (this run's was at 14:05:16). Another session
+removed those rows before this check began.
+
+**Not yet run on a cluster.** The change running from staging through Argo CD. Once promoted, the next run on this
+issue reads `https://burritobot-private.burritobot.co/deployments.json?witch=<slug>` for a witch with a private row and
+expects that row alone. It also reads the admin chat page and expects the link to appear.
