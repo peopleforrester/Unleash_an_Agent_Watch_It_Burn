@@ -48745,3 +48745,74 @@ uncaught. Each fault's anchor is checked first and named when the note is reword
 validation.
 
 **Live check.** None: the change is a test under `verify/` that no cluster runs.
+## 2026-11-09 · #1269 · run 19650 · deploy_app and the deployments page: no code-of-conduct term, whatever the guardrails
+
+**What.** `deploy_app` (gitops/ai-layer/workshop-mcp-server.py) refuses a deploy that carries a term of the
+code-of-conduct floor anywhere in it, and the desk's `record_landing` (gitops/ai-layer/ticket_site.py) masks any term
+that still arrives. Both are always on: no guardrail switch, reset or profile reaches them. The floor is the one the
+#1267 spike chose and Michael named on the issue, `floor.py`'s `Floor("proposed")` over `terms-proposed.rot13` (144
+terms, folded spellings), not guard-proxy's 40 terms.
+
+**deploy_app.** Following the spike's note on the issue, it checks every string in the deploy, not only the name and
+image: the manifest as sent, every key and value it parses to (names, labels, annotations, image, env, args, command),
+`requested_by` as passed and as written into the manifest, and the witch name the deploy is finally credited to. The
+check on the text as sent runs before parsing, so a manifest that does not parse is never quoted back in the parse
+error with a term in it, and the check on the parsed strings catches a term spelt with a JSON `\u` escape. The refusal
+is raised as the other refusals are ("deploy failed for this manifest: ... Nothing was deployed."), so the collector
+marks the span ERROR. It names no term and repeats nothing of the manifest, and it tells the bot to pass it on plainly.
+A refused deploy calls nothing on the API server and posts nothing to the desk, so no row reaches the page.
+
+**record_landing.** It masks name, kind, image, witch, who and the refusal detail with `[redacted]`, for this
+cluster's `/landed` and the private bot's reports through `/remote-landed` alike, since both end in `record_landing`. A
+name is cut to 63 characters and then masked, and a cluster read's names (`parse_cluster_read`) are treated the same
+way, so a masked row still compares equal to its running app and is greyed only once it is gone. `/desk-forget` takes
+the real name or the masked one. The cluster field is not masked: it comes from the desk's own environment.
+
+**One block in two files, not a module.** The floor is carried as one block, between two anchor comments, in both
+files. Each file runs alone from its ConfigMap, and 48 scripts under verify/ load `ticket_site.py` or the server by path with
+no `gitops/ai-layer` on `sys.path`, so a shared `coc_floor.py` would have broken them or needed a path change in each.
+`verify/test_deploy_coc.py` holds the two blocks equal, the terms equal to `terms-proposed.rot13`, the pattern equal
+to `floor.proposed_pattern()`, and the spans and masks equal to `Floor("proposed")` on the spike's 359 abuse texts,
+hard negatives and terms. A change to the spike's list fails there until both copies are rewritten. The terms are kept
+ROT13-encoded, as the spike keeps them.
+
+**Against #1268's draft.** Run 19632's desk check (#1268, branch `agent/1268-19632`, not in staging) also edits
+`ticket_site.py`, with guard-proxy's 40 terms in a `coc_violation` of its own. This change takes nothing from it and
+does not touch the desk's ticket paths. When #1268 is redone it can call this block's `coc_hit` instead of a second
+list.
+
+**Live, 2026-11-09, both clusters.** `verify/deploy_coc_live.py` (new) runs `deploy_app` inside the cluster's own
+workshop-mcp pod (`kubectl exec deploy/workshop-mcp -c shim`, as the probe's C6 tool check runs a tool there), on a
+Deployment named `joker-<term 0>`. With `--source` it loads this branch's server file, sent on stdin, since the
+clusters run staging's until hecaton promotes this. It refuses to call a `deploy_app` that has no check, since that
+would apply the Deployment. The term is sent ROT13-encoded and no line names it.
+
+    $ python3 verify/deploy_coc_live.py --context watch-it-burn-community --source gitops/ai-layer/workshop-mcp-server.py
+    context watch-it-burn-community; deploy_app from gitops/ai-layer/workshop-mcp-server.py; the deploy is named joker-<term 0 of 144>
+    PASS  deploy_app refused the deploy, plainly, naming no term  ({"has_check": true, "refused": true, "type": "RuntimeError", "message": "deploy failed for this manifest: it has words in it that the event's code of conduct rules out, in a name, a label, the image or another field, so the cantina will not deploy it. Tell the person that plainly, and ask them for the deploy again without those words. Nothing was deployed.", "answer_has_term": false})
+    PASS  no Deployment of the test's name, and no floor term in any of the 12 Deployment names  (0 names carry a term)
+    PASS  the deployments page (0 rows) has no row of the test's name and no floor term  (0 terms on the page)
+    3 of 3 checks passed
+
+The same command with `--context watch-it-burn-private` printed the same three PASS lines (12 Deployments there too;
+the page it reads is the community desk's, the one page the room sees). Run with no `--source` on community, against
+the deployed server, it printed `FAIL  the pod's deploy_app carries the code-of-conduct check (it has no coc_hit, so
+nothing was called ...)` and the two PASS lines, exit 1: the guard holds, and the deployed code lacks the check until
+promotion. Nothing on either cluster or the page changed: the refusal is raised before any API call.
+
+**Tests.** `verify/test_deploy_coc.py` (new, offline, about 10 s) refuses each of the 144 terms in each of 14 places
+(name, label key and value, annotation, image, env, args, command, `requested_by` as argument and as a manifest field,
+a YAML manifest, a `\u` escape, a manifest that does not parse, a bare name), with nothing applied or reported and no
+term in the message. It deploys every game image in BurritoBot's prompt (Challenge 2, Tron among them), HC-666's
+Joker in the shape the KubeCon probe's c6-lands sends it, and a Joker for all 768 witch names, each credited to its
+witch. Through the desk's own `_landed` (both `/landed` and `/remote-landed`) it stores no term in any field for any
+term, keeps the 768 Joker rows and Challenge 2's row unchanged, and a cluster read and `/desk-forget` still find a
+masked row. It passed. `test_kubecon_probe.py` (the probe's c2-lands and c6-lands beats offline, with the guard-proxy
+submodule checked out), `test_deploy_app_errors.py`, `test_deploy_app_manifest_shapes.py`, `test_coc_floor_spike.py`
+(it scans both changed files' string literals), `test_fetch_inventory.py` and `test_scope_tests.py` passed. The scope
+map and the fetch inventory have the new files' entries. The whole Test and E2E commands were not run; validation runs
+what the scope map selects. No dependency was added.
+
+**Not yet run on a cluster.** The deployed check, once hecaton promotes this and Argo CD rolls workshop-mcp and
+fake-ticket: `python3 verify/deploy_coc_live.py --context watch-it-burn-community` and the same with
+`--context watch-it-burn-private`, with no `--source`, each expected to print 3 of 3 checks passed.
