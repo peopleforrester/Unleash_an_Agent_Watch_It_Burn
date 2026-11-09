@@ -45497,3 +45497,24 @@ scoped suite is left to validation. No dependency was added.
 512k + 1 to `/cluster-read` each answer 413, with the port-forward still up afterwards. The two checks run 19413 named
 are still owed as well: `curl -sI` on the two private desk hosts answering 307, and `desk_ticket_live.py`, after the
 follow-up that has it remove its own rows.
+## 2026-11-09 · #1233 · run 19463 · A test holds the comment on the waypoint's istiod rule
+
+**What.** Test review run 18838 found that no test read the comment #1033 put above the istiod rule of
+agent-allow-egress-waypoint in `challenges/c1-exfil-s3/fix/agent-egress-fqdn.yaml`: `verify/test_c1_dns_exfil_fix.py`
+read the file only through YAML parsing, which drops comments, so the comment could be deleted with every check still
+green. The test now also reads the raw text. Inside the agent-allow-egress-waypoint document it finds the one egress
+item naming istio-system and the comment lines directly above it, and requires that comment to name istiod, the port's
+xDS role, the stage-2 allowlist and its 443, and #980, the live loss on watch-it-burn-private. The rule's peer and port
+were already held by the parsed check #1033 added (app: istiod in istio-system, TCP 15012 alone). Five mutated copies of
+the file must each fail the new check: the comment deleted, moved to the 443 rule, cut to what the port is, set apart
+by a blank line, and the rule deleted under its comment. A mutation case exits naming the file when the istiod item is
+not there to edit.
+
+**Checked to fail.** On scratch edits of the YAML, restored from a copy after each: the five comment lines deleted
+failed the new check with "the istiod rule has no comment directly above it", and "admits 443 alone" reworded to
+"admits one port alone" failed it naming the missing 443.
+
+**Tests run.** `python3 verify/test_c1_dns_exfil_fix.py` passes. The test reads no path it did not read before, so
+`verify/scope-map.yaml` is unchanged and `python3 verify/scope_tests.py check` reports 0 problems. The full Test and E2E
+commands are left to hecaton's validation. No live check: the change touches only `verify/` and decisions.md, which no
+cluster runs. No dependency was added.
