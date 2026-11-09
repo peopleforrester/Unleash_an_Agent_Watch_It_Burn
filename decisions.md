@@ -42212,3 +42212,61 @@ its lines 6, 7, 32 and 33; with the change it passes.
 **Tests run.** `python3 verify/test_old_tron_ask_retired.py`, `python3 verify/test_c2_tron_single_prompt.py` and
 `python3 verify/test_scope_tests.py`, green, and the prose gate. The whole Test and E2E commands are left to
 validation, which runs the tests that read the changed files.
+## 2026-11-09 · #1229 · run 19104 · Live: the desk is clear and HC-666 answers; the beacon reset waits on the admin token
+
+**Where the issue stood.** `verify/prior-drafts.sh 1229 origin/staging` printed NONE and the issue had no comments, so
+this run started fresh from staging `2eef250c`. Every command ran from `infra/terraform/fleet/` with the run's
+`accen-dev` session sourced. Nothing in the repo changed apart from this entry. The `agent/terminal-auth` Secret was
+not read or written on either cluster.
+
+**Before the resets.** `./fleet.sh start-check` printed both deployments pages at 0 rows and the beacon view at 321,
+exit 1.
+
+**desk-reset**, on watch-it-burn-community (no `promoted.tsv`, so the roster cluster holds the desk), exit 0:
+
+```
+desk-reset: watch-it-burn-community (us-west-2), the public desk: every deploy row, fixed tickets kept
+  cleared 0 deploy row(s) and 0 filed ticket(s); 0 filed and 4 fixed ticket(s) kept
+desk-reset: done; deployments.burritobot.co lists no deploy, the room's or the presenters'
+```
+
+After it, `GET /deployments.json` answered `[]` with 200 on deployments.burritobot.co and on
+deployments-burritobot-private.burritobot.co, which is still served. `GET https://support.burritobot.co/ticket?id=HC-666`
+answered 200 with `{"id":"HC-666","status":"open","title":"card keeps failing at checkout"}`, so HC-666 still answers
+on the desk.
+
+**beacon-reset**, exit 1, posting nothing:
+
+```
+beacon-reset: FAIL cannot resolve the provisioning admin token; the beacon count was not reset. It comes from
+  an exported WIB_ADMIN_TOKEN, or the Railway variables of watch-it-burn-provisioning on a host logged in
+  to Railway (railway login), or ADMIN_TOKEN in ~/secrets/projects/watch-it-burn-provisioning.env
+```
+
+This is the same blocker #1226's run 18800 recorded. On this host `railway whoami` printed "Unauthorized. Please login
+with `railway login`", there is no `~/secrets/projects/watch-it-burn-provisioning.env`, no `WIB_ADMIN_TOKEN` is
+exported, and the run's AWS session lists no Secrets Manager secret whose name holds `provision`, `admin`, `railway`
+or `beacon`. Afterwards https://beacon.burritobot.co/beacon/view and https://agenticburn.com/beacon/view both still
+read `data-count="321"`. A dry run with a placeholder token and `WIB_PROVISIONING_URL=http://127.0.0.1:9`, under
+`env -i`, showed the verb needs nothing more than a checkout, curl, jq and the token: no AWS session, no kubeconfig.
+
+**start-check** after the two resets, at 2026-11-09T01:39Z, exit 1:
+
+```
+  PASS  https://deployments.burritobot.co/deployments.json lists 0 deploy rows
+  PASS  https://deployments-burritobot-private.burritobot.co/deployments.json lists 0 deploy rows
+  FAIL  https://beacon.burritobot.co/beacon/view reads 321 beacon(s)
+        run './fleet.sh beacon-reset', which zeroes the count
+start-check: NOT at the start state: https://beacon.burritobot.co/beacon/view 321 beacon(s)
+```
+
+**Filed and escalated.** The run report escalates `./fleet.sh beacon-reset` then `./fleet.sh start-check` under
+`railway run` on the provisioning service, where the CLI is signed in, with `WIB_ADMIN_TOKEN` taken from the service's
+own `ADMIN_TOKEN` inside that process, so the token is never on a command line or in a log. It files, as a follow-up of
+this issue, the gap behind the failure: no dispatched run has any route to the token, so no run can do the live reset
+#1144 owes. Nothing in the repo was changed to get past it.
+
+**Not yet run on a cluster.** `./fleet.sh beacon-reset` ending `beacon-reset: done; the beacon view reads zero`, both
+beacon views at `data-count="0"`, and `./fleet.sh start-check` exiting 0 right after it.
+
+**Tests run.** None: the change is this entry alone. The prose gate passes on it.
