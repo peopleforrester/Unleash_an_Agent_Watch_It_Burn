@@ -29,6 +29,18 @@ spec:
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE"]
         resources: ["pods"]
+    # KubeArmor's operator is out of scope (#1235). It labels each node by running a snitch Job there, with no
+    # limits, and the enforcer DaemonSet selects only labelled nodes. With this policy at Deny, as on an armed
+    # cluster, autogen's Job rule refused the snitch, so a replaced node got no enforcer and block-recipe-snoop
+    # blocked nothing. #1081's LimitRange cannot help: it fills in Pods, and the Job is refused before any Pod
+    # exists. Kyverno copies this selector onto the policy's webhook, which covers every autogen kind, so the
+    # API server never sends a kubearmor Job, DaemonSet or Pod to this policy.
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values:
+            - kubearmor
   variables:
     - name: limitsSet
       expression: >-

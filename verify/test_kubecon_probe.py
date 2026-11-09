@@ -229,7 +229,7 @@ check("identity: the burritobot.co name of another cluster fails",
 # The private cluster's start (#774): every AI guard off and the four Kubernetes guardrails present and off.
 start = {"guards": {k: False for k in kp.AI_GUARDS}, "evil_tools": list(kp.EVIL_ALL), "c7_rule": kp.C7_OPEN,
          "kyverno_actions": ["Audit"], "breakout_actions": ["Audit"], "networkpolicy": False,
-         "kubearmor_action": None, "rbac_scoped": False}
+         "kubearmor_action": None, "rbac_scoped": False, "kubearmor_unenforced": []}
 check("start state: guards off and the four Kubernetes guardrails off passes", passes(kp.judge_start_state(start)))
 for name, change in [("an AI guard on", {"guards": {**start["guards"], "budget": True}}),
                      ("the allow-list already narrowed", {"evil_tools": ["get_weather"]}),
@@ -252,8 +252,60 @@ for name, change in [("the Role still broad", {"rbac_scoped": False}),
                      ("restrict-image-registries in Audit", {"kyverno_actions": ["Audit"]}),
                      ("deny-external-registries in Audit", {"breakout_actions": ["Audit"]}),
                      ("no egress NetworkPolicy", {"networkpolicy": False}),
-                     ("KubeArmor policy missing", {"kubearmor_action": None})]:
+                     ("KubeArmor policy missing", {"kubearmor_action": None}),
+                     ("a node with no Ready KubeArmor enforcer", {"kubearmor_unenforced": ["ip-10-0-90-97"]}),
+                     ("the enforcer pods or nodes unreadable", {"kubearmor_unenforced": None})]:
     check(f"armed: {name} fails", not passes(kp.judge_armed({**armed, **change})))
+ok, note = kp.judge_armed({**armed, "kubearmor_unenforced": ["ip-10-0-90-97"]})
+check("armed: a node with no enforcer is named as that, not left for Challenge 2 to read as a leak (#1235)",
+      not ok and "no Ready KubeArmor enforcer on ip-10-0-90-97" in note, note)
+
+
+# #1235: the enforcer coverage read, on the JSON `kubectl get nodes` and the kubearmor-app=kubearmor pod list return.
+def _node(name, ready="True"):
+    return {"metadata": {"name": name}, "status": {"conditions": [{"type": "Ready", "status": ready}]}}
+
+
+def _enforcer(node, ready="True"):
+    return {"spec": {"nodeName": node}, "status": {"conditions": [{"type": "Ready", "status": ready}]}}
+
+
+NODES = {"items": [_node("a"), _node("b")]}
+check("unenforced: an enforcer Ready on every Ready node names none",
+      kp.unenforced_nodes(NODES, {"items": [_enforcer("a"), _enforcer("b")]}) == [])
+check("unenforced: a replaced node the DaemonSet never scheduled on is named (DESIRED 0, run 18849)",
+      kp.unenforced_nodes(NODES, {"items": [_enforcer("a")]}) == ["b"])
+check("unenforced: no enforcer pod at all names every node",
+      kp.unenforced_nodes(NODES, {"items": []}) == ["a", "b"])
+check("unenforced: an enforcer pod not yet Ready does not count",
+      kp.unenforced_nodes(NODES, {"items": [_enforcer("a"), _enforcer("b", "False")]}) == ["b"])
+check("unenforced: a node that is not Ready is not asked for an enforcer",
+      kp.unenforced_nodes({"items": [_node("a"), _node("gone", "False")]}, {"items": [_enforcer("a")]}) == [])
+
+
+class _CoverageKubectl:
+    """kubectl for KubeconCluster.kubearmor_unenforced alone: nodes and enforcer pods, or a failure on either."""
+
+    def __init__(self, pods_rc=0):
+        self.pods_rc, self.calls = pods_rc, []
+
+    def __call__(self, argv, **kw):
+        args = argv[3:]
+        self.calls.append(argv)
+        if args[:2] == ["get", "nodes"]:
+            return subprocess.CompletedProcess(argv, 0, stdout=json.dumps(NODES), stderr="")
+        if args[:4] == ["-n", "kubearmor", "get", "pods"] and "kubearmor-app=kubearmor" in args:
+            return subprocess.CompletedProcess(argv, self.pods_rc, stdout=json.dumps({"items": [_enforcer("a")]}),
+                                               stderr="Forbidden\n" if self.pods_rc else "")
+        raise AssertionError(f"unexpected kubectl {args}")
+
+
+cov = _CoverageKubectl()
+check("the cluster reads the enforcer pods in kubearmor by kubearmor-app=kubearmor and names the node without one",
+      kp.KubeconCluster(host, "ctx-admin", None, None, 5, runner=cov).kubearmor_unenforced() == ["b"]
+      and all(c[:3] == ["kubectl", "--context", "ctx-admin"] for c in cov.calls), str(cov.calls))
+check("an unreadable enforcer pod list reads as None, which the Armed beat fails",
+      kp.KubeconCluster(host, "ctx-admin", None, None, 5, runner=_CoverageKubectl(1)).kubearmor_unenforced() is None)
 check("the probe reads the Role as guard-proxy's RBAC badge does",
       kp.rbac_scoped(yaml.safe_load(kp.challenge_fix(kp.RBAC_FIX))) is True
       and kp.rbac_scoped(yaml.safe_load(kp.challenge_fix(kp.RBAC_SHIPPED))) is False)
@@ -932,7 +984,8 @@ class Fake:
         action = ["Deny"] if self.armed else ["Audit"]
         return {"guards": dict(self.g), "evil_tools": list(self.tools), "c7_rule": self.rule,
                 "kyverno_actions": action, "breakout_actions": action, "networkpolicy": self.armed,
-                "kubearmor_action": "Block" if self.armed else None, "rbac_scoped": self.role == kp.RBAC_FIX}
+                "kubearmor_action": "Block" if self.armed else None, "rbac_scoped": self.role == kp.RBAC_FIX,
+                "kubearmor_unenforced": []}
 
     def c7_rule(self):
         return self.rule
