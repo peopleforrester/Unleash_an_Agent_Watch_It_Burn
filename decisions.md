@@ -43116,3 +43116,74 @@ them runs a fetch. `verify/fetch-inventory.yaml` now classes each as `none`, and
 lines instead of 1. `python3 verify/test_fetch_inventory.py` printed `All fetch inventory checks passed.`;
 `python3 verify/test_scope_tests.py` printed `ALL PASS` and `python3 verify/scope_tests.py check` reported 0 problems on
 the rebased tree.
+
+## 2026-11-09 · #1167 · run 19253 · The Backstage install checks its platform-conditional packages and corepack's yarn against hashes in the repo
+
+**What.** The two unchecked parts of the Backstage `corepack yarn install --immutable` #1121 named. No earlier draft
+existed (`verify/prior-drafts.sh 1167 origin/staging` printed NONE, and the issue had no comments).
+
+**Why a plugin, and why it wraps the fetch step.** Yarn 4.13.0's cache returns `{isValid: true, hash: null}` for a
+package in `unstablePackages` (the project's `conditionalLocators`: optional packages with a `conditions:` line) before
+it hashes anything, so no checksum, in yarn.lock or elsewhere, is ever compared for one, and a checksum line added by
+hand would be dropped on the next write and fail `--immutable` with YN0028. No Yarn hook runs between the fetch step
+and the link step, and `afterAllInstalled` runs after the build scripts, where esbuild's postinstall already runs its
+binary. So `images/watch-it-burn-backstage/yarn-plugins/conditional-checksums.cjs` wraps `Project#fetchEverything`:
+after the fetch, before the link, it hashes the cache zip of each conditional package the install enabled
+(`cache.getLocatorPath(locator, null)`, in the cache's `<cacheKey>/<sha512>` form) against
+`yarn-plugins/conditional-checksums.lock`, and throws YN0018 naming the package, the file and both values on a
+mismatch, a package with no line, or a missing zip. Packages for other platforms are mocked and never read. It throws
+at load if this yarn has no `fetchEverything`.
+
+**Where it lives, and what was refused.** The session's permission check refused writing the plugin under `.yarn/plugins/`
+and editing `.yarnrc.yml`, both as sensitive files, so the plugin and its lock are in `yarn-plugins/` and are not in
+`.yarnrc.yml`'s `plugins:`. Yarn 4.13.0 also loads plugins named in `YARN_PLUGINS` (semicolon-separated, resolved from
+the working directory), and every install this repo runs sets it: `run-e2e.sh`'s `backstage_e2e`, the Dockerfile
+(which now copies `yarn-plugins` and sets `ENV YARN_PLUGINS` before `yarn workspaces focus`) and the README's build
+step 1. A bare `yarn install` in the app without it is still unchecked; the follow-up filed from this run moves the
+registration into `.yarnrc.yml`.
+
+**The lock.** 99 lines, one per conditional entry in yarn.lock, every platform's (so a darwin install is checked too),
+each line `<locator> 10c0/<sha512 of the zip> <npm dist.integrity>`. `python3 verify/yarn_pins.py write`
+made it in 1m19s: it reads each of the 97 registry packages' version documents from registry.npmjs.org, downloads each
+tarball and checks it against `dist.integrity`, serves those bytes alone from a registry on 127.0.0.1 to a scratch
+project that depends on each package plainly (plain dependencies are not conditional, so Yarn hashes them), runs the
+committed yarn 4.13.0 there with `install --mode=update-lockfile`, and reads each checksum from the scratch yarn.lock,
+fsevents' two compat-patch locators included. Cross-check: yarn.lock already records checksums for
+`fsevents@npm:2.3.2` and `fsevents@npm:2.3.3`, and the writer's values for both are identical to them.
+
+**Checked on the real app.** A scratch copy of the app's tracked install files, with a fresh global cache and
+`YARN_PLUGINS` set, ran `node .yarn/releases/yarn-4.13.0.cjs install --mode=update-lockfile` (which fetches only the
+packages with no stored checksum, the conditional ones): `5 packages were added to the project (+ 90.13 MiB)`, then
+`5 platform-conditional package(s) match yarn-plugins/conditional-checksums.lock`, exit 0, yarn.lock unchanged. The five
+were the linux x64 glibc binaries of esbuild, rollup, rspack, swc and unrs, fetched from registry.npmjs.org.
+
+**corepack.** `packageManager` is now `yarn@4.13.0+sha512.5c20ba01...`, the SHA-512 of the committed
+`.yarn/releases/yarn-4.13.0.cjs`, which is byte for byte the `yarn.js` repo.yarnpkg.com serves (both hashed in this
+run). With an empty COREPACK_HOME, `corepack yarn --version` printed `4.13.0`; with one hex digit changed in a scratch
+copy it failed `Mismatch hashes. Expected 5c20ba02..., got 5c20ba01...` and kept nothing. corepack 0.36.0's
+`installVersion` reuses a folder that already has a `.corepack` file without hashing it, and COREPACK_HOME is in the
+artifact cache between runs, so `run-e2e.sh` now runs `python3 verify/yarn_pins.py corepack-check` before corepack:
+it hashes `v1/yarn/4.13.0/yarn.js` against the pin and requires `.corepack` to name the yarn bins and that hash. On the
+folder corepack had just written it printed `... matches the packageManager pin`; with a line appended to `yarn.js` it
+failed `YARN PINS FAILED: .../yarn.js is sha512 ae1644a1..., but package.json's packageManager pins 5c20ba01...`.
+
+**Tests.** `verify/test_yarn_pins.py` (offline, 33 checks): the lock against yarn.lock both ways, its cacheKey, the
+fsevents agreement, the plugin's lock path and line rule against `yarn_pins.LOCK_LINE`, the pin against the release's
+SHA-512, `YARN_PLUGINS` and corepack-check in run-e2e.sh, the Dockerfile and the README, `corepack_check()` on a
+made-up COREPACK_HOME, and the writer's rules with stub fetches. `verify/test_yarn_pins_e2e.py` (tools tier, loopback):
+with a fixture conditional package for this host and one for aix, the premise (yarn.lock records no checksum for
+either, and without the plugin a changed cached zip installs with no error), then with it: cold and warm installs pass
+with no request on the warm one, and a changed cached zip, a changed fetched copy and an unrecorded package each fail
+with YN0018 and link nothing. `test_e2e_toolchain.py` now requires the hash on `packageManager`, and
+`test_package_cache.py` allows the three new files that name a yarn install. Run once each: `test_yarn_pins.py`,
+`test_e2e_toolchain.py`, `test_package_cache.py`, `test_scope_tests.py` and `test_docs_current.py` pass, and
+`bash verify/run-e2e-tools.sh test_yarn_pins_e2e.py` printed `1 checks ran ... in 0m30s` and `ALL E2E TOOLS TIER CHECKS
+GREEN`. `python3 verify/scope_audit.py offline test_yarn_pins.py test_e2e_toolchain.py`: `0 with reads their entries
+miss`. No dependency was added.
+
+**Live.** The change touches `images/`, but only the image's build inputs. `kubectl --context watch-it-burn-private`
+shows `backstage/backstage` running `watch-it-burn:backstage-1.52.0-node24.22.2@sha256:65b2315c...`, the
+`images.lock` and `backstage/k8s/backstage.yaml` pin, which this change does not move; watch-it-burn-community runs no
+Backstage. **Not yet run on a cluster:** the image rebuild with the plugin (README step 1 and the Dockerfile's
+`yarn workspaces focus --all --production`), and `verify/run-e2e.sh`'s `backstage playwright (corepack yarn test:e2e)`
+check, the first full install to run corepack-check and the plugin together.
