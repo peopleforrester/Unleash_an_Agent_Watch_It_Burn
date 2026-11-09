@@ -46294,3 +46294,84 @@ scheduling. Twelve copies run side by side at load average 41 all exited 0.
 (`be88e1f`), as origin/staging pins it. The checks under run 19452's "Not yet run on a cluster" are unchanged and
 still wait on this branch's promotion: criterion 2's `poll_spans.py` read after a blocked `C1_PROMPT` turn, and
 criterion 3's `CONTEXT=watch-it-burn-private python3 verify/one_root_probe.py`.
+
+## 2026-11-09 · #1162 · run 19512 · The ask to feedback-agenticburn is #27; run 19507's row awaits its comment (#1244)
+
+**What was left.** Run 19507's draft landed in staging (919cef09) with #1244 partial on one item: the URL of the ask
+to feedback-agenticburn, which hecaton files from that run's report. `verify/prior-drafts.sh 1244 origin/staging`
+printed LANDED for `origin/agent/1244-19507` and NONE otherwise, so this run starts from staging and redoes nothing.
+
+**The ask's URL.** https://github.com/peopleforrester/feedback-agenticburn/issues/27, opened by hecatongithub at
+2026-11-09T12:13:53Z: "Confirm Unleash_an_Agent_Watch_It_Burn#1162's two marked test submissions in /admin under
+kubecon-na-2026 with source burritobot, on #1162". It names both marked submissions: run 19100's (01:41Z, already
+confirmed on #1162 as response 10, issuecomment-6733846674) and run 19507's (12:01:45Z, posted from the form the
+live Feedback button opens, which answered 302 to `/thanks`). It asks for one comment on #1162 that reads `/admin`
+for `kubecon-na-2026` and, for each row, says confirmed with its response number, created time, event,
+"Source: burritobot" and the change text quoted exactly. At 12:18Z it was open with no comments. The earlier ask,
+feedback-agenticburn#26, covers setting run 19100's row aside.
+
+**The live test now (12:18Z).** `python3 verify/test_feedback_admin_1162_live.py`, exit 0:
+
+    PASS  a comment by hecatongithub or peopleforrester names /admin, kubecon-na-2026, source burritobot and a marked #1162 test submission, and says it confirmed the row
+          confirmed at https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/1162#issuecomment-6733846674 by peopleforrester: /admin, event kubecon-na-2026, source burritobot, marked submission of run 19100
+    NOTE  run 19100's marked submission (2026-11-09T01:41Z) is confirmed
+    NOTE  run 19507's marked submission (2026-11-09T12:01:45Z) is not confirmed yet by a comment
+
+**Not yet run on a cluster.** feedback-agenticburn has not confirmed run 19507's row yet. When its comment for
+feedback-agenticburn#27 is on #1162, `python3 verify/test_feedback_admin_1162_live.py` prints that row's NOTE as
+confirmed. No cluster check ran: this change is decisions.md alone, which no cluster runs.
+
+**Tests run.** `python3 verify/test_feedback_admin_1162_live.py` (above) and the prose gate. No code changed.
+## 2026-11-09 · #1247 · run 19508 · The other three cluster-root inits seeded from the module cache, with the network closed
+
+**Why.** #1246 kept the cluster root's Terraform modules in the host artifact cache for `verify/iam_plan_render.py`,
+after a GitHub clone that timed out after 300 s failed `test_iam_policy_structural.py` on staging `cdeaedfd`. Its entry
+left three more tools-tier tests that init `infra/terraform/aws/cluster` installing its modules (terraform-aws-modules/eks
+and five eks-pod-identity calls) from the registry and GitHub on every run: `test_terraform_lock_init.py`,
+`test_lab_platform_operator_entry.py` and `test_control_plane_app_ports_module.py`.
+
+**What changed.** Each of the three now calls `tf_module_cache.seed()` on its fresh working directory before init. On
+a hit the init runs with `iam_plan_render.CLOSED_NETWORK` added to its environment, so an init that still tried to
+install a module fails at once, and its failure detail says the init was seeded with the network closed. On a miss the
+init runs as before, and after it succeeds `store()` keeps the install. Each test prints which happened. The key is
+the one #1246's renders use (each module call's name, source and version), so the renders and these tests share one
+kept copy. Nothing in `tf_module_cache.py` or `iam_plan_render.py` changed.
+
+Two things differ from the issue's wording. `test_terraform_lock_init.py` seeds every root it inits that calls a
+module, so the network root's `vpc` call (terraform-aws-modules/vpc) is kept and seeded too; the other three roots
+call none. And a seeded init there is never run again on a network error: with the network closed, that error means
+the kept modules no longer satisfy the root's calls, which another try cannot fix.
+
+**The trade-off, for the lock test.** #468 is why `test_terraform_lock_init.py` inits in an empty directory: the lock
+pinned an aws provider older than the floor the freshly resolved EKS module needed. The constraints (`~> 21.29.0`,
+`~> 1.12.0`, `~> 5.21.0`) admit later patch releases, and a kept copy holds the patch the first install resolved until
+a module call in `main.tf` changes. So a patch release that raises a module's provider floor past the lock now shows
+in this test only when the calls change or the host's cache is cold, not on the day it is published. `fleet.sh`'s own
+init still installs fresh. The issue asked for exactly this, and #1246 took the same trade for the renders; it is
+written in the test's header.
+
+**Tests.** `verify/test_terraform_lock_init_retry.py` (offline) drives the lock test against a stub terraform. Its
+stub's successful init of a root that calls a module now writes `.terraform/modules/modules.json`, as a real install
+does, and records whether each init started seeded and the `HTTPS_PROXY` it saw. Two cases are new: on a warm module
+cache the cluster and network inits start seeded behind the refused proxy while the other three run fresh and open,
+and nothing is installed again; and a seeded init that the network breaks runs once and fails, saying it was
+seeded. 24 PASS, `All terraform lock-init retry checks passed.` `verify/fetch-inventory.yaml`'s pin text for the
+three tests' init lines now names the module cache (`test_fetch_inventory.py` passes), and `verify/scope-map.yaml`
+has `tf_module_cache.py` and `iam_plan_render.py` among the four tests' reads, as `scope_tests.py write` produced them
+(`test_scope_tests.py` ALL PASS).
+
+Each tier test ran alone under `bash verify/run-e2e-tools.sh <test>` with the pinned tools (terraform v1.15.6), on
+this host, whose cache already held the cluster root's copy from #1246:
+- `test_terraform_lock_init.py`: the cluster init seeded from the cache with the network closed (8.7 s); the network
+  root missed, installed and kept its modules (12.2 s, one fetch-log line); `ALL TERRAFORM LOCK-INIT CHECKS GREEN`,
+  `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0, in 0m40s. It ran a second time to exercise the network root's warm path,
+  which is new here: both inits seeded with the network closed (3.8 s and 3.5 s), `artifact cache fetches this run:
+  0`, exit 0, in 0m30s.
+- `test_lab_platform_operator_entry.py`: `modules: seeded from the module cache, init run with the network closed`,
+  all four `terraform test` cases passed, `ALL LAB-PLATFORM-OPERATOR ENTRY CHECKS GREEN`, exit 0, in 12 s.
+- `test_control_plane_app_ports_module.py`: the same seeded init, module eks resolved as 21.29.x, every check PASS,
+  `ALL CONTROL-PLANE APP-PORT MODULE CHECKS GREEN`, exit 0, in 9 s.
+The logs are `/var/lib/hecaton/runs/19508/tier3.log` and `lockinit-warm.log`. The whole Test and E2E commands were not
+run; validation runs the tests that read the changed files. No dependency was added.
+
+**No live check.** The change is under `verify/`, which no cluster runs, and this entry (#1062).
