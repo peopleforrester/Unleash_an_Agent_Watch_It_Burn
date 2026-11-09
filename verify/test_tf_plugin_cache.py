@@ -348,7 +348,7 @@ REAL = ["iam_plan_render.py", "test_control_plane_app_ports_module.py", "test_la
         "test_terraform_plugin_cache_lock.py"]
 # The ones whose terraform is a stub that installs nothing, or that only name an init in a message.
 STUBBED = ["test_audit_import_state.py", "test_drift_report.py", "test_event_tag.py", "test_iam_plan_render_cache.py",
-           "test_terraform_lock_init_retry.py", "test_terraform_module_pins.py", "test_tf_plugin_cache.py"]
+           "test_iam_plan_render_plugin_start.py", "test_terraform_lock_init_retry.py", "test_terraform_module_pins.py", "test_tf_plugin_cache.py"]
 # test_preflight_boundary.sh holds the command text fleet.sh prints for a person to run; it runs no terraform.
 SHELL_TEXT_ONLY = ["test_preflight_boundary.sh"]
 RUNS_TERRAFORM = re.compile(r'TERRAFORM|terraform_binary\(|which\("terraform"\)|"terraform"')

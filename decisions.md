@@ -42768,3 +42768,58 @@ them. The log is `/var/lib/hecaton/runs/18396/e2e-tools.log`.
 
 **Not run.** The two kubecon probes did not run again: run 17949 ran them on these names (the run-of-show's Probe
 record), nothing they read has changed since, and they switch the guardrails on clusters other sessions share.
+
+## 2026-11-09 · #651 · run 19190 ports run 18396's unmerged draft onto staging 0b2e157b and checks both domains again
+
+Run 18396's eight commits never reached staging: the coordinator stopped it to put Whitney's issues first, so no
+gate this repo's change runs had failed it. `bash verify/prior-drafts.sh 651 origin/staging` named
+`origin/agent/651-18396` as the START draft, with five drift lines, all edits in place, and a decisions.md APPEND.
+The eight commits were cherry-picked onto staging `0b2e157b`. There were three conflicts:
+
+- `verify/iam_plan_render.py`: #1119's `f3309526` replaced the per-process plugin cache with `_terraform_env()`, which
+  serves every provider from the host artifact cache's mirror. Staging's env and timeout message are kept, and the
+  draft's `run_once` and `run` wrapper sits on top of them, so the retry when a provider misses its start still
+  applies to staging's mirror-backed renders. The mirror removes the download but not the provider's start, so the
+  retry is still needed.
+- The run-of-show's Probe record: staging's 2026-11-08 #612 entry and run 17949's 2026-11-06 entry are both kept, in
+  date order.
+- `verify/scope-map.yaml`: staging's map is kept, and `scope_tests.py write` regenerated
+  `test_iam_plan_render_plugin_start.py`'s entry from what it reads now, including `tf_plugin_cache.py` and the
+  artifact cache.
+
+What differs from the draft: `verify/test_iam_plan_render_plugin_start.py` now runs under
+`tf_plugin_cache.scratch()` with a prepared `TF_CLI_CONFIG_FILE`, as `test_iam_plan_render_cache.py` does, so its
+renders fill no mirror. Its stub terraform now reads each case from a file beside its record and no longer from the
+environment, because `iam_plan_render` builds terraform's env once per process since #1119, and a case set in
+`os.environ` after the first render never reached the stub (five checks failed until it read the file).
+`verify/test_tf_plugin_cache.py` lists the new test in STUBBED: its terraform is a stub that installs nothing. That
+was the scoped offline suite's one failure, and the test passed when rerun alone.
+
+**Argo CD.** On both clusters `ai-layer` is Synced and Healthy at `0b2e157b`, this run's base. The live `console-conf`
+ConfigMap in `agent` on each names no kagent, hedgehog, wombat, unicorn, spider or mantis-shrimp host.
+
+**Read-only curl, 2026-11-09 02:27Z.** All 42 kept URLs answer 2xx or 3xx with `ssl_verify_result` 0, the same list
+as run 18396: attackme, burritobot-private, start and `/roster.json`, prompts and `/healthz`, feedback `/quick` and
+rounds on both domains, grafana-, argocd-, backstage-, maintenance-shell-, support- and deployments- on both clusters
+and both domains, and `beacon.burritobot.co/beacon/view` and `agenticburn.com/beacon/view`. All 54 retired URLs get
+the router's "no route" 404 page, each on both domains.
+
+**fleet.sh, 02:27Z.** `./fleet.sh router-check` printed a PASS for attackme.burritobot.co and
+burritobot-private.burritobot.co and "the router serves exactly the roster", exit 0. `./fleet.sh wall-check` printed
+a PASS for prompts.burritobot.co/healthz and both clusters and "the wall shows every roster cluster", exit 0.
+
+**The pages.** With scripts, styles and HTML comments stripped, `/`, `/brief`, `/platform` and `/links` on
+attackme.burritobot.co, and those with `/lab` and `/kubecon` on burritobot-private.burritobot.co, show no
+"agenticburn" except `/kubecon`'s five `agenticburn.com/beacon` and `/beacon/view` strings. Those are #1003's deck
+address (`36575032`), the one exception `verify/test_two_domains.py` admits, as in run 18396's entry.
+
+**The suites, scoped to this run's change.** `HECATON_BASE_SHA=0b2e157b bash verify/run-e2e-tools.sh` printed
+`15 checks ran (the offline suite and 14 tier tests) in 6m43s, 4 at a time`, each of the 14 tier tests green, the
+collector, ttyd and iam_plan_render tests among them, and exit 1 on the offline suite's one failure,
+`test_tf_plugin_cache.py`, which this run fixed as above and reran alone green (`python3
+verify/test_tf_plugin_cache.py`), with `test_scope_tests.py` and `test_iam_plan_render_plugin_start.py` also green
+alone. The log is `/var/lib/hecaton/runs/19190/e2e-tools.log`. The full tools tier was not run, as CLAUDE.md's
+Dispatched runs point 6 says.
+
+**Not run.** The two kubecon probes did not run again, for the reason run 18396 gave: run 17949 ran them on these
+names, nothing they read has changed since, and they switch the guardrails on clusters other sessions share.
