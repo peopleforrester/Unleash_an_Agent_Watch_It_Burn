@@ -247,7 +247,10 @@ config is written `$$`. https://github.com/open-telemetry/opentelemetry-collecto
 - `portable_pattern()` is the same pattern without lookarounds, in the syntax RE2 shares with Python, for the
   collector and CEL. It cannot fold, so zero-width characters, look-alikes and accents get past it; on the 151 abuse
   texts that need no folding it agrees with the folded floor exactly. Its word edges are capture groups, so the
-  replacement keeps them and is applied twice for two terms one separator apart.
+  replacement keeps them and is applied twice for two terms one separator apart. Since #1277 it also reads JSON, which
+  is what the collector sees: a leading edge takes a `\n`, `\r`, `\t` or `\uXXXX` escape, and `ß` also matches as
+  `ß`, since guard-proxy's `json.dumps` escapes every non-ASCII character. The collector's `transform/coc_mask`
+  runs this form.
 - The list is `terms-proposed.rot13`, decoded by `corpus.terms("proposed")`. guard-proxy reads its list from
   `PROFANITY_LIST`, so the wall can take the longer list before #78 lands; the folding is code and lands with #78.
 - A refusal says what happened in plain words ("Keep it kind: that message has words the code of conduct rules out,
