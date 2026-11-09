@@ -47301,3 +47301,56 @@ presenter terminal login was not read or touched. No dependency was added. The p
 `live_fresh_chats.py` command with `--arm memory=30 --arm earlier=8`. It should show no reply that is planning text,
 guard-proxy's log no `thinking_only_surfaced` and an `ask_user_reply` and a `task_cancel` for each `ask_user` turn that
 workshop-agent's log shows. That is this issue's second criterion, and the next run on it runs it.
+
+## 2026-11-09 · #1094 · run 19549 · The guard-proxy repin to a637e68 carries the ask_user fix; live, 38 fresh memory chats show no planning text and 3 forced ask_user turns show the question
+
+**Why this run.** Run 19291's draft failed hecaton's `tests` gate, whose output the issue comment does not quote, and
+this run cannot read run 19291's directory. `verify/prior-drafts.sh 1094 origin/staging` printed START from
+`origin/agent/1094-19291` with one in-place drift line (`verify/scope-map.yaml`, `ca9c9daa`, a neighbouring entry), so
+its three commits were cherry-picked onto staging `d3761fee` with no conflict. What changed since that draft: staging's
+`69659912` (#1225) repinned `gitops/ai-layer/guard-proxy` to `a637e68`, and the GitHub compare of `2f21fe3...a637e68`
+reads ahead 8, behind 0, so the pin now carries guard-proxy-agenticburn#72. The repin run 19291 waited on is done.
+
+**What differs from the draft.** `verify/test_ask_user_reply.py` no longer holds the gap at `5772a5d`. It now requires
+the fix at every pin: a check that the pin's `proxy.py` is not `5772a5d`'s (sha256 `ddf97ec452c0...`), then task 1's
+question as the reply, no scratchpad, one send and one `tasks/cancel` for task 1. At `a637e68` (`proxy.py` sha256
+`5e0c8390277e...`) it printed `ALL ASK_USER REPLY CHECKS GREEN`. With `5772a5d`'s `proxy.py` put in the submodule's
+place it failed all five pin checks, and the file was restored. Run 19291's draft also added a second heading line to
+run 18386's entry in place of retitling it, with no blank line before it; the first line is gone, and the entry now
+reads under its retitled heading.
+
+**What the guest sees, read live with the fix deployed.** On watch-it-burn-community, Argo CD's `ai-layer` read Synced
+and Healthy at `a6dc70db` and `workshop-agent` at `d3761fee`. guard-proxy's `/app/proxy.py` read sha256
+`5e0c8390277e...`, equal to `checksum/proxy-py`, on both clusters. workshop-agent runs kagent `golang-adk:0.10.1`, as
+in run 19291. From 14:10:41Z to 14:12:26Z, under the guard lock:
+`python3 verify/guard_lease.py hold --context watch-it-burn-community --profile accen-dev -- python3 docs/research/2026-11-07-weather-tool-scope/live_fresh_chats.py --host attackme.burritobot.co --context watch-it-burn-community --out /var/lib/hecaton/runs/19549/live/fresh.jsonl --arm memory=30 --arm earlier=8 --seed 19549`.
+The seed is new so that no session id repeats run 19291's.
+
+| Question | Fresh chats | `ask_user` in workshop-agent's log | Reply that is planning text |
+| --- | --- | --- | --- |
+| the memory question | 30 | 0 | 0 |
+| "What did we talk about earlier?" | 8 | 0 | 0 |
+
+No chat called any tool. guard-proxy logged no line in that window: no `thinking_only_retry`, no
+`thinking_only_surfaced`. Every reply's text outside its `<thinking>` block, which is what the chat page shows, is
+addressed to the guest, for example "I'm sorry, Silas the Ghoul, but I don't have the ability to recall past messages
+or remember what you asked me last." Two `earlier` replies made up a past chat ("Earlier, we discussed the menu items
+and specials"), which is not planning text and not this issue's. To show the 0 is not a silent log, one fresh chat
+asked "Can you check the inventory for tortillas, please?" and workshop-agent logged `Tool execution started` for
+`check_inventory`.
+
+Since no fresh chat called `ask_user`, three more asked for it outright: "Before you answer anything, use your ask_user
+tool to ask me which tortilla base I want." workshop-agent logged `ask_user` on all three sessions. Each guest read
+Nova's question and nothing else, for example "Which tortilla base would you like for your burrito, Edgar the Troll?
+Please choose from Cilantro-Slime Rice, Black-Bog Rice, or Graveyard Greens." guard-proxy logged an `ask_user_reply`
+and a `task_cancel` ("it waits on an ask_user answer the chat page cannot send") for each, from 14:14:31Z to 14:14:35Z.
+Before the repin, the same turn showed the guest the scratchpad (runs 18386 and 19291, above). So the fix the issue
+offers third, guard-proxy showing the question, is the one in place, and it holds whatever the persona does.
+
+**What the run spent and changed.** 42 `/chat` turns on the public bot: `/cost` read 0 requests and $0.0000 before (the
+counter had reset) and 42 requests and $0.3792 after. No guard, policy, Secret or Deployment was switched, and the
+guard lock was released after each run. The presenter terminal login was not read or touched. No dependency was added.
+The per-chat data and the two logs are in `/var/lib/hecaton/runs/19549/live/` on hecaton's host.
+
+**Tests.** `python3 verify/test_ask_user_reply.py` printed `ALL ASK_USER REPLY CHECKS GREEN`. The scoped Test and E2E
+commands are left to hecaton's gate.
