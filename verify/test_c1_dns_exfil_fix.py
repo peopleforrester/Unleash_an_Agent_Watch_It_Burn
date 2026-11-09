@@ -22,7 +22,10 @@ What it proves without a cluster:
     still carry Bedrock's in-VPC allow;
   - the waypoint is the one workload granted a public 443, and the weather feed's direct public door is shut;
   - the waypoint may reach istiod on TCP 15012 and on nothing else of istio-system (#1033), and the check fails on
-    mutated copies of that rule: removed, another peer, another port, a range or UDP.
+    mutated copies of that rule: removed, another peer, another port, a range or UDP;
+  - that rule carries a comment directly above it giving the why (istiod's xDS port, which the stage-2 443-only
+    allowlist does not admit, as #980 showed), read from the raw text since YAML parsing drops comments (#1233),
+    and the check fails on mutated copies: the comment deleted, moved, cut short or set apart, or the rule deleted.
 """
 from __future__ import annotations
 
@@ -243,6 +246,106 @@ MUTATIONS = {
 }
 for label, change in MUTATIONS.items():
     check(f"the istiod check fails with {label}", bool(istiod_rule_problem(mutated(change))))
+
+
+# The istiod rule carries a comment saying why it is there (#1033, #1233). YAML parsing drops comments, so this
+# reads the raw text: the comment lines directly above the rule's list item, inside the agent-allow-egress-waypoint
+# document, must name istiod and what the port carries (xDS), say why the stage-2 allowlist does not already cover
+# it (it admits 443 alone), and cite the live loss that showed it (#980). Without the comment the next edit to this
+# file has no reason in front of it to keep the rule.
+FQDN_PATH = FIX / "agent-egress-fqdn.yaml"
+FQDN_TEXT = FQDN_PATH.read_text(encoding="utf-8")
+WHY_TERMS = ("istiod", "xDS", "stage-2", "443", "#980")
+
+
+def egress_items(text: str) -> tuple[list[str], list[tuple[int, int]]]:
+    """The waypoint document's lines, and each egress list item as a (first line, end line) pair."""
+    doc = next((d for d in re.split(r"^---\s*$", text, flags=re.M)
+                if re.search(r"^\s*name:\s*agent-allow-egress-waypoint\s*$", d, flags=re.M)), "")
+    lines = doc.splitlines()
+    start = next((i for i, line in enumerate(lines) if re.match(r"^\s+egress:\s*$", line)), None)
+    if start is None:
+        return lines, []
+    first = next((i for i in range(start + 1, len(lines)) if lines[i].lstrip().startswith("- ")), None)
+    if first is None:
+        return lines, []
+    indent = len(lines[first]) - len(lines[first].lstrip())
+    heads = [i for i in range(first, len(lines))
+             if lines[i].startswith(" " * indent + "- ")]
+    items = []
+    for n, head in enumerate(heads):
+        end = heads[n + 1] if n + 1 < len(heads) else len(lines)
+        # The comment block above the next item belongs to the next item, not to this one's body.
+        while end - 1 > head and lines[end - 1].lstrip().startswith("#"):
+            end -= 1
+        items.append((head, end))
+    return lines, items
+
+
+def comment_above(lines: list[str], head: int) -> tuple[int, str]:
+    """The first line index and the joined text of the contiguous comment lines directly above line `head`."""
+    top = head
+    while top > 0 and lines[top - 1].lstrip().startswith("#"):
+        top -= 1
+    return top, " ".join(line.strip().lstrip("#").strip() for line in lines[top:head])
+
+
+def istiod_comment_problem(text: str) -> str:
+    """Empty when the waypoint policy's one istio-system egress item has a comment above it giving the why."""
+    lines, items = egress_items(text)
+    if not items:
+        return "no egress list in the agent-allow-egress-waypoint document"
+    istiod = [(head, end) for head, end in items if "istio-system" in "\n".join(lines[head:end])]
+    if len(istiod) != 1:
+        return f"want one egress item naming istio-system, found {len(istiod)}"
+    _, why = comment_above(lines, istiod[0][0])
+    if not why:
+        return "the istiod rule has no comment directly above it"
+    missing = [term for term in WHY_TERMS if term not in why]
+    if missing:
+        return f"the istiod rule's comment does not name {missing}: {why!r}"
+    return ""
+
+
+problem = istiod_comment_problem(FQDN_TEXT)
+check("the istiod rule carries a comment saying why: istiod's xDS port, which the stage-2 443-only allowlist "
+      "does not admit, as #980 showed", not problem, problem)
+
+
+def text_mutated(change) -> str:
+    """The fix file with the waypoint document's istiod item and its comment edited by `change`."""
+    lines, items = egress_items(FQDN_TEXT)
+    istiod = [(head, end) for head, end in items if "istio-system" in "\n".join(lines[head:end])]
+    if len(istiod) != 1:
+        sys.exit(f"the istiod egress item (istio-system) is not in {FQDN_PATH.relative_to(REPO)}; "
+                 "the comment mutation cases below edit it")
+    head, end = istiod[0]
+    top, _ = comment_above(lines, head)
+    new = change(list(lines), top, head, end, items)
+    doc = "\n".join(lines)
+    if doc not in FQDN_TEXT:
+        sys.exit(f"the waypoint document of {FQDN_PATH.relative_to(REPO)} did not round-trip; "
+                 "the comment mutation cases below rebuild it")
+    return FQDN_TEXT.replace(doc, "\n".join(new))
+
+
+def moved_to_first_item(lines, top, head, end, items):
+    block = lines[top:head]
+    rest = lines[:top] + lines[head:]
+    first_top, _ = comment_above(rest, items[0][0])
+    return rest[:first_top] + block + rest[first_top:]
+
+
+COMMENT_MUTATIONS = {
+    "the comment deleted": lambda ls, top, head, end, items: ls[:top] + ls[head:],
+    "the comment moved to the 443 rule": moved_to_first_item,
+    "the comment cut to what the port is": lambda ls, top, head, end, items: (
+        ls[:top] + [ls[top][:len(ls[top]) - len(ls[top].lstrip())] + "# istiod's xDS port."] + ls[head:]),
+    "a blank line between the comment and the rule": lambda ls, top, head, end, items: ls[:head] + [""] + ls[head:],
+    "the rule deleted under its comment": lambda ls, top, head, end, items: ls[:head] + ls[end:],
+}
+for label, change in COMMENT_MUTATIONS.items():
+    check(f"the istiod comment check fails with {label}", bool(istiod_comment_problem(text_mutated(change))))
 
 # The stage-2 L3/L4 allowlist file itself still carries Bedrock's in-VPC allow, unchanged by the fix.
 stage2 = next((d for d in docs(STAGE2_ALLOWLIST) if d.get("kind") == "NetworkPolicy"), {})
