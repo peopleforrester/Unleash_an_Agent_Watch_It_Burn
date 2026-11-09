@@ -50129,3 +50129,36 @@ Then, on each: the agent's GETs on agentgateway :3001 are answered 405 (`kubectl
 deploy/agentgateway -c agentgateway | grep 'http.method=GET'`), the agent's evil-mcp GETs on :3003 no longer end at 30
 seconds (`-c agentgateway-c7`), and `PRIVATE_CONTEXT=watch-it-burn-private COMMUNITY_CONTEXT=watch-it-burn-community
 python3 verify/test_coc_floor_probes_live.py` runs green on both. The next run on #1303 runs those three.
+
+## 2026-11-10 · #1288 · run 19825 · f75aa2f is held: its /chat matcher takes time in the square of a leetspeak run, and the fix is not on guard-proxy main yet
+
+**What the merge showed.** Staging had moved 20 commits since run 19749's base, among them #1300 (d2846fef), which made
+the code-of-conduct pattern linear in floor.py and every copy in this repo, with `verify/test_coc_pattern_linear.py`
+to time them. Its docstring names the case this repin opens: "once guard-proxy runs the floor, /chat". This run
+merged staging into the branch (clean) and timed the pinned proxy.py's `conduct_matches()` on that test's 123 cases.
+f75aa2f builds each letter the pre-#1300 way. A run of `$` took 173 ms at 1,000 characters, 2,243 ms at 4,000 and
+35,150 ms at 16,000 on this host; a7a5a36, live now, took under 1 ms at all three. proxy.py is a Python
+`ThreadingHTTPServer` with no cap on a prompt's length, and since a7a5a36 `/chat` runs the check on every turn,
+whatever the toggles say, so one pasted run holds the interpreter and stalls every guest's `/chat`.
+
+**The fix exists upstream.** guard-proxy-agenticburn#83, closed 2026-11-09, applies #1300's rule to proxy.py and the
+Go build. Its commit 0627502da78f (after d666698) is on guard-proxy's staging, not its main, and this repo pins only
+guard-proxy main commits (`test_guard_proxy_pin_on_main.sh`, `test_guard_proxy_pin_1288.py`). With the submodule
+checked out at 0627502 here, `test_coc_pattern_linear.py` passed (the guard-proxy copy's slowest run 13.7 ms at
+4,000 characters) and `test_chat_coc.py` passed; sha256(proxy.py)[:12] there is `d7efbfee76b7`.
+
+**What this run did.** `test_coc_pattern_linear.py` now times the pinned guard-proxy's `conduct_matches()` beside the
+other copies, and stops timing a copy at its fifth failing run, so a quadratic copy fails in seconds, not most of an
+hour. At f75aa2f it fails on that copy alone (5 runs printed, 14.8 s); the other four copies pass. The branch is
+left on f75aa2f with that failure, so it cannot promote, and the issue waits on 0627502 reaching guard-proxy main.
+
+**For the next run.** Check `git -C gitops/ai-layer/guard-proxy fetch origin && git -C gitops/ai-layer/guard-proxy
+merge-base --is-ancestor 0627502da78f origin/main`. When it holds, repin to guard-proxy main's head, set
+`checksum/proxy-py` to its proxy.py's sha256[:12] (`d7efbfee76b7` if proxy.py is unchanged since 0627502), and
+consider raising `test_guard_proxy_pin_1288.py`'s floor to 0627502. Then run test_coc_pattern_linear.py,
+test_chat_coc.py, test_guard_proxy_pin_1288.py, test_weaver_guard_proxy_spans.py and test_proxy_checksum.py. Since
+the merge, `test_coc_pattern_linear.py` failed once on its first run here with three checks, at a host load of 20,
+then passed: noted as a followup, since this run did not keep that output.
+
+Run here once each: test_coc_pattern_linear.py (exit 1 at f75aa2f, the guard-proxy copy only; exit 0 at 0627502),
+test_scope_tests.py (exit 0). Live check: none; the clusters still run a7a5a36 and nothing promotes from this run.
