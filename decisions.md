@@ -44421,3 +44421,48 @@ gave it an entry under `reads` (decisions.md, PROGRESS.md, and what importing `s
 `python3 verify/test_scope_tests.py` printed `ALL PASS`. The scoped suite is left to validation. No dependency was added.
 
 **Live check.** Skipped: the change touches only a `verify/` test no cluster runs, the scope map and this file.
+## 2026-11-09 · #1208 · run 19409 · guardrails-off returns on both clusters with the finalizer on, and the switch test reads the terminal's own deletes
+
+**What was left.** #1134's run 18785 found this hang's cause and fixed it in `gitops/guardrails-switch/guardrails-switch.yaml`:
+the switch's Role in `agent` grants `list` and `watch` beside `delete` on NetworkPolicies and KubeArmor policies, so
+the wait in `kubectl delete` can watch an object that still holds `networking.k8s.aws/resources`. Run 18805 (#1159)
+saw `guardrails-off` return on both KubeCon probes after it synced. `verify/prior-drafts.sh 1208 origin/staging` printed
+NONE. Of the issue's two options this keeps the Role fix and does not add `--wait=false`: with the wait, the policy
+is gone before the terminal prints "Egress OFF", and a `guardrails-on` straight after does not meet an object that is
+still being deleted.
+
+**The test.** `verify/test_guardrails_switch.py` already held the Role alone (every kind it may delete it may also list
+and watch). Its replay of `guardrails-off` against the fake two-cluster kubectl now turns each `delete` the terminal
+makes on the other cluster into the RBAC requests real kubectl makes: `delete`, and `list` and `watch` on the kind
+unless the call passes `--wait=false`. The check that everything the switch asks of the other cluster is inside the
+grant then fails on the grant run 18721 met. A new check pins that: both deletes wait, and with `list` and `watch`
+taken out of the grant the replay names `watch` on networkpolicies and kubearmorpolicies as missing. With the live
+Role's networkpolicies rule cut to `get, create, patch, delete` in the worktree, the test exited 1 on three checks,
+the replay's among them; the file was restored. Against the tree, 133 checks pass.
+
+**Live check, watch-it-burn-private's terminal.** At the start, both clusters had every guardrail off, the
+`guardrails-switch` Application Synced at `6513ed35`, `kubectl auth can-i watch networkpolicies -n agent --as
+system:serviceaccount:guardrails-switch:guardrails-switch` printed `yes` on both, and every NetworkPolicy in `agent`
+on both carried `[networking.k8s.aws/resources]`. Under `python3 verify/guard_lease.py hold --with-peer --context
+watch-it-burn-private --profile accen-dev`, which waited for run 19404's trace seed to release the lock first:
+
+```
+kubectl --context watch-it-burn-private -n agent exec deploy/web-terminal -c ttyd -- bash /home/student/guardrails-on
+Both clusters, this one and watch-it-burn-community: all four Kubernetes guardrails are on.
+guardrails-on rc=0 in 6.3 s
+kubectl --context watch-it-burn-private -n agent exec deploy/web-terminal -c ttyd -- bash /home/student/guardrails-off
+Both clusters, this one and watch-it-burn-community: all four Kubernetes guardrails are off.
+guardrails-off rc=0 in 6.7 s
+```
+
+A second pass read the policies between the two: on both clusters each of the six egress policies `guardrails-on`
+applied (`agent-allow-dns`, `agent-allow-intra-namespace`, `agent-allow-kagent-egress`, `agent-allow-otel-egress`,
+`agent-allow-weather-feed-egress`, `agent-egress-allowlist`) carried `[networking.k8s.aws/resources]`, and
+`guardrails-off` then returned rc 0 in 6.7 s, ending "all four Kubernetes guardrails are off." Read back after: both
+clusters at the start state (the egress policies gone, the shipped ingress and console policies kept, no KubeArmor
+policy, both registry policies at `[Audit]`, the workshop-agent Role's rules byte for byte as read before), no
+`wib-guard-lock` on either, and no kubectl left running in either terminal pod. The presenter terminal login was not
+read or touched.
+
+**Tests run.** `python3 verify/test_guardrails_switch.py` and `python3 verify/test_scope_tests.py` pass. The full Test
+and E2E commands are left to hecaton's validation. No dependency was added.
