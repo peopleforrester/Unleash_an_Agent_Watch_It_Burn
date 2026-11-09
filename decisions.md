@@ -48455,3 +48455,22 @@ signature against `policies/cosign/watch-it-burn.pub`; cosign is not in `verify/
 host's PATH. The cluster's Kyverno verifyImages rule on watch-it-burn-private does that check at Pod admission.
 
 **Live check.** None needed: this entry is the only change, and no cluster runs decisions.md.
+## 2026-11-09 · #1286 · run 19676 · the agent-logs and lab-pipeline collector tests log otelcol to a file
+
+**What changed.** `verify/test_agent_otlp_logs_collector.py` and `verify/test_lab_pipeline_collector.py` started
+otelcol-contrib with its stderr on a pipe that nothing read until the start had failed. Run 19660 on #1283 found that
+pattern blocked the kagent collector test: #1277's coc_mask statement made a start-up log of about 218 KB, and the
+collector stopped on a full 64 KB pipe before it opened its receiver. Both tests now start the collector the way
+`verify/test_kagent_service_name_collector.py` does since #1283, with stderr written to a log file in the test's
+temporary directory. A failed start names the reason (exited with its code, or still not listening at the bound) and
+the last 600 characters of that file. The lab test used to print nothing for a collector still running at its
+30-second bound, since it read the pipe only after an exit; it now prints the file's tail in both cases.
+
+**What ran.** `bash verify/run-e2e-tools.sh test_agent_otlp_logs_collector.py`: all checks PASS over the six
+profile and secret starts, `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0, 0m20s. `bash verify/run-e2e-tools.sh
+test_lab_pipeline_collector.py`: every validate and every lab-contract check PASS, `ALL E2E TOOLS TIER CHECKS GREEN`,
+exit 0, 2m07s. The failed-start path was checked on scratch copies of both tests, since deleted, with an unknown
+processor `bogus/x` put into the pipeline: each printed FAIL with "exited 1" and the tail of its collector log, which
+held otelcol's own complaint about the unknown processor type.
+
+**Live check.** None: the change touches only two tests under `verify/` that no cluster runs.
