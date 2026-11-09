@@ -132,7 +132,7 @@ BAD = {
     "build-push-action outputs type=registry": wf("      - uses: docker/build-push-action@v6\n        with:\n"
                                                   "          outputs: type=registry\n"),
     "bake-action push: true": wf("      - uses: docker/bake-action@v5\n        with:\n          push: true\n"),
-    "docker push": wf("      - run: docker push ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-1.7.7\n"),
+    "docker push": wf("      - run: docker push ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-1.7.7-8\n"),
     "docker image push in a block": wf("      - run: |\n          set -e\n          docker image push \"${TAG}\"\n"),
     "docker buildx build --push": wf("      - run: docker buildx build -t \"${TAG}\" --push images/web-terminal\n"),
     "imagetools create": wf("      - run: docker buildx imagetools create -t \"${TAG}\" \"${SRC}\"\n"),

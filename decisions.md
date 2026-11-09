@@ -49609,3 +49609,40 @@ on watch-it-burn-community still runs `ghcr.io/kagent-dev/kagent/golang-adk:0.10
 `peopleforrester/watch-it-burn:golang-adk-0.10.1-mcptrace`, so the patched image runs nowhere before promotion and the
 workflow's push. What
 run 19476's entry names under "Not yet run on a cluster" is still owed, in its order.
+
+## 2026-11-09 · #1276 · run 19675 · The web-terminal pin moves to `web-terminal-ttyd-1.7.7-8`, the signed build from the pinned fetches
+
+**What changed since run 19641.** Run 19641 left the pin on `68004fb5` because `web-terminal-ttyd-1.7.7-8`
+(`sha256:b81d336c6a71cf98889ab6815269af7b0cb9cb1e7b3a3e0464435dcdcbc77386`) had no cosign signature and
+watch-it-burn-private's `verify-image-signatures` policy denied it. On 2026-11-09 an anonymous HEAD of
+`sha256-b81d336c....sig` on ghcr.io answers 200 (digest `sha256:18c417f8...`), so the signing act has been done. The
+tag still serves `b81d336c`, no later web-terminal tag exists (`-8` is the newest in the tag list), and
+`images/web-terminal` on staging is still tree `b2b8abf1`, the tree `-8` carries in its source-tree label.
+
+**The pin.** Both places `gitops/ai-layer/resources.yaml` names the image (the web-terminal Deployment and the
+cloud-credential-probe Job) and `images.lock` row 55 now read
+`web-terminal-ttyd-1.7.7-8@sha256:b81d336c...`. The row's saved column is `-`: the image archive on netcup holds
+`68004fb5`, not `-8`, so the dated column would be false until `mirror-images.sh save .` runs there again;
+`verify/test_images_saved.py` (by hand, on netcup) asks for that save. `test_image_version_tags.py` requires every
+whole `watch-it-burn:web-terminal...` reference in the tree to name the pinned tag, so three references to the bare
+`web-terminal-ttyd-1.7.7` moved to `-8` with it: the image table in `docs/MASTER-RECREATION-SPEC.md`, the allowlist
+case in `verify/test_c6_villain_endpoint.py` and the `docker push` fixture in
+`verify/test_workflow_registry_writes.py`. Neither test reads the tag for its own meaning.
+
+**Live check, nothing created.** A server-side dry run of a Pod on `-8` in namespace `agent`
+(`kubectl --context <c> apply --dry-run=server`) was admitted on watch-it-burn-private and on
+watch-it-burn-community; on private it was denied in run 19641. Both web-terminal pods still run `68004fb5`
+(`containerStatuses[].imageID`), and both Deployments are `Recreate`, so the pods are replaced once Argo CD syncs this
+change from staging.
+
+**Tests.** `bash verify/run-e2e-tools.sh test_image_version_tags.py`: green, and it read ttyd 1.7.7 out of the `-8`
+image and found the source-tree label. Its first run failed on the three bare references above, which this change
+fixes. `test_ttyd_ws_auth.py`, `test_wib_digests_signed.py`, `test_cloud_credential_probe_admission.py`,
+`test_breakout_registry_policy.py`, `test_kyverno_cel_policies.py`, `test_c8_pod_secret_mount.py` and
+`test_room_reader_rbac_e2e.py`, run alone the same way, are green. Offline: `test_c6_villain_endpoint.py`,
+`test_workflow_registry_writes.py`, `test_images_lock.py`, `test_ghcr_version_tag.py`, `test_wib_pins.py`,
+`test_scope_tests.py` and `scope_tests.py check` pass. The scoped suites are left to validation.
+
+**Not yet run on a cluster.** `CONTEXT=watch-it-burn-community python3 verify/test_terminal_ws_auth_live.py` (and the
+same on watch-it-burn-private) against a web-terminal pod on `sha256:b81d336c...`, after hecaton promotes this change
+and Argo CD syncs it. The next run on the issue runs it.
