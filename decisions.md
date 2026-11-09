@@ -49848,3 +49848,25 @@ run 19733's run of it stands, with its follow-up on the admin probe's Challenge 
 
 **Tests.** `python3 verify/test_guard_lease.py` (all guard lock checks passed), `python3
 verify/test_coc_floor_probes_live_checks.py` (passed) and `python3 verify/test_scope_tests.py` (ALL PASS), once each.
+
+## 2026-11-09 · #1302 · run 19773 · The patched kagent runtime's digest is signed now, and its check passes alone
+
+**What changed since run 19761.** The digest that run 19761 found unsigned,
+`ghcr.io/peopleforrester/watch-it-burn@sha256:59bc5777ae74609446fde57324f4e33e606c819dd32fffc543243c0e7940f6c5`
+(#1222's `golang-adk-0.10.1-mcptrace`, pinned at `gitops/bootstrap/apps/kagent.yaml:66` and `images.lock:132`), now
+has its `sha256-<digest>.sig` tag on ghcr.io: the escalated signing on netcup was done outside this run. No file
+besides this entry changes, and no pin moves.
+
+**The test, run alone.** `python3 verify/test_wib_digests_signed.py` read the same 14 digests (14 in images.lock, 11
+in manifests), passed all 14, including `sha256:59bc5777ae74...`, printed "Every pinned watch-it-burn digest is
+served with its sha256-<digest>.sig tag, anonymously." and exited 0. That was the heavy gate's only red check on
+staging 6eaadbd3.
+
+**Live check.** The same read-only server-side dry run that was denied in run 19761: a Pod in `agent` on
+watch-it-burn-private with the pinned image, `kubectl --context watch-it-burn-private apply --dry-run=server`. It
+printed `pod/sig-dryrun-1302 created (server dry run)` and exited 0, so the signature verifies against the workshop
+key. The policy was enforcing when it did: `imagevalidatingpolicies.policies.kyverno.io/verify-image-signatures`
+reads `validationActions ["Deny"]` and ready `true`. Nothing was created and no cluster changed.
+
+**Left to validation.** Only this entry changed, so the scoped Test and E2E commands and the next heavy gate run
+`bash verify/run-e2e-tools.sh`; this run did not run either whole.
