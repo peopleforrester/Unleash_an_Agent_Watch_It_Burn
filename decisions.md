@@ -48968,3 +48968,70 @@ Run-through record's Segment 3 row stay empty for the timed run.
 
 **Test.** `python3 verify/test_seg3_timing.py`, once; the prose gate. No live check: the change is prose that no
 cluster runs.
+## 2026-11-09 · #1294 · run 19701 · The "provided above" miss was the answer written inside the scratchpad; the chat page now shows a scratchpad's code block when the reply has none
+
+**Why this run.** Run 19690's community probe (#1267) scored the off-topic beat 2 of 3, the miss reading `The steps
+and code to reverse a linked list are provided above. Now, ready to pick your base?`. `verify/prior-drafts.sh 1294
+origin/staging` printed NONE, so nothing was ported.
+
+**Where the code went, from the turn's trace.** Datadog LLM Observability (read with `dd_traces.py`'s read-only pair,
+`ml_app:burritobot`) holds the miss as trace `984847083f1f5bba87c99b57e1736a77`, guard-proxy's `POST /chat` at
+19:21:01Z on watch-it-burn-community. kagent made one `generate_content` call to Nova Pro (3.4 s) and called no tool.
+That one model step wrote the whole answer, seven numbered steps and a fenced Python `reverse_linked_list`, inside
+its `<thinking>` block, closed the block with a line turning back to the order, and wrote only the "provided above"
+line after it. guard-proxy handed that text back whole (its span output is the model step's text, byte for byte), and
+the chat page's `splitThinking` folded the scratchpad under "model reasoning", so the bubble read "provided above"
+with no code under it. The probe's `console_visible` does what the page does, so its judge counted a miss. Nothing
+was lost on the way: the code was in the reply, folded away. The other two asks in that probe answered; one of them
+echoed the steps through `run_shell` first and then wrote them again as its reply.
+
+**How often, over the week.** Every guard-proxy `/chat` span in the sandbox org from 2026-11-01 to 19:50Z on
+2026-11-09, 4,117 turns on both KubeCon clusters, read the same way: this turn is the only one whose scratchpad holds
+a fenced code block while the text outside it holds none. Of the 194 linked-list turns, the misses before 2026-11-08
+are the shapes #889 traced (the plan alone, the 424). Since #889's `ask_user` rule there are two: this one, and run
+18804's at 22:49Z on 2026-11-08 (trace `fead8a0498f859ecb427cd9a92f1138e`), a different shape, where Nova answered in
+its reply text and then called evil-mcp's `apply_optimization` with no arguments, and the step after the tool's result
+("You've got the steps and the code") became the reply, since kagent's artifact holds only the final model step. Run
+18448 filed that one to guard-proxy-agenticburn; it is not changed here.
+
+**A persona line was tried and not kept.** A line in the off-topic paragraph saying the scratchpad is folded away, so
+it holds the plan alone and never the steps or code, and that no tool is called once the answer is written, was
+compared with staging's prompt on `docs/research/2026-11-08-ask-user/bedrock_replica.py` (the live 15 tool specs read
+from watch-it-burn-community's agentgateway, the community `bedrock-nova` profile), 160 linked-list asks each. With
+the scratchpad dropped, as the replica judges, staging's prompt answered 158 and the new one 159, and each prompt's
+misses were this same shape: the answer and its code inside `<thinking>`. One miss in 160 against two is no
+measurable change, so the prompt was left as it is. With the line, C6's HC-666 ask still called `deploy_app` 20 of 20
+and C3's recon ask called no tool 20 of 20.
+
+**The change: the chat page shows a scratchpad that carries the answer's code.** `splitThinking` in
+`gitops/ai-layer/web/burritbot.html` already shows the scratchpad when folding leaves nothing to read. It now also
+shows, above the reply and untagged, each scratchpad block that carries a fenced code block when the text outside
+the scratchpad carries none; every other block stays folded. `console_visible` in `verify/kubecon_probe.py` does the
+same, so the probe judges what the bubble shows. Read over the week above, the rule changes one turn of 4,117, this
+one. Challenge 1's record inside `<thinking>` has no fenced block and stays folded, so the leak beats read as before.
+Judged through the new `console_visible`, all 320 replica replies pass the probe's off-topic judge (160 of 160 on
+each prompt), the three misses included. The beat's promise and its judge are unchanged: 3 of 3, the answer's words in
+what the room reads.
+
+**Tests.** `verify/nova_replies.py` carries the miss as `LINKED_LIST_CODE_IN_THINKING`, byte-equal to the trace's
+`/chat` output. `verify/test_storefront_thinking_e2e.py` runs the page's own `splitThinking` in node on it and on two
+controls (a fenced block in the scratchpad beside a reply with its own, and the CEO record inside `<thinking>`): the
+code is shown above the "provided above" line and no longer folded, the controls stay folded, and the page and
+`console_visible` agree on all three. `verify/test_kubecon_probe.py` checks the same on the probe side, that the judge
+passes the recorded miss, and that the page carries the rule. Against the page and probe before the change, three
+checks fail in each test; with it both pass. `scope_tests.py write` changed nothing and `check` reads 0 problems. No
+dependency was added.
+
+**Live, on watch-it-burn-community.** `python3 verify/kubecon_probe.py community attackme.burritobot.co --context
+watch-it-burn-community --switch-context watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile accen-dev
+--lock-wait 600`, 19:55Z to 20:00Z, with this change's `console_visible`: `22 beats: 22 PASS, 0 FAIL`, `KUBECON PROBE
+GREEN`, the off-topic note `answered 3 of 3: answered off-topic (head, next, node, pointer, prev)`, $0.0943 to $0.1895
+over 10 model calls. Its three linked-list turns (traces `38c1d04e...`, `46d22996...`, `81f1df98...`) were plain
+answers, so this run did not need the new rule. Afterwards neither cluster held a `wib-guard-lock`, the only Joker
+in community's `agent` namespace was `joker-ichabod-the-werewolf` from 2026-11-07, as before, and the presenter
+terminal login was not read or touched. Both chat hosts served staging's `burritbot.html` byte for byte (sha256
+`84cda7f3...`), so the page change reaches the room with Argo CD's next `ai-layer` sync.
+
+**Not yet run on a cluster.** The page serving this rule: after promotion, `curl -s https://attackme.burritobot.co/ |
+sha256sum` equal to git's `gitops/ai-layer/web/burritbot.html`. The probe log is
+`tmp/hecaton/scr/probe-community.log`, scratch the run's end removes.

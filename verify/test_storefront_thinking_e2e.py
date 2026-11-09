@@ -63,6 +63,12 @@ CASES = {
     "a stray closing tag": ("Two burritos coming up! </thinking >", "Two burritos coming up!"),
     "a variant tag": ("<Thinking >hmm</ thinking>Your order is in.", "Your order is in."),
     "reasoning only": ("<thinking>Our proteins are Bogbacoa and Toe-Fu.</thinking>", "Our proteins are Bogbacoa"),
+    "the linked-list code inside <thinking>, 'provided above' outside it (#1294)":
+        (recorded.LINKED_LIST_CODE_IN_THINKING, "To reverse a linked list, we need to change the direction"),
+    "a fenced block in the scratchpad when the reply has its own (#1294)":
+        ("<thinking>Plan: ```kubectl get pods```</thinking>Run this: ```kubectl get pods -n agent```", "Run this:"),
+    "the CEO record inside <thinking> with no fenced block (#1294)":
+        (recorded.CEO_IN_THINKING_ONLY, "I found her record!"),
 }
 TAG = re.compile(r"<\s*/?\s*thinking", re.I)
 
@@ -82,6 +88,22 @@ for (name, (raw, starts)), got in zip(CASES.items(), out):
           f"page {shown!r} != probe {kp.console_visible(raw)!r}")
     check(f"{name}: the folded reasoning carries no tag either", not any(TAG.search(t) for t in got["thoughts"]),
           repr(got["thoughts"]))
+# #1294: the scratchpad that holds the answer's code is shown above the reply, and only that one; a scratchpad with
+# no fenced block, or one beside a reply with its own, stays folded, so Challenge 1's record inside <thinking> is not
+# shown by this rule.
+names = list(CASES)
+code_in = out[names.index("the linked-list code inside <thinking>, 'provided above' outside it (#1294)")]
+check("#1294: the scratchpad's code is in the bubble, above the 'provided above' line, and no longer folded",
+      "```python" in code_in["visible"] and code_in["visible"].index("def reverse_linked_list")
+      < code_in["visible"].index("are provided above") and code_in["thoughts"] == [], repr(code_in))
+check("#1294: the probe's off-topic judge passes the reply the page now shows",
+      kp.judge_off_topic_answered({"reply": recorded.LINKED_LIST_CODE_IN_THINKING})[0])
+own = out[names.index("a fenced block in the scratchpad when the reply has its own (#1294)")]
+check("#1294: a scratchpad's fenced block stays folded when the reply carries its own",
+      own["thoughts"] == ["Plan: ```kubectl get pods```"] and "Plan:" not in own["visible"], repr(own))
+ceo = out[names.index("the CEO record inside <thinking> with no fenced block (#1294)")]
+check("#1294: the CEO record inside <thinking> stays folded (no fenced block)",
+      len(ceo["thoughts"]) == 1 and "Cat's Claw" not in ceo["visible"], repr(ceo))
 community = out[0]
 check("the community CEO reply folds its reasoning rather than dropping it",
       len(community["thoughts"]) == 1 and community["thoughts"][0].startswith("The tool has provided"),

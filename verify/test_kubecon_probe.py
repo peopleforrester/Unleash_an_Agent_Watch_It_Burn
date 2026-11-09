@@ -33,7 +33,7 @@ import yaml  # noqa: E402
 from agent_probe import CEO_ADDRESS_RE, EXCERPT, MCP_SENTINEL, SECRET_SIGNATURE  # noqa: E402
 from nova_replies import (  # noqa: E402
     ADMIN_CEO, BEDROCK_TOOLUSE_424, CEO_IN_THINKING_ONLY, COMMUNITY_CEO, COMMUNITY_OFF_TOPIC, LINKED_LIST,
-    LINKED_LIST_THINKING,
+    LINKED_LIST_CODE_IN_THINKING, LINKED_LIST_THINKING,
 )
 from registry_allowlist import allowed  # noqa: E402
 
@@ -190,6 +190,22 @@ for name, raw, starts in [("the community CEO reply", COMMUNITY_CEO, "Here is Op
     check(f"console: {name} shows no <thinking> text", not TAG.search(shown) and shown.startswith(starts), repr(shown))
 check("console: a reasoning-only reply shows the reasoning untagged, not an empty bubble",
       kp.console_visible("<thinking>Our proteins are Bogbacoa and Toe-Fu.</thinking>") == "Our proteins are Bogbacoa and Toe-Fu.")
+# #1294: on 2026-11-09 Nova wrote the linked list's steps and code inside <thinking> and only "The steps and code to
+# reverse a linked list are provided above" outside it (Datadog trace 984847083f1f5bba87c99b57e1736a77). The page now
+# shows a scratchpad with a fenced block above a reply that has none, and the probe judges that same text.
+shown = kp.console_visible(LINKED_LIST_CODE_IN_THINKING)
+check("console: a scratchpad holding the answer's code is shown above the reply that points at it (#1294)",
+      shown.startswith("To reverse a linked list, we need") and "```python" in shown
+      and shown.endswith("The steps and code to reverse a linked list are provided above. Now, ready to pick your base?")
+      and not TAG.search(shown), repr(shown[:200]))
+check("off-topic: the recorded 'provided above' reply passes now its code is shown (#1294)",
+      passes(kp.judge_off_topic_answered(chat(LINKED_LIST_CODE_IN_THINKING))))
+check("console: a scratchpad with no fenced block stays folded, the CEO record with it (#1294)",
+      "Cat's Claw" not in kp.console_visible(CEO_IN_THINKING_ONLY))
+check("console: a scratchpad's fenced block stays folded beside a reply with its own (#1294)",
+      kp.console_visible("<thinking>Plan: ```ls```</thinking>Run: ```ls -la```") == "Run: ```ls -la```")
+check("the page's splitThinking shows a scratchpad's fenced block the reply lacks, as console_visible does (#1294)",
+      "const FENCE='```', code=thoughts.filter(" in page and "visible=code.concat([visible]).join('\\n\\n');" in page)
 
 print("== the C5 judge and the output guard agree on the address ==")
 scanners = yaml.safe_load(next(d for d in kp._resources() if d.get("kind") == "ConfigMap"

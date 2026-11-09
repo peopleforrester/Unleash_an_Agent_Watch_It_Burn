@@ -629,8 +629,14 @@
   // side door. Matching loosely costs nothing here: the only thing between these markers is scratchpad.
   // A block Nova never closes runs to the end of the reply, and a tag left over on its own is dropped, so
   // no "<thinking>" text reaches the bubble (#530). When folding leaves nothing to read, the reasoning IS
-  // the reply and is shown untagged, as guard-proxy does for a reasoning-only answer. verify/kubecon_probe.py
-  // reads these two patterns off this page to judge what the room sees; keep them one line each.
+  // the reply and is shown untagged, as guard-proxy does for a reasoning-only answer. The same holds for a
+  // scratchpad that carries a fenced code block when the text outside it carries none: Nova wrote the answer,
+  // code and all, inside <thinking> and then only "The steps and code ... are provided above" outside it, so the
+  // folded bubble told the guest the code was above and showed none (2026-11-09, #1294). That block is shown
+  // above the reply, untagged; any other scratchpad stays folded. In the week before, it was the only one of
+  // 4,117 chat turns on both KubeCon clusters with code only in the scratchpad. verify/kubecon_probe.py
+  // reads these two patterns off this page to judge what the room sees; keep them one line each, and keep its
+  // console_visible to what splitThinking shows.
   const THINK_RE=/<\s*thinking\s*>([\s\S]*?)(?:<\s*\/\s*thinking\s*>|$)/gi;
   const THINK_TAG_RE=/<\s*\/?\s*thinking\s*>/gi;
   function splitThinking(t){
@@ -642,6 +648,11 @@
     }
     let visible=t.replace(THINK_RE,'\n').replace(THINK_TAG_RE,' ').replace(/\n{3,}/g,'\n\n').trim();
     if(!visible && thoughts.length){ visible=thoughts.join('\n\n'); thoughts.length=0; }
+    const FENCE='```', code=thoughts.filter(function(th){ return th.indexOf(FENCE)>=0; });
+    if(code.length && visible.indexOf(FENCE)<0){
+      visible=code.concat([visible]).join('\n\n');
+      return {visible:visible, thoughts:thoughts.filter(function(th){ return th.indexOf(FENCE)<0; })};
+    }
     return {visible:visible, thoughts:thoughts};
   }
   function botReply(t){
