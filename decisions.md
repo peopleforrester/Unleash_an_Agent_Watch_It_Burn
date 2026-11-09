@@ -45284,3 +45284,36 @@ ran ttyd, the two entrypoints, jupyter-lab and nothing else: no `guardrails-off`
 and PIDs only were read; the presenter terminal login was not read or touched). Nothing was changed on either cluster.
 
 **Tests run.** None: the change is this entry alone. The ai-isms prose gate was run on it.
+## 2026-11-09 · #1222 · run 19434 · kagent's MCP traceparent fix is upstream in the 1.0 line only; which way to take it is asked
+
+**Upstream (criterion 1).** kagent fixed this on main in `81af4dbe68`, kagent-dev/kagent#2809 ("fix(adk): propagate
+trace context on outbound LLM and MCP HTTP calls", merged 2026-09-14), which closed kagent-dev/kagent#2550. It wraps
+the transport `createTransport` builds (go/adk/pkg/mcp/registry.go) and the one `models.BuildHTTPClient` builds in
+`otelhttp.NewTransport`, outermost, after header injection. Read through the GitHub API on 2026-11-09:
+
+- registry.go has `otelhttp.NewTransport` at v1.0.0-alpha1 through v1.0.0-rc3 (rc3 adds `otelhttp.WithFilter`) and
+  on main.
+- It has none at v0.10.1, v0.10.6 or the head of `release/v0.10.x`, which is two commits past v0.10.6 and carries
+  neither #2809 nor a backport.
+- The 1.0 line moves the CRD group from `kagent.dev` to `api.kagent.dev` (helm/kagent-crds/templates at v1.0.0-rc3:
+  `api.kagent.dev_agents.yaml` and seven more).
+
+So the only releases that carry the fix are 1.0 release candidates, and taking one means moving every Agent,
+ModelConfig and RemoteMCPServer here, with the policies and tests that name `kagent.dev`, to a new API group.
+
+**Can 0.10.1 take the fix as a patch?** Yes. In a scratch clone of tag v0.10.1, `git apply --check` fails on #2809
+only on its import hunk, whose context differs by one line (no `go/pkg/logging` import at 0.10.1). With context
+reduced to one line, the registry.go and base.go hunks apply as they are. The MCP half is four lines. The 0.10.1
+chart reads its Go runtime image from `controller.goAgentImage` (helm/kagent/values.yaml), so a patched build could be
+pinned from `gitops/bootstrap/apps/kagent.yaml` the way #1015 pins Kyverno's counter fix. That route also needs a
+collector rule. otelhttp writes a client span under `execute_tool`, and the gateway's POST on :3001 would name it as
+its parent, so the rules in `gitops/otel-collector/values.yaml` must keep that span. If they drop it, the pair is a
+second root in the turn's trace, the way the A2A hop was (#703).
+
+**Not settled here.** The issue's plan is to bump kagent once a release carries the fix. Only a new major with an API
+group rename carries it, and #1015's precedent chose a patched build of the running release over a prerelease of a
+whole new line. Building one would replace the issue's own second criterion with a different one, so the run asks
+which way to go. It changes no cluster and no `gitops/` file.
+
+Live check: none. This run changes only decisions.md, and it read neither cluster. Criterion 2, a Challenge 1 turn on
+watch-it-burn-private with the tools/call pair inside the turn's trace in Tempo, waits on the answer.
