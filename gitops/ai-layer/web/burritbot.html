@@ -713,8 +713,9 @@
   // the terms. cocFold folds the text one character at a time as floor.py's fold() does: zero-width characters and
   // the soft hyphen dropped, compatibility and accent forms reduced to their base letter (NFKD, marks dropped),
   // Cyrillic and Greek look-alikes mapped to Latin, lower case. COC_RE is floor.py's proposed_pattern(): each
-  // letter repeatable, its leetspeak stand-ins, "*" for a vowel, or the term spelt with one separator between
-  // every letter; a phrase's words with any run of separators between them; a whole word on the folded text, with
+  // letter as itself, a leetspeak stand-in or "*" for a vowel, then repeatable as itself or a digit stand-in (cocRun,
+  // floor.py's _run: a symbol stands once, so a long run of symbols costs time linear in its length, #1300), or the
+  // term spelt with one separator between every letter; a phrase's words with any run of separators between them; a whole word on the folded text, with
   // an optional plural s. A separator is what Python's \s matches (spelt out here, as JavaScript's \s differs), a
   // dot, an underscore, an asterisk or a hyphen. Only this list: BLOCK_LIST attack words and personal data are
   // masked on the wall but are not code-of-conduct problems in the attendee's own saved list.
@@ -723,7 +724,7 @@
   const COC_TERMS='shpx,shpxf,shpxrq,shpxre,shpxref,shpxvat,shpxva,shpxnoyr,shpxsnpr,shpxurnq,shpxjvg,spx,shx,shd,sipx,cuhpx,zbgureshpxre,zbgureshpxvat,fuvg,fuvgf,fuvggl,fuvggvat,fuvggrq,fuvgurnq,fuvgsnpr,ohyyfuvg,ubefrfuvg,qvcfuvg,phag,ovgpu,ovgpurf,ovgpuvat,ovngpu,onfgneq,qvpx,qvpxurnq,pbpx,pbpxfhpxre,chffl,nffubyr,nefrubyr,qhzonff,wnpxnff,jnaxre,gjng,cevpx,fgsh,tgsb,jgs,avttre,avttn,snttbg,snt,qlxr,genaal,genaavr,furznyr,ergneq,ergneqrq,gneq,fcnm,zbatbybvq,xvxr,fcvp,puvax,tbbx,jrgonpx,ornare,enturnq,gbjryurnq,cnxv,pbba,jbc,qntb,ubaxl,erqfxva,mvccreurnq,frk,cbea,cbeab,oybjwbo,unaqwbo,phz,phzfubg,qvyqb,ubeal,gvgf,gvggvrf,obbof,ahqrf,rebgvp,guerrfbzr,nany frk,wrex bss,wnpx bss,anxrq obql,fyhg,juber,encr,encrq,encvfg,encvat,xvyy lbhefrys,xvyy hefrys,xlf,unat lbhefrys,urvy uvgyre,fvrt urvy,juvgr cbjre,tnf gur wrjf,craqrwb,craqrwn,zvreqn,chgn,chgb,pnoeba,puvatn,puvatnqn,znevpba,wbqre,pbñb,iretn,chgnva,zreqr,pbaaneq,fnybcr,raphyr,raphyre,chgr,fpurvffr,fpurvßr,uherafbua,sbgmr,jvpufre,svpx qvpu,fpuynzcr,pnenyub,cbeen,ivnqb,ohprgn,inssnaphyb,fgebamb,pnmmb,chggnan'.split(',').map(function(w){return w.replace(/[a-z]/gi,function(c){var b=c<='Z'?65:97;return String.fromCharCode((c.charCodeAt(0)-b+13)%26+b);});});
   const COC_LEET={a:'4@',b:'8',c:'(',e:'3',g:'9',i:'1!|',l:'1|',o:'0',s:'5$',t:'7+'};
   const COC_ZERO_WIDTH='\u200b\u200c\u200d\u2060\ufeff\u00ad';
-  const COC_LOOKALIKE=['\u0430\u0435\u043e\u0440\u0441\u0443\u0445\u0456\u0458\u0455\u0501\u051b\u051d\u043a\u043c\u0442\u0432\u043d\u0410\u0415\u041e\u0420\u0421\u0423\u0425\u0406\u0408\u0405\u041a\u041c\u0422\u0412\u041d\u03b1\u03bf\u03b5\u03c1\u03c4\u03c5\u03bd\u03ba\u03b9\u0391\u0392\u0395\u0396\u0397\u0399\u039a\u039c\u039d\u039f\u03a1\u03a4\u03a5\u03a7','aeopcyxijsdqwkmtbhaeopcyxijskmtbhaoeptuvkiabezhikmnoptyx'];
+  const COC_LOOKALIKE=['\u0430\u0435\u043e\u0440\u0441\u0443\u0445\u0456\u0458\u0455\u0501\u051b\u051d\u043a\u043c\u0442\u0432\u043d\u0410\u0415\u041e\u0420\u0421\u0423\u0425\u0406\u0408\u0405\u041a\u041c\u0422\u0412\u041d\u03b1\u03bf\u03b5\u03c1\u03c4\u03c5\u03bd\u03ba\u03b9\u0391\u0392\u0395\u0396\u0397\u0399\u039a\u039c\u039d\u039f\u03a1\u03a4\u03a5\u03a7\u0131','aeopcyxijsdqwkmtbhaeopcyxijskmtbhaoeptuvkiabezhikmnoptyxi'];
   const COC_SEP='[\\t-\\r\\x1c-\\x20\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000._*\\-]';
   function cocFold(t){
     var out='';
@@ -739,9 +740,17 @@
     var a=(c+(COC_LEET[c]||'')).replace(/[\\\]\[^\-]/g,'\\$&');
     return '['+a+('aeiou'.indexOf(c)>=0?'*':'')+']';
   }
+  function cocRun(c,after){
+    var own=c+(COC_LEET[c]||''),next=after+(COC_LEET[after]||'');
+    var again=Array.from(own).filter(function(x){return (x===c||/[0-9]/.test(x))&&next.indexOf(x)<0;}).join('');
+    if(!again)return cocLetter(c);
+    if(again===own&&'aeiou'.indexOf(c)<0)return cocLetter(c)+'+';
+    return cocLetter(c)+'['+again+']*';
+  }
+  function cocWord(x){var cs=Array.from(x);return cs.map(function(c,i){return cocRun(c,cs[i+1]||'');}).join('');}
   function cocTerm(w){
     var words=cocFold(w).split(/\s+/).filter(Boolean);
-    var joined=words.map(function(x){return Array.from(x).map(function(c){return cocLetter(c)+'+';}).join('');}).join(COC_SEP+'+');
+    var joined=words.map(cocWord).join(COC_SEP+'+');
     if(words.length===1&&Array.from(words[0]).length>=3)return '(?:'+joined+'|'+Array.from(words[0]).map(cocLetter).join(COC_SEP)+')';
     return '(?:'+joined+')';
   }

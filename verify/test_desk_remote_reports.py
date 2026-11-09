@@ -278,7 +278,13 @@ pattern = inc[0][len(CONF_DIR):] if inc else ""
 check("the pattern is a glob, so nginx starts when no file matches it", any(c in pattern for c in "*?["), pattern)
 check("it cannot match nginx's own *.conf includes or the ConfigMap's ..data entries",
       not pattern.endswith(".conf") and not pattern.startswith("."), pattern)
-check("console.conf includes nothing anywhere else", len(re.findall(r"^\s*include\s", CONF, re.M)) == 1)
+# The one other include is the chat page's /deployments.json read on kubecon-private (#1256,
+# verify/test_private_chat_deployments.py), whose glob cannot read this component's file.
+all_inc = re.findall(r"^\s*include\s+(\S+);", CONF, re.M)
+check("console.conf includes nothing else but the chat deployments read's set line",
+      sorted(all_inc) == sorted(inc + [CONF_DIR + "chat-deployments-relay*.set"]), str(all_inc))
+check("whose glob cannot match desk-remote-report.locations",
+      not fnmatch.fnmatchcase("desk-remote-report.locations", "chat-deployments-relay*.set"))
 check("console.conf has no /remote-landed or /remote-cluster-read route of its own",
       "location = /remote-landed" not in CONF and "location = /remote-cluster-read" not in CONF)
 check("and still refuses /landed and /cluster-read from outside on the support server",

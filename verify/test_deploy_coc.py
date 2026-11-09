@@ -94,6 +94,8 @@ check(f"its terms are terms-proposed.rot13's {len(TERMS)}, in order, in both fil
       f"{len(server.COC_TERMS)} and {len(desk.COC_TERMS)} terms")
 check("its pattern is floor.proposed_pattern()'s",
       server._COC_RE.pattern == floor.proposed_pattern().pattern == desk._COC_RE.pattern)
+check("its look-alike table is floor.py's _HOMOGLYPH, the dotless i (U+0131) to i included (#1301)",
+      server._COC_HOMOGLYPH == floor._HOMOGLYPH == desk._COC_HOMOGLYPH and floor._HOMOGLYPH.get(0x131) == ord("i"))
 _texts = [t for _, t in corpus.abuse_set()] + corpus.hard_negatives() + TERMS
 _differ = [i for i, t in enumerate(_texts)
            if not (server.coc_spans(t) == desk.coc_spans(t) == FLOOR.spans(t)

@@ -272,9 +272,11 @@ for profile in ("kubecon-community", "burn", "attendee", "kubecon-private"):
               .get("volumes", []) if (v.get("configMap") or {}).get("name", "").startswith("console-conf")]
     env = {e["name"]: e for c in (site.get("spec") or {}).get("template", {}).get("spec", {}).get("containers", [])
            for e in c.get("env") or []}
-    # kubecon-private's public-desk component adds the private desk hosts' redirect (#1220); no other profile has a file.
+    # kubecon-private's public-desk component adds the private desk hosts' redirect (#1220) and the chat page's
+    # deployments read through the relay (#1256); no other profile has a file.
     want_conf = (["default.conf", "desk-remote-report.locations"] if on else
-                 ["default.conf", "private-desk-redirect.conf"] if profile == "kubecon-private" else ["default.conf"])
+                 ["chat-deployments-relay.set", "default.conf", "private-desk-redirect.conf"]
+                 if profile == "kubecon-private" else ["default.conf"])
     check(f"{profile}: kustomize builds it, and console-conf is {' and '.join(want_conf)}",
           bool(conf) and sorted(conf["data"]) == want_conf, err or str(sorted((conf or {}).get("data", {}))))
     check(f"{profile}: the console mounts that console-conf by its hashed name", bool(conf) and mounts == [conf["metadata"]["name"]],
@@ -330,6 +332,9 @@ for profile in ("attendee", "kubecon-private", "kubecon-community", "admin"):
         check(f"{profile}: console-conf carries the component's private-desk-redirect.conf (#1220)",
               (conf.get("data") or {}).get("private-desk-redirect.conf")
               == (REPO / "gitops/ai-layer/components/public-desk/private-desk-redirect.conf").read_text(encoding="utf-8"))
+        check(f"{profile}: and its chat-deployments-relay.set (#1256)",
+              (conf.get("data") or {}).get("chat-deployments-relay.set")
+              == (REPO / "gitops/ai-layer/components/public-desk/chat-deployments-relay.set").read_text(encoding="utf-8"))
 
 print("== the guardrails, armed by lab-platform's arm parameter (#638, lab-platform#310) ==")
 ARMING = ("--set", f"{ARM_PARAMETER}={ARM_VALUE}")

@@ -911,6 +911,11 @@ sites:
     lines: 1
     class: loopback
     why: the support desk's own server on 127.0.0.1, which the test starts
+  verify/test_private_chat_deployments.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: the desk, desk-relay and stub deployments-page servers on 127.0.0.1, which the test starts
   verify/test_public_desk.py:
   - match: urlopen
     lines: 1

@@ -1,5 +1,5 @@
-# ABOUTME: The admin KubeCon cluster's way to the public support desk (#1158): one ticket by its number, and a deploy
-# ABOUTME: report sent with the desk's token. A fixed upstream and nothing else, so it is no route out for the bot.
+# ABOUTME: The admin KubeCon cluster's way to the public support desk (#1158): one ticket by its number, a deploy report
+# ABOUTME: sent with the desk's token, and one witch's private deployments rows (#1256). Fixed upstreams, nothing else.
 """desk-relay: what workshop-mcp's TICKET_SITE_URL points at on the kubecon-private profile (#1158, part of #1145).
 
 On the KubeCon pair one support desk and one deployments page serve both clusters' bots, at the public addresses
@@ -9,6 +9,8 @@ cluster's workshop-mcp reaches them through this pod and no other way:
     GET  /ticket?id=<number>   -> GET  <DESK_PUBLIC_URL>/ticket?id=<number>, the desk's answer as it is
     POST /landed               -> POST <DESK_PUBLIC_URL>/remote-landed with X-Desk-Report-Token, the answer as it is
     POST /cluster-read         -> POST <DESK_PUBLIC_URL>/remote-cluster-read with X-Desk-Report-Token, the answer as it is
+    GET  /deployments.json?witch=<slug>
+                               -> GET  <DESK_DEPLOYMENTS_URL>/deployments.json?witch=<slug>, its rows labelled private
     GET  /healthz              -> this relay's own state
     anything else              -> 404
 
@@ -19,6 +21,14 @@ reader (#1050) posts what this cluster still runs to the same desk, with the sam
 applies that read to the rows labelled private alone, so a deploy Kyverno's remove-untrusted-room-workloads deletes here
 shows greyed on deployments.burritobot.co, and a read from here never greys a community row. This cluster's own desk
 gets no deploy report from this cluster's bot, so it needs no read either, and the relay reaches no in-cluster desk.
+
+The admin chat page's "see your deployments" link (burritbot.html, checkMyDeployments) shows once /deployments.json on
+the bot's own host lists a row for the visitor. On this profile the console sends that read here (#1256), since this
+cluster's own desk holds no rows: the relay asks the one deployments page for the one witch named, with no token, and
+answers with the rows labelled private alone, so the admin page shows its link for the admin bot's deploys and not for
+a deploy the room's bot made under the same name. The read takes exactly one witch slug and nothing else: no witch,
+two, or a name outside the vocabulary's characters is refused here and sends nothing. It is GET only, and it reads the
+deployments page, which serves nothing of the desk's (console.conf), so it is no way to a ticket list (#1077).
 
 Why a pod of its own and not an egress allow on workshop-mcp: support.burritobot.co, beacon.burritobot.co and the
 registry share one router address (153.52.255.114, measured 2026-11-08), and a NetworkPolicy cannot name a host, so
@@ -34,6 +44,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -43,6 +54,12 @@ TOKEN_HEADER = "X-Desk-Report-Token"   # the public desk's header (#1157, ticket
 MAX_REPORT = 4 * 1024                  # the public console's client_max_body_size for /remote-landed
 MAX_READ = 512 * 1024                  # the desk's MAX_READ_BODY, and the public console's limit for /remote-cluster-read
 MAX_ID = 40                            # the desk keeps a ticket id to 40 characters
+MAX_ROWS_BODY = 256 * 1024             # the desk answers 200 rows at most; a larger answer is not the desk's
+PRIVATE_LABEL = "private"              # the label the public desk gives this cluster's rows (its DESK_REMOTE_CLUSTER)
+# A witch slug as the chat page writes one (witchSlug: the name lower-cased, spaces to dashes): every name in the
+# desk's vocabulary is lower-case letters joined by single dashes. The desk reads at most 80 characters of it.
+WITCH_SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+MAX_WITCH = 80
 # An oversize body up to this size is read and dropped before the 413, as nginx discards one before its own 413, so the
 # caller reads the 413 and not a broken pipe: answering before the body is read closed the socket under a sender still
 # writing (#1220 measured 9 of 40 POSTs of 512k + 1 ending in EPIPE). A body declared larger is answered at once and the
@@ -80,8 +97,23 @@ def forward(method: str, url: str, body: bytes | None = None, headers: dict | No
         return 502, json.dumps({"error": f"the support desk did not answer: {e}"}).encode()
 
 
+def private_rows(status: int, body: bytes) -> tuple[int, bytes]:
+    """The deployments page's answer cut to the rows labelled private; a status other than 200 passes as it is, and an
+    answer that is not the page's list of rows is a 502."""
+    if status != 200:
+        return status, body
+    try:
+        rows = json.loads(body)
+    except ValueError:
+        rows = None
+    if not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows):
+        return 502, json.dumps({"error": "the deployments page did not answer with its rows"}).encode()
+    return 200, json.dumps([r for r in rows if r.get("cluster") == PRIVATE_LABEL]).encode()
+
+
 class Handler(BaseHTTPRequestHandler):
     public = ""
+    deployments = ""
 
     def log_message(self, fmt: str, *args) -> None:  # one line per request, without the query (a ticket number)
         print(f"desk-relay: {self.command} {urllib.parse.urlsplit(self.path).path} -> {args[1] if len(args) > 1 else ''}",
@@ -116,8 +148,12 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == "/healthz":
             self._json(200, {"ok": True, "desk": self.public, "token": bool(report_token())})
             return
+        if url.path == "/deployments.json":
+            self._deployments(url.query)
+            return
         if url.path != "/ticket":
-            self._json(404, {"error": "not found: this relay reads one ticket by its number, nothing else"})
+            self._json(404, {"error": "not found: this relay reads one ticket by its number and one witch's "
+                                      "deployments, nothing else"})
             return
         ids = urllib.parse.parse_qs(url.query).get("id") or []
         tid = ids[0].strip() if len(ids) == 1 else ""
@@ -125,6 +161,20 @@ class Handler(BaseHTTPRequestHandler):
             self._json(400, {"error": "give one ticket number, e.g. /ticket?id=HC-7731"})
             return
         self._send(*forward("GET", f"{self.public}/ticket?{urllib.parse.urlencode({'id': tid})}"))
+
+    def _deployments(self, query: str) -> None:
+        """One witch's rows labelled private on the one deployments page (#1256), for the admin chat page's link."""
+        asked = urllib.parse.parse_qs(query, keep_blank_values=True)
+        witches = asked.get("witch") or []
+        witch = witches[0] if len(witches) == 1 and set(asked) == {"witch"} else ""
+        if not (len(witch) <= MAX_WITCH and WITCH_SLUG.fullmatch(witch)):
+            self._json(400, {"error": "give one witch name, e.g. /deployments.json?witch=agatha-the-banshee"})
+            return
+        status, body = forward("GET", f"{self.deployments}/deployments.json?{urllib.parse.urlencode({'witch': witch})}")
+        if len(body) > MAX_ROWS_BODY:
+            self._json(502, {"error": "the deployments page answered more than its rows"})
+            return
+        self._send(*private_rows(status, body))
 
     def do_POST(self) -> None:  # noqa: N802
         # Each POST this relay takes, and where it sends it on the public desk with the token: a deploy report, and a
@@ -148,9 +198,11 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     Handler.public = _base("DESK_PUBLIC_URL")
+    Handler.deployments = _base("DESK_DEPLOYMENTS_URL")
     # Not DESK_RELAY_*: Kubernetes injects DESK_RELAY_PORT=tcp://... for the Service named desk-relay.
     port = int(os.environ.get("RELAY_LISTEN_PORT", "8080"))
-    print(f"desk-relay: tickets, deploy reports and cluster reads go to {Handler.public}", flush=True)
+    print(f"desk-relay: tickets, deploy reports and cluster reads go to {Handler.public}, deployments reads to "
+          f"{Handler.deployments}", flush=True)
     ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
 
 

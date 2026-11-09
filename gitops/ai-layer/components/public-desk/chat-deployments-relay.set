@@ -1,0 +1,11 @@
+# ABOUTME: On kubecon-private, sends the chat page's /deployments.json read to desk-relay (#1256), which answers with the
+# ABOUTME: visitor's rows labelled private on the one deployments page. Included by console.conf's location alone.
+#
+# console.conf's /deployments.json location sets $wib_deployments to this cluster's own fake-ticket, then includes
+# conf.d/chat-deployments-relay*.set; this set comes after that one, so it is the address the proxy_pass reads. Since
+# #1158 the admin bot reports its deploys to deployments.burritobot.co, so this cluster's own desk lists none, and the
+# admin chat page's "see your deployments" link (burritbot.html, checkMyDeployments) never showed. desk-relay passes
+# GET /deployments.json?witch=<slug> to deployments.burritobot.co and answers with the rows labelled private alone
+# (desk_relay.py). Not a *.conf name, so nginx's http-level conf.d/*.conf include does not read it.
+# verify/test_private_chat_deployments.py holds it.
+set $wib_deployments http://desk-relay.agent.svc.cluster.local:8080;

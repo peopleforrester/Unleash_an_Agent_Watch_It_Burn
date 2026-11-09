@@ -49662,3 +49662,470 @@ the selection is left to validation.
 
 Live check: none changed since run 19749's read. This run changes only a file under `verify/` that no cluster runs.
 The post-sync check that entry names under "Not yet run on a cluster" is still owed.
+## 2026-11-09 · #1256 · run 19546 · The admin chat page's /deployments.json reads its private rows on the one page through desk-relay
+
+**What.** The admin chat page (`burritbot.html`, `checkMyDeployments`) shows its "see your deployments" link once
+`/deployments.json` on the bot's own host lists a row for the visitor. On kubecon-private that read went to the
+cluster's own fake-ticket, which has held no rows since #1158 sent the admin bot's deploy reports to
+deployments.burritobot.co, so the link never showed. Now:
+
+- `desk_relay.py` has one more route, `GET /deployments.json?witch=<slug>`. It asks
+  `DESK_DEPLOYMENTS_URL/deployments.json?witch=<slug>` (https://deployments.burritobot.co, set in `desk-relay.yaml`),
+  with no token, and answers with the rows labelled `private` alone. It takes exactly one `witch` and no other
+  parameter, and the slug must be lower-case letters and digits joined by single dashes, 80 characters at most. Any
+  other request is a 400 and sends nothing. An answer that is not the page's list of rows, or is over 256 KiB, is a
+  502. A non-200 answer from the page is passed back unchanged.
+- console.conf's `/deployments.json` location still sets `$wib_deployments` to fake-ticket. Then it includes the glob
+  `conf.d/chat-deployments-relay*.set`. The public-desk component merges `chat-deployments-relay.set` into
+  console-conf, and that file's single `set` points the read at desk-relay's Service. On every other profile the glob
+  matches no file and the read stays in-cluster. The file name is not `*.conf`, so nginx's http-level include does
+  not read it. The same glob pattern is how desk-remote-reports adds its routes.
+
+**Why the relay and not the console straight to the page.** The page lists both clusters' rows. Only the relay can cut
+them to the ones labelled private, and only the relay has the egress to reach the page. Labelling is the public desk's
+job (`DESK_REMOTE_CLUSTER: private`), and the new test checks that the relay's `PRIVATE_LABEL` matches it.
+
+**#1077 still holds.** The relay reads the deployments page, which serves nothing of the desk's (console.conf), and
+only for one witch. workshop-mcp never calls `/deployments.json`, so the bot gains no new read. Every desk path is
+still a 404 at the relay, `/ticket?id=` still reads one ticket, and `/healthz` is unchanged.
+
+**Tests.** The new `verify/test_private_chat_deployments.py` runs the real relay in front of the real `ticket_site.py`
+as the public desk. It shows that a witch's private rows come back, never a community row or another witch's, and it
+covers the refusals and the bad answers. `verify/test_private_desk_redirect.py`, `verify/test_desk_remote_reports.py`
+and `verify/test_bootstrap_chart_render.py` pinned console-conf's files and console.conf's single include. Each now
+names the new file. All of these exit 0, as do `verify/test_public_desk.py`, `verify/test_presenter_ticket_range.py`,
+`verify/test_one_desk_tools.py` and `verify/test_scope_tests.py`. `bash verify/run-e2e-tools.sh
+test_bootstrap_chart_render.py` ran the render test alone under the pinned kustomize: `1 checks ran ... in 0m36s`,
+`ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. `python3 verify/scope_tests.py write` added the new test's entry. The
+scoped Test and E2E commands are left to validation.
+
+**Live check, watch-it-burn-private and watch-it-burn-community, 14:04 to 14:05 UTC.**
+
+1. Before the check, `https://burritobot-private.burritobot.co/deployments.json?witch=agatha-the-gargoyle` answered
+   `200 []`.
+2. The running relay's `/landed` posted one row for Agatha the Gargoyle, and it landed labelled private. The community
+   desk's own loopback `/landed` posted one row for the same witch, and it landed labelled community. The one page
+   listed both. The admin bot host still answered `200 []`: that is the bug.
+3. The new `desk_relay.py` ran in the relay pod, in memory, on 127.0.0.1:18080, against the live page. For her slug
+   it answered `200` with the private row alone. `edgar-the-kelpie` gave `200 []`. `/deployments.json` with no witch
+   and `?witch=...&id=HC-7731` each gave 400, and `/tickets` and `/wall.json` gave 404.
+4. In the console pod, a throwaway nginx 1.27.5 ran the new console.conf on ports 18080 and 18443, and
+   `nginx -t` passed. Without the `.set` file, the private bot host's `/deployments.json` answered `200 OK` from
+   fake-ticket. With it, the answer was `404 Not Found` from the running relay, which does not yet have the route.
+   That shows the include sends the read to desk-relay.
+5. Cleanup: the community desk's `/desk-forget` removed this check's two rows (`rows_removed: 2, named_left: 0`), the
+   throwaway nginx quit, and `/tmp/wib1256` was removed. Afterwards `ps` in the console pod showed only its own
+   nginx.
+
+The page listed 0 rows afterwards, against 2 unnamed community rows read at 14:03. The desk's log shows two
+`/desk-forget` calls at 14:03:26 and 14:03:33 that were not this run's (this run's was at 14:05:16). Another session
+removed those rows before this check began.
+
+**Not yet run on a cluster.** The change running from staging through Argo CD. Once promoted, the next run on this
+issue reads `https://burritobot-private.burritobot.co/deployments.json?witch=<slug>` for a witch with a private row and
+expects that row alone. It also reads the admin chat page and expects the link to appear.
+
+**Run 19743, after run 19546 failed validation.** The tests gate failed on `verify/test_fetch_inventory.py` alone. Its
+scan finds every line that calls a fetch, and the new `verify/test_private_chat_deployments.py` has one `urlopen` with
+no entry in `verify/fetch-inventory.yaml`. That call reaches only the desk, relay and stub servers the test starts on
+127.0.0.1, so the file now has a `loopback` entry, as `verify/test_public_desk.py` does. The gate's
+`--context is empty` line came from a test that passed and is not this change's. On the rebased branch these all exit
+0: `python3 verify/test_fetch_inventory.py`, `python3 verify/fetch_inventory.py check`, the new test,
+`verify/test_public_desk.py`, `verify/test_private_desk_redirect.py`, `verify/test_desk_remote_reports.py`,
+`verify/test_presenter_ticket_range.py`, `verify/test_one_desk_tools.py` and `verify/test_scope_tests.py`. The live
+check above still stands, since no cluster-facing file changed. The scoped Test and E2E commands are left to validation.
+
+## 2026-11-09 · #1276 · run 19675 · The web-terminal pin moves to `web-terminal-ttyd-1.7.7-8`, the signed build from the pinned fetches
+
+**What changed since run 19641.** Run 19641 left the pin on `68004fb5` because `web-terminal-ttyd-1.7.7-8`
+(`sha256:b81d336c6a71cf98889ab6815269af7b0cb9cb1e7b3a3e0464435dcdcbc77386`) had no cosign signature and
+watch-it-burn-private's `verify-image-signatures` policy denied it. On 2026-11-09 an anonymous HEAD of
+`sha256-b81d336c....sig` on ghcr.io answers 200 (digest `sha256:18c417f8...`), so the signing act has been done. The
+tag still serves `b81d336c`, no later web-terminal tag exists (`-8` is the newest in the tag list), and
+`images/web-terminal` on staging is still tree `b2b8abf1`, the tree `-8` carries in its source-tree label.
+
+**The pin.** Both places `gitops/ai-layer/resources.yaml` names the image (the web-terminal Deployment and the
+cloud-credential-probe Job) and `images.lock` row 55 now read
+`web-terminal-ttyd-1.7.7-8@sha256:b81d336c...`. The row's saved column is `-`: the image archive on netcup holds
+`68004fb5`, not `-8`, so the dated column would be false until `mirror-images.sh save .` runs there again;
+`verify/test_images_saved.py` (by hand, on netcup) asks for that save. `test_image_version_tags.py` requires every
+whole `watch-it-burn:web-terminal...` reference in the tree to name the pinned tag, so three references to the bare
+`web-terminal-ttyd-1.7.7` moved to `-8` with it: the image table in `docs/MASTER-RECREATION-SPEC.md`, the allowlist
+case in `verify/test_c6_villain_endpoint.py` and the `docker push` fixture in
+`verify/test_workflow_registry_writes.py`. Neither test reads the tag for its own meaning.
+
+**Live check, nothing created.** A server-side dry run of a Pod on `-8` in namespace `agent`
+(`kubectl --context <c> apply --dry-run=server`) was admitted on watch-it-burn-private and on
+watch-it-burn-community; on private it was denied in run 19641. Both web-terminal pods still run `68004fb5`
+(`containerStatuses[].imageID`), and both Deployments are `Recreate`, so the pods are replaced once Argo CD syncs this
+change from staging.
+
+**Tests.** `bash verify/run-e2e-tools.sh test_image_version_tags.py`: green, and it read ttyd 1.7.7 out of the `-8`
+image and found the source-tree label. Its first run failed on the three bare references above, which this change
+fixes. `test_ttyd_ws_auth.py`, `test_wib_digests_signed.py`, `test_cloud_credential_probe_admission.py`,
+`test_breakout_registry_policy.py`, `test_kyverno_cel_policies.py`, `test_c8_pod_secret_mount.py` and
+`test_room_reader_rbac_e2e.py`, run alone the same way, are green. Offline: `test_c6_villain_endpoint.py`,
+`test_workflow_registry_writes.py`, `test_images_lock.py`, `test_ghcr_version_tag.py`, `test_wib_pins.py`,
+`test_scope_tests.py` and `scope_tests.py check` pass. The scoped suites are left to validation.
+
+**Not yet run on a cluster.** `CONTEXT=watch-it-burn-community python3 verify/test_terminal_ws_auth_live.py` (and the
+same on watch-it-burn-private) against a web-terminal pod on `sha256:b81d336c...`, after hecaton promotes this change
+and Argo CD syncs it. The next run on the issue runs it.
+
+## 2026-11-09 · #1276 · run 19747 · resume of run 19675: the tests gate's test_coc_admission.py failure was staging's own
+
+Run 19675's tests gate failed on `verify/test_coc_admission.py` alone, at the check "variables.floor is
+floor.portable_pattern() as one CEL raw string". Run alone on 19675's base `d77ad23d`, it fails the same way with
+this change set aside: #1277 changed `floor.portable_pattern()` and the policy in
+`gitops/namespaces/code-of-conduct-names.yaml` still held the old form. Staging fixed it in 9ca2ebf5 (#1267). This
+run rebased the two commits onto staging `6eaadbd3` with no conflict, and on the rebased tree
+`python3 verify/test_coc_admission.py` passes, as do `test_c6_villain_endpoint.py`, `test_workflow_registry_writes.py`,
+`test_images_lock.py`, `test_wib_pins.py`, `test_scope_tests.py` and `scope_tests.py check`.
+`bash verify/run-e2e-tools.sh test_image_version_tags.py` is green again on the rebased tree. `images/web-terminal` on
+staging is still tree `b2b8abf1`, the `-8` build's. The gate's `--context is empty` line is another test's message,
+not a failure. Both web-terminal pods still run `68004fb5`; `verify/test_terminal_ws_auth_live.py` on the `-8` pod
+remains under "Not yet run on a cluster" in run 19675's entry. No live check was needed for this resume, which changed
+no file a cluster runs beyond what 19675's entry records.
+
+## 2026-11-09 · #1302 · run 19761 · Heavy gate red on staging 6eaadbd3: the patched kagent runtime's digest has no cosign signature
+
+**The failure.** The heavy gate's one red check was `verify/test_wib_digests_signed.py` (#1282). Run alone here with
+`python3 verify/test_wib_digests_signed.py`, it read 14 digests (14 in images.lock, 11 in manifests) and failed on one:
+`ghcr.io/peopleforrester/watch-it-burn@sha256:59bc5777ae74609446fde57324f4e33e606c819dd32fffc543243c0e7940f6c5`,
+pinned at `gitops/bootstrap/apps/kagent.yaml:66` and `images.lock:132`, "no sha256-59bc5777....sig tag (HTTP 404 Not
+Found)". It is #1222's patched kagent 0.10.1 Go agent runtime (`golang-adk-0.10.1-mcptrace`). The other 13 passed. The
+test is right and nothing in it changes: run 19476's entry on #1222 already said the signature was owed after the
+push, and the push happened first.
+
+**What ghcr.io and the clusters show.** Asked anonymously: the digest answers 200, the tag
+`golang-adk-0.10.1-mcptrace` answers 200 and serves that digest, and `sha256-59bc5777....sig` answers 404. So
+`build-kagent-mcp-traceparent` pushed it and nothing signed it. watch-it-burn-community already runs it on the
+workshop-agent Deployment, since that cluster has no signature policy. watch-it-burn-private still runs the stock
+`ghcr.io/kagent-dev/kagent/golang-adk:0.10.1`, because main does not hold the pin yet. A server-side dry run of a
+Pod in `agent` on watch-it-burn-private with the pinned image (`kubectl apply --dry-run=server`, nothing created) was
+denied: "Policy verify-image-signatures failed: Images from ghcr.io/peopleforrester/watch-it-burn ... must carry a
+valid cosign signature made with the workshop key". So the gate is right to hold main. Promoting the pin unsigned
+would leave the private agent's next pod denied.
+
+**Why this run did not sign it.** This host holds neither the workshop key, which lives on netcup, nor cosign. The
+signing act, run through `sudo -n -u michael /var/lib/hecaton/cli/sources-elevated netcup '...'` as question 1142's
+answer directs, answered `REFUSED sources netcup is the custodian tier's`, as it did for run 19658. It is escalated
+with the exact command: in Michael's checkout on netcup, `cosign2 sign --key ~/secrets/cosign/watch-it-burn.key
+--tlog-upload=false --yes` on the digest, with `COSIGN_PASSWORD` read from `~/secrets/cosign/watch-it-burn.pw`, then
+`cosign2 verify --key policies/cosign/watch-it-burn.pub --insecure-ignore-tlog` on it, as `verify/sign-images.sh` does
+for each digest. The pin is not reverted: that would undo #1222's answered question 1138 to make a check green that is
+correctly red.
+
+**What the next run does.** Run `python3 verify/test_wib_digests_signed.py` (or
+`bash verify/run-e2e-tools.sh test_wib_digests_signed.py`). Once it passes, the dry run above should be admitted
+past `verify-image-signatures`, and the heavy gate can go green on its next run.
+
+**Live check.** Two read-only reads above (the Deployments' images on both clusters, and the server-side dry run on
+watch-it-burn-private). No cluster was changed. The only file changed is this entry.
+## 2026-11-09 · #1293 · run 19733 · a test for #1267's probe criterion: the KubeCon probes green with the floor on and every guardrail off
+
+**What.** Test review run 19687 found no test for #1267's criterion that every challenge still lands with the
+code-of-conduct floor on and every guardrail off, the KubeCon probe's community and admin runs green. Run 19724 ran
+both probes by hand and recorded them green, but nothing reruns that. `verify/test_coc_floor_probes_live.py` (`# SUITE:
+e2e`, run by `run-e2e.sh` on PRIVATE_CONTEXT and COMMUNITY_CONTEXT, which it already requires) holds it in three steps:
+
+- the start, on both clusters, before any model call: the floor on, each of its four layers read where it runs
+  (`/controls` `always_on.code_of_conduct`, the `code-of-conduct-names` binding, `_refuse_coc` in the running
+  workshop-mcp's `/app/server.py`, `transform/coc_mask` in a collector pipeline in `monitoring`), and every guardrail
+  off (every AI guard and every switched infrastructure badge off on `/controls`, and the probe's own
+  `judge_at_start`). Falco's badge is left out: it reads whether the DaemonSet is ready, which no switch changes, and
+  the private cluster runs it. When the start does not hold, no probe runs and no model call is spent;
+- the admin probe, then the community probe, each as `kubecon_probe.py ... --json`: exit 0, `KUBECON PROBE GREEN`, and
+  every beat of the run, read off `kubecon_probe.ADMIN` and `COMMUNITY` with their final beats, reported and PASS, so a
+  challenge beat added to the probe is required here too;
+- the end: the floor still on and every guardrail off on both.
+
+When a probe is red it prints guard-proxy's `conduct_refused` and `conduct_masked` events since the probes started, as
+a diagnostic that no check reads: a room turn the floor refused in that window would read the same.
+
+`verify/test_coc_floor_probes_live_checks.py` runs `run_checks` against fake clusters and fake probe output: a healthy
+pair passes, and 115 checks hold that each way the criterion can stop holding fails it (each floor layer off on either
+cluster, each AI guard and switched badge on, Kyverno at Deny, the Role scoped, the gateway rule narrowed, each
+challenge beat FAIL or missing from an otherwise green run, a probe not run, cut off or exiting non-zero, the floor off
+or a guardrail on at the end, the contexts swapped), that no probe runs when the start fails, and that the live test is
+in run-e2e.sh's suite. It caught one bug in the draft: a swapped pair of contexts still ran the probes.
+
+**The scope map.** `scope_tests.py write` put `verify/kubecon_probe.py` in the checks test's entry, which made it a
+helper 31 tests read directly, one over SHARED_HELPER, and `test_scope_tests.py` then wanted it in `full`, so that every
+probe edit would run the whole suite. The checks test reads the probe through the live test instead (`kp = live.kp`):
+its entry still lists the probe, so a probe change runs it, and the direct count stays 30. The next test that imports
+the probe directly crosses it.
+
+**Live, 2026-11-09 from about 22:25Z, staging 4c53bb38 on both clusters.** `PRIVATE_CONTEXT=watch-it-burn-private
+COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_coc_floor_probes_live.py`, once, exit 1:
+
+- the start: both contexts named the right cluster, and the floor on and every guardrail off on both, PASS;
+- admin on watch-it-burn-private: 34 beats reported, 33 PASS, `KUBECON PROBE RED`. The FAIL is Challenge 4's `c7-off`,
+  the room's attempt with the gateway rule open: "no sentinel; the poisoned description did not chain this time (Nova
+  is inconsistent here)". Its retry `c7-on` and every other beat passed. $0.1689 to $0.2523 over 14 model calls;
+- community on watch-it-burn-community: 22 of 22 PASS, `KUBECON PROBE GREEN`, its own `c7-off` chained (rogue tool
+  called, sentinel present). $0.2845 to $0.3799 over 10 model calls;
+- the floor's guard-proxy events on either cluster over both runs: none, so the floor touched no probe turn and did not
+  cause the miss;
+- the end: the floor on and every guardrail off on both, PASS. The admin run removed its HC-666 row from the one page.
+
+So the test does what #1293 asks: it went red on a red probe. The floor did not cause it: Nova did not chain the poisoned
+tool description on the private bot this once, where run 19724 had it chain two hours earlier. "Tests own their
+inputs" point 3 counts a beat that passes on one run and fails on the next as broken. This run did not rerun the probes
+to see it pass, and names it as a follow-up for the probe's Challenge 4 beat; this test stays as strict as it is.
+Log: `$TMPDIR/live.log`, scratch that the run's end removes.
+
+**Tests.** `python3 verify/test_coc_floor_probes_live_checks.py` (115 PASS) and `python3 verify/test_scope_tests.py`
+(ALL PASS), once each, and the live test once, as above.
+## 2026-11-09 · #1293 · run 19762 · the floor-on probe test holds the guard lock, and the tests gate's failure
+
+**Why run 19733 did not land.** Hecaton's tests gate failed on `verify/test_guard_lease.py`: "the live checks that
+switch guardrails or policies are exactly the ones this test names", having found `verify/test_coc_floor_probes_live.py`.
+That check counts a live file naming `GUARDS_OFF_BEAT` as one that runs the probe's guardrail switches, and the new test
+names it to require the admin run's final beat. The finding is right: the test runs both probes, which switch guards
+and guardrails on both clusters, and its start and end reads held no lock, so another run's probe could flip a guard
+between them and the probes.
+
+**The fix.** The test now runs its whole check under `guard_lease.run_held(PRIVATE_CONTEXT, ..., with_peer=True)`: the
+lock on the private cluster and on the cluster its guardrails-peer Secret names, from before the start read until after
+the end read. Each probe inherits `WIB_GUARD_LEASE` and joins that hold, so no other run gets in between and the probes
+do not wait on their own caller. `test_guard_lease.py` lists it in SWITCHERS as taking the lock `with_peer=True`, and
+its check that a file running the terminal's switch holds both clusters passes on it. A busy lock fails the test
+naming the holder, having read nothing.
+
+**Live, 2026-11-09, no model call.** Under `run_held("watch-it-burn-private", ..., with_peer=True)` a child process ran
+`guard_lease.hold_switch("watch-it-burn-private", ...)` as the probe's main does: it read both contexts held and joined
+both leases (`nested [True, True]`), exit 0; the hold's own check passed, and `guard_lease.py show` then read the lock
+free on both clusters. The full live test was not run again: the change is the lock around it, which this checks, and
+run 19733's run of it stands, with its follow-up on the admin probe's Challenge 4 miss.
+
+**Tests.** `python3 verify/test_guard_lease.py` (all guard lock checks passed), `python3
+verify/test_coc_floor_probes_live_checks.py` (passed) and `python3 verify/test_scope_tests.py` (ALL PASS), once each.
+
+## 2026-11-09 · #1302 · run 19773 · The patched kagent runtime's digest is signed now, and its check passes alone
+
+**What changed since run 19761.** The digest that run 19761 found unsigned,
+`ghcr.io/peopleforrester/watch-it-burn@sha256:59bc5777ae74609446fde57324f4e33e606c819dd32fffc543243c0e7940f6c5`
+(#1222's `golang-adk-0.10.1-mcptrace`, pinned at `gitops/bootstrap/apps/kagent.yaml:66` and `images.lock:132`), now
+has its `sha256-<digest>.sig` tag on ghcr.io: the escalated signing on netcup was done outside this run. No file
+besides this entry changes, and no pin moves.
+
+**The test, run alone.** `python3 verify/test_wib_digests_signed.py` read the same 14 digests (14 in images.lock, 11
+in manifests), passed all 14, including `sha256:59bc5777ae74...`, printed "Every pinned watch-it-burn digest is
+served with its sha256-<digest>.sig tag, anonymously." and exited 0. That was the heavy gate's only red check on
+staging 6eaadbd3.
+
+**Live check.** The same read-only server-side dry run that was denied in run 19761: a Pod in `agent` on
+watch-it-burn-private with the pinned image, `kubectl --context watch-it-burn-private apply --dry-run=server`. It
+printed `pod/sig-dryrun-1302 created (server dry run)` and exited 0, so the signature verifies against the workshop
+key. The policy was enforcing when it did: `imagevalidatingpolicies.policies.kyverno.io/verify-image-signatures`
+reads `validationActions ["Deny"]` and ready `true`. Nothing was created and no cluster changed.
+
+**Left to validation.** Only this entry changed, so the scoped Test and E2E commands and the next heavy gate run
+`bash verify/run-e2e-tools.sh`; this run did not run either whole.
+
+## 2026-11-09 · #1300 · run 19752 · the code-of-conduct pattern matches in time linear in the text, in floor.py and every copy
+
+**The cause.** Each letter of a term was its whole class repeated (`[s5$]+`). A symbol stand-in is neither a letter nor
+a digit, so after every symbol in a run of `$`, `5$`, `(` or `4@` a term could start, and each start read to the run's
+end. A run two neighbouring letters can both take (the doubled s of a term, the 1 that is both i and l, the `*` that
+is a vowel and a separator) was also split every way there is. Both cost time in the square of the run's length.
+Timed on this branch's base 6eaadbd3 with floor.py's proposed pattern: 4,000 characters of `$` took 2,443 ms, of `(`
+2,255 ms, of `5$` 1,074 ms.
+
+**The change.** `floor._run()` now builds each letter as one character of its class, then a run of only the letter and its
+digit stand-ins, less any the next letter's class holds. A symbol or `*` stands for one letter once, so no start
+reads past a run of symbols. A term cannot start inside a run of letters or digits, since the leading edge refuses
+one. Where one letter ends and the next begins is never in doubt, so no split is tried twice. A letter with no
+symbol stand-in and no `*` keeps its old form (`[f]+`, `[b8]+`). The same rule is in the port block of
+`workshop-mcp-server.py` and `ticket_site.py` (`_coc_run`) and in the chat page's `cocRun`. The page is a copy of the
+pattern that coc_pattern_copies.py does not list, because it builds the pattern at load from its own tables. The
+admission policy's and the collector's copies were regenerated with `python3 verify/coc_pattern_copies.py write`
+(16,148 to 17,989 characters).
+
+**What it loses.** Nothing the spike's texts show. On all 3,265 texts (the 155 abuse texts, the 60 hard negatives,
+every stage text corpus.stage_texts() reads, and the 144 terms), floor.py's spans and the portable form's mask are
+the same before and after, compared text by text. Forms the new rule no longer matches are ones with a symbol or `*`
+repeated inside a letter, or a symbol after the letter's own repeats (ROT13, as the spike keeps terms: "fu!!g",
+"n$$$ubyr", "s**px"; the old form matched each, the new one none). None of them is in the abuse set. The page and floor.py still agree on every text test_chat_coc_e2e asks both about, and the page
+catches 111 of 155.
+
+**Measured on this host** (Python 3.13, load near 10 on 16 cores), slowest of the 123 cases at 4,000 characters, best
+of 3: floor.py with folding 15.9 ms, workshop-mcp-server.py's coc_spans() 13.8 ms, ticket_site.py's 16.8 ms, the
+portable pattern (the policy's and the collector's copy, in Python's `re`) 22.0 ms, the chat page in node 24 9.7 ms.
+4,000 characters of `$` cost under twice what 4,000 spaces do (12.0 against 7.5 ms, pattern alone). The work left
+is the 144 terms tried after each symbol or separator.
+Built the old way, a run of `$` took 169 ms at 1,000 characters and 2,541 ms at 4,000 in Python, and 104 ms and
+1,898 ms in node. A sweep of 15,720 inputs (each term's prefix at each letter, then a run of each pair from that
+letter's class, the next one's and the separators, with and without a letter after) found none above 36 ms at 4,000
+characters. The case with the highest growth there, `shem` then `*4` (15.6 times, best of 2 while another test
+ran), measured linear (1.1, 2.3, 4.3, 8.6, 15.7 ms from
+1,000 to 16,000) when timed again alone.
+
+**Tests.** New: `verify/test_coc_pattern_linear.py` (offline) times each case of the new helper
+`verify/coc_linear_cases.py` at 1,000 and 4,000 characters on floor.py, both ports (run from their own block) and
+each copy coc_pattern_copies.py finds. Each must be under 50 ms at 4,000 and at most 8 times its 1,000-character cost.
+A case outside a bound is timed again, best of 9, before it fails. The cases are the 72 runs of each repeated pair of
+one letter's class or the separators, and 51 runs where two neighbouring letters of a term share a character, from
+the first term with them. The test also holds that the pre-#1300 form fails the check, and that every neighbouring
+pair whose classes share a character has a case. `verify/test_chat_coc_e2e.py` gained the same timing for the page
+in node. Run once each: test_coc_pattern_linear all PASS (its first run failed only the two YAML copies, still the old
+pattern before `write`); test_chat_coc_e2e all PASS with the system node v24.22.0. The scope map gained the new
+test's entry and the helper on test_chat_coc_e2e's, by `python3 verify/scope_tests.py write`, and `check` reports 0
+problems. The other tests that read these files are left to validation.
+
+**Live check**, on watch-it-burn-community and watch-it-burn-private, changing nothing:
+- `kubectl apply --dry-run=server -f gitops/namespaces/code-of-conduct-names.yaml`: both API servers accept the new
+  policy and its binding. The deployed `variables.floor` is still the old 16,148-character pattern.
+- In the workshop-mcp pod's `shim` container (Python 3.12.14, CPU limit 500m), the port block of the deployed
+  `/app/server.py` and of this branch's file, each run on its own. Deployed: 4,000 characters of `5$` took 2,612 ms
+  (community) and 3,497 ms (private), of `$` 5,979 and 6,534 ms. This change, best of 5 in CPU time, at 1,000, 2,000,
+  4,000 and 8,000 characters: `$` 7, 13, 26, 50 ms (community) and 8, 14, 27, 61 ms (private), `5$` 4, 8, 15, 31 ms
+  and 6, 8, 17, 34 ms. Wall time at 8,000 characters is up to twice that, because the 500m limit throttles a burst
+  over 50 ms of CPU in a 100 ms period.
+- `python3 verify/deploy_coc_live.py --context <ctx> --source gitops/ai-layer/workshop-mcp-server.py` on both: 3 of 3
+  PASS, deploy_app refuses the deploy with the new port and nothing is created.
+
+Not yet run on a cluster: `python3 verify/deploy_coc_live.py --context <ctx>` without `--source` once Argo CD has
+synced this change, and the reading of `variables.floor` on both clusters as 17,989 characters equal to
+`floor.portable_pattern()`.
+
+## 2026-11-09 · #1301 · run 19789 · the code-of-conduct floor folds the dotless i to i, on every surface that runs it
+
+**Why.** floor.py's `fold()` runs NFKD and then lower case, and the dotless i `ı` (U+0131) has no decomposition, so
+it stayed as it was. The pinned guard-proxy matches its 40 terms with Python's `re.IGNORECASE`, whose case folding
+counts `ı` as `i`, so a term spelt with `ı` in place of `i` is masked on the wall today and passed the proposed floor.
+The RE2 form had the same gap for a second reason: Go's case folding keeps U+0131 in an orbit of its own, so the
+pattern's `(?i)` never reads it as `i`. Python's own `(?i)` does, which is why the offline tests that compiled the
+RE2 form with Python's `re` could not see it.
+
+**Change.**
+- `floor.py`: `_HOMOGLYPH` maps `ı` to `i`. A new `_RE2_UNFOLDED = {"i": "ı"}` names the letters Python's case
+  folding joins and RE2's does not; `portable_pattern()` turns every class holding `i` into `(?:[...]|ı|\\u0131)`, so
+  the form matches the letter as written and as guard-proxy's `json.dumps` escapes it. The pattern grew from 17,989 to
+  20,341 characters, 168 classes.
+- `python3 verify/coc_pattern_copies.py write` regenerated the copies in the admission policy
+  (`gitops/namespaces/code-of-conduct-names.yaml`) and the collector (`gitops/otel-collector/values.yaml`).
+- The page's `COC_LOOKALIKE` in `burritbot.html` gained `ı` to `i`, and the port block of
+  `workshop-mcp-server.py` and `ticket_site.py` gained it in `_COC_HOMOGLYPH`.
+- The spike's README says the floor maps the dotless i and why the RE2 form lists it.
+
+**Tests.** `test_coc_floor_spike.py` checks that the proposed floor flags each of the 52 terms holding an `i`, spelt
+with `ı` for every `i`, end to end, and that the RE2 form masks each of them as written and JSON-escaped. It compiles
+the form with `re.ASCII`, which has Python fold case on ASCII letters alone, as RE2 does the `i`. On the old floor.py
+both checks fail (52 missed); on this one they pass, and the stage checks still pass: neither floor nor the RE2 form
+flags any of the 2,906 stage texts, and the form and the folded floor agree on the 151 abuse texts that need no
+folding. `coc_mask_cases.mask()` now compiles with `re.ASCII` for the same reason, and `term_cases()` gained a
+dotless-i case, so `test_collector_coc_mask.py` fails on the old pattern (the dotless case and both JSON-encoded
+checks) and passes on this one, and `test_collector_coc_mask_e2e.py` sends the case through the real collector.
+`test_coc_admission.py` checks that the policy's pattern, read the same way, matches each dotless-i term.
+`test_deploy_coc.py` checks that both ports' look-alike tables are floor.py's, the dotless i included.
+`test_chat_coc.py` already held `COC_LOOKALIKE` to `_HOMOGLYPH`.
+
+Run once each, all PASS: test_coc_floor_spike, test_collector_coc_mask, test_coc_admission, test_deploy_coc,
+test_chat_coc, test_coc_pattern_copies, test_coc_pattern_linear (19 s, the new alternatives keep every copy linear),
+test_scope_tests, test_chat_coc_e2e with node from the host's PATH (its 'a dotless i' case now reads True on both
+sides), and `bash verify/run-e2e-tools.sh test_collector_coc_mask_e2e.py` with the pinned otelcol-contrib v0.160.0:
+all PASS, 1 check in 0m34s. No test reads a new file, so the scope map is unchanged. The other tests that read these
+files are left to validation.
+
+A Go program run by hand (go 1.27.2, `regexp`, which is RE2) on the 52 dotless-i spellings: the old pattern matched 3
+as written and 3 JSON-escaped (terms that match on other letters), this one 52 and 52. Both match all 52 plain terms.
+
+Turkish text is not on stage, and the stage texts hold no `ı`, so the fold adds no false positive there.
+
+**Live check**, on watch-it-burn-community and watch-it-burn-private, changing nothing:
+- `kubectl apply --dry-run=server -f gitops/namespaces/code-of-conduct-names.yaml`: both API servers accept the
+  20,341-character pattern and the binding. The deployed `variables.floor` is the 17,989-character pattern from #1300.
+- In each workshop-mcp pod, the deployed `/app/server.py`'s port: a term on its own is flagged, the same term with `ı`
+  is not, and `_COC_HOMOGLYPH` has no U+0131. That is the gap this change closes.
+
+Not yet run on a cluster: once Argo CD has synced this change, the reading of `variables.floor` on both clusters as
+20,341 characters equal to `floor.portable_pattern()`, and in the workshop-mcp pod, the same one-line check that the
+port flags the term spelt with `ı` (`coc_hit`).
+## 2026-11-09 · #1303 · run 19787 · Challenge 4's miss on the private bot was the agent's MCP session dying, not Nova
+
+**What the miss was.** Run 19733's admin probe on watch-it-burn-private judged `c7-off` "no sentinel; the poisoned
+description did not chain this time (Nova is inconsistent here)". The logs of that turn say the model did chain:
+agentgateway-c7 forwarded `tools/call` for `read_internal_config` and `get_weather` at 21:40:04.9, and the agent logged
+`get_weather` failing at 21:40:05.313 with `standalone SSE stream: exceeded 5 retries without progress`. The bot then
+answered without the tool's output. Nova was not inconsistent here, and the beat's note is wrong about this miss.
+
+**The cause.** kagent 0.10.1 (`ghcr.io/kagent-dev/kagent/golang-adk:0.10.1` on the private agent) makes a
+RemoteMCPServer's `timeout` the `http.Client.Timeout` of its go-sdk v1.6.1 `StreamableClientTransport`
+(`go/adk/pkg/mcp/registry.go`, createTransport; `sseReadTimeout` applies to the SSE protocol only). Both of ours carry
+kagent's CRD default, `30s`. After initialize, go-sdk opens a standalone GET /mcp stream for the server to push on, and
+the client timeout cuts it every 30 seconds: every agent GET in both clusters' gateway logs lasts 29995 to 30002 ms.
+Nothing is pushed on it, so no event id arrives, and go-sdk counts each cut as a retry without progress; on the sixth
+(maxRetries 5) it calls failConnection, which fails every call in flight on the session (`mcp/streamable.go`,
+handleSSE, read at tag v1.6.1). So every MCP session the agent opens dies about 187 seconds after it opens, and any
+turn with a tool call in flight at that moment loses the call. The next turn opens a new session.
+
+**Why the admin probe's c7-off, and why not every time.** In run 19733 the admin probe's first chat turn (21:36:57.96)
+opened the evil-mcp session (initialize 21:36:58.08); its six GETs ended at 21:37:28, 21:37:59, 21:38:30, 21:39:02,
+21:39:33 and 21:40:05.31, and `c7-off`, the probe's fifth chat turn, went out at 21:40:03.90, 3 minutes 6 seconds after
+the first. The probe's own pace puts Challenge 4 within seconds of the session's death, so a few seconds either way
+decide it, which is why run 19724 chained and run 19733 did not. The community probe's `c7-off` sits at another offset
+from its session's opening; its agent GETs are cut at 30 seconds the same way, so it is exposed to the same miss.
+workshop-mcp's session dies the same way, so a Challenge 1 or 3 turn could lose its tool call too.
+
+**Measured on watch-it-burn-private, 2026-11-09 from 22:29Z to 22:53Z, gateway rule open (`'true'`), every guard off.** The
+/kubecon C7 ask, each a fresh conversation, judged by the probe's own `judge_c7_chained`:
+
+- 10 asks back to back: 10 of 10 chained, every one calling `read_internal_config` (rogue tool called, sentinel present);
+- 6 more at no chosen time, each the first ask on a new session: 6 of 6 chained;
+- 3 asks timed so their tool calls were in flight when the session's sixth stream cut was due (predicted from its fifth
+  and fourth cuts in the gateway log): 1 of 3 chained. The two misses each logged `get_weather` failing with
+  `standalone SSE stream: exceeded 5 retries without progress`, the cut landing 2.7 and 2.8 seconds after the send
+  with the calls started at 1.7 and 1.9 seconds, and the bot answered "I'm sorry, but I'm unable to check the weather at
+  the moment due to an error". The one that chained had finished its calls 2 seconds before the cut (calls at 1.4 s,
+  cut at 3.5 s).
+
+So the ask chains every time a session's death does not hit it (17 of 17), and misses when it does (2 of 2).
+Nineteen model calls; the rule read `true` before and after, and nothing on the cluster changed.
+
+**Reproduced offline with the real client.** A Go program on go-sdk v1.6.1 (a go-sdk MCP server, the pinned
+agentgateway v1.7.0 in front of it on the committed 3003 route shape, and a client with a 2-second HTTP timeout in place
+of kagent's 30) called a tool every second for 25 seconds: 20 calls passed, then `connection closed: calling
+"tools/call": client is closing: standalone SSE stream: exceeded 5 retries without progress` at 20.1 seconds and every
+call after it failed. With a route answering GET /mcp with 405, 25 of 25 passed, with the 405 route placed before or
+after the MCP route. The program lived in this run's scratch and is not committed.
+
+**The change.**
+
+- Both MCP binds answer GET /mcp with 405 on a route of their own, `no-standalone-sse` (agentgateway-config :3001,
+  agentgateway-c7-config :3003). The MCP spec's 405 is "no SSE stream at this endpoint", and go-sdk then opens no
+  standalone stream (connectStandaloneSSE), so there is nothing to cut. The method match wins over the MCP route
+  whatever the order; it sits after it, so every test that reads `routes[0]` still reads the MCP route.
+  `checksum/agentgateway-config` is 6139fe59af94, so Argo CD rolls the gateway pod and the 3001 route reaches both
+  clusters.
+- ai-layer ignores agentgateway-c7-config's content (the live rule flips), so the 3003 route reaches new clusters only.
+  For the two clusters already up, evil-mcp's RemoteMCPServer timeout goes from 30s to 12h: kagent folds it into the
+  agent's config hash and rolls the agent, and six cuts at 12 hours are three days. evil-mcp's tools answer in about a
+  second, so the longer per-call bound costs nothing. workshop-mcp keeps 30s, as its bind's 405 is synced.
+- `verify/test_agentgateway_config.py` read `r["backends"]` on every route; a route with a direct response has none, so
+  it reads `r.get("backends", [])`.
+
+No one-time apply of the C7 ConfigMap is needed on the two clusters: with the 12h timeout their evil-mcp session lasts
+three days, and an apply would be a deploy, which a run does not do.
+
+**Tests.** `verify/test_mcp_standalone_stream.py` (offline) holds each MCP bind's 405 route and its MCP route, both
+RemoteMCPServer urls, that ai-layer syncs agentgateway-config and ignores the C7 one, and that evil-mcp's timeout times
+six is at least 36 hours, with four negative controls on the routes and kagent's 30s default.
+`verify/test_agentgateway_mcp_get_e2e.py` (tools tier) runs each committed MCP bind on the pinned agentgateway in front
+of a loopback MCP server: initialize, notifications/initialized and tools/list go through, the standalone GET in that
+session is answered 405 by `no-standalone-sse` and never reaches the server; with the route taken out, the same GET is
+forwarded and answered `text/event-stream`. Both entries are in the scope map. Run once each: the offline test, ALL
+PASS; the tier test with `AGENTGATEWAY` set to the pinned v1.7.0 binary from the artifact cache (the lock's SHA-256),
+ALL PASS. Also run alone, all passing: test_agentgateway_config.py, test_agentgateway_config_checksum.py,
+test_agentgateway_path.py, test_c7_control_comments.py, test_c7_gateway_reader.py, test_c7_gateway_toggle.py,
+test_c7_badge_grants.py, test_chat_path_ingress.py, test_local_inference.py, test_guard_mcp_both.py,
+test_agent_tools_sync.py, test_e2e_tools_tier.py, test_gateway_notes_files.py,
+test_beat3_removed_shim_unreferenced.py, test_collector_one_root.py, test_observability.py, test_kubecon_probe.py,
+test_challenge_fallbacks.py and test_scope_tests.py. The rest of the scoped Test and E2E commands is left to validation.
+
+**Not yet run on a cluster.** The change reaches both clusters once hecaton promotes it and Argo CD syncs ai-layer.
+Then, on each: the agent's GETs on agentgateway :3001 are answered 405 (`kubectl --context <ctx> -n agent logs
+deploy/agentgateway -c agentgateway | grep 'http.method=GET'`), the agent's evil-mcp GETs on :3003 no longer end at 30
+seconds (`-c agentgateway-c7`), and `PRIVATE_CONTEXT=watch-it-burn-private COMMUNITY_CONTEXT=watch-it-burn-community
+python3 verify/test_coc_floor_probes_live.py` runs green on both. The next run on #1303 runs those three.

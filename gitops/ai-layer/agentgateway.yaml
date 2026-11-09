@@ -62,7 +62,7 @@ spec:
       # ignores drift on it. A C7 rule flip must never roll this pod. verify/test_agentgateway_config_checksum.py
       # fails when the value is not sha256(config.yaml)[:12], and prints the value to set.
       annotations:
-        checksum/agentgateway-config: "7b5736c88625"
+        checksum/agentgateway-config: "6139fe59af94"
     spec:
       serviceAccountName: agentgateway
       automountServiceAccountToken: false
@@ -223,6 +223,21 @@ data:
               - name: workshop-mcp
                 mcp:
                   host: http://workshop-mcp.agent.svc.cluster.local:8000/mcp
+        # No standalone SSE stream on an MCP bind (#1303). The agent's MCP client (go-sdk v1.6.1 in kagent 0.10.1)
+        # opens a GET /mcp stream per session, and its RemoteMCPServer timeout is that client's whole-request
+        # timeout, so the stream is cut each time it runs out. Nothing is ever sent on it, so each cut counts as a
+        # retry without progress, and the sixth fails the session along with every tool call then in flight: the
+        # admin probe's Challenge 4 miss on watch-it-burn-private on 2026-11-09. A 405 here is the spec's "no SSE
+        # stream at this endpoint", which the client takes as no standalone stream at all. The method match makes
+        # this route win over the one above, whatever their order (test_agentgateway_mcp_get_e2e.py runs both).
+        - name: no-standalone-sse
+          matches:
+          - method: GET
+            path:
+              pathPrefix: /mcp
+          policies:
+            directResponse:
+              status: 405
     - port: 3002
       listeners:
       - protocol: HTTP
@@ -331,3 +346,14 @@ data:
               - name: evil-mcp
                 mcp:
                   host: http://evil-mcp-shim.agent.svc.cluster.local:8000/mcp
+        # No standalone SSE stream (#1303), as on agentgateway-config's 3001 bind, which says why. ai-layer ignores
+        # this ConfigMap's content, so on a cluster built before this line the 3003 bind still serves the stream,
+        # and evil-mcp's RemoteMCPServer timeout (resources.yaml) is what keeps its session alive there.
+        - name: no-standalone-sse
+          matches:
+          - method: GET
+            path:
+              pathPrefix: /mcp
+          policies:
+            directResponse:
+              status: 405
