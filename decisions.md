@@ -42440,3 +42440,64 @@ above.
 **Not yet run.** The purge and the green run of this test, on or after 2026-11-13: the run-of-show's Teardown step,
 then the #647 comment, then `python3 verify/test_dd_purge_public_live.py` until it exits 0; its APM checks go green
 only when retention or Datadog support has removed the 98732 APM spans.
+
+## 2026-11-09 · #1184 · run 19175 · The stage-switch check's third live run: every FAIL is the unpinned agency_scoped field
+
+**What this run did.** Run 18721's step, its test and its PROGRESS.md line are on staging (`e947f36d`), and
+`verify/prior-drafts.sh 1184 origin/staging` printed NONE. What it left owed is the full pass. Since then #1134's
+Role fix (`2ade7e74`, list and watch on the NetworkPolicies and KubeArmor policies the guardrails-switch Role
+deletes) and #1171's 8080 and 3000 node rules (`4b277b12`) reached both clusters, so this run ran the check again.
+The guard-proxy pin is still `5772a5d8`, which does not send `agency_scoped`, and only Michael repins it (#1151), so
+a GREEN was not possible and this run does not mark the pass met.
+
+**Before.** At 02:08 UTC both `/controls` read every field off (Falco on the private cluster only), the lock was free
+on both, and the agent namespace's Roles and both clusters' ValidatingPolicy actions were saved
+(`/var/lib/hecaton/runs/19175/live/`).
+
+**Live run (run 19175, watch-it-burn-private's terminal, both clusters, 02:08:05 to 02:10:04 UTC).**
+`python3 verify/stage_switch_run.py --context watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile accen-dev`
+printed (long lines cut; full log `/var/lib/hecaton/runs/19175/live/stage-switch-live.log`):
+
+    PASS  identity         private    kube-context and https://burritobot-private.burritobot.co are the same cluster
+    PASS  start            private    every field the closing commands turn off reads off
+    PASS  start            community  every field the closing commands turn off reads off
+    PASS  guardrails-on    private    guardrails-on turned on infra.rbac_scoped, infra.kyverno, infra.kubearmor, infra.networkpolicy
+    PASS  guardrails-on    community  guardrails-on turned on infra.rbac_scoped, infra.kyverno, infra.kubearmor, infra.networkpolicy
+    FAIL  guard-agency-on  private    /controls after the switch does not carry infra.agency_scoped; it waits on #1132 (...)
+    FAIL  guard-agency-on  community  /controls after the switch does not carry infra.agency_scoped; it waits on #1132 (...)
+    PASS  guard-input-on   private    guard-input-on turned on ai.input_blocklist, ai.input_classifier
+    PASS  guard-input-on   community  guard-input-on turned on ai.input_blocklist, ai.input_classifier
+    PASS  guard-mcp-on     private    guard-mcp-on turned on infra.tool_allowlist
+    PASS  guard-mcp-on     community  guard-mcp-on turned on infra.tool_allowlist
+    FAIL  start-state      private    /controls at the start-state check does not carry infra.agency_scoped; ... (guard-agency-on)
+    FAIL  start-state      community  /controls at the start-state check does not carry infra.agency_scoped; ... (guard-agency-on)
+    PASS  as-found         private    every field the closing commands turn off reads as it did at the start
+    PASS  as-found         community  every field the closing commands turn off reads as it did at the start
+    15 lines: 11 PASS, 4 FAIL
+    waiting on #1132 (agency_scoped, guard-proxy-agenticburn#76, not yet in this repo's guard-proxy pin): guard-agency-on on private, community; start-state on private, community
+    STAGE SWITCH CHECK RED
+    exit=1
+
+**Which switches still FAIL, and why.** Only `agency_scoped`. `guard-agency-on` printed "Switched on both clusters:
+this one and watch-it-burn-community." and applied `c6-least-privilege-role.yaml` on both, here and through the peer
+kubeconfig, but `/controls` has no field to show it, so its line and both `start-state` lines FAIL. Everything run
+18721 found besides that no longer shows: `guard-input-on` reached the community cluster's guard-proxy through the
+Service proxy on 8080 (#1202's symptom), `guards-off` exited 0 and ran its MCP step, so `tool_allowlist` read off
+again on both (#1203's symptom), and `guardrails-off` deleted the community cluster's NetworkPolicies and returned
+(#1208, fixed by #1134). #1202 and #1203 are still open; this run did not change their code, so whether #1203's
+stop-at-first-failure is still there when a peer toggle fails is theirs to say.
+
+**Left as found, with no repair.** After the run both `/controls` are byte for byte the pre-run read, the agent
+namespace's Roles carry the same rules as before on both clusters, both clusters' ValidatingPolicy actions match
+the pre-run list, the private cluster has its four NetworkPolicies in `agent` and the community cluster its three,
+no KubeArmorPolicy is left on either, evil-mcp's toolNames are the full three on both, and the lock is free on
+both. The command never read the `agent/terminal-auth` Secret, and nothing here printed the presenter login.
+
+**What changed in the repo.** The run-of-show step's result bullet now carries this run (11 PASS, 4 FAIL, every FAIL
+`agency_scoped`) in place of run 18721's, and drops the ^C advice for the `guardrails-off` hang that #1134 fixed.
+PROGRESS.md's #1184 line adds this run. No test reads the words changed (`git grep` on `verify` and `scripts`
+found none; `verify/test_stage_switch_night_before.py` reads the verdict words and exit codes, which are kept).
+
+**Not yet run on a cluster.** The full pass, `python3 verify/stage_switch_run.py --context watch-it-burn-private`
+ending `STAGE SWITCH CHECK GREEN`, once the `gitops/ai-layer/guard-proxy` pin carries `agency_scoped`
+(guard-proxy-agenticburn#76, #1151).

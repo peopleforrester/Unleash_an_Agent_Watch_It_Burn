@@ -2157,20 +2157,18 @@ is merely slow rather than rebuilding:
     CHECK NOT RUN` switched nothing: exit 3 is another run holding the lock
     (`python3 verify/guard_lease.py show --context <context>` names it), exit 4 is a
     cluster not at the start state, with the fields named.
-  - On 2026-11-08 (run 18721) it ended RED, 8 PASS and 10 FAIL, as on the first run
-    (run 18714): `guard-agency-on` FAIL on both, since the pinned guard-proxy does not
-    send `agency_scoped` yet (#1132's last piece); `guard-input-on` FAIL on the
-    community cluster and `guards-off` FAIL in the terminal, since the private
-    terminal cannot reach the community cluster's guard-proxy on 8080 (#1202, #1171);
-    and `guards-off` stopping before its MCP step, which left `tool_allowlist` on on
-    both (#1203). New on this run, `guardrails-off` hung on the community cluster
-    until the check's 420-second limit: its NetworkPolicies now carry the AWS network
-    policy agent's finalizer, so `kubectl delete` waits for them to go, and that wait
-    needs list and watch, which the `guardrails-switch` ServiceAccount does not have.
-    The objects were already gone. If `guardrails-off` sits on the community
-    cluster's `delete ... c1-network-policy.yaml`, that delete is done: read both
-    `/controls`, and when all four guardrails read off, stop it with ^C. The full pass
-    is owed until those land.
+  - On 2026-11-09 (run 19175) it ended RED, 11 PASS and 4 FAIL, in two minutes. Every
+    FAIL is the one field the pinned guard-proxy does not send yet, `agency_scoped`
+    (#1151, #1132's last piece): `guard-agency-on` on both clusters, and so
+    `start-state` on both. The terminal printed "Switched on both clusters" for
+    `guard-agency-on`, and applied the least-privilege Role on both; only `/controls`
+    cannot show it. `guardrails-on`, `guard-input-on` and `guard-mcp-on` PASS on both
+    clusters, `guards-off` and `guardrails-off` ran every step, and `as-found` PASS on
+    both. So the 8080 path to the community cluster's guard-proxy (#1202), `guards-off`
+    stopping early (#1203) and `guardrails-off` hanging on the NetworkPolicy delete
+    (#1208), which made run 18721 RED with 10 FAIL on 2026-11-08, no longer show. Read
+    a RED that names only `agency_scoped` lines as that, not as a broken switch. The
+    full pass, GREEN, is owed until the guard-proxy pin carries `agency_scoped`.
   `./fleet.sh check-tls --closed-terminal attackme.burritobot.co attackme.agenticburn.com`, then
   `./fleet.sh check-tls burritobot-private.burritobot.co burritobot-private.agenticburn.com`.
   Each second name is the agenticburn.com twin, kept for redundancy (#651): neither is shown, and both must pass.
