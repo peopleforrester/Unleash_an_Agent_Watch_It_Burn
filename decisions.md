@@ -46884,3 +46884,33 @@ write` left the map unchanged. A plain `yarn install --immutable --mode=skip-bui
 yarn-plugins/conditional-checksums.lock` and ended `exit=0` in 27 s. Its `node_modules` and install state were then
 removed. The live check is still skipped for the reason given above. The scoped Test and E2E commands are left to
 validation.
+## 2026-11-09: /kubecon reaches each challenge's trace by its seed's session id, not a saved view (#1249, run 19524)
+
+**What changed.** #1204 reworded the run-of-show's segments 2 to 5 to the Night Before step "Seed the stage's Datadog
+traces" (#1139), and the presenter page, `gitops/ai-layer/web/kubecon.html`, still named the old setup: one saved
+view per challenge, a "Datadog Challenge N tab" in the Challenge 1, 3 and 4 private-bot markers, `c3-fixed` as the
+tab's second saved view and `c3-pii` as a view. The "Datadog on stage" control now says each challenge's trace is
+reached from the Datadog link on its slide by its seed's session id, `wib-stage-<key>-<stamp>`, on Past 7 Days, as
+that step says. Each private-bot marker now opens "The trace, after the attack" and names its link and its seed's
+session id (`c1-attack` from "Ophelia Thorn", `c3-attack` from the trace link on #/48, `c4-attack` from
+"tools" on #/68), Challenge 2's control names `wib-stage-c2-attack-<stamp>`, the fixed markers name
+`wib-stage-c3-fixed-<stamp>` and `wib-stage-c4-fixed-<stamp>`, and the `c3-pii` note sends the presenter to APM's
+traces with `service:burritobot @session.id:wib-stage-c3-pii-<stamp>`, since a refused prompt reaches no model. The
+visible page went from 2377 to 2409 words, under its 2,450 budget.
+
+**Tests.** `verify/test_instructor_brief.py` no longer asks for "Datadog Challenge N tab"; it checks each of C5, C6
+and C7 names `wib-stage-c<n>-attack-<stamp>` on Past 7 Days after its private-bot attack marker and before its fix,
+that the page names no saved view and no Challenge N tab (with a self-check that the old wording is caught), and that
+the control, Challenge 2's trace and the `c3-fixed` and `c3-pii` seeds carry their session ids.
+`verify/test_kubecon_seg4_flow.py`'s BLOCK_ORDER and KEPT read the new words, and its `_trace` cut is on
+`<b>The trace, after the attack`, checked first as an anchor. Both passed. `verify/test_scope_tests.py` failed on map
+drift from run 19479's commit (`test_kubearmor_config_tracked.py` reads
+`policies/kyverno/require-resource-limits.yaml`); `python3 verify/scope_tests.py write` added that one read and the
+test then passed. The prose gate passed. The whole Test and E2E commands were not run; validation runs the tests
+that read the changed files.
+
+**Live.** Before promotion, watch-it-burn-private's `agent/console-src-*` ConfigMap serves the old page ("saved view"
+and "Datadog Challenge 3 tab" present, no `wib-stage-c3-attack`); watch-it-burn-community carries no `kubecon.html`
+ConfigMap. Not yet run on a cluster: after Argo CD syncs the promoted change, the private cluster's `kubecon.html`
+in `agent/console-src-*` names no "saved view" and no "Datadog Challenge 3 tab" and does name
+`wib-stage-c3-attack-&lt;stamp&gt;`.
