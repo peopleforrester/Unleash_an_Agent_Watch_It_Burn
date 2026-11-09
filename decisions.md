@@ -49986,3 +49986,42 @@ other offline tests that call the bootstrap, repair and up paths (`test_attendee
 
 **Live check.** Skipped: the change touches a policy and tests, and the policy reaches the clusters only through Argo
 CD after promotion. The cluster-side check is the one already written up under "Not yet run on a cluster" above.
+
+## 2026-11-09: #1279 resumed (run 19785): the tests gate's test_coc_admission.py failure, and guard-proxy's own env names
+
+**Why the gate failed.** Run 19648's draft (`origin/agent/1279-19636`) was cut from staging 31d03d8d. On that tree
+`verify/test_coc_admission.py` fails one check, "variables.floor is floor.portable_pattern()", with or without the
+draft: a worktree of the draft's tip reproduces it. Staging's own 9ca2ebf5 fixed it later (#1277's JSON-escape edges
+had turned that test red on staging). The draft changes nothing the test reads for that check. This run ported the
+draft's four commits onto staging 1af2ef24 as `prior-drafts.sh` said: two edits in place (`gitops/ai-layer/resources.yaml`,
+`verify/scope-map.yaml`, where both sides' new entries are kept) and the decisions.md append. On that base
+`test_coc_admission.py` passes every check.
+
+**What differs from the draft.** Michael's comment on the issue, from the guard-proxy repin for #1267, says guard-proxy
+reads other names than the draft wrote. guard-proxy-agenticburn 48cc2ca (its commit message, README and config code)
+reads `CONDUCT_GUARDRAIL_ID` and `CONDUCT_GUARDRAIL_VERSION`, which turn the call on, and `AWS_REGION`, the region it
+signs for. An id without a version, or without a region, stops it at start. Under the draft's `BEDROCK_GUARDRAIL_*`
+names guard-proxy would never call the guardrail and nothing would say so. The guard-proxy Deployment now takes those
+three names from the `coc-guardrail` ConfigMap's id, version and region keys, each optional, so all three are set or
+none. The comments in the cluster root and in `fleet.sh`, and `verify/test_pin_coc_guardrail.sh`'s env check, name
+them the same way. guard-proxy's current pin (a7a5a369) is three commits behind 48cc2ca and ignores the env until the
+#1267 repin lands. The guardrail, the grant, the policy and the pin are the draft's, unchanged.
+
+**Tests run,** each once, alone: `test_pin_coc_guardrail.sh` (31 passed), `test_fleet_converge_repairs.sh`,
+`test_fleet_standbys.sh` (40 passed), `test_coc_guardrail_tf.py`, `test_fleet_import_state.py`,
+`test_iam_policy_structural.py`, `test_iam_policy_coverage.py`, `test_tf_module_cache.py`, `test_agent_cloud_credential.py`,
+`test_agent_bypass_shapes.py`, `test_coc_admission.py`, `test_scope_tests.py`: all exit 0. The whole Test and E2E
+commands were not run; validation runs the scoped ones, the Kyverno CLI tier tests included.
+
+**Live check,** read-only, with no change to either cluster. On watch-it-burn-community and watch-it-burn-private
+guard-proxy runs as `guard-proxy-reader` with one ready replica, sets no guardrail or AWS env today, and there is no
+`agent/coc-guardrail` ConfigMap. agent's Pod Identity associations on watch-it-burn-private are web-terminal, agent-sa
+and agentgateway, none for guard-proxy, and accen-dev us-west-2 lists no guardrail. The renamed guard-proxy Deployment,
+applied with `--dry-run=server` as Argo CD's controller, printed `deployment.apps/guard-proxy configured (server dry run)`
+on both clusters. `policies/kyverno/restrict-agent-spawned-workloads.yaml` the same way printed `configured` on
+watch-it-burn-private and `created` on watch-it-burn-community, where that policy is not applied today.
+
+**Not yet run on a cluster.** Unchanged from the draft's entry: the cluster root's apply on both clusters (an operator's
+act), then `infra/terraform/fleet/fleet.sh converge instructors` to write the ConfigMap, then guard-proxy's env naming
+the guardrail and an ApplyGuardrail call as `guard-proxy-reader` returning GUARDRAIL_INTERVENED on an insult and NONE
+on a stage prompt, once guard-proxy is pinned at or after 48cc2ca.
