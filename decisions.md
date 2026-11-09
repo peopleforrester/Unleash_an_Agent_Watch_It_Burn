@@ -43072,3 +43072,38 @@ where the probes moved them, far under the $25 cap. No dependency was added.
 
 **Tests.** The two deploy_app tests above pass. The prose gate was run on the changed Markdown. The scoped suites are
 left to validation, as the run's rules say.
+
+## 2026-11-09 · #1078 · run 18853 · The tier render tests' run-time paths are bounded, and twelve tests leave the scope map's always list
+
+**What changed.** `verify/scope-map.yaml` has eight new `bounds` entries, one for each file whose paths built from run-time
+values sent a test to `always`. `verify/app_render.py`, `test_datadog_log_services_render.py`, `test_enforce_floor.py` and
+`test_image_registry_render.py` read each `gitops/bootstrap/apps` Application source's path and each `$values/` file, so
+their bound is `bootstrap_chart.py`'s: gitops, policies, backstage, observability-idp and security. `test_enforce_floor.py`
+adds the two infra value files of the releases `deploy-full-idp.sh` installs. `test_kubearmor_config_render.py` is bounded
+by `gitops/kubearmor-config`, `test_bootstrap_chart_render.py` by `gitops/manifests` (the burn demo apps it kustomizes) and
+`test_platform_baseline.py` by `infra/deploy-full-idp.sh`, the one `installed_by` script. `verify/sister_tree.py` runs git
+only on a clone of the sister repo, so its bound names no path; `scope_tests.py` now accepts `paths: []` for that case
+and writes it back as such. With the bounds, the eight tests the issue names move to `reads`, and so do
+`test_chart_fetch.py`, `test_sister_tree.py` and `test_verify_harness.py`, whose only always reasons were those same
+lines. `always` goes from 82 tests to 70, and from 8 tier tests to none.
+
+**What the bounds are held by.** `verify/test_scope_tests.py` checks each against its data: every Application source
+path and `$values/` file in `gitops/bootstrap/apps` (whatever its repoURL) is inside each of the four app-source bounds;
+the release table's value files, the kubearmor app's path source, the five burn demo apps' manifest directories and
+every `installed_by` script sit inside theirs; and `sister_tree.py`'s two git calls are a clone and a `-C` read of that
+clone. A bound stands in for every run-time path of its file, so each bounded file's count of run-time paths and git
+reads is pinned there (eleven files); a new one fails the test until its bound is reread.
+
+**Effect.** On the scoped selector, a change to `scripts/compile-design-doc.py` alone ran 9 tier tests before and runs 1
+now; one to `verify/gh_comments.py` ran 17 and runs 9; one to `infra/terraform/fleet/fleet.sh` ran 19 and runs 11.
+A change to `gitops/bootstrap/apps/kubearmor.yaml` still runs the render tests that read it, which the test holds.
+
+**Audit.** `python3 verify/scope_audit.py tools` on the eight tier tests printed `exit 0, ok` for each and
+`8 tests audited, 0 with reads their entries miss`, exit 0, in 146 s with the pinned tools. `python3 verify/scope_audit.py
+offline` on `test_chart_fetch.py`, `test_platform_baseline.py`, `test_sister_tree.py` and `test_verify_harness.py`
+printed `4 tests audited, 0 with reads their entries miss`, exit 0.
+
+**Tests run.** `python3 verify/test_scope_tests.py` prints `ALL PASS` and `python3 verify/scope_tests.py check` reports
+0 problems. This change edits the map's bounds and `scope_tests.py`, so the gate's scoped runners run everything for it;
+the full Test and E2E commands are left to hecaton's validation. No live cluster check: the change touches only files
+under `verify/` that no cluster runs, and decisions.md. No dependency was added.
