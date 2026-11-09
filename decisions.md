@@ -49643,3 +49643,22 @@ promotion.
 Not yet run on a cluster: once Argo CD syncs the promoted staging, `checksum/proxy-py` reads `f5410e81173a` on both
 clusters, and with every guard toggled off, `/chat` refuses "f u c k" and its fullwidth spelling with the
 code-of-conduct reply on each, as guard-proxy's release notes for 48cc2ca say. The toggles are put back as found.
+
+## 2026-11-10 · #1288 · run 19825 · run 19749's tests gate: the weaver spans test did not know 48cc2ca's loop over two spans
+
+**The cause.** Run 19749's repin failed hecaton's tests gate on one test, `verify/test_weaver_guard_proxy_spans.py`:
+"every span variable proxy.py sets a literal attribute on is mapped to a group (['span'])". 48cc2ca's
+`_refuse_for_conduct` stamps a refused turn's attributes with `for span in (root, chat_span):`, where `root` is
+`trace.get_current_span()`, the `/chat` POST server span. The test maps each span by the variable name the
+attribute is set on, so the loop variable `span` and the new `root` were unmapped. The registry was already right:
+`span.witb.guard_proxy.http` and `span.witb.guard_proxy.chat` both declare the four attributes the loop sets.
+Run 19749 had run only the tests that read the term list, so it missed this one.
+
+**The fix.** The test maps `root` to the server span's group, as it maps `_root_span`, and expands a loop over a
+tuple of mapped span variables into one call per span, so each attribute is checked on both groups. A new check
+holds that the loop is over `root` and `chat_span`. No proxy or registry change. Run here once each:
+test_weaver_guard_proxy_spans.py, test_weaver_guard_proxy_stamps.py and test_scope_tests.py, all exit 0. The rest of
+the selection is left to validation.
+
+Live check: none changed since run 19749's read. This run changes only a file under `verify/` that no cluster runs.
+The post-sync check that entry names under "Not yet run on a cluster" is still owed.
