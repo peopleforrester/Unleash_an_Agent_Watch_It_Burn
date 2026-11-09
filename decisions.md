@@ -45956,3 +45956,39 @@ Both hosts served byte-identical `event.js` and `burritbot.html` (73754 bytes), 
 stays with the phone-check checklist.
 
 **Tests run.** The two tests above and the prose gate. No dependency was added.
+## 2026-11-09: The Jokers' layer clears setuid, setgid and sticky, so a setgid checkout builds the pins (#1126, run 18886)
+
+**What failed.** In hecaton run 18408 (#905), `verify/test_joker_build_digest.py` built the festival-ops Joker to
+sha256:8cf3af0c5420... and the internal Joker to sha256:fb252967b50d..., not images.lock's 0765b359552b and
+793db2995eee, while every file in both images matched. Run alone it passed.
+
+**The cause.** Not the parallel tier: the checkout. images/villains/build.sh made the layer with
+`tar --mode='a+rX,ug+w,o-w'`, which adds and removes rwx bits and never touches setuid, setgid or sticky. A hecaton run
+directory is setgid (`drwxrws---`, read with stat on /var/lib/hecaton/runs/18886 and /var/lib/hecaton/runs/18408), so a
+checkout made under one gives every directory git creates the setgid bit, and the layer's directory entries kept it.
+The branch's own worktree under /var/lib/hecaton/worktrees/ is not setgid, which is why the same test passed there.
+Shown three ways in this run: setting g+s on the copy's joker-web, joker-web/www, joker-web-internal and
+joker-web-internal/www gave 8cf3af0c5420 and fb252967b50d exactly; a `git worktree add` under a setgid directory in
+/tmp, with the old build.sh, printed the issue's two FAIL lines byte for byte, full digests included; and with umask
+077, LC_ALL=C or another TMPDIR the digests stayed on the pins. One setgid directory alone moves only its own Joker
+(joker-web alone gave 3b0b3fc29963 for the workshop Joker and left the internal one on its pin).
+
+**The fix.** The mode is now `a-st,a+rX,ug+w,o-w`. Both digests are unchanged on a plain checkout, so images.lock, the
+internal registry's seed and the published tags stay as they are. The test now builds a second time from a copy of
+images/villains (with verify/image_cache.py and verify/artifact_cache.py) whose every directory carries setgid, with
+TMPDIR inside it, checks that chmod g+s held, and holds that build to the same pins. Against the old build.sh it fails
+with the two digests above; with the fix it passes.
+
+**Runs of the check.** In the setgid git worktree: five runs one after another and four at once, each 31 PASS and 0
+FAIL. In this run's worktree, on the committed test: one run, 31 PASS (two earlier runs of a draft of the new check passed too). The offline tests that read build.sh passed:
+test_c6_villain_endpoint.py, test_ghcr_version_tag.py, test_room_jokers.py, test_no_docker_hub.py,
+test_tests_own_inputs.py and test_scope_tests.py. The scope map needed no new entry. The whole tools tier was not run
+here; validation runs the tier tests the change selects.
+
+**Live check (read only).** `crane digest` on ghcr.io read busybox-1.38.0 at sha256:0765b359552b... and
+busybox-1.38.0-internal at sha256:793db2995eee..., the pins. On watch-it-burn-private the `registry/registry-seed`
+ConfigMap seeds burritobot/maintenance-shell from the internal Joker at 793db2995eee; watch-it-burn-community has no
+such ConfigMap. Nothing on either cluster was changed, and nothing there changes from this commit, since the digests
+did not move.
+
+**Not yet run on a cluster.** Nothing: the images the clusters run are byte for byte the same.
