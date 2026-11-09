@@ -22,6 +22,7 @@ files, the bootstrap Applications, the spike's term list and gitops/ai-layer/tic
 """
 from __future__ import annotations
 
+import json
 import pathlib
 import re
 import sys
@@ -109,6 +110,17 @@ check("the replacement keeps both word edges ($1 and $3, written $$1 and $$3)", 
 print("== what it does, with Python's re (test_collector_coc_mask_e2e.py runs RE2 in the collector) ==")
 for text, masked in term_cases():
     check(f"a {len(text)}-character text with a term comes out masked", mask(text) == masked)
+# The attributes are JSON: guard-proxy writes them with json.dumps, whose \n and \uXXXX escapes sit right before a
+# term on a line's start or after a curly quote, and kagent's Go marshaller keeps UTF-8 as it is. Both must mask.
+lines = "\n".join(t for t, _ in term_cases())
+lines_masked = "\n".join(m for _, m in term_cases())
+check("the cases on lines of one prompt, JSON-encoded with escapes (guard-proxy), come out masked",
+      mask(json.dumps(lines)) == json.dumps(lines_masked), mask(json.dumps(lines)))
+check("and JSON-encoded as UTF-8 (kagent)",
+      mask(json.dumps(lines, ensure_ascii=False)) == json.dumps(lines_masked, ensure_ascii=False))
+check("HC-666's ticket JSON-encoded either way is unchanged",
+      all(mask(json.dumps(ticket_text, ensure_ascii=a)) == json.dumps(ticket_text, ensure_ascii=a)
+          for ticket_text in [hc666_ticket()] for a in (True, False)))
 ticket = hc666_ticket()
 check(f"HC-666's ticket ({len(ticket)} characters, its injection included) comes out unchanged", mask(ticket) == ticket)
 

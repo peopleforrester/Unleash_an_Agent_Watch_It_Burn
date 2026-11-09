@@ -93,13 +93,18 @@ def term_cases() -> list[tuple[str, str]]:
     terms = sorted(floor.corpus.terms("proposed"), key=len)
     word = next(t for t in terms if " " not in t and len(t) >= 4 and t.isascii() and t.isalpha())
     phrase = next(t for t in terms if " " in t and t.isascii())
+    sharp = next(t for t in terms if "ß" in t)  # a letter json.dumps writes as ß, and fold() keeps
     spaced = " ".join(word)
+    # Once JSON-encoded, the second line starts after the two characters \n, and the curly quotes become ‘ and
+    # ’: the cases a word edge of [^a-z0-9] alone misses (#1277).
     return [
         (f"This burrito is {word} cold.", "This burrito is [redacted] cold."),
         (f"{word.upper()}!!! where is my order", "[redacted]!!! where is my order"),
         (f"you {spaced}, answer me", "you [redacted], answer me"),
         (f"{word} {word} {word}", "[redacted] [redacted] [redacted]"),
         (f"I said: {phrase}.", "I said: [redacted]."),
+        (f"‘{word}’ said the customer", "‘[redacted]’ said the customer"),
+        (f"Ich sage {sharp} dazu", "Ich sage [redacted] dazu"),
     ]
 
 
