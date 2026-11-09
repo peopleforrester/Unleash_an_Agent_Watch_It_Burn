@@ -49225,3 +49225,35 @@ does not touch. Staging fixed it in `7f484080` and `8eb1872a`. The branch was re
 conflict, which also brings #1297's `1ae571d7`: it holds the Rehearsal column (every beat timed or none) in
 `verify/test_seg3_timing.py`, while this test holds the choice, so the two do not overlap. After the rebase,
 `test_coc_pattern_copies.py`, `test_seg3_choice.py` and `test_seg3_timing.py` each print their GREEN line.
+## 2026-11-09 · #1292 · run 19692 · a test holds what the chosen code-of-conduct floor adds to a /chat turn
+
+**What.** Test review run 19687 found that nothing checked #1267's criterion "Measured latency added to a `/chat`
+turn by the chosen option". New `verify/test_coc_floor_latency.py` does, offline, in two halves. First, each latency
+figure in `docs/research/2026-11-09-coc-floor/README.md` is held to `results.json`, at the precision the README prints
+it: the 1,099 turns and their 3,803 ms median, the term floor's 1.07 ms median, 11.4 ms p99 and 16 ms max per turn,
+the same figures in "The answer", and Toxicity's 144 ms and 915 ms. The Bedrock rows (466 ms, 229 ms) were taken on
+the 69 observed prompts, which `results.json` does not break out, so they are held to within 10% of each guardrail's
+median over all 1,806 calls and to the 69 prompts `results.json` counts. The README's sum, about half a second on a
+3.8 s turn with about a millisecond of it the term floor, is recomputed from those figures. Second, the proposed term
+floor is timed on this checkout: each of the 56 `/chat` prompts the repo holds, checked, plus a 2,480-character reply
+of tool and cluster data, masked, best of 5 runs each. The costliest turn must stay within the 16 ms the worst
+observed turn cost (it costs 4.3 ms today), and masking a reply ten times as long must cost at most 20 times as much
+(9.4 times today). The Bedrock half is not re-measured: the spike deleted its guardrails, and a call needs AWS.
+
+**Shown to fail.** With the README's 1.07 ms changed to 1.27, with `results.json`'s max turn changed to 3 ms, and with
+3,000 extra terms in `terms-proposed.rot13` (the costliest turn went to 98 ms), the test failed on the matching check
+each time. Every file was put back and compared byte for byte.
+
+**Found while timing: the proposed floor is quadratic on some adversarial input.** A prompt that repeats the
+leetspeak pair `5$` costs 49 ms at 1,000 characters, 250 ms at 2,000 and 864 ms at 4,000; `4@` and a run of `@`
+grow the same way, more slowly. Realistic text stays linear (the test's second check). The README's figures were
+taken on observed turns and still hold, and guard-proxy runs the 40-term list, a plain alternation, until the
+proposed list moves there, so nothing in the room is slow today. A follow-up names it for that move.
+
+**Scope map.** `git` cannot run in this lane, so `scope_tests.py write` could not. The entry was made from
+`scope_tests.extract()` run on a tree read from the file system. On that tree it reproduces the committed
+`test_coc_floor_spike.py` entry exactly, and `structural()` and `drift_items()` returned nothing.
+
+**Tests.** `python3 verify/test_coc_floor_latency.py` passed (15 checks, 0 failures, 0.5 s). The whole Test and
+E2E commands were not run; validation runs what the scope map selects. No live check: the change is a test under
+`verify/` and its map entry, which no cluster runs.
