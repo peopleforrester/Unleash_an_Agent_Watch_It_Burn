@@ -48098,3 +48098,98 @@ dry run above changed nothing on watch-it-burn-private. No file a cluster runs c
 
 **Not yet run on a cluster.** `verify/test_terminal_ws_auth_live.py` against a web-terminal pod on `-8`, after the
 signature and the pin.
+## 2026-11-09 · #1278 · run 19634 · Code-of-conduct admission on names and labels in `agent`, outside Kyverno
+
+**What.** `gitops/namespaces/code-of-conduct-names.yaml` is a ValidatingAdmissionPolicy and its binding. It refuses a
+CREATE or UPDATE of any namespaced kind in `agent` whose name or labels match the floor the spike chose (#1267,
+`docs/research/2026-11-09-coc-floor`), with `validationActions: [Deny]` and `failurePolicy: Fail`. The pattern is
+`floor.portable_pattern()` written out in full, 16,084 characters of RE2 in one CEL raw string. The refusal says "Keep
+it kind: this name or one of its labels has words the code of conduct rules out, so the cluster refused it. Pick
+another name." and names no term. It is native admission, so guardrails-off, which sets Kyverno to Audit, leaves it on.
+
+**Where.** It ships in the namespaces Application, not in an Application of its own. Every profile lists namespaces,
+so no profile list or count changes. It syncs first (wave -10), so the policy is in place before anything lands in
+`agent`. selfHeal and prune are on, so a deleted policy comes back.
+
+**What it reads.** The CEL joins three things into one text: the object's name, its labels as key=value, and the pod
+template labels of a workload or CronJob. Those template labels are what the controllers later copy onto Pods. The
+joiner is "/", which ends a word for the pattern but is not one of its separators, so letters split across labels
+never spell a term together. One text with one `matches()` keeps the CEL cost down: cel-go charges about 0.1 times the
+text length times a quarter of the pattern length, roughly 400 per character against the 1,000,000 per-call limit.
+The largest name and labels in `agent` on either cluster came to 410 characters (the workshop-agent Pod). A text over
+about 2,400 characters fails the evaluation, and `failurePolicy: Fail` refuses that too. The error quotes the
+expression `!variables.text.matches(variables.floor)`, which holds no term, because the pattern sits in a variable.
+
+**Whose writes: a difference from the spike.** The spike bound the policy to the namespace with nothing else. Here a
+`matchCondition` leaves out the cluster's own `system:` identities (controllers, Kyverno, Argo CD, kubelets). Service
+accounts in `agent` are kept in, among them workshop-mcp (deploy_app), agent-sa (run_shell) and web-terminal, and so is
+every person. The reason is in the live data. Both clusters' `agent` objects were dumped (359 on private, 354 on
+community). On community two Kyverno PolicyReports matched, both named for a UID whose four-character segment
+reads as a term in leetspeak. In 200,000 random UUIDs, 0.03% matched, about one in 3,400. With controllers in scope,
+Kyverno's reports and the Pods of a Job (which carry its UID as a label) would be refused at that rate. Whatever a
+controller makes is named after an object a checked identity already wrote, plus a random part. Argo CD writes only
+what is in git, and the offline test reads that. Cluster-scoped kinds are left out (`scope: Namespaced`), since a
+binding's namespaceSelector never skips them. Nothing in `agent` on private matched.
+
+**What lifts it.** Nothing a switch or reset runs. On both clusters, `kubectl auth can-i delete
+validatingadmissionpolicies` and `patch validatingadmissionpolicybindings` answer no for agent-sa, workshop-mcp,
+web-terminal and guardrails-switch. Neither terminal entrypoint (guardrails-off, guards-off) nor fleet.sh (reset-bot,
+desk-reset, beacon-reset, wall-reset) names an admission policy. guardrails-off's Kyverno step patches Kyverno's own
+`validatingpolicy` alone.
+
+**Live, watch-it-burn-private, 2026-11-09 about 16:45Z.** The policy and binding were applied by hand. The checks ran
+as the run's role, and as the bot by impersonating `system:serviceaccount:agent:workshop-mcp`. The term came from
+`terms-proposed.rot13` and was masked in the output:
+
+    validatingadmissionpolicy.admissionregistration.k8s.io/code-of-conduct-names created
+    {"observedGeneration":1,"typeChecking":{}}
+    == 1. ConfigMap with a term in its name (as arn:aws:sts::<acct>:assumed-role/hecaton-run/hecaton-run-19634)
+    error: failed to create configmap: configmaps "coc-probe-<term>" is forbidden: ValidatingAdmissionPolicy 'code-of-conduct-names' with binding 'code-of-conduct-names' denied request: Keep it kind: this name or one of its labels has words the code of conduct rules out, so the cluster refused it. Pick another name.
+    == 2. ConfigMap with a plain name and a term in a label value
+    Error from server (Forbidden): ... configmaps "coc-probe-label" is forbidden: ... denied request: Keep it kind: ...
+    == 3. the same ConfigMap name as the bot (workshop-mcp), server dry run           -> forbidden, same message
+    == 4. a Deployment whose pod template label carries the term, as the bot, dry run -> forbidden, same message
+    == 5. the Joker deploy_app builds, created as the bot (workshop-mcp)
+    deployment.apps/joker-agatha-the-banshee created
+    deployment "joker-agatha-the-banshee" successfully rolled out
+    pod/joker-agatha-the-banshee-6f9f6dfc9d-lm79x
+    == 6. an update of the Joker as the bot (label added), admitted
+    deployment.apps/joker-agatha-the-banshee labeled
+
+The Joker was the manifest deploy_app's `_plain_room_joker` builds, with its stamped labels. Afterwards the Joker, its
+ReplicaSet and Pod, the policy and the binding were deleted. A recheck found no `coc-probe` ConfigMap, nothing named
+for agatha and no `code-of-conduct-names` policy or binding: the cluster was left as found. This check ran without the
+guard lock, a slip of about two minutes; the probe runs below held it.
+
+**Probes with the policy on.** Both KubeCon probes ran with the policy and binding applied by hand on both clusters,
+inside `guard_lease.py hold --with-peer` (the guard lock on both), from 16:58Z to 17:11Z:
+
+- `kubecon_probe.py community attackme.burritobot.co --context watch-it-burn-community --switch-context
+  watch-it-burn-private`: `22 beats: 22 PASS, 0 FAIL`, `KUBECON PROBE GREEN`. Among them: "tron runs
+  docker.io/iamassif731/tron-lightcycle-game:latest, in the cluster and listed on deployments.burritobot.co; removed
+  tron and its row again". Also "read_support_ticket(HC-666), then deploy_app(joker-agatha-the-banshee):
+  joker-agatha-the-banshee Deployment created", and the end beat "AI guards off and the four Kubernetes guardrails off
+  on watch-it-burn-community, watch-it-burn-private: the stage starts clean".
+- `kubecon_probe.py admin burritobot-private.burritobot.co --context watch-it-burn-private`: `34 beats: 34 PASS, 0
+  FAIL`, `KUBECON PROBE GREEN`, HC-666's Joker landing with Kyverno on, then Forbidden by RBAC, then withheld by the
+  input guard, as before.
+
+Each cluster's binding read `["Deny"]` between the two probes and after them. Both were then deleted, and each cluster's
+`validatingadmissionpolicies` list read as before (private: guardrails-switch-pod-touch and the Gateway API's
+safe-upgrades; community: guardrails-switch-pod-touch). The one Joker Deployment left in `agent`, community's
+joker-ichabod-the-werewolf, dates from 2026-11-07, before this run. The run's log is
+`tmp/hecaton/live/probes-1278.log`, scratch that the run's end removes.
+
+**Tests.** `verify/test_coc_admission.py` (new, offline) holds the shape, the binding to `agent` and the namespaces
+Application on all seven profiles. It holds the pattern equal to `floor.portable_pattern()`, and holds that the message
+and expressions name no term. It holds the 768 Joker slugs (built by deploy_app's own code), the four stage images in
+the agent prompt (Tron, 2048, Infinite Mario, Tetris) and all 200 objects under `gitops/` and the terminal's challenge
+files against the CEL text, with none refused. Every ASCII term in the list, as a name and as a pod template label, is
+refused. It also holds what guardrails-off, guards-off, the resets and the stage roles leave in place. It passed. With
+the binding set to Audit and one pattern character changed, it failed on both. `verify/scope-map.yaml` has its entry.
+The whole Test and E2E commands were not run; validation runs the 130 offline and 16 tools-tier tests the scope map
+selects. No dependency was added.
+
+**Not yet run on a cluster.** Argo CD syncing the policy from git through the namespaces Application, once hecaton
+promotes this and the clusters take the new revision: `kubectl --context <ctx> get validatingadmissionpolicy
+code-of-conduct-names` then shows it carrying Argo CD's tracking annotation.
