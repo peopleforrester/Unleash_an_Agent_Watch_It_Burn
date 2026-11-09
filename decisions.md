@@ -47962,3 +47962,24 @@ validation.
 
 **No live check.** Only `verify/fetch-inventory.yaml` and this entry changed, and no cluster runs either. Run 19593's
 live run of the finale stands.
+
+## 2026-11-09 · #1275 · run 19620 · A test holds the over-the-slot paragraph to segment 5's length
+
+Test review run 19614 found no test for #1270's criterion that the run-of-show's "Over the slot (#1196, #1270)"
+paragraph states segment 5's new length, about 5 minutes 30 seconds for 823 words over 49 slides, 478 of them on the
+thirty-eight diagram slides. `verify/test_ros_over_slot_seg5.py` now checks it offline, against segment 5's own
+Timing paragraph, where the numbers are counted, rather than against fixed numbers, so a later redraw of the deck
+updates both paragraphs and the test together. It holds that the paragraph states the length in one phrase, and that
+its words and its time are the Timing paragraph's. The time must be the words at 150 a minute to the nearest 30
+seconds, the Timing paragraph's three parts must add up to its words with the diagram part equal to the paragraph's
+diagram words, and the 49 slides and thirty-eight diagram slides must be the slides of the ranges `#/65` to `#/113`
+and `#/74` to `#/111` the Timing paragraph cites. The segments table's row 5 must cite the same range, both
+paragraphs must name the same rounds commit (`faf4005`), and "runs past its 5 minutes on speech alone" must stand
+exactly when the time is over the row's 5 minutes. The 154-slide deck's length it replaced (744 words, about 5
+minutes) must be gone. Each check is run again on a copy with one number changed and fails there.
+
+**Tests run.** `python3 verify/test_ros_over_slot_seg5.py` printed `OVER-THE-SLOT SEGMENT 5 LENGTH GREEN`, exit 0.
+`python3 verify/scope_tests.py write` added its entry to the scope map. The scoped Test command is left to
+validation; the change touches no file a tier test reads.
+
+**Live check.** Skipped: the change touches only `verify/` files no cluster runs and decisions.md.
