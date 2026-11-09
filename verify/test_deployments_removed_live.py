@@ -32,17 +32,23 @@ In order, this:
    and runs the page's own script in node against those rows: the public line reads "Someone deployed nginx at <t>,
    removed at <t>" with the class the page greys, the internal line reads "Someone deployed maintenance-shell at <t>"
    with no class;
-9. always puts both policies back to the actions it read, deletes both Deployments, and checks the policies, and the
-   names of every Deployment, StatefulSet, DaemonSet, Job and CronJob in agent, are as it found them.
+9. always puts both policies back to the actions it read, deletes both Deployments, removes its two rows from the
+   page with the desk's /desk-forget, and checks the policies, the names of every Deployment, StatefulSet, DaemonSet,
+   Job and CronJob in agent, and the page's rows are as it found them: /deployments.json lists no row of its names.
 
 Steps 2 to 9 hold the cluster's guard lock (verify/guard_lease.py, #1016), as every check that switches a policy does.
 
-What it leaves: its two rows on the desk. The desk keeps landed rows in memory and has no way to drop one (#1049
-keeps every row by design), and restarting fake-ticket would drop the room's rows and tickets as well, as
-verify/desk_ticket_live.py says of its tickets. Both rows end greyed: once the check deletes the internal Deployment,
-the next read marks it removed too, which the check waits for, so the page tells the truth about both.
+What it leaves: nothing on the page. The desk keeps landed rows in memory, and #1049 keeps every row a read marks
+removed, so nothing the reader does takes a row off. Since #1215 the desk has POST /desk-forget for that. It removes
+exactly the rows named in its "names" that landed at or after its "since", and the filed tickets in its "tickets", and
+nothing else: a real row of the same name from before the check stays, and a fixed ticket is never removed. It answers
+only on the desk pod's own loopback, through no proxy, so only a kubectl session reaches it; console.conf refuses the
+path on the public server. Step 9 runs it with kubecon_probe's forget_on_desk, a kubectl exec into this cluster's
+fake-ticket pod, in two passes a few seconds apart. The rows go whatever ended the run, a failed check or an exception
+included, since step 9 is the `finally` of steps 3 to 8. A row the desk still lists afterwards fails the check, naming
+what the desk answered. This check files no ticket, so it names none.
 
-It takes about four minutes.
+It takes about three minutes.
 """
 from __future__ import annotations
 
@@ -61,6 +67,7 @@ REPO = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "verify"))
 import guard_lease  # noqa: E402
 import kube_forward  # noqa: E402
+import kubecon_probe as kp  # noqa: E402
 
 CONTEXT = os.environ.get("COMMUNITY_CONTEXT", "")
 POLICIES = ("restrict-image-registries", "deny-external-registries")
@@ -270,6 +277,8 @@ def run_checks() -> None:
     if failures:
         return
     armed_here: list[str] = []
+    # The desk's `since` for step 9's /desk-forget: no row of this check's names can have landed before it.
+    t_start = time.time()
     try:
         print("== 3. two room Deployments, one public, one internal ==")
         r = kubectl("apply", "-f", "-", stdin="\n---\n".join(json.dumps(deployment(n, i))
@@ -359,6 +368,13 @@ def run_checks() -> None:
         if made:
             r = kubectl("delete", "deployment", "-n", "agent", GONE, KEPT, "--ignore-not-found", "--wait=true")
             check("this check's Deployments are deleted", r.returncode == 0, r.stderr.strip()[:300])
+            desk_pod = kp.KubeconCluster(public_host, CONTEXT, None, os.environ.get("KUBECONFIG"), 60)
+            why = desk_pod.forget_on_desk([GONE, KEPT], t_start)
+            check("/desk-forget removed this check's rows from the desk", why is None, why or "")
+            status, rows, err = desk("/deployments.json")
+            left = sorted(rows_by_name(rows))
+            check("/deployments.json lists no row of this check's names", status == 200 and not left,
+                  err or f"it still lists {left}")
         after = actions()
         check("both registry policies read what they read before", after == before, f"before {before}, after {after}")
         now = found_names()
@@ -368,16 +384,4 @@ def run_checks() -> None:
 
 if not guard_lease.run_held(CONTEXT, run_checks, check, "verify/test_deployments_removed_live.py"):
     sys.exit(guard_lease.BUSY_EXIT)
-
-if made:
-    print(f"== the desk keeps both rows; the internal one is marked once a read misses it ({READ_INTERVAL_S * 2} s) ==")
-    deadline = time.monotonic() + READ_INTERVAL_S * 2
-    mine = {}
-    while time.monotonic() < deadline:
-        mine = rows_by_name(desk("/deployments.json")[1])
-        if mine.get(KEPT, {}).get("removed_at"):
-            break
-        time.sleep(POLL_S)
-    check("both of this check's rows now read removed, so the page says what the cluster runs",
-          all(mine.get(n, {}).get("removed_at") for n in (GONE, KEPT)), json.dumps(mine)[:300])
 finish()
