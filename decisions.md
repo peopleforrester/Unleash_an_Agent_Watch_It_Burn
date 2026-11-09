@@ -43971,3 +43971,41 @@ in place. The relay's own path, the admin bot's `deploy_app` landing on the publ
 prose gate ran and printed `prose gate: pass, 2 public-prose file(s) read against 6b5185555cba`. The scoped
 `run-tests.sh` is left to hecaton's validation, which runs the tests that read the changed files, and
 `run-e2e-tools.sh` selects no tier test for a prose-only change. No test was written or changed. No dependency was added.
+
+## 2026-11-09 · #1185 · run 19298 · plan-policy's Checkov and moto come from the artifact cache, hash-checked, and the package scan reads infra/
+
+**What changed.** `infra/policy/plan/install-tools.py` took its four binaries from the host artifact cache since
+#1123, but its Python tools still ran `pip install checkov==3.3.30` and `pip install moto[server]==5.2.4` from PyPI,
+unhashed, into a fresh venv on every plan-policy.yml run. Both are now environments of `verify/python.lock`:
+`checkov` (96 wheels) and `moto` (60 wheels, the `server` extra included), each on Python 3.13, the Python
+plan-policy.yml sets up. They were written by `python3 verify/package_cache.py write checkov moto` on 2026-11-09, which
+found a manylinux x86_64 or pure wheel for every dependency, so nothing builds from source. The versions are the ones
+tools.yaml already pinned; the dependencies under them are locked for the first time. tools.yaml's `python` entries
+now name their lock environment (`env:`) in place of a pip requirement. For each tool, install-tools.py checks that the
+lock pins tools.yaml's version and exits naming both when it does not. It then makes a fresh venv and calls
+`package_cache.install(env, <venv python>, pip=True)`, which pip installs the wheelhouse with `--no-index`,
+`--only-binary=:all:` and `--require-hashes`. pip, not uv, because the plan-policy job sets up no uv and every venv
+has pip. The lock's header now names infra/ among the places it serves. The one other install line under infra/,
+infra/datadog-room/README.md's `pip install segno==1.6.6` for the room-view QR, now reads
+`python3 verify/package_cache.py run segno -- python -c ...`, the segno environment scripts/audience-qr.py uses.
+
+**Tests.** `verify/test_package_cache.py` scans infra/ as well as verify/, scripts/ and .github/workflows/ (93 files
+under infra/). Its pattern now catches an argv that names pip by path, `"pip"), "install"`, which is the form
+install-tools.py's old call took and which the old pattern missed. A new check holds the pattern against eight
+install lines it must catch, that old call and the README's line among them. With a stray
+`subprocess.run([str(venv / "bin" / "pip"), "install", ...])` appended to install-tools.py by hand, the scan
+failed naming the file and line; the file was then restored. New checks hold tools.yaml's two tools to the lock: each
+names an environment the lock holds, the lock pins tools.yaml's version, and the environment is on plan-policy.yml's
+Python. install-tools.py's `python_tool()` is loaded with its venv step and `package_cache.install` stubbed. The
+checks see it make the venv, install the moto environment into it with `pip=True`, and link `moto_server`. A version
+the lock does not pin, or an environment it does not hold, is refused before anything runs.
+
+**Run here.** `install-tools.py` into a scratch directory, for real: exit 0 in 1m28s, with `checkov --version` 3.3.30
+and `moto_server --help` working. A second install exited 0 with the artifact cache's fetch.log at 148 lines before and
+after, so nothing was downloaded. With that toolchain on PATH, `verify/test_plan_policy_e2e.py` (plan-policy.yml's
+self-test step, which plans the fleet against moto_server and runs Checkov on Terraform and OpenTofu plans) passed: 56
+checks, exit 0. Alone, once each: `test_package_cache.py`, `test_plan_policy.py`, `test_workflow_artifact_cache.py`,
+`test_scope_tests.py`, `test_iam_policy_ci.py`, `test_tool_audit.py` and `test_playwright_browsers.py`, all exit 0.
+`verify/package_cache.py` and `verify/python.lock` are on the scope map's full list, so validation runs every test;
+the scoped `run-tests.sh` and `run-e2e-tools.sh` are left to it, as the run's governance asks. No live check: the
+change touches infra/policy/plan, infra/datadog-room's README and verify/, none of which a cluster runs.

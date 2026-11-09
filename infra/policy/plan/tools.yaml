@@ -1,4 +1,4 @@
-# ABOUTME: Pinned toolchain for the plan-time policy check: every binary by version and sha256, pip tools by version.
+# ABOUTME: Pinned toolchain for the plan-time policy check: every binary by version and sha256, Python tools by lock.
 # ABOUTME: install-tools.py installs exactly these; check-plan.py refuses to run with any other version.
 #
 # Pinned 2026-10-24 to the then-current releases, each read from its project's release page that day.
@@ -37,14 +37,19 @@ binaries:
     sha256: 723bebb0df8411daff1e5fc3862e28ff5581fe5634087f4c29a9aa41d78208b5
     member: tofu
 
-# Each installed into its own virtualenv under the install directory, with its console script linked into bin/.
+# Each key is a package, installed into its own virtualenv under the install directory with its console script linked
+# into bin/. `env` names the environment of verify/python.lock that holds it and every dependency by wheel and SHA-256
+# (#1185); install-tools.py installs that environment hash-checked from the artifact cache, and refuses to when the
+# lock pins another version than `version`. To move a pin, change it here and in ENVS in verify/package_cache.py,
+# then run `python3 verify/package_cache.py write <env>`.
 python:
   checkov:
     version: 3.3.30
-    package: checkov
+    env: checkov
     command: checkov
-  # The local AWS API that plan-fleet.py plans the real fleet roots against, so a plan needs no AWS account.
+  # The local AWS API that plan-fleet.py plans the real fleet roots against, so a plan needs no AWS account. The
+  # moto environment takes moto with its `server` extra.
   moto:
     version: 5.2.4
-    package: "moto[server]"
+    env: moto
     command: moto_server
