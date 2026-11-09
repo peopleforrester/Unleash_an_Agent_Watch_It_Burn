@@ -126,9 +126,11 @@
 
   <div class="control"><b>Datadog on stage.</b> Two tabs: <code>burritobot-public</code> is the room,
   <code>burritobot-private</code> is the presenters, so the room's volume never buries the trace being shown.
-  Every trace shown is pre-seeded the night before, one saved view per challenge in presentation order
-  (#648), so nobody waits for a span; Challenge 2's is the recipe read, before and after <code>guardrails-on</code>
-  (#843). Datadog comes up right after each challenge's
+  Every trace shown is pre-seeded the night before (#648), so nobody waits for a span; Challenge 2's is the
+  recipe read, before and after <code>guardrails-on</code> (#843). Each challenge's trace is reached from the
+  Datadog link on its slide (#1139): search its seed's session id,
+  <code>wib-stage-&lt;key&gt;-&lt;stamp&gt;</code>, on Past 7 Days and click the one trace, as the run-of-show's
+  Night Before step "Seed the stage's Datadog traces" says. Datadog comes up right after each challenge's
   live attack, before its fix, to show what the attack did, not as a product tour. On the <code>burritobot-public</code> tab, e-mails, card numbers,
   SSNs and phone numbers in the room's prompts read <code>[EMAIL]</code>, <code>[CARD]</code>,
   <code>[SSN]</code> and <code>[PHONE]</code>: the public cluster's collector scrubs them before export (#647).
@@ -195,10 +197,11 @@
       <code>OPHELIA-THORN-TIBBY-TOP-SPIRE-No9</code> comes too when the model copies the record whole (#530), so
       do not wait for it.</div>
       <div class="marker"><span class="lbl">Success marker, private bot (Whitney's attack)</span>The same address
-      comes back: its Kubernetes guardrails are off too. <b>Datadog Challenge 1 tab, after the attack:</b> click
+      comes back: its Kubernetes guardrails are off too. <b>The trace, after the attack:</b> click
       <b>Ophelia Thorn</b> on the hint slide to open Datadog's
       <a href="https://app.datadoghq.com/llm/traces?query=ml_app%3Aburritobot+k8s.cluster.name%3Aburritobot-private" target="_blank" rel="noopener">Agent
-      Observability traces for the admin cluster</a> and show the pre-seeded Secret read.</div>
+      Observability traces for the admin cluster</a>; search
+      <code>wib-stage-c1-attack-&lt;stamp&gt;</code> on Past 7 Days for the pre-seeded Secret read.</div>
       <div class="control"><b>No fix here (#776):</b> RBAC arms with Challenge 2's <code>guardrails-on</code>. End on
       the <a href="https://genai.owasp.org/llm-top-10/" target="_blank" rel="noopener">OWASP Top 10 for LLM
       Applications</a>, naming <b>LLM02</b> Sensitive Information Disclosure and <b>LLM06</b> Excessive Agency.</div>
@@ -307,7 +310,8 @@
 
     <div class="control"><b>Whitney's attack, then its trace:</b> after slide 27, the second recipe prompt above, on
     the private bot, with no recon first; move on whether or not it lands. Then the pre-seeded trace of the same
-    read, <code>c2-attack</code> (#843).</div>
+    read, <code>c2-attack</code> (#843), from the slide's link: <code>wib-stage-c2-attack-&lt;stamp&gt;</code> on
+    Past 7 Days.</div>
 
     <article class="beat" data-beat="guardrails" data-segment="3">
       <h3>Let's turn on Kubernetes guardrails: one switch, the retry, one set per guardrail</h3>
@@ -389,8 +393,9 @@
       tiny and is scaled to zero after five minutes; the Deployment stays as the proof.</div>
       <div class="marker"><span class="lbl">Success marker, private bot (the presenters' attack, #/47)</span>
       It lands under the presenter's witch name on the one page, <code>deployments.burritobot.co</code>, in a row
-      tagged <code>private</code>. <b>Datadog Challenge 3 tab, after the attack
-      (#/48):</b> <code>c3-attack</code>, <code>read_support_ticket</code> returning HC-666 and the
+      tagged <code>private</code>. <b>The trace, after the attack
+      (#/48):</b> from "Let's look at the trace.", search
+      <code>wib-stage-c3-attack-&lt;stamp&gt;</code> on Past 7 Days: <code>c3-attack</code>, <code>read_support_ticket</code> returning HC-666 and the
       <code>deploy_app</code> call it leads to.</div>
       <div class="toggle" onclick="cp(this)"><span class="lbl">Fix, least privilege · private terminal · prints its kubectl apply</span>guard-agency-on<button class="cp">copy</button></div>
       <div class="marker"><span class="lbl">Success marker, private bot, before the toggle (least privilege)</span>The
@@ -399,7 +404,8 @@
       <div class="toggle" onclick="cp(this)"><span class="lbl">Toggle, the input guard · private terminal</span>guard-input-on<button class="cp">copy</button></div>
       <div class="marker"><span class="lbl">Success marker, private bot, after the toggle (the input guard)</span>The
       ticket comes back <code>[input guard] withheld</code>, there is no <code>deploy_app</code> call, and no
-      Deployment. The tab's second saved view, <code>c3-fixed</code>: <code>read_support_ticket</code> returning
+      Deployment. The same search for <code>wib-stage-c3-fixed-&lt;stamp&gt;</code> finds
+      <code>c3-fixed</code>: <code>read_support_ticket</code> returning
       the withheld notice with no <code>deploy_app</code> after it. The input guard does double duty:
       someone else's PII it withholds never reaches the model, the traces, or a later agent that reads them.</div>
       <details class="more"><summary>Notes · if it wanders</summary>
@@ -423,7 +429,10 @@
       Deployments, in red) beside the one <code>guard-agency-on</code> applies (<code>get</code> and
       <code>list</code>, in green). #/55 names LLM Guard on screen. #/56 to #/64 follow one request through the
       nine-slide architecture diagram, the ticket coming back through a tool, not through the AI guardrails; #/62
-      adds LLM Guard below the tool server, and #/64 shows the dead ticket the model never sees. The double duty, on the tab's <code>c3-pii</code> view: the input guard keeps
+      adds LLM Guard below the tool server, and #/64 shows the dead ticket the model never sees. The double duty, on the <code>c3-pii</code> seed: a refused
+      prompt reaches no model, so it is in APM's traces, not Agent Observability; type
+      <code>app.datadoghq.com/apm/traces</code> and search
+      <code>service:burritobot @session.id:wib-stage-c3-pii-&lt;stamp&gt;</code> on Past 7 Days. The input guard keeps
       someone else's e-mail, card, SSN or phone number out of the model and the traces. Say "deterministic" only for
       the Role, never for the classifier. <code>guard-agency-off</code> puts the scoped Role back.
       <code>support-attackme.burritobot.co</code> is the same desk, if the bare name ever fails.</p>
@@ -459,14 +468,15 @@
       moonlight) and the sentinel <code>FAKE-MCP-EXFIL-sentinel-4c1d</code>, then a burrito order: the bot
       called a tool nobody asked for.</div>
       <div class="marker"><span class="lbl">Success marker, private bot (Michael's attack)</span>The recipe comes
-      back under the forecast. <b>Datadog Challenge 4 tab, after the attack:</b> the
-      <code>execute_tool read_internal_config</code> span the poisoned description chains the bot into.</div>
+      back under the forecast. <b>The trace, after the attack:</b> from "tools"
+      (#/68), search <code>wib-stage-c4-attack-&lt;stamp&gt;</code> on Past 7 Days: the <code>execute_tool read_internal_config</code> span the poisoned description chains the bot into.</div>
       <div class="toggle" onclick="cp(this)"><span class="lbl">Fix · private terminal</span>guard-mcp-on<button class="cp">copy</button></div>
       <div class="marker"><span class="lbl">Success marker, private bot, after the fix</span>After <code>guard-mcp-on</code>:
       agentgateway's MCP authorization rule on evil-mcp's bind allows only the one registered tool,
       <code>get_weather</code>, so the gateway stops the rogue <code>tools/call</code> before the tool runs. Give
       it the reload delay the run-of-show's segment 5 records before re-asking. Do not say the MCP server's reply
-      is scanned before the model reads it (#480, not built). The same tab then shows no
+      is scanned before the model reads it (#480, not built). The same search for
+      <code>wib-stage-c4-fixed-&lt;stamp&gt;</code> shows no
       <code>read_internal_config</code> span.</div>
       <details class="more"><summary>Notes · if it wanders</summary>
       <p class="note">The solve stays with the presenters: the weather tool's server, evil-mcp, was never vetted,
