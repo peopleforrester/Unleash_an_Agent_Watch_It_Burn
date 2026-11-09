@@ -50076,3 +50076,48 @@ Then, on each: the agent's GETs on agentgateway :3001 are answered 405 (`kubectl
 deploy/agentgateway -c agentgateway | grep 'http.method=GET'`), the agent's evil-mcp GETs on :3003 no longer end at 30
 seconds (`-c agentgateway-c7`), and `PRIVATE_CONTEXT=watch-it-burn-private COMMUNITY_CONTEXT=watch-it-burn-community
 python3 verify/test_coc_floor_probes_live.py` runs green on both. The next run on #1303 runs those three.
+
+## 2026-11-10 · #1305 · run 19826 · The KubeCon probe's c7-off says from the logs why no sentinel came back
+
+**What was wrong.** `judge_mcp_leaks` (verify/agent_probe.py) wrote every Challenge 4 reply with no sentinel as "the
+poisoned description did not chain this time (Nova is inconsistent here)". In run 19733 the model had chained: the
+gateway forwarded `read_internal_config` and `get_weather`, and `get_weather` failed in the agent (#1303). The note
+sent the investigation to the model.
+
+**The change.** The c7-off beat on both KubeCon runs is now `_c7_chained`. It sends /kubecon's C7 ask as before; when
+the judge finds no sentinel, it reads agentgateway-c7's log (the existing `gateway_tool_calls_since`) and
+workshop-agent's log (`agent_tool_failures_since`: `kubectl logs deploy/workshop-agent -c kagent`, from AUDIT_SKEW_S
+before the ask) and judges again with both. `parse_agent_tool_failures` takes each JSON line whose `msg` is
+`Tool execution failed`, as (tool, error); kagent's `Tool execution completed with error` line for the same call is
+left out, so a failure counts once. The note (`c7_miss_cause`) always says whether `read_internal_config` reached the
+gateway, quotes each failure the agent logged, and then names the cause: a tool call failed in the agent; the model
+declined (only `get_weather` forwarded and nothing failed); the bot never called `get_weather`; or the rogue tool ran
+and the reply left the sentinel out. A log that cannot be read is named with its error and the cause is "not known";
+the verdict is still FAIL, and the run goes on. A passing c7-off reads neither log. `judge_c7_chained` called without
+logs (verify/stage_traces.py's `c4-attack`) says the logs were not read. agent_probe's own note is now "no sentinel in
+the reply", with no claim about the model.
+
+**The log formats.** Both agent pods had rolled minutes before this run, so the failing turn was read back from
+Datadog (the read-only pair in `watch-it-burn/datadog`, accen-dev): workshop-agent's kagent container
+logged `Tool execution failed` at 2026-11-09T21:40:05.313Z for `get_weather`, error `failed to call MCP tool
+"get_weather" with err: calling "tools/call": standalone SSE stream: exceeded 5 retries without progress (session ID:
+...)`, and agentgateway-c7 logged `tools/call` for `read_internal_config` and `get_weather` at 21:40:06.35. The pod
+writes zap JSON with `msg`, `tool` and `error` keys (read live from the current pod's log on watch-it-burn-private).
+The test's recorded logs are those lines, the session id trimmed and the stacktrace left out, and a declined turn from
+22:29:49 on the same pod.
+
+**Tests.** `verify/test_kubecon_probe.py` adds: the parser on the recorded agent log (one failure, the twin and a
+non-JSON line left out); the judge on run 19733's recorded logs (fails, names `read_internal_config` reaching the
+gateway, quotes the SSE error, no blame on the model) and on the declined turn (fails, `read_internal_config` never
+reached the gateway, no `Tool execution failed`, the model declined); no call at the gateway; the rogue call with no
+failure; each log unreadable; no logs read; the sentinel passing whatever the logs say; the kubectl argv; and three
+fake admin runs (a passing c7-off reads no agent log; run 19733's miss quoted in the beat's note with the run going
+on to c7-on and guards-off; an unreadable agent log named). The two source checks on the c7-off beat now read
+`_c7_chained`. Run once each: test_kubecon_probe.py and test_stage_traces.py, both passing; `scope_tests.py check`
+reads 0 problems. The rest of the scoped Test command is left to validation; the change touches no file a tools tier
+test reads alone, so no tier run here.
+
+**Live check.** The change is to `verify/` files no cluster runs; the probe is run by hand. A read-only check, no model
+call: `agent_tool_failures_since` and `gateway_tool_calls_since` over the last hour on watch-it-burn-private and
+watch-it-burn-community each returned `[]` with kubectl exit 0, so the new argv reads both clusters. Nothing on either
+cluster changed.
