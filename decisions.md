@@ -49217,3 +49217,11 @@ settled copy for each of the three options passing, and 13 broken copies each fa
 `verify/test_seg3_timing.py` and `verify/test_ros_segments_table_seg3.py`, which read the same paragraph and table,
 stay green. `verify/scope_tests.py write` added the new test's entry. No live check: the change is the run-of-show's
 prose and an offline test, which no cluster runs.
+
+**Resumed in run 19725.** Run 19713's tests gate failed on `verify/test_coc_pattern_copies.py` alone: at its base
+`8b5764a0` the test reported #1269's floor block in `gitops/ai-layer/workshop-mcp-server.py` and
+`gitops/ai-layer/ticket_site.py` as an unknown copy of the pattern, a failure of staging's own, which this change
+does not touch. Staging fixed it in `7f484080` and `8eb1872a`. The branch was rebased onto `origin/staging` with no
+conflict, which also brings #1297's `1ae571d7`: it holds the Rehearsal column (every beat timed or none) in
+`verify/test_seg3_timing.py`, while this test holds the choice, so the two do not overlap. After the rebase,
+`test_coc_pattern_copies.py`, `test_seg3_choice.py` and `test_seg3_timing.py` each print their GREEN line.
