@@ -48474,3 +48474,44 @@ processor `bogus/x` put into the pipeline: each printed FAIL with "exited 1" and
 held otelcol's own complaint about the unknown processor type.
 
 **Live check.** None: the change touches only two tests under `verify/` that no cluster runs.
+
+## 2026-11-09 · #1274 · run 19643 · The fetch inventory scans a Dockerfile's FROM and apt-get
+
+`verify/fetch_inventory.py` had no pattern for a Dockerfile's base image or for an apt install, so since #1251 put
+images/ in the scan, those lines were found only when they also named curl. It now has two more families.
+
+- `dockerfile-from`: a FROM line, in any case, with flags and an AS name, or FROM in capitals opening a string (a test
+  that feeds a parser `"FROM x\n"`); `COPY --from=`, which pulls an image the same way; and `buildah from`, the base a
+  by-hand build pulls, which `verify/test_no_docker_hub.py` already reads as one. The line has to be the whole
+  instruction, so a Python `from x import y`, a prose line that opens with "from" and runs on (villains/README.md:73),
+  `FROM, TO = ...` and a quoted "from v1.37.0" are not found.
+- `apt`: apt or apt-get followed on the line by an archive verb (install, update, upgrade, download, source,
+  build-dep), options between them, in a shell line or a list (`["apt-get", *opts, "-q", "update"]`). apt as a
+  directory (`/var/lib/apt/lists`, `/etc/apt/`) is not the command.
+
+What they found, and how it is classed:
+
+- Every FROM under images/ (sample-app, tool-pin, workshop-mcp, web-terminal, the Backstage backend) is a ghcr.io
+  copy by digest: pinned, container-image, not through the artifact cache. sample-app's Dockerfile had no entry before.
+- web-terminal's `apt-get update` and `apt-get install` read snapshot.debian.org at a fixed time (#1273), so they join
+  its package line as pinned.
+- workshop-mcp's `apt-get update` joins its install as live, upstream-index. The Backstage backend's two
+  update/install pairs read Debian trixie as it stands at build time: live, upstream-index, four lines.
+- `verify/ci_chromium_libs.py`'s `apt-get update` and `apt-get download` read deb.debian.org as it stands when
+  verify-suites.yml runs: live, upstream-index. Its `apt-get -s install` resolves against the lists already fetched and
+  downloads nothing, so it is none with the docstrings and messages.
+- The rest name the commands and run none: the Backstage README's by-hand steps, and the strings and checks in
+  `test_c1_dns_exfil.py`, `test_ci_chromium_libs.py`, `test_images_lock.py` and `test_no_docker_hub.py`.
+
+Totals after the change: 971 call sites in 254 files. By family, `summary` counts 5 pinned and 11 none lines for
+`dockerfile-from`, and 2 pinned, 8 live and 11 none for `apt`; a line counts once for each family it matches. `python3 verify/fetch_inventory.py check` reads "every call site classed", with no NOTE.
+
+**Tests.** `verify/test_fetch_inventory.py` gains a sample for each family, the forms above that are found and the
+look-alikes that are not, a check that every FROM line of every Dockerfile under images/ is claimed by a pinned
+container-image entry, and a scratch repository where a new Dockerfile with `FROM python:3.12` and an apt-get install
+of jq fails on each of its three lines though none names curl. It passed. `verify/test_package_cache.py` passed.
+`verify/test_fleet_contract.py` stops in this worktree before its inventory check, on the guard-proxy submodule not
+being checked out, the same on the base commit; its check that no web-terminal Dockerfile line is classed live was run
+alone on the new inventory and holds. The whole Test and E2E commands are left to validation.
+
+**Live check.** None: the change touches only files under verify/ that no cluster runs. No dependency was added.
