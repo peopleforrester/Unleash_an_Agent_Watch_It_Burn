@@ -28,6 +28,7 @@ import json
 import os
 import pathlib
 import re
+import socket
 import sys
 import tempfile
 import threading
@@ -310,6 +311,22 @@ check("it reached the public desk on /remote-cluster-read, and no in-cluster des
       and len(local_seen) == local_before, f"{public_seen[before:]} {local_seen[local_before:]}")
 code, _ = http("POST", f"{RELAY}/cluster-read", b"x" * (512 * 1024 + 1), {"Content-Type": "application/json"})
 check(f"a read over the public console's 512k is refused at the relay ({code})", code == 413)
+# The relay reads an oversize body before its 413, as nginx does, so the sender reads the 413 and not a broken pipe:
+# answering first closed the socket under a sender still writing, 9 of 40 times at this size (#1220). Every one counts.
+codes = [http("POST", f"{RELAY}/cluster-read", b"x" * (512 * 1024 + 1), {"Content-Type": "application/json"})[0]
+         for _ in range(20)]
+check(f"twenty reads over 512k each get the relay's 413, none a broken pipe ({sorted(set(codes))})", codes == [413] * 20)
+check("the relay reads at most DRAIN_MAX of an oversize body, twice the largest it takes",
+      relay.DRAIN_MAX == 2 * relay.MAX_READ)
+host, port = urllib.parse.urlsplit(RELAY).hostname, urllib.parse.urlsplit(RELAY).port
+with socket.create_connection((host, port), timeout=5) as sock:
+    sock.sendall(f"POST /cluster-read HTTP/1.1\r\nHost: {host}\r\nContent-Type: application/json\r\n"
+                 f"Content-Length: {relay.DRAIN_MAX + 1}\r\n\r\n".encode())
+    reply = b""
+    while chunk := sock.recv(4096):
+        reply += chunk
+check("a body declared over DRAIN_MAX, never sent, is answered 413 at once and the connection closed",
+      reply.startswith(b"HTTP/1.0 413") or reply.startswith(b"HTTP/1.1 413"), reply[:80].decode(errors="replace"))
 
 # Kyverno's remove-untrusted-room-workloads deletes relay-landed on the private cluster: the private reader's next read,
 # the real read_room_workloads' report posted by the real post_cluster_read, no longer lists it.

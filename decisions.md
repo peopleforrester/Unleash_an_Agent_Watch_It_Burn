@@ -44519,3 +44519,41 @@ watch-it-burn-private --community-context watch-it-burn-community --kubeconfig "
 `DESK TICKET LIVE GREEN`. This run did not run `desk_ticket_live.py`: it spends Bedrock money, arms the guardrails on
 both clusters, and leaves its deploy rows on the one deployments page, since it does not remove its own as the probe
 and the seeds do since #1215, so a run would leave the room's page not as found. A followup asks for that removal.
+
+## 2026-11-09 · #1220 · run 19458 · Run 19413's gate failure was desk-relay answering an oversize body before reading it, so the relay now reads it first
+
+**What failed.** Hecaton's `tests` gate on run 19413 (`433511f0`, `33b69c13`, the entry above) failed on
+`test_public_desk.py` (exit 1) alone, with a `BrokenPipeError` from urllib. The change's public-desk component edit made
+the scope select that test; the failing check came from #1209 (`5e3baf67`, run 19400): "a read over the public
+console's 512k is refused at the relay". The `--context is empty` line in the gate's output is an e2e test's own message
+printed in the suite's listing; no other test failed. This run resumes 19413's workspace, so its two commits are kept
+as they are.
+
+**The cause.** `desk_relay.py`'s `_body()` answered 413 without reading the declared body, and the handler then closed
+the socket. A sender still writing a 512k + 1 body gets EPIPE or a reset instead of the 413, depending on how much the
+loopback buffers took before the close. Measured with the real `desk_relay.py` on localhost, before the fix: 31 of 40
+POSTs of 512k + 1 read the 413 and 9 ended `Broken pipe`, and 40 of 40 at 4 MiB ended `Broken pipe`. So the test
+passed or failed by timing, and a real caller sending an oversize read got a broken pipe, not the relay's 413. On
+watch-it-burn-private, through `kubectl --context watch-it-burn-private -n agent port-forward svc/desk-relay`, the
+deployed relay (healthz `{"ok": true, "desk": "https://support.burritobot.co", "token": true}`) gave one 413, then
+`Connection reset by peer`, and the port-forward itself exited with `write tcp4 127.0.0.1:42940->127.0.0.1:8080:
+write: broken pipe`. An oversize body is refused before anything is forwarded, so nothing reached the public desk;
+the relay pod stayed 1/1 with 0 restarts, as found.
+
+**The fix.** The relay reads and drops an oversize body before its 413, as nginx discards one before its own, up to
+`DRAIN_MAX`, twice `MAX_READ` (1 MiB). A body declared larger is answered 413 at once with the connection closed
+unread, so no caller holds the relay reading. After the fix the same measurement gave 40 of 40 413s at 512k + 1; 4
+MiB still closes, by design. The relay's routes, limits and token handling are unchanged.
+
+**Tests.** `verify/test_public_desk.py` gains three checks: twenty reads over 512k each get the 413, `DRAIN_MAX` is
+twice `MAX_READ`, and a raw request declaring `DRAIN_MAX + 1` bytes and sending none is answered 413 and closed without
+the relay waiting for the body. Run once with the fix: exit 0, every check PASS. Run once with `HEAD`'s `desk_relay.py`
+put back: exit 1 on the same `BrokenPipeError` the gate printed, then the fix restored. `python3
+verify/test_fetch_inventory.py` passed, and `python3 verify/scope_tests.py write` changed nothing. The rest of the
+scoped suite is left to validation. No dependency was added.
+
+**Not yet run on a cluster.** Once hecaton promotes this and Argo CD rolls `desk-relay` on watch-it-burn-private
+(its source ConfigMap is generated, so the pod rolls on the new hash): through the same port-forward, twenty POSTs of
+512k + 1 to `/cluster-read` each answer 413, with the port-forward still up afterwards. The two checks run 19413 named
+are still owed as well: `curl -sI` on the two private desk hosts answering 307, and `desk_ticket_live.py`, after the
+follow-up that has it remove its own rows.
