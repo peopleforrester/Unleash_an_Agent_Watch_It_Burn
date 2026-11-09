@@ -45108,3 +45108,58 @@ run on Tanjiro run the scoped tests.
 **Not yet run on a cluster.** Nothing: this change touches only `verify/` files no cluster runs, so it has no live
 check (CLAUDE.md, Dispatched runs, point 1). **Not yet run on Tanjiro.** The step's new unpack and Arial check run
 there on the next `verify-suites` job; its log line names the fonts it unpacked.
+## 2026-11-09 · #1219 · run 19446 · The AWS plane still catches out-of-band change in accen-dev: Config, CloudTrail, the drift cron and the hand-made bucket case, read and rerun live
+
+**Context.** #205's AWS-plane case was last run live by run 17941 (2026-11-06). Since then #1041 rebuilt accen-dev's
+boundary, lab VPC and KubeCon cluster states on tanjiro-wsl2. This run reads accen-dev again and reruns the case on
+staging `786e7e76`. `bash verify/prior-drafts.sh 1219 origin/staging` printed NONE. No code changed: the check called
+for no fix to `infra/terraform/drift` or `infra/terraform/aws/audit`, so the tools tier was not run.
+
+**What accen-dev showed, 2026-11-09 at 07:03Z.** The session is the role `hecaton-run` (session `hecaton-run-19446`)
+in 515966504359, us-west-2.
+- `describe-configuration-recorder-status`: `"name": "watch-it-burn"`, `"recording": true`, `"lastStatus":
+  "SUCCESS"`, `lastStatusChangeTime` 2026-11-09T01:39:52Z.
+- `describe-configuration-recorders`: `allSupported` false, `recordingStrategy` `INCLUSION_BY_RESOURCE_TYPES`, 17
+  types. EKS: `AWS::EKS::Cluster`, `Nodegroup`, `Addon`, `FargateProfile`, `IdentityProviderConfig`,
+  `PodIdentityAssociation`. S3: `AWS::S3::Bucket`, `BucketPolicy`, `AccountPublicAccessBlock`. Bedrock:
+  `AWS::Bedrock::Guardrail`, `ApplicationInferenceProfile`. The rest are `AWS::IAM::Policy`, `User`, `UserPolicy`,
+  `Role`, `RolePolicy` and `AWS::CloudTrail::Trail`. No `AWS::Config::` type is in the list.
+- `get-trail-status --name watch-it-burn`: `"IsLogging": true`, `LatestDeliveryAttemptSucceeded`
+  2026-11-09T07:01:07Z, `TimeLoggingStopped` empty.
+- `wib-community` held one key, its own `AKIAXQIQABWT2L7UOXQ5`, and the account had no `wib-drift` bucket.
+
+**The daily drift report's schedule.** It runs on tanjiro-wsl2 from michael's crontab, in the checkout
+`/home/michael/repos/talks/Unleash_an_Agent_Watch_It_Burn`. The record is #955's entries above (runs 17868 and 17884,
+2026-11-06), which read `crontab -l` there, and docs/floor.md's "The schedule", which names the host and path (#955).
+#1041's entry (run 18311) shows the states that report reads rebuilt in the same checkout. Read again here through
+`sources-elevated fleet tanjiro-wsl2` at 07:03Z, changing nothing: `crontab -l` line 3 is `17 6 * * *
+/home/michael/repos/talks/Unleash_an_Agent_Watch_It_Burn/infra/terraform/drift/scheduled-drift.sh # wib-drift`, the
+checkout is at `16f8d46c`, its newest report copy is `drift-20261108T1117Z.md` (five accounts, `**0 finding(s)**`),
+and `command -v driftctl` finds nothing. In this repo `driftctl` is named only in prose: docs/floor.md says it is not
+used, and drift-report.py's docstring says why. The report is `terraform plan -refresh-only`, plan only.
+
+**The hand-made bucket case.** A second, temporary access key, `AKIAXQIQABWTQQYLMUXC`, was minted for `wib-community`
+at 07:03:54Z into a CSV in a mode-700 temp directory. After 20 s for IAM,
+`DRIFT_PROFILE=accen-dev ATTENDEE_CLUSTER=watch-it-burn-community WIB_ATTENDEE_ACCOUNTS=accen-dev
+ATTENDEE_KEY_CSV=<that csv> python3 verify/test_drift_aws_live.py` ran, exit 0, `AWS-plane drift acceptance passed.`
+- The attendee's CreateBucket for `wib-drift-attendee-515966504359-20261109070420` was refused: `AccessDenied ... is
+  not authorized to perform: s3:CreateBucket ... because no identity-based policy allows the s3:CreateBucket action`.
+- The operator made `wib-drift-oob-515966504359-20261109070420`. After 76 s AWS Config had a configuration item for
+  it and CloudTrail had the attendee's refused call as AccessDenied.
+- The next drift report, run from this worktree, exited 2 with the bucket in its Unmanaged table, the operator as its
+  creator from CloudTrail and Config's record of it. The test then deleted the bucket (`cleanup: delete ...: ok`).
+
+The wrapper deleted the temporary key and the CSV's directory on exit (`cleanup: deleted temporary key
+AKIAXQIQABWTQQYLMUXC`, `exists now: no`). Its script and log are in the run directory
+(`/var/lib/hecaton/runs/19446/live/`); the log holds no secret.
+
+**Read back, 07:06:56Z.** `wib-community` holds only `AKIAXQIQABWT2L7UOXQ5` (Active), `list-buckets` has 0 names with
+`wib-drift`, `head-bucket` on the out-of-band bucket answers 404, and no `wib-community.csv` is left on this host. The
+account is as found. Neither cluster was touched, `agent/terminal-auth` included.
+
+**Not yet run on a cluster.** Nothing: this run changed only this entry, and the issue's live checks all ran.
+
+**Tests (run 19446).** `python3 verify/test_drift_report.py`: `All drift-report checks passed.`, exit 0. The prose
+gate printed `prose gate: pass`. The scoped `run-tests.sh` ran the tests the scope map selects for this entry. The
+whole Test and E2E commands were not run; validation runs the tests that read the changed file. No dependency was
+added.
