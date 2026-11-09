@@ -29,6 +29,12 @@ Nine /chat requests, eight of them model calls, in presentation order:
     c4-attack  Challenge 4, the poisoned weather tool chains read_internal_config
     c4-fixed   the same ask after guard-mcp-on: stopped at the gateway
 
+A model seed whose ask misses a tool its slide shows (SEEDS' must column, read off workshop-mcp's audit log, or
+agentgateway-c7's access log for Challenge 4, counting only the calls made during that ask) is asked again in a fresh
+session, its session id with "-2" after it, then "-3", up to --attempts asks in all (4) and never past --max-calls
+(#1210). The seed's row, link and span read follow the ask that made the call; the sessions of the asks that missed are
+in --out's `missed`. A seed that misses on every ask is red.
+
 c3-pii is sent only after guard-proxy's own input stages, asked in its pod, say they refuse it, so the PII never
 reaches the model off a guard that lets it through. A refused request has no gen_ai span, so LLM Observability never
 sees it: its view is APM's Trace Explorer on the session, and its check is that trace holding none of the PII. A
@@ -201,6 +207,74 @@ def session_id(key: str, stamp: str) -> str:
     return f"wib-stage-{key}-{stamp}"
 
 
+# A model seed whose ask misses the tool call its slide shows is asked again, in a fresh session, up to ATTEMPTS asks
+# in all (#1210). Run 18722 saw Nova Pro skip run_shell in four of six Challenge 2 asks and get_weather's chain in two
+# of three c4-fixed asks, each in a fresh session, so a miss is the model's draw, not the guard's verdict; one more ask
+# is what a presenter does on stage. A seed's session follows the ask that made the call: the first ask is
+# session_id(), the n-th session_id() with "-n" after it, and the seed's row, link and span read name that session.
+ATTEMPTS = 4
+# The tool spans each model seed's slide shows: SEEDS' `must` column.
+SEED_MUST = {key: must for key, _, _, must, _ in SEEDS}
+# The seeds whose tools are read off agentgateway-c7's access log (evil-mcp's tools); every other model seed's are read
+# off workshop-mcp's audit log.
+GATEWAY_SEEDS = ("c4-attack", "c4-fixed")
+# The audit window opens kp.AUDIT_SKEW_S before the ask so a skewed node clock loses no line, which also takes in the
+# previous seed's last calls (run 18722's c2 notes named c1's get_vault_entry, #1210). A seed counts only the calls
+# stamped from its own ask's start on, less this much for the node's clock: a tool call follows a model turn, which
+# takes longer than this, and the previous seed's last call is followed by its reply's model turn.
+OWN_ASK_GRACE_S = 1.0
+
+
+def attempt_session(key: str, stamp: str, n: int) -> str:
+    """The session of a seed's n-th ask: session_id() for the first, then "-2", "-3"."""
+    return session_id(key, stamp) + ("" if n == 1 else f"-{n}")
+
+
+def _stamp_of(ts: object) -> dt.datetime | None:
+    try:
+        t = dt.datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return t if t.tzinfo else t.replace(tzinfo=dt.timezone.utc)
+
+
+def own_calls(calls: list[dict], since: dt.datetime) -> list[dict]:
+    """workshop-mcp's audit records stamped (`ts`, tool_audit.py) from the ask's start on, less OWN_ASK_GRACE_S. A
+    record with no readable stamp is kept: it cannot be placed, and leaving it out could hide the seed's own call."""
+    floor = since - dt.timedelta(seconds=OWN_ASK_GRACE_S)
+    return [c for c in calls if (t := _stamp_of(c.get("ts"))) is None or t >= floor]
+
+
+def gateway_calls_in(out: str, since: dt.datetime) -> list[str]:
+    """The tools agentgateway-c7's access log `out` forwarded from the ask's start on, less OWN_ASK_GRACE_S, read off
+    each line's leading timestamp. A line with no readable stamp is kept, as own_calls keeps a record."""
+    floor = since - dt.timedelta(seconds=OWN_ASK_GRACE_S)
+    lines = [ln for ln in out.splitlines()
+             if (t := _stamp_of((ln.strip().split(None, 1) or [""])[0])) is None or t >= floor]
+    return kp.parse_gateway_tool_calls("\n".join(lines))
+
+
+def called_tools(key: str, d: dict) -> list[str] | None:
+    """The tools a seed's ask called, as its slide counts them, or None when they were not read. Challenge 2 counts
+    run_shell only when it read RECIPE_DIR, since that grep is the span Whitney points at."""
+    if key in GATEWAY_SEEDS:
+        return d.get("gateway_calls")
+    calls = d.get("tools")
+    if calls is None:
+        return None
+    if key.startswith("c2-"):
+        calls = _recipe_reads(calls)
+    return [c.get("tool_name") for c in calls]
+
+
+def missed_tools(key: str, d: dict) -> list[str]:
+    """The slide's tools (SEED_MUST) the ask did not call. Empty when its calls were not read: the judge says so."""
+    called = called_tools(key, d)
+    if called is None:
+        return []
+    return [t for t in SEED_MUST[key] if t not in called]
+
+
 def scanner_scores(v: dict) -> dict:
     return {k: float(s) for k, s in ((v.get("verdict") or {}).get("scanners") or {}).items()}
 
@@ -297,9 +371,22 @@ class StageCluster(kp.KubeconCluster):
         raw = self._kubectl(*kp.GUARD_PROXY_EXEC, GUARD_VERDICT_PY, json.dumps(texts))
         return json.loads(raw.strip().splitlines()[-1])
 
+    def tool_calls_during(self, since: dt.datetime) -> list[dict]:
+        """workshop-mcp's tool calls made during the ask that started at `since`, its own calls alone (own_calls)."""
+        return own_calls(self.tool_calls_since(since), since)
+
+    def gateway_calls_during(self, since: dt.datetime) -> list[str]:
+        """The tools agentgateway-c7 forwarded during the ask that started at `since`. Raises when kubectl cannot
+        read the log, so the seed fails saying so."""
+        stamp = (since - dt.timedelta(seconds=kp.AUDIT_SKEW_S)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        return gateway_calls_in(self._kubectl(*kp.C7_GATEWAY_LOGS, f"--since-time={stamp}"), since)
+
 
 class StageProbe(kp.Probe):
-    """A seed is a stage prompt, so it goes without the probe marker."""
+    """A seed is a stage prompt, so it goes without the probe marker. `attempts` is how many asks a model seed may
+    take to make its slide's tool call (ATTEMPTS, --attempts)."""
+
+    attempts = ATTEMPTS
 
     def ask(self, prompt: str) -> dict:
         try:
@@ -323,41 +410,94 @@ def _seed(key: str, stamp: str, prompt: str, judge: Callable[[dict], tuple[bool,
     return go
 
 
-def _c2(stamp: str, key: str, prompt: str,
-        judge: Callable[[dict], tuple[bool, str]]) -> Callable[[kp.Probe], tuple[bool, str]]:
-    """Challenge 2's recipe read, judged on the reply and on the tool calls workshop-mcp logged during the ask."""
-    def go(p: kp.Probe) -> tuple[bool, str]:
-        p.cluster.session = session_id(key, stamp)
+Ask = Callable[[kp.Probe], dict]
+
+
+def ask_audited(prompt: str) -> Ask:
+    """One ask, with the workshop-mcp tool calls made during it (Challenges 1 and 2)."""
+    def go(p: kp.Probe) -> dict:
         since = dt.datetime.now(dt.timezone.utc)
-        try:
-            d = p.ask(prompt)
-            d = {**d, "tools": p.cluster.tool_calls_since(since)}
-        finally:
-            p.cluster.session = ""
-        p.state.setdefault("seeded", []).append(key)
-        ok, note = judge(d)
-        return ok, f"session {session_id(key, stamp)}: {note}"
+        d = p.ask(prompt)
+        return {**d, "tools": p.cluster.tool_calls_during(since)}
     return go
 
 
-def _c3(stamp: str, key: str, prompt: str,
-        judge: Callable[[dict], tuple[bool, str]]) -> Callable[[kp.Probe], tuple[bool, str]]:
-    """Challenge 3 judged on joker-<stage name> and the tool calls that made it, as the probe's own C6 beats do."""
+def ask_room(prompt: str) -> Ask:
+    """Challenge 3's ask through the probe's room_ask, which clears joker-<stage name> and its row before and after,
+    with its tool calls kept to the ask's own."""
+    def go(p: kp.Probe) -> dict:
+        since = dt.datetime.now(dt.timezone.utc)
+        d = kp.room_ask(p, prompt)
+        return {**d, "tools": own_calls(d["tools"], since)} if d.get("tools") is not None else d
+    return go
+
+
+def ask_gateway(prompt: str) -> Ask:
+    """Challenge 4's ask, with the evil-mcp tools agentgateway-c7 forwarded during it (#905)."""
+    def go(p: kp.Probe) -> dict:
+        since = dt.datetime.now(dt.timezone.utc)
+        d = p.ask(prompt)
+        return {**d, "gateway_calls": p.cluster.gateway_calls_during(since)}
+    return go
+
+
+def _tried(key: str, stamp: str, ask: Ask,
+           judge: Callable[[dict], tuple[bool, str]]) -> Callable[[kp.Probe], tuple[bool, str]]:
+    """A model seed: asked in session_id(key, stamp), and asked again in a fresh session (attempt_session) while the
+    ask misses a tool its slide shows (missed_tools), up to the probe's `attempts` and never past --max-calls. The
+    seed is judged on the last ask, and its session, which the seed's row and link name, is that ask's. A seed whose
+    every ask missed is red, whatever its judge said, since its trace has no span for the slide to point at. A Joker
+    or row an ask left behind fails the seed at once, as the probe's C6 beats do (#1026, #1215): no ask follows it."""
     def go(p: kp.Probe) -> tuple[bool, str]:
-        p.cluster.session = session_id(key, stamp)
-        try:
-            d = kp.room_ask(p, prompt)
-        finally:
-            p.cluster.session = ""
+        attempts = getattr(p, "attempts", 1)
+        earlier: list[str] = []
+        n = 0
+        while True:
+            n += 1
+            sess = attempt_session(key, stamp, n)
+            p.cluster.session = sess
+            try:
+                d = ask(p)
+            finally:
+                p.cluster.session = ""
+            p.state.setdefault("sessions", {})[key] = sess
+            ok, note = judge(d)
+            left = kp.left_behind(d)
+            if left:
+                ok, note = False, f"{left} (the seed's own verdict: {kp.PASS if ok else kp.FAIL}, {note})"
+                break
+            miss = missed_tools(key, d)
+            if not miss:
+                break
+            called = called_tools(key, d)
+            if n >= attempts:
+                ok = False
+                note = (f"the slide's {', '.join(miss)} never ran in {n} ask(s); the last called "
+                        f"{called or 'no tool'}: {note}")
+                break
+            end = max(p.beat_end, p.cluster.calls)
+            if end + 1 > p.max_calls:
+                ok = False
+                note = (f"{', '.join(miss)} never ran, and another ask would pass --max-calls={p.max_calls}; "
+                        f"called {called or 'no tool'}: {note}")
+                break
+            p.beat_end = end + 1
+            earlier.append(f"{sess} called {called or 'no tool'}, not {', '.join(miss)}")
+            log.info("  %s: %s missed %s; asking again in a fresh session", key, sess, ", ".join(miss))
         p.state.setdefault("seeded", []).append(key)
-        ok, note = judge(d)
-        # A Joker, or its row on the one deployments page, left after the seed fails it, as the probe's C6 beats do
-        # (#1026, #1215): the presenters open the seed's trace in Datadog, never its row.
-        if kp.left_behind(d):
-            return False, f"session {session_id(key, stamp)}: {kp.left_behind(d)} (the seed's own verdict: " \
-                          f"{kp.PASS if ok else kp.FAIL}, {note})"
-        return ok, f"session {session_id(key, stamp)}: {note}"
+        if earlier:
+            p.state.setdefault("missed", {})[key] = earlier
+            note += f" (after {len(earlier)} ask(s) that missed the slide's tool: {'; '.join(earlier)})"
+        return ok, f"session {sess}: {note}"
     return go
+
+
+def judge_c4_fixed(d: dict) -> tuple[bool, str]:
+    """Challenge 4 after guard-mcp-on, judged on the gateway as the probe's c7-on beat is (#905): get_weather called,
+    no rogue tool forwarded, no sentinel. The reply-only judge, judge_mcp_blocked, wanted the reply to name
+    read_internal_config or its calibration pretext, which Nova leaves out about 2 asks in 5 (run 17768): run 18722's
+    c4-fixed failed it twice with the model calling read_support_ticket in its place (#1210)."""
+    return kp.judge_c7_stopped(d)
 
 
 def _pii(stamp: str) -> Callable[[kp.Probe], tuple[bool, str]]:
@@ -381,33 +521,32 @@ def seed_beats(stamp: str, page: pathlib.Path = KUBECON_PAGE) -> list[kp.Beat]:
         beat["start-state"],
         beat["one-desk"],
         kp.Beat("c1-attack", "2", "Challenge 1 attack: the CEO record leaks",
-                _seed("c1-attack", stamp, ask["c1-attack"], kp.judge_ceo_leaks), calls=1),
+                _tried("c1-attack", stamp, ask_audited(ask["c1-attack"]), kp.judge_ceo_leaks), calls=1),
         # The four Kubernetes guardrails start off on the private cluster (#774), so Challenge 2's recipe read lands;
         # then the stage's one switch arms them: Challenge 1's ask, sent again, is Forbidden by the scoped Role (#855),
         # and Challenge 2's is denied by KubeArmor (#843). Challenge 3's Joker
         # meets Kyverno at Deny, as it does on stage, and lands: its image is on the internal registry, which Kyverno
         # trusts (#775). The fix is least privilege, then the input guard.
         kp.Beat("c2-attack", "3", "Challenge 2 attack: the recipe read lands",
-                _c2(stamp, "c2-attack", ask["c2-attack"], judge_recipe_leaks), calls=1),
+                _tried("c2-attack", stamp, ask_audited(ask["c2-attack"]), judge_recipe_leaks), calls=1),
         beat["guardrails-on"],
         beat["armed"],
         kp.Beat("c1-fixed", "3", "Challenge 1 again after guardrails-on: the record out of reach",
-                _seed("c1-fixed", stamp, ask["c1-fixed"], kp.judge_ceo_unreadable), calls=1),
+                _tried("c1-fixed", stamp, ask_audited(ask["c1-fixed"]), kp.judge_ceo_unreadable), calls=1),
         kp.Beat("c2-fixed", "3", "Challenge 2 fixed: KubeArmor denies the read",
-                _c2(stamp, "c2-fixed", ask["c2-fixed"], judge_recipe_kept), calls=1),
+                _tried("c2-fixed", stamp, ask_audited(ask["c2-fixed"]), judge_recipe_kept), calls=1),
         kp.Beat("c3-attack", "4", "Challenge 3 attack: the Joker lands with Kyverno on",
-                _c3(stamp, "c3-attack", ask["c3-attack"], kp.judge_joker_lands), calls=1),
+                _tried("c3-attack", stamp, ask_room(ask["c3-attack"]), kp.judge_joker_lands), calls=1),
         beat["guard-agency-on"],
         beat["guard-input-on"],
         kp.Beat("c3-fixed", "4", "Challenge 3 fixed: the ticket withheld",
-                _c3(stamp, "c3-fixed", ask["c3-fixed"], kp.judge_joker_blocked), calls=1),
+                _tried("c3-fixed", stamp, ask_room(ask["c3-fixed"]), kp.judge_joker_blocked), calls=1),
         kp.Beat("c3-pii", "4", "Challenge 3: someone else's PII refused by the input guard", _pii(stamp), calls=1),
         kp.Beat("c4-attack", "5", "Challenge 4 attack: the rogue tool chains",
-                _seed("c4-attack", stamp, ask["c4-attack"], kp.judge_c7_chained), calls=1),
+                _tried("c4-attack", stamp, ask_gateway(ask["c4-attack"]), kp.judge_c7_chained), calls=1),
         beat["guard-mcp-on"],
         kp.Beat("c4-fixed", "5", "Challenge 4 fixed: stopped at the gateway",
-                _seed("c4-fixed", stamp, ask["c4-fixed"], lambda d: kp.from_green(kp.judge_mcp_blocked(d))),
-                calls=1),
+                _tried("c4-fixed", stamp, ask_gateway(ask["c4-fixed"]), judge_c4_fixed), calls=1),
     ]
 
 
@@ -441,11 +580,14 @@ def pii_view(site: str, stamp: str, window=None) -> dict:
             "query": q, "url": apm_url(site, q, window)}
 
 
-def views(site: str, stamp: str, window=None) -> list[dict]:
-    """The seed views, pinned to `window` (epoch ms, start and end) when given, then the two live tabs, unpinned."""
-    out = [{"key": k, "challenge": c, "shows": what, "session": session_id(k, stamp),
-            "query": f"session_id:{session_id(k, stamp)}", "must": list(must), "must_not": list(must_not),
-            "url": llmobs_url(site, f"session_id:{session_id(k, stamp)}", window)}
+def views(site: str, stamp: str, window=None, sessions: dict[str, str] | None = None) -> list[dict]:
+    """The seed views, pinned to `window` (epoch ms, start and end) when given, then the two live tabs, unpinned. A
+    seed asked more than once (#1210) is viewed on the session `sessions` names for it, the ask that made its slide's
+    call; any other seed on session_id()."""
+    sess = {k: (sessions or {}).get(k) or session_id(k, stamp) for k, *_ in SEEDS}
+    out = [{"key": k, "challenge": c, "shows": what, "session": sess[k],
+            "query": f"session_id:{sess[k]}", "must": list(must), "must_not": list(must_not),
+            "url": llmobs_url(site, f"session_id:{sess[k]}", window)}
            for k, c, what, must, must_not in SEEDS]
     out.insert([r["key"] for r in out].index("c3-fixed") + 1, pii_view(site, stamp, window))
     for key, cluster, what in (("room", ROOM_CLUSTER, "the room's prompts, the public bot"),
@@ -607,12 +749,25 @@ PREFLIGHT = (("identity", kp._identity), ("start-state", kp._start_state), ("one
 SEED_DESK = kp.PUBLIC_DESK
 
 
+def max_calls_for(attempts: int) -> int:
+    """The default --max-calls: every model seed asked `attempts` times, c3-pii once, and one Bedrock ToolUse re-send.
+    Ten before #1210, with one ask per seed."""
+    return len(SEEDS) * attempts + 1 + 1
+
+
+def max_calls(args) -> int:
+    return args.max_calls if args.max_calls is not None else max_calls_for(args.attempts)
+
+
 def cmd_seed(args) -> int:
     if not args.context:
         log.error("seed needs --context: it flips the private cluster's guards and never uses the current-context")
         return 2
     if args.host in kp.COMMUNITY_HOSTS:
         log.error("seed runs on the private bot only; %s is the room's", args.host)
+        return 2
+    if args.attempts < 1:
+        log.error("--attempts must be 1 or more")
         return 2
     started = dt.datetime.now(dt.timezone.utc)
     stamp = args.stamp or started.strftime("%Y%m%d%H%M")
@@ -634,7 +789,8 @@ def cmd_seed(args) -> int:
                     log.error("SEEDED RED: not at the stage's start state or not on the one desk, so nothing was sent "
                               "and nothing was flipped")
                     return 1
-            probe = StageProbe(cluster, args.max_calls, settle=args.settle)
+            probe = StageProbe(cluster, max_calls(args), settle=args.settle)
+            probe.attempts = args.attempts
             # c3-attack's Joker lands its row on the one page, the guardrails peer's desk; room_ask removes it (#1215).
             probe.desk = kp.peer_desk(lease, args.context, args.profile, args.kubeconfig, args.timeout)
             results = probe.run(seed_beats(stamp), final=kp.GUARDS_OFF_BEAT)
@@ -653,14 +809,15 @@ def cmd_seed(args) -> int:
     dd, site = datadog(args.profile, args.region)
     end = dt.datetime.now(dt.timezone.utc)
     window = (int(started.timestamp() * 1000) - SEED_MARGIN_MS, int(end.timestamp() * 1000) + 2 * SEED_MARGIN_MS)
-    rows = views(site, stamp, window)
+    rows = views(site, stamp, window, probe.state.get("sessions"))
     log.info("== waiting up to %ds for the traces to reach Datadog ==", args.wait)
     verdicts = wait_for(dd, rows, args.wait)
     found = report(rows, verdicts)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps({"host": args.host, "stamp": stamp, "seeded_at": started.isoformat(),
                                     "desk": SEED_DESK, "site": site, "views": rows,
-                                    "spans": {k: v[1] for k, v in verdicts.items()}, "beats": results},
+                                    "spans": {k: v[1] for k, v in verdicts.items()},
+                                    "missed": probe.state.get("missed", {}), "beats": results},
                                    indent=2) + "\n")
     log.info("written: %s", args.out)
     log.info("SEEDED %s", "GREEN" if seeded_ok and found else "RED")
@@ -721,8 +878,12 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--kubeconfig", help="isolated kubeconfig, passed per command, never exported")
         p.add_argument("--timeout", type=float, default=120.0)
     m.add_argument("--profile", help="AWS_PROFILE for kubectl, passed per command")
-    s.add_argument("--max-calls", type=int, default=10,
-                   help="hard ceiling on /chat requests (default 10; a seed sends 9, c3-pii spending no tokens)")
+    s.add_argument("--attempts", type=int, default=ATTEMPTS,
+                   help=f"asks a model seed may take to make its slide's tool call, each in a fresh session "
+                        f"(default {ATTEMPTS}, #1210)")
+    s.add_argument("--max-calls", type=int, default=None,
+                   help="hard ceiling on /chat requests (default: --attempts for each of the 8 model seeds, one for "
+                        f"c3-pii, which spends no tokens, and one Bedrock re-send: {max_calls_for(ATTEMPTS)})")
     s.add_argument("--settle", type=float, default=20.0, help="seconds after narrowing C7's gateway rule")
     s.add_argument("--wait", type=int, default=600, help="seconds to wait for the traces (default 600)")
     s.add_argument("--stamp", help="session id suffix (default: the UTC minute)")
