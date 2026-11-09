@@ -539,7 +539,11 @@ def console_visible(reply: str) -> str:
     t = reply or ""
     thoughts = [th for th in (THINK_TAG_RE.sub(" ", m.group(1)).strip() for m in THINK_RE.finditer(t)) if th]
     visible = re.sub(r"\n{3,}", "\n\n", THINK_TAG_RE.sub(" ", THINK_RE.sub("\n", t))).strip()
-    return visible or "\n\n".join(thoughts)
+    if not visible:
+        return "\n\n".join(thoughts)
+    # A scratchpad holding a fenced code block the reply outside it lacks is shown above the reply (#1294).
+    code = [th for th in thoughts if "```" in th]
+    return "\n\n".join(code + [visible]) if code and "```" not in visible else visible
 
 
 ENV = _proxy_env()

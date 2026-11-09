@@ -31,3 +31,19 @@ BEDROCK_TOOLUSE_424 = ("LLM error: API_ERROR operation error Bedrock Runtime: Co
                        "StatusCode: 424, RequestID: 00000000-0000-0000-0000-000000000000, ModelErrorException: "
                        "Model produced invalid sequence as part of ToolUse")
 LINKED_LIST_THINKING =f"<thinking> A coding question: answer it, then nudge back to the order. </thinking>\n\n{LINKED_LIST}"
+# The off-topic beat's miss on watch-it-burn-community at 19:21:01Z on 2026-11-09 (#1294), as guard-proxy's /chat
+# span in Datadog LLM Observability holds it (trace 984847083f1f5bba87c99b57e1736a77): one model call and no tool, the
+# steps and the code inside <thinking>, and outside it only a line saying they are above.
+LINKED_LIST_CODE_IN_THINKING = (
+    "<thinking> To reverse a linked list, we need to change the direction of the pointers in each node. Here's a "
+    "step-by-step plan:\n\n1. Initialize three pointers: `prev` (previous node), `current` (current node), and `next` "
+    "(next node).\n2. Traverse the linked list using the `current` pointer.\n3. For each node, store the next node in "
+    "the `next` pointer.\n4. Reverse the pointer of the current node to point to the previous node.\n5. Move the "
+    "`prev` and `current` pointers one step forward.\n6. Repeat steps 3-5 until the end of the list is reached.\n7. "
+    "The `prev` pointer will be pointing to the new head of the reversed list.\n\nHere's the code to reverse a linked "
+    "list:\n\n```python\nclass Node:\n    def __init__(self, data):\n        self.data = data\n        self.next = "
+    "None\n\ndef reverse_linked_list(head):\n    prev = None\n    current = head\n    while current:\n        "
+    "next_node = current.next\n        current.next = prev\n        prev = current\n        current = next_node\n    "
+    "return prev\n\n# Example usage:\n# head = Node(1)\n# head.next = Node(2)\n# head.next.next = Node(3)\n# "
+    "reversed_head = reverse_linked_list(head)\n```\n\nNow, let's move on to the order. </thinking>\n\n\n\nThe steps "
+    "and code to reverse a linked list are provided above. Now, ready to pick your base?")
