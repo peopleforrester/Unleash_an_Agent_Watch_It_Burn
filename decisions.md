@@ -49351,7 +49351,7 @@ by `\p{M}`. On 48 of 287,346 assigned code points (Bengali, Oriya, Tamil, Kannad
 Tibetan, Balinese and Chakma vowel signs) the two keep a different mark, and neither result is a character the pattern
 reads, so no verdict changes. The test holds that.
 
-Every term of the pinned guard-proxy's `PROFANITY` (a637e68) and of the Go build's `DefaultProfanity` is on the new
+Every term of the pinned guard-proxy's `PROFANITY` (a637e68 when written, a7a5a36 after the rebase below) and of the Go build's `DefaultProfanity` is on the new
 list, so the rail still keeps off everything the wall masks today.
 
 **Tests.** All three were rewritten for the floor and run once each:
@@ -49385,3 +49385,15 @@ That is the page before this change. Nothing was changed on either cluster.
 `console-src` ConfigMap in `agent` on both clusters and confirm it equals the repo file, then
 `python3 verify/test_chat_saved_coc_e2e.py` against that copy (the test reads the repo file, so the equality is the
 check).
+
+Resumed by run 19730. Run 19662's tests gate failed on `verify/test_coc_admission.py`, and the cause was staging's
+own, not this change. At run 19662's base (a035e02b), `gitops/namespaces/code-of-conduct-names.yaml` held the
+policy's pattern from before #1277's JSON-escape edges (99f9803e), so it no longer equalled `floor.portable_pattern()`.
+The test failed the same way on a035e02b with this commit taken off. Staging had already fixed it in 9ca2ebf5 (#1267).
+The commit was rebased onto staging 4c53bb38 with no conflict and nothing in it changed. On that base,
+`test_coc_admission.py`, `test_coc_pattern_copies.py` (#1289, which holds every copy of the pattern under `gitops/`;
+the page's JavaScript port is not one of them), `test_chat_coc.py`, `test_chat_coc_e2e.py`,
+`test_chat_saved_coc_e2e.py` and `test_scope_tests.py` all pass, with the counts above unchanged.
+`scope_tests.py write` changed nothing. Live, read only: on both clusters the `code-of-conduct-names` policy holds
+the pattern staging now holds, and the namespaces Application reads Synced at 4c53bb38. A server dry run of the
+policy file was accepted on both and changed nothing.
