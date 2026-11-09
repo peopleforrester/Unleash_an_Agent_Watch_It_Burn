@@ -48573,3 +48573,28 @@ a035e02b, private at 7c2703cb).
 off, a `/chat` prompt carrying a term gets the refusal and the agent's log shows no turn for it; and
 `verify/kubecon_probe.py`'s community and admin runs are green with the check on. That is #1267's criterion on the
 probe, and the next run on the issue runs it.
+
+## 2026-11-09 · #1267 · run 19681 · run 19672's tests gate: the admission policy's pattern predated #1277's JSON-escape edges
+
+**Cause.** Run 19672's repin failed validation on `verify/test_coc_admission.py` alone, at the check that
+`variables.floor` in `gitops/namespaces/code-of-conduct-names.yaml` is `floor.portable_pattern()`. The repin did not
+cause it: the test fails the same way on a clean checkout of staging d77ad23d. #1278's policy (60148d72, 17:56) wrote
+the pattern as `portable_pattern()` returned it then, with a plain `(^|[^a-z0-9])` leading edge. #1277's 99f9803e
+(18:13) then widened that edge to take a JSON `\n`, `\r`, `\t` or `\uXXXX` escape and let a non-ASCII letter match
+as its escape, for the collector. Each run's test passed on its own branch, and the two met only on staging.
+
+**Fix.** The policy's `r'...'` line is replaced with what `floor.portable_pattern()` prints now, the step the file's
+own comment gives. A name or label value cannot hold a backslash, so the wider edge admits and refuses the same
+names as before; the test's section 3 (every name the stage creates passes, every term is refused) passes on it.
+Tests run once here, all passing: `test_coc_admission.py`, `test_agent_bypass_shapes.py`,
+`test_minimal_floor_namespaces.py`, `test_no_permanent_drift.py`, `test_manifest_contract.py`.
+
+**Live check (dry run only).** The namespaces Application tracks `staging`, so the policy reaches both clusters
+when this run is promoted. `kubectl apply --dry-run=server` of the file was accepted on watch-it-burn-community and
+watch-it-burn-private (policy and binding `configured (server dry run)`), and a dry-run create of the same policy
+under another name was accepted on both, so each API server compiles the new expression. Nothing was written.
+
+**Not yet run on a cluster.** Once promoted: the live policy's `variables.floor` equals `floor.portable_pattern()`
+on both clusters, and a dry-run create of a ConfigMap named with a term in `agent` is refused by
+code-of-conduct-names. The rest is as run 19672's entry above names: the repin's restart, `always_on` in
+`/controls`, and the KubeCon probe's community and admin runs with the check on.
