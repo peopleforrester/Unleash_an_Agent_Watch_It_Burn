@@ -13,15 +13,11 @@ copy is escaped there.
 
 A copy found anywhere else under gitops/ is a problem too: scan() looks for the pattern's own pieces (floor's
 separator class and its leetspeak classes, in any escaping) in every file there, and each one has to sit
-inside a copy a Site knows. A new copy therefore fails verify/test_coc_pattern_copies.py until it gets a Site here,
-and from then on that test holds it to the floor. On 2026-11-09 #1278 copied the pattern into the admission policy
+inside a copy a Site knows or a Port's block. A Port is a file that carries floor.py's own Python and builds the
+pattern from it (#1269 put one in workshop-mcp-server.py and ticket_site.py); test_deploy_coc.py holds those to the
+floor. A new copy therefore fails verify/test_coc_pattern_copies.py until it gets a Site or a Port here, and from then
+on the tests it names hold it to the floor. On 2026-11-09 #1278 copied the pattern into the admission policy
 and #1277 changed it 17 minutes later; each run passed on its own branch and staging went red (#1289).
-
-A Builder is the other kind of place: a Python file that builds the floor's pattern itself, from the same terms,
-inside a block between two anchor comments (#1269's deploy_app refusal and the desk's mask). Its pieces inside that
-block are known, `write` leaves it alone, and the test it names (test_deploy_coc) holds the compiled pattern to
-floor.proposed_pattern(). #1269 added the block a minute before #1289's scan landed, each on its own branch, and the
-scan called the block's separator an unknown copy (#1294's run 19718).
 """
 from __future__ import annotations
 
@@ -77,30 +73,34 @@ SITES = (
          re.compile(re.escape(_OTTL[0]) + r'(?P<w>[^"\n]+)' + re.escape(_OTTL[1]) + "$", re.M),
          coc_mask_cases.encode, coc_mask_cases.decode, ("test_collector_coc_mask",)),
 )
-@dataclasses.dataclass(frozen=True)
-class Builder:
-    """A Python file that builds the pattern from the floor's terms between `start` and `end`, two comment lines each
-    there once. The block is not a copy to rewrite; `tests` holds what it compiles to the floor."""
-    path: str
-    what: str
-    start: str
-    end: str
-    tests: tuple[str, ...]
-
-
-_BLOCK = ("# --- the code-of-conduct floor (#1269, part of #1267) ", "# --- end of the code-of-conduct floor ")
-BUILDERS = (
-    Builder("gitops/ai-layer/workshop-mcp-server.py", "deploy_app's code-of-conduct refusal (#1269)", *_BLOCK,
-            ("test_deploy_coc",)),
-    Builder("gitops/ai-layer/ticket_site.py", "the desk's code-of-conduct mask on record_landing (#1269)", *_BLOCK,
-            ("test_deploy_coc",)),
-)
 # What the floor is built from: a change to any of these changes the pattern, so it has to select every test that
 # holds a copy (verify/scope-map.yaml), and it then fails on its own branch rather than on staging.
 FLOOR_SOURCES = ("docs/research/2026-11-09-coc-floor/floor.py", "docs/research/2026-11-09-coc-floor/corpus.py",
                  "docs/research/2026-11-09-coc-floor/terms-proposed.rot13")
+
+
+@dataclasses.dataclass(frozen=True)
+class Port:
+    """A file that carries floor.py's own Python rather than a copy of portable_pattern(): its separator class, its
+    leetspeak table and its term list, from which the file builds the pattern itself as it starts. It sits between two
+    marker lines, and `tests` hold it to floor.proposed_pattern(). The scan reads the floor's pieces between the
+    markers as the port's, so only a piece outside them is a copy no Site or Port knows."""
+    path: str
+    start: str
+    end: str
+    tests: tuple[str, ...]  # by stem, as Site.tests
+
+
+# #1269 put the floor into the deploy path as one block, the same text in both files; test_deploy_coc.py holds it
+# equal in both and its compiled pattern to floor.proposed_pattern(), on the spike's abuse set and hard negatives.
+_PORT_START = "# --- the code-of-conduct floor (#1269, part of #1267) "
+_PORT_END = "# --- end of the code-of-conduct floor "
+PORTS = (
+    Port("gitops/ai-layer/workshop-mcp-server.py", _PORT_START, _PORT_END, ("test_deploy_coc",)),
+    Port("gitops/ai-layer/ticket_site.py", _PORT_START, _PORT_END, ("test_deploy_coc",)),
+)
 # By stem: a test named in full here would read to verify/scope_tests.py as a helper this one runs.
-HOLDERS = ("test_coc_pattern_copies",) + tuple(dict.fromkeys(t for s in SITES + BUILDERS for t in s.tests))
+HOLDERS = ("test_coc_pattern_copies",) + tuple(dict.fromkeys(t for s in SITES + PORTS for t in s.tests))
 
 
 def pattern() -> str:
@@ -144,33 +144,35 @@ def gitops_files() -> dict[str, str]:
     return {rel: p.read_bytes().decode("utf-8", errors="replace") for rel, p in gitops_paths().items()}
 
 
-def builder_spans(files: dict[str, str], builders: tuple[Builder, ...] = BUILDERS) -> tuple[dict[str, tuple[int, int]],
-                                                                                          list[str]]:
-    """Each builder's block as (start, end) in its file, by path, and each problem: the file missing, or an anchor
-    there other than once or out of order."""
-    spans: dict[str, tuple[int, int]] = {}
+def port_spans(files: dict[str, str], ports: tuple[Port, ...] = PORTS) -> tuple[dict[str, list[tuple[int, int]]],
+                                                                                  list[str]]:
+    """Where each port's block sits in its file, from the start marker to the end of the end marker's line, and each
+    problem: the file missing, or a marker missing or written more than once."""
+    spans: dict[str, list[tuple[int, int]]] = {}
     problems: list[str] = []
-    for b in builders:
-        text = files.get(b.path)
+    for port in ports:
+        text = files.get(port.path)
         if text is None:
-            problems.append(f"{b.path}: missing, and it is where {b.what} builds the pattern")
+            problems.append(f"{port.path}: missing, and it carries a port of floor.py")
             continue
-        counts = {a: text.count(a) for a in (b.start, b.end)}
-        if any(n != 1 for n in counts.values()) or text.index(b.start) > text.index(b.end):
-            problems.append(f"{b.path}: the block {b.what} sits in is found by {b.start!r} then {b.end!r}, once each; "
-                            f"the file holds them {counts[b.start]} and {counts[b.end]} times")
+        counts = {m: text.count(m) for m in (port.start, port.end)}
+        if any(n != 1 for n in counts.values()):
+            problems.append(f"{port.path}: the port's markers {counts} each have to be there once, and the floor's "
+                            "pieces are read as the port's only between them")
             continue
-        spans[b.path] = (text.index(b.start), text.index(b.end))
+        s = text.index(port.start)
+        e = text.find("\n", text.index(port.end))
+        spans.setdefault(port.path, []).append((s, len(text) if e < 0 else e))
     return spans, problems
 
 
 def scan(files: dict[str, str], sites: tuple[Site, ...] = SITES,
-         builders: tuple[Builder, ...] = BUILDERS) -> tuple[list[Copy], list[str]]:
+         ports: tuple[Port, ...] = PORTS) -> tuple[list[Copy], list[str]]:
     """Each copy the sites find, and each problem: a site's file or anchor or copy missing, a site holding more than
-    one copy, a builder's block not found, and a piece of the pattern outside every copy and every builder's block (a
-    copy no Site knows)."""
+    one copy, a port's markers missing, and a piece of the pattern outside every copy and port (a copy no Site or Port
+    knows)."""
     copies: list[Copy] = []
-    blocks, problems = builder_spans(files, builders)
+    known, problems = port_spans(files, ports)
     for site in sites:
         text = files.get(site.path)
         if text is None:
@@ -185,14 +187,12 @@ def scan(files: dict[str, str], sites: tuple[Site, ...] = SITES,
                             f"the Site's pattern is {site.where.pattern[:80]!r}...")
         copies += found
     for path, text in sorted(files.items()):
-        spans = sorted([(c.start, c.end) for c in copies if c.site.path == path]
-                       + ([blocks[path]] if path in blocks else []))
+        spans = sorted([(c.start, c.end) for c in copies if c.site.path == path] + known.get(path, []))
         for m in FINGERPRINT.finditer(text):
             if not any(s <= m.start() and m.end() <= e for s, e in spans):
                 line = text.count("\n", 0, m.start()) + 1
                 problems.append(f"{path}:{line}: a piece of the code-of-conduct pattern ({m.group(0)}) outside every "
-                                f"copy and builder verify/coc_pattern_copies.py knows; add a Site or a Builder for it "
-                                f"there")
+                                f"copy and port verify/coc_pattern_copies.py knows; add a Site or a Port for it there")
                 break
     return copies, problems
 
@@ -238,8 +238,6 @@ def main(argv: list[str]) -> int:
     problems += stale(copies)
     for c in copies:
         print(f"{c.site.path}: {c.site.what}, {len(c.decoded)} characters")
-    for b in BUILDERS:
-        print(f"{b.path}: {b.what}, built in Python and held to the floor by {', '.join(b.tests)}")
     for p in problems:
         print(f"PROBLEM {p}")
     if problems:

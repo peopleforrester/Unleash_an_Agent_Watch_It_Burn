@@ -1,5 +1,6 @@
 # ABOUTME: Holds segment 3's beat budget in the KubeCon run-of-show (#1040): each time column's beats add up to
-# ABOUTME: its Segment 3 row, and the budget names the 2026-11-07 deck's close on slides 28 to 42.
+# ABOUTME: its Segment 3 row, the budget names the deck's close on slides 28 to 42, and the rehearsal's beat times
+# ABOUTME: are all there or all waiting, tied to the Run-through record (#1297).
 """Segment 3's 'Timing' budget adds up (#1040).
 
 The run-of-show's segment 3 'Timing' carries a beat table: one row per beat, the deck's slides, the time as the
@@ -15,6 +16,13 @@ Its last row, "Segment 3", is each column's total. This test holds:
   4. The budget is for the 2026-11-07 deck: it names slide 29's retry and the guardrail sets on slides 30 to 42,
      and no longer the four single guardrail slides. It also names its re-read of 2026-11-09 against deck commit
      4dd5bbb0, the deck the rehearsal times, with the 326 words slides 30 to 42 then read.
+  5. Michael and Whitney time segment 3 in a rehearsal, beat by beat, against that budget (#1297). The Rehearsal
+     column is either empty on every row or an m:ss time on every row, never part-timed. It is tied to the
+     "Run-through record": once a run-through's Date row reads anything but "not yet run", or its Segment 3 row
+     holds a time, every beat must be timed; once the column is timed, its Segment 3 total must be the Segment 3
+     time of run-through 1 or 2. While the column is empty, the Timing paragraph must say it waits on a timed run;
+     once it is timed, the paragraph may no longer say so. So the test is green while the rehearsal has not run
+     and that is on record, and fails on a run-through recorded without its beat times.
 
 Each cut on repo text first checks its literal is there and exits naming the literal and the file when it is not
 ("Tests own their inputs"). Each check is also run on a copy of the text with one beat changed, so a check that
@@ -33,6 +41,12 @@ SEG4 = "### Segment 4:"
 TIMING = "**Timing (#1003, #1040).**"
 HEADER = ["Beat", "Slides", "As the deck has it", "With the cut", "Rehearsal"]
 TOTAL = "Segment 3"
+RECORD = "### Run-through record"
+RECORD_HEAD = "| | Run-through 1 | Run-through 2 | Delivered |"
+DATE_ROW = "Date"
+SEG3_ROW = "Segment 3 (target 5:00)"
+NOT_RUN = "not yet run"
+WAITS = "Rehearsal column waits on a later one"
 
 failures: list[str] = []
 
@@ -106,10 +120,128 @@ def verdicts(block: str) -> dict[str, bool]:
     return out
 
 
+def record_table(ros: str) -> str:
+    """The Run-through record's table, its header line to the first line that is not a table row."""
+    for lit in (RECORD, RECORD_HEAD, "| " + DATE_ROW + " |", "| " + SEG3_ROW + " |"):
+        need(ros, lit)
+    rec = ros.split(RECORD, 1)[1]
+    need(rec, RECORD_HEAD)
+    lines = rec.split(RECORD_HEAD, 1)[1].splitlines()[1:]
+    rows = [RECORD_HEAD]
+    for ln in lines:
+        if not ln.startswith("|"):
+            break
+        rows.append(ln)
+    return "\n".join(rows)
+
+
+def record_row(record: str, label: str) -> list[str]:
+    for r in table(record):
+        if r and r[0] == label:
+            return r[1:]
+    return []
+
+
+def rehearsal_verdicts(block: str, record: str) -> dict[str, bool]:
+    """The rehearsal's beat-by-beat times against the budget and the Run-through record (#1297)."""
+    out: dict[str, bool] = {}
+    rows = table(block)
+    body = [r for r in rows[2:] if len(r) == len(HEADER)] if len(rows) > 2 else []
+    beats = [r[4] for r in body if r[0] != TOTAL]
+    totals = [r[4] for r in body if r[0] == TOTAL]
+    cells = beats + totals
+    timed = bool(beats) and all(secs(c) is not None for c in cells)
+    empty = bool(beats) and not any(cells)
+    out["the Rehearsal column is timed on every beat or on none"] = timed or empty
+
+    dates = record_row(record, DATE_ROW)
+    seg3 = record_row(record, SEG3_ROW)
+    out["the Run-through record has its Date and Segment 3 rows, one cell per run"] = len(dates) == 3 == len(seg3)
+    runs = list(zip(dates[:2], seg3[:2]))
+    ran = [i for i, (d, t) in enumerate(runs) if d != NOT_RUN or t]
+    out["a run-through on record has segment 3 timed beat by beat in the Rehearsal column"] = not ran or timed
+    if timed:
+        total = totals[0] if totals else ""
+        out["the Rehearsal column's total is a run-through's Segment 3 time"] = any(t == total for _, t in runs)
+
+    flat = " ".join(block.split())
+    if empty:
+        out["the empty Rehearsal column is stated as waiting on a timed run"] = WAITS in flat
+    if timed:
+        out["the timed Rehearsal column is no longer stated as waiting"] = WAITS not in flat
+    return out
+
+
+def with_rehearsal(block: str, times: dict[str, str]) -> str:
+    """The block with each named row's Rehearsal cell set; rows not named keep their cell."""
+    out = block
+    for ln in block.splitlines():
+        if not ln.startswith("|"):
+            continue
+        cells = [c.strip() for c in ln.strip().strip("|").split("|")]
+        if len(cells) == len(HEADER) and cells[0] in times:
+            cells[4] = times[cells[0]]
+            out = out.replace(ln, "| " + " | ".join(cells) + " |")
+    return out
+
+
+def with_record(record: str, label: str, run: int, value: str) -> str:
+    for ln in record.splitlines():
+        cells = [c.strip() for c in ln.strip().strip("|").split("|")]
+        if cells and cells[0] == label:
+            cells[1 + run] = value
+            return record.replace(ln, "| " + " | ".join(cells) + " |")
+    sys.exit(f"ANCHOR MISSING: no {label!r} row in the Run-through record of {ROS_PATH}")
+
+
+def rehearsal_cases(block: str, record: str) -> None:
+    """Each rehearsal check fails on a copy built to break it, and a full, consistent rehearsal passes."""
+    rows = [r for r in table(block)[2:] if len(r) == len(HEADER)]
+    beats = [r for r in rows if r[0] != TOTAL]
+    if not beats:
+        sys.exit(f"ANCHOR MISSING: no beat row under {TIMING!r} in {ROS_PATH}")
+    deck = {r[0]: r[2] for r in rows}  # a stopwatch that read the deck column, total included
+    if WAITS not in " ".join(block.split()):
+        sys.exit(f"ANCHOR MISSING: {WAITS!r} is not in the Timing paragraph of {ROS_PATH}")
+    total = deck[TOTAL]
+    timed = with_rehearsal(block, deck)
+    timed = re.sub(r"\s+".join(WAITS.split()), "Rehearsal column holds run-through 1", timed)
+    ran = with_record(with_record(record, DATE_ROW, 0, "2026-11-10"), SEG3_ROW, 0, total)
+
+    def fails(name: str, b: str, r: str, key: str) -> None:
+        check(name, rehearsal_verdicts(b, r).get(key) is False)
+
+    good = {**verdicts(timed), **rehearsal_verdicts(timed, ran)}
+    check("a rehearsal timed on every beat, adding up and on record as run-through 1, passes",
+          "the filled Rehearsal column adds up" in good and all(good.values()))
+    fails("one beat timed and the rest empty fails", with_rehearsal(block, {beats[0][0]: "0:45"}), record,
+          "the Rehearsal column is timed on every beat or on none")
+    fails("a timed column with one beat emptied fails", with_rehearsal(timed, {beats[-1][0]: ""}), ran,
+          "the Rehearsal column is timed on every beat or on none")
+    fails("run-through 1 dated with no beat timed fails", block, with_record(record, DATE_ROW, 0, "2026-11-10"),
+          "a run-through on record has segment 3 timed beat by beat in the Rehearsal column")
+    fails("run-through 2's Segment 3 time with no beat timed fails", block,
+          with_record(record, SEG3_ROW, 1, "5:10"),
+          "a run-through on record has segment 3 timed beat by beat in the Rehearsal column")
+    fails("a timed column whose total is in no run-through's Segment 3 row fails", timed,
+          with_record(record, DATE_ROW, 0, "2026-11-10"),
+          "the Rehearsal column's total is a run-through's Segment 3 time")
+    fails("a total written only under Delivered fails", timed,
+          with_record(record, SEG3_ROW, 2, total),
+          "the Rehearsal column's total is a run-through's Segment 3 time")
+    fails("an empty column the paragraph no longer says waits fails",
+          re.sub(r"\s+".join(WAITS.split()), "Rehearsal column", block), record,
+          "the empty Rehearsal column is stated as waiting on a timed run")
+    fails("a timed column the paragraph still says waits fails", with_rehearsal(block, deck), ran,
+          "the timed Rehearsal column is no longer stated as waiting")
+
+
 def main() -> None:
     ros = ROS_PATH.read_text()
     block = timing_block(ros)
+    record = record_table(ros)
     real = verdicts(block)
+    real.update(rehearsal_verdicts(block, record))
     for name, ok in real.items():
         check(name, ok)
 
@@ -144,6 +276,8 @@ def main() -> None:
     check("a budget without the 2026-11-09 re-read fails the re-read check",
           not verdicts(block.replace("`4dd5bbb0`", "`903f26cb`"))[
               "the budget names the 2026-11-09 re-read, deck commit 4dd5bbb0, and its 326 words on slides 30 to 42"])
+
+    rehearsal_cases(block, record)
 
     if failures:
         print(f"\n{len(failures)} FAILED", file=sys.stderr)

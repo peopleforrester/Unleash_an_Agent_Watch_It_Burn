@@ -10,8 +10,9 @@ verify/test_console_rollout_drain.py holds the settings in git. This holds the c
 console rollout from outside, the way the room sees it:
 
   1. the agent namespace carries the readiness-gate label, the console's nginx sleeps in preStop, its grace period
-     covers the sleep plus the longest /chat turn, and each of the console Service's target groups has a
-     deregistration delay shorter than the sleep, read from the NLB itself;
+     covers the sleep plus the longest /chat turn, each of the console Service's target groups has a
+     deregistration delay shorter than the sleep, read from the NLB itself, and the console.conf the pod mounts sets
+     a keepalive_time that, added to that delay, is still under the sleep;
   2. one POST /chat a second goes to https://<public host>/chat for the whole rollout, from before it starts until
      the old pod is gone, and every one of them must come back as guard-proxy's own answer: no 502, no 504, no
      dropped connection;
@@ -20,7 +21,9 @@ console rollout from outside, the way the room sees it:
 
 The rollout. ROLLOUT=restart, the default, runs `kubectl rollout restart deploy/console`. The block-argocd-drift
 policy refuses that to every principal but Argo CD's controller and the admin groups, so a hecaton run's identity
-cannot start one: run it as a cluster admin. ROLLOUT=watch starts nothing; it sends the loop and waits up to WAIT
+cannot start one: run it as a cluster admin. ROLLOUT=admin runs the same restart as the run's own
+user in the system:masters group, which that policy exempts as an admin group; a hecaton run's role may impersonate
+it, and run 19661 rolled the console on watch-it-burn-private that way. ROLLOUT=watch starts nothing; it sends the loop and waits up to WAIT
 seconds (default 1800) for the next rollout an Argo CD sync makes, which is how a run checks it: start it, then let
 the promotion of a change that rolls the console land. In restart mode, a cluster that does not hold the settings
 is not rolled; in watch mode the loop runs anyway, so a rollout before the fix reaches the cluster shows its 502s.
@@ -29,7 +32,7 @@ What it spends. Each turn sends an EMPTY prompt in a fresh conversation: nginx c
 with a 400 before any guard, the prompt feed or the model, so it costs nothing and appears nowhere. One a second is
 60 of guard-proxy's 150 a minute for the cluster, so do not run it while the room is chatting.
 
-Usage: CONTEXT=<kube-context> [ROLLOUT=restart|watch] [WAIT=<seconds>] python3 verify/test_console_rollout_drain_live.py
+Usage: CONTEXT=<kube-context> [ROLLOUT=restart|admin|watch] [WAIT=<seconds>] python3 verify/test_console_rollout_drain_live.py
 """
 from __future__ import annotations
 
@@ -159,7 +162,7 @@ missing = [m for m, bad in (
     ("CONTEXT is not set: name the kube-context of the KubeCon cluster to roll", not CONTEXT),
     ("AWS_PROFILE is not set: the NLB's target groups are read with it", not os.environ.get("AWS_PROFILE")),
     ("AWS_REGION is not set", not os.environ.get("AWS_REGION")),
-    (f"ROLLOUT is {ROLLOUT!r}: it is restart or watch", ROLLOUT not in ("restart", "watch")),
+    (f"ROLLOUT is {ROLLOUT!r}: it is restart, admin or watch", ROLLOUT not in ("restart", "admin", "watch")),
 ) if bad]
 for m in missing:
     check(m, False)
@@ -189,15 +192,27 @@ check(f"its grace period {grace}s covers the sleep plus the {CHAT_TIMEOUT}s /cha
 tgbs = [t for t in kjson("-n", NS, "get", "targetgroupbindings").get("items", [])
         if t.get("spec", {}).get("serviceRef", {}).get("name") == "console"]
 check(f"the console Service has its NLB target groups bound (got {len(tgbs)})", bool(tgbs))
+delays = []
 for t in tgbs:
     arn = t["spec"]["targetGroupARN"]
     a = subprocess.run(["aws", "--region", os.environ["AWS_REGION"], "elbv2", "describe-target-group-attributes",
                         "--target-group-arn", arn, "--output", "json"], capture_output=True, text=True)
     attrs = {x["Key"]: x["Value"] for x in json.loads(a.stdout).get("Attributes", [])} if a.returncode == 0 else {}
     delay = int(attrs.get("deregistration_delay.timeout_seconds", "0") or 0)
+    delays.append(delay)
     check(f"{t['metadata']['name']} (port {t['spec']['serviceRef']['port']}) deregisters in {delay}s, under the "
           f"{sleep}s preStop sleep", a.returncode == 0 and 0 < delay < sleep, a.stderr.strip()[:200])
-if failures and ROLLOUT == "restart":
+# The apex router reuses its connections, and the NLB keeps a flow on the pod it began on through the whole drain,
+# so nginx must close them itself, on a response, before the sleep ends (run 19661's rollout).
+conf_cm = next((v["configMap"]["name"] for v in pod_spec.get("volumes", [])
+                if (v.get("configMap") or {}).get("name", "").startswith("console-conf")), "")
+conf_text = kjson("-n", NS, "get", "configmap", conf_cm).get("data", {}).get("default.conf", "") if conf_cm else ""
+m = re.search(r"^keepalive_time (\d+)s;", conf_text, re.M)
+keepalive = int(m.group(1)) if m else None
+check(f"the console's nginx config ({conf_cm or 'no console-conf volume'}) sets keepalive_time (got {'none' if keepalive is None else f'{keepalive}s'}), "
+      f"and it plus the {max(delays, default=0)}s deregistration delay is under the {sleep}s sleep",
+      keepalive is not None and bool(delays) and max(delays) + keepalive < sleep)
+if failures and ROLLOUT in ("restart", "admin"):
     print("  the cluster does not hold the settings, so it is not rolled: sync the change, then run this again")
     finish()
 
@@ -212,11 +227,16 @@ check(f"the loop is answered before the rollout ({sum(answered(s, b) for _, s, b
 
 print(f"== the rollout ({ROLLOUT}) ==")
 rolled_at = None
-if ROLLOUT == "restart":
-    r = kubectl("-n", NS, "rollout", "restart", "deploy/console")
+if ROLLOUT in ("restart", "admin"):
+    as_admin: list[str] = []
+    if ROLLOUT == "admin":
+        me = kubectl("auth", "whoami", "-o", "jsonpath={.status.userInfo.username}").stdout.strip()
+        as_admin = [f"--as={me}", "--as-group=system:masters", "--as-group=system:authenticated"]
+    r = kubectl(*as_admin, "-n", NS, "rollout", "restart", "deploy/console")
     check("kubectl rollout restart deploy/console is admitted", r.returncode == 0,
           (r.stderr.strip()[:300] + "\n        the block-argocd-drift policy admits only Argo CD's controller and "
-           "the admin groups: run this as a cluster admin, or with ROLLOUT=watch during an Argo CD sync"))
+           "the admin groups: run this as a cluster admin, with ROLLOUT=admin, or with ROLLOUT=watch during an Argo CD "
+           "sync"))
     rolled_at = loop.now() if r.returncode == 0 else None
 else:
     deadline = time.monotonic() + WAIT

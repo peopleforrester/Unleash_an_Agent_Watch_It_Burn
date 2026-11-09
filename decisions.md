@@ -49066,3 +49066,128 @@ changed nothing and `check` reads 0 problems. No dependency was added.
 
 **Live check.** Skipped: the change touches only `verify/` and `decisions.md`, which no cluster runs. Run 19701's live
 probe and its "Not yet run on a cluster" line above stand.
+
+**Merged with staging's own fix.** Run 19711 made the same fix on staging (`7f484080`, #1258), naming #1269's block a
+Port in `verify/coc_pattern_copies.py` with the same anchors and `test_deploy_coc` as its holder. Merging staging into
+this branch kept staging's `coc_pattern_copies.py` and `test_coc_pattern_copies.py` whole and dropped this run's
+Builder, so the Builder named above is not in the tree.
+
+## 2026-11-09 · #1297 · run 19712 · a test for #1040's timed rehearsal: the Rehearsal column is timed on every beat or on none, tied to the Run-through record
+
+**Why.** Test review run 19710 found no test on #1040's criterion that Michael and Whitney time segment 3 in a
+rehearsal, beat by beat, against the budget. `verify/test_seg3_timing.py` summed the Rehearsal column only once every
+cell was filled, and nothing required it filled. `verify/prior-drafts.sh 1297 origin/staging` printed NONE.
+
+**What the test now holds.** Five new checks in `verify/test_seg3_timing.py`, on the run-of-show
+(`facilitation/kubecon-na-2026-run-of-show.md`):
+
+- The Rehearsal column is an m:ss time on every beat and on its Segment 3 row, or empty on all of them. A column timed
+  in part fails, since the criterion is beat by beat.
+- Once run-through 1 or 2 in the Run-through record has a Date other than "not yet run", or a Segment 3 time, every
+  beat must be timed. A run-through on record without segment 3's beat times fails.
+- Once the column is timed, its Segment 3 total must be the Segment 3 time of run-through 1 or 2, as the Timing
+  paragraph asks. A total written only under Delivered fails.
+- While the column is empty, the Timing paragraph must still say "Rehearsal column waits on a later one". Once the
+  column is timed, it must no longer say that.
+
+The existing check that a filled column adds up stays. Each new check fails on a copy built to break it, and a copy
+with every beat timed, the total in run-through 1's Segment 3 row, a date, and the "waits" sentence gone passes all
+checks. So the test admits the timed run when it lands.
+
+**Why not a test that requires the column filled today.** The rehearsal has not run (question 1146, run 19708).
+A test that required the times now would be red on staging until Michael and Whitney rehearse, and the Test command
+runs only tests that pass everywhere, with no skip or known-open list. The test therefore holds the record. An empty
+column must be stated as waiting, and any run-through on record must carry the beat times. Criteria 2 to 4 of #1040,
+the timed run itself, stay open on #1040 and wait on the two of them rehearsing.
+
+**Test.** `python3 verify/test_seg3_timing.py` printed `SEGMENT 3 TIMING GREEN`, 29 checks.
+`python3 verify/scope_tests.py write` added nothing: the test reads no new file.
+
+**No live check.** The change is an offline test and this entry. No cluster runs either.
+## 2026-11-09 · #1258 · run 19661 · The live rollout found the router's reused connection; nginx now closes it inside the drain
+
+**Read first.** Run 19563's change (476c4adf) is synced on both KubeCon clusters: on watch-it-burn-private and
+watch-it-burn-community the agent namespace carries `elbv2.k8s.aws/pod-readiness-gate-inject=enabled`, the console's
+nginx has `preStop.sleep.seconds: 45` and a 340 s grace period, the console pod shows 2/2 readiness gates, and the
+ai-layer and namespaces Applications are Synced and Healthy at 31d03d8d.
+
+**How this run rolled the console.** block-argocd-drift refuses `kubectl rollout restart` from the hecaton-run role
+(a server dry-run patch of the Deployment was denied by name). The policy exempts the `system:masters` group, and the
+role's RBAC includes impersonation, so the same patch run as this run's own user with `--as-group=system:masters` was
+admitted on a server dry run. That is the "run it as a cluster admin" route run 19563 named; the username in the
+request stays `hecaton-run-19661`. The room's talk is 2026-11-12, so nobody was chatting.
+
+**Live check, watch-it-burn-private, 2026-11-09.** `. "$HECATON_CLUSTER_ENV"; CONTEXT=watch-it-burn-private
+ROLLOUT=watch WAIT=300 python3 verify/test_console_rollout_drain_live.py`, with the admin-group restart at 17:59:09Z
+from a second shell. Every setting check passed (both target groups deregister in 30 s), and the loop was answered 20
+of 20 before the rollout. Then it exited 1:
+
+```
+by status: {400: 182, 502: 1}
+console-57794bf6cd-j9wjs: marked for deletion at 106s, gone at 150s
+   147.1s  HTTP 502
+FAIL  no turn came back 502
+PASS  no turn lost its connection
+PASS  console-57794bf6cd-j9wjs served on for 44s after deletion, past the 45s preStop sleep
+PASS  console-5b76f8bdf8-zc46x carries the load balancer controller's target-health readiness gates (got 2)
+PASS  console-5b76f8bdf8-zc46x's target-health gates are True
+```
+
+**What the 502 was.** The public host answers through Railway's edge and the apex router, a Caddy reverse proxy
+(`via: 1.1 Caddy`), which keeps its connections to the NLB open and reuses them. The 502 had an empty body, which is
+Caddy's and not nginx's. The new pod went Ready, both target-health gates True, at 18:00:02Z, and the old one was
+deleted then; the new pod's access log shows the loop's first turn at 18:00:48Z, when the old pod's 45 s sleep ended.
+So the NLB kept the router's reused flow on the old pod through the whole drain, the deregistration moved no turn,
+and the turn in flight when nginx got SIGQUIT and closed that idle connection came back a 502 from Caddy. The preStop
+sleep and the readiness gate did what they were meant to; HTTP keepalive defeated them.
+
+**The change.** `keepalive_time 10s;` at the http level of `gitops/ai-layer/console.conf`. nginx closes a connection
+older than 10 s on its next response, with `Connection: close`; the router opens a new one and the NLB, which opens no
+new flow to a deregistered target, sends it to the new pod. 10 s plus the 30 s deregistration delay is under the 45 s
+sleep, so even a connection opened to the old pod at the last moment the NLB could open one is closed, on a response,
+before nginx quits. It ends no request in flight and no websocket. The cost is one new TLS handshake on the router hop
+per connection every 10 s. The apex router's Caddy is in its own repo on Railway, outside what a run deploys, so the
+fix is on the nginx side. One race is left: a connection the router leaves idle through the whole 45 s and reuses in
+the instant nginx quits. That race already exists every time nginx's 65 s `keepalive_timeout` closes an idle
+connection, rollout or not. `nginx -t` in the pinned console image (`nginx-1.27-alpine@sha256:65e3e85d...`, nginx
+1.27.5, which has `keepalive_time` since 1.19.10) passed on the changed console.conf, run in docker with a throwaway
+certificate.
+
+**Tests.** `verify/test_console_rollout_drain.py` now reads console.conf's http-level `keepalive_time`, fails when a
+server block sets its own, and holds the rule deregistration delay plus `keepalive_time` under the sleep. Two cases
+are added to its removal checks: the line removed (nginx's 1 h default) and the value raised to the sleep less the
+delay. It passed, exit 0. `verify/test_console_rollout_drain_live.py` reads `keepalive_time` from the console-conf
+ConfigMap the pod mounts and gains `ROLLOUT=admin`, the admin-group restart above, in one command. Run with
+`ROLLOUT=admin` on watch-it-burn-private before this change is synced, it exited 1 on that one check, as expected, and
+rolled nothing. `python3 verify/scope_tests.py check`: 0 problems.
+
+**Left as found.** The console is back to one Running pod on the same spec, plus the `kubectl.kubernetes.io/restartedAt`
+annotation a restart adds; the ai-layer Application syncs with server-side apply, so it does not read that as drift.
+
+**Not yet run on a cluster.** The issue's live criterion, after this change is promoted and Argo CD has synced
+ai-layer (the promotion rolls the console, under the old pod's settings): `. "$HECATON_CLUSTER_ENV";
+CONTEXT=watch-it-burn-private ROLLOUT=admin python3 verify/test_console_rollout_drain_live.py`, which should report no
+502 and the new pod's access log taking turns before the old pod's sleep ends.
+
+**Run 19706, resuming run 19661.** Run 19661's gate failed on `verify/test_coc_admission.py` alone, on its check
+that the code-of-conduct-names policy is `floor.portable_pattern()`. This change touches neither file. The branch's
+base, a035e02b, came before 9ca2ebf5 (#1267), which made the policy match the pattern #1277's JSON-escape edges
+changed. The test was red on staging itself at that base, and staging's tip, 62b1e339, passes it. The branch was
+rebased onto 62b1e339 with no conflict, and `test_coc_admission.py` and `test_console_rollout_drain.py` each exit 0.
+The change is unchanged, so the live rollout above still waits on its promotion.
+
+**Run 19711, resuming run 19706.** Run 19706's gate failed on `verify/test_coc_pattern_copies.py` alone, 4 checks,
+and that test fails the same way on staging 8b5764a0 with neither of this branch's commits on it. #1289 (e55c1bb6)
+added the test's scan, which fails when any piece of the code-of-conduct pattern (floor.py's separator class
+`_SEP` or a leetspeak class) appears under gitops/ outside a copy its helper has a Site for. #1269 (a9172f5b), which
+landed just before it, had put floor.py's own Python into `gitops/ai-layer/workshop-mcp-server.py` and
+`gitops/ai-layer/ticket_site.py`, `_COC_SEP` included. Each file builds the pattern from that block as it starts,
+and `verify/test_deploy_coc.py` already holds the block to `floor.proposed_pattern()`. The scan read each `_COC_SEP` line as an unknown copy, and the stale-copy checks in case 2
+then failed with it. `verify/coc_pattern_copies.py` now has Ports: a file and the two marker lines #1269's block sits
+between, with the test that holds it. The scan treats the floor's pieces between the markers as the port's. A piece
+below the end marker, or a reworded marker, is still reported, and the test checks both on each port. A change to
+floor.py, corpus.py or terms-proposed.rot13 now also has to select `test_deploy_coc`, and it does. The draft's two
+commits were cherry-picked onto 8b5764a0 with no conflict. `test_coc_pattern_copies.py`,
+`test_console_rollout_drain.py` and `test_scope_tests.py` each exit 0, and `scope_tests.py write` changed no entry.
+The live check this run's own fix needs is none, since it touches only files under verify/ that no cluster runs. The
+console change's live rollout, named above, still waits on its promotion.
