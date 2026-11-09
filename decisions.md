@@ -46929,3 +46929,39 @@ policy file it reads, the drift `test_scope_tests.py` failed on. On base a6dc70d
 `python3 verify/test_kubearmor_config_tracked.py` printed `All KubeArmor config tracking checks passed.` and
 `python3 verify/test_scope_tests.py` printed `ALL PASS`, both exit 0. The E2E command was not run in the run;
 hecaton's gate runs it on promotion. No live check: this change touches decisions.md alone.
+## 2026-11-09 · #1254 · run 19545 · The removed-row live check takes its two rows off the desk with /desk-forget
+
+**What.** `verify/test_deployments_removed_live.py` (#1051) left its two rows on the desk, and its docstring gave two
+reasons that no longer held: that the desk has no way to drop a row, and that restarting fake-ticket would drop the
+room's tickets "as verify/desk_ticket_live.py says". Since #1215 the desk has a loopback-only POST /desk-forget, and
+since #1224 desk_ticket_live.py uses it. `verify/prior-drafts.sh 1254 origin/staging` printed NONE. The check now
+takes its rows off in step 9, the `finally` of steps 3 to 8, so they go on every path out, a failed check or an
+exception included. It deletes its Deployments, then runs kubecon_probe's `KubeconCluster.forget_on_desk([GONE, KEPT],
+t_start)` on the cluster it ran on. That is a kubectl exec into that cluster's fake-ticket pod, two passes a few
+seconds apart, with `since` taken before the first /landed. The check fails when the forget gives a reason, or when
+/deployments.json still lists a row of its names afterwards. The old closing wait is gone: the check no longer
+waits up to 90 s for the internal row to read removed, since that row no longer stays. The docstring now
+describes /desk-forget as ticket_site.py defines it (the names, the `since`, the tickets, the loopback gate) and no
+longer cites desk_ticket_live.py. No new fetch is added: the exec is kubecon_probe's, already in
+`verify/fetch-inventory.yaml`.
+
+**Step 8 was red at the base, and is fixed here.** The first live run of the change failed only on step 8's two
+page-line checks. Since #1157 the page's script ends each line with the row's cluster ("... removed at 13:58:59
+community"), and the check still expected the line without it. The expected lines now carry `" " + row["cluster"]`
+when the row names one, as the page's script does. The rest of that run passed, and step 9 removed both rows even
+though the run failed. That shows the cleanup runs on a failing path.
+
+**Live check.** On watch-it-burn-community, whose registry policies read Audit at the start:
+`COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_deployments_removed_live.py` printed `DEPLOYMENTS
+REMOVED-ROW LIVE CHECK GREEN`, exit 0. The public row was marked 26 s after the arm, both policies went back to Audit,
+`/desk-forget removed this check's rows from the desk` and `/deployments.json lists no row of this check's names`
+passed, and every workload in agent was as found. No Secret was read, and the presenter terminal login was not
+touched.
+
+**Left as it is.** `verify/run-e2e.sh`'s header comment still says this check's two rows stay on the desk, greyed.
+run-e2e.sh is a runner, so any change to it makes `verify/scope_tests.py` run the whole suite, and a one-line comment
+does not need that. It is filed as a follow-up, to correct alongside the next change that touches run-e2e.sh.
+
+**Tests run.** `python3 verify/test_guard_lease.py`, `test_fetch_inventory.py`, `test_kube_safety.py`,
+`test_lint.py` and `test_tests_own_inputs.py`, each exit 0. `python3 verify/scope_tests.py check` read 0 problems,
+and the prose gate passed. The scoped Test and E2E commands are left to validation.
