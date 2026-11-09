@@ -43519,6 +43519,7 @@ it printed `FAILED: 1 check(s)` before the edit. `python3 verify/test_drift_rebu
 the change; the report gives their result.
 
 **No live check.** The change is under `verify/`, which no cluster runs, and this entry (#1062).
+
 ## 2026-11-08 · #1110 · run 18434 · A test holds segment 3 step 5 of the KubeCon run-of-show to the 2026-11-07 deck
 
 **What.** #1095 moved step 5 of segment 3 in `facilitation/kubecon-na-2026-run-of-show.md` onto the deck Whitney
@@ -43552,3 +43553,24 @@ scoped to this change, printed `92 tests ran` and `ALL OFFLINE RENDER-GATE TESTS
 offline suite and 14 tier tests) in 4m34s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `python3
 verify/scope_audit.py offline` read the new test's entry as `ok`. The prose gate printed `prose gate: pass`. No
 dependency was added. The log is `/var/lib/hecaton/runs/18434/e2e-tools.log`.
+
+## 2026-11-09 · #1110 · run 19319 · Run 18434's test ported to staging, its self-check text no longer read as a slide citation
+
+**Why 18434 did not land.** Its `tests` gate failed on `verify/test_guardrail_slide_citations.py`, which #1125 put on
+staging while 18434 ran (b9f62b45). That test searches every file under `verify/` for the 2026-11-06 deck's names for
+its four single slides, and 18434's self-checks replaced each phrase of step 5 with the words "the guardrail slides",
+one of the banned forms, on line 143 of `verify/test_ros_seg3_switch_step.py`. Its scoped run, cut before #1125, could
+not select the newer test.
+
+**What changed from the draft.** `bash verify/prior-drafts.sh 1110 origin/staging` printed START for
+`origin/agent/1110-18434`, with two edits in place (decisions.md, `verify/scope-map.yaml`). Both commits were
+cherry-picked; the scope-map conflict was the `test_ros_seg4_flow.py` entry from #1098 (48a24bdf) next to this one, and both are kept.
+The self-checks now put "removed text" in place of each phrase, which matches no check and no citation rule. Nothing
+else in the test changed, and it still reads step 5 of the current run-of-show as the draft claims.
+
+**Results.** `python3 verify/test_ros_seg3_switch_step.py` printed 31 PASS and `SEGMENT 3 STEP 5 GREEN`, exit 0.
+`python3 verify/test_guardrail_slide_citations.py` printed `NO GUARDRAIL SLIDE CITATION OF LIVE 29 TO 32 GREEN`
+with no hit among 837 files. `HECATON_BASE_SHA=cdeaedfd python3 verify/scope_tests.py select offline` names both tests
+and `test_scope_tests.py`. The rest of the scoped suite is left to validation.
+
+**No live check.** The change is under `verify/`, which no cluster runs, and this entry (#1062).
