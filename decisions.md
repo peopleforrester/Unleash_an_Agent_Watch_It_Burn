@@ -49065,3 +49065,10 @@ annotation a restart adds; the ai-layer Application syncs with server-side apply
 ai-layer (the promotion rolls the console, under the old pod's settings): `. "$HECATON_CLUSTER_ENV";
 CONTEXT=watch-it-burn-private ROLLOUT=admin python3 verify/test_console_rollout_drain_live.py`, which should report no
 502 and the new pod's access log taking turns before the old pod's sleep ends.
+
+**Run 19706, resuming run 19661.** Run 19661's gate failed on `verify/test_coc_admission.py` alone, on its check
+that the code-of-conduct-names policy is `floor.portable_pattern()`. This change touches neither file. The branch's
+base, a035e02b, came before 9ca2ebf5 (#1267), which made the policy match the pattern #1277's JSON-escape edges
+changed. The test was red on staging itself at that base, and staging's tip, 62b1e339, passes it. The branch was
+rebased onto 62b1e339 with no conflict, and `test_coc_admission.py` and `test_console_rollout_drain.py` each exit 0.
+The change is unchanged, so the live rollout above still waits on its promotion.
