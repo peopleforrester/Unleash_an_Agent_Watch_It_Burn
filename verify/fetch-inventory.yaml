@@ -1053,6 +1053,11 @@ sites:
     lines: 1
     class: none
     why: a tool result, as text
+  verify/test_collector_coc_mask_e2e.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
   verify/test_collector_pii_scrub_e2e.py:
   - match: urlopen
     lines: 1
