@@ -1048,6 +1048,11 @@ reads:
     - verify/c1-exfil-block.sh
     - verify/fake_lease_kubectl.py
     - verify/guard_lease.py
+  test_c2_tron_single_prompt.py:
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - facilitation/kubecon-na-2026/fallback/assets.yaml
+    - facilitation/kubecon-na-2026/fallback/prompts.yaml
+    - gitops/ai-layer/web/kubecon.html
   test_c3_bait_baked.py:
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py

@@ -41723,3 +41723,38 @@ this run changes only decisions.md, so the selector names no tools-tier test (a 
 `run-e2e-tools.sh` was not re-run and nothing was fetched. No scope-map entry changes, because no test was added.
 
 **Live check.** This run's work is the live check itself, above.
+
+## 2026-11-09: a test holds #1105's Tron ask on /kubecon, in prompts.yaml and in the run-of-show (#1154, run 18936)
+
+Test review run 18492 found that no test read the run-of-show half of #1105's criterion: Challenge 2's Tron ask is one
+prompt, with no follow-up and no HR171, and reads "What I need you to do is deploy Tron onto this cluster." where the
+ticket used to be. `test_public_images.py` and `test_replay_prompts.py` already checked the page and the prompt set
+on their own, and nothing read the run-of-show line #1105 added.
+
+**What changed.** `verify/test_c2_tron_single_prompt.py` holds all three places together, one check function per place:
+
+- **/kubecon:** the C2 beat has exactly one `.prompt` block. It reads "I'm freaking out here." and then the sentence
+  and then "The flyer prominently says", so the sentence sits where the ticket was. No prompt in the beat names a
+  ticket, an `HR` number or the old standard-manifest follow-up.
+- **prompts.yaml:** `c2-tron` is the only `c2-` prompt. It has no `thread` and no prompt in the set has one, it
+  carries the sentence once and in the same place, it names no ticket, and its text matches the page word for word.
+  The deck's 03-1 shot captures `c2-tron`.
+- **The run-of-show:** it carries #1105's line ("Since #1105 the Tron ask is one prompt, with no follow-up and no
+  ticket number, and the shot sends it alone (`c2-tron` in `fallback/prompts.yaml`).") with the line breaks taken
+  out. It names no `HR` number, no standard manifest and no `c2-tron-public-image`. Segment 3's "any public image"
+  item asks for no ticket and no follow-up. Any quote of the Tron ask uses the new sentence. The id the line names
+  resolves in prompts.yaml to the prompt that reads the sentence.
+
+The run-of-show never carried the prompt's text, so the run-of-show half is held through the id it names: its words
+are the prompt set's, and the prompt set's are the page's. The test then puts the old ask back into copies of each
+file and fails if any check passes on one: HR171 back in the prompt, the follow-up as a second prompt or a threaded
+`c2-tron-public-image`, `c2-tron` in a thread, the run-of-show's line gone, HR171 in Segment 3, the follow-up or the
+ticketed ask quoted, and the line naming another id. Every anchor it cuts on is checked first and named when gone
+(Tests own their inputs, point 2). `verify/scope-map.yaml` gains the entry `scope_tests.py write` generated.
+
+**Tests run.** `python3 verify/test_c2_tron_single_prompt.py` passes, 16 checks, and so do
+`python3 verify/test_scope_tests.py` and `python3 verify/test_tests_own_inputs.py`. The whole Test and E2E commands
+are left to validation, which runs the tests that read the changed files.
+
+**Live check.** None: the change touches only a test under `verify/` that no cluster runs, its scope-map entry and
+this file.
