@@ -1231,7 +1231,7 @@ sites:
     why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
   verify/test_package_cache.py:
   - match: .
-    lines: 13
+    lines: 14
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   verify/test_package_cache_e2e.py:
@@ -1545,3 +1545,23 @@ sites:
     lines: 4
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_yarn_pins.py:
+  - match: .
+    lines: 3
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_yarn_pins_e2e.py:
+  - match: .
+    lines: 3
+    class: none
+    why: check messages; its installs run the app's yarn against a registry it serves on 127.0.0.1, from lines the scan does not name
+  verify/yarn_pins.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: upstream-index
+    target: registry.npmjs.org, each conditional package's version document and tarball, read to write yarn-plugins/conditional-checksums.lock and checked against its dist.integrity
+  - match: .
+    lines: 2
+    class: none
+    why: the module docstring, which names the install commands; none runs it
