@@ -193,36 +193,33 @@ sites:
   images/web-terminal/Dockerfile:
   - match: ca-certificates curl wget
     lines: 1
-    class: live
-    kind: upstream-index
-    target: Debian bookworm's apt archive as it stands when build-web-terminal.yml builds the image (curl and wget are packages it installs)
-  - match: ttyd/releases/download/1\.7\.7|release/\$\{KVER\}|code-server/releases/download/v\$
-    lines: 3
     class: pinned
     kind: tool
-    pin: images/web-terminal/Dockerfile (ttyd 1.7.7 in its URL, KUBECTL_VERSION, CODE_SERVER_VERSION; a version each, no checksum)
+    pin: images/web-terminal/Dockerfile (DEBIAN_SNAPSHOT, the snapshot.debian.org time the base image names; apt checks each package's sha256 against the snapshot's signed index)
     cached: false
-  - match: releases/latest/download|get-helm-3
-    lines: 4
-    class: live
-    kind: github
-    target: the latest GitHub release of eksctl, k9s and yq, and helm's get-helm-3 script on its main branch, which installs helm's latest release
-  - match: awscli\.amazonaws\.com|deb\.nodesource\.com
-    lines: 2
-    class: live
-    kind: public-web
-    target: the current AWS CLI v2 build (its URL names no version) and NodeSource's setup_22.x script with the Node 22 release it installs that day
+  - match: releases/download/|dl\.k8s\.io/release/|awscli\.amazonaws\.com/awscli-exe|get\.helm\.sh/helm-|nodejs\.org/dist/
+    lines: 9
+    class: pinned
+    kind: tool
+    pin: images/web-terminal/Dockerfile (ttyd 1.7.7 in its URL, and the _VERSION and _SHA256 ARGs of kubectl, the AWS CLI, helm, eksctl, k9s, yq, code-server and Node; each download is checked with sha256sum -c)
+    cached: false
   - match: pip install
-    lines: 2
-    class: live
-    kind: upstream-index
-    target: PyPI as it stands at build time; pip is upgraded to its latest, and of the notebook stack only jupyterlab and jupyter-collaboration are pinned
+    lines: 1
+    class: pinned
+    kind: python-package
+    pin: images/web-terminal/requirements.txt (every package, pip included, by version and wheel sha256, installed with --require-hashes)
+    cached: false
   images/web-terminal/entrypoint.sh:
   - match: localhost:8080
     lines: 5
     class: live
     kind: cluster
     target: guard-proxy's control API on localhost:8080, reached from the attendee terminal inside the guard-proxy pod with kubectl exec
+  images/web-terminal/requirements.in:
+  - match: uv pip compile
+    lines: 1
+    class: none
+    why: a comment giving the command that regenerates requirements.txt by hand; the build runs none
   images/workshop-mcp/Dockerfile:
   - match: ^RUN pip install
     lines: 1

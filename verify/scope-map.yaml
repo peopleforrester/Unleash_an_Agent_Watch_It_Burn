@@ -3360,6 +3360,8 @@ reads:
     - gitops/bootstrap/values.yaml
     - gitops/workshop-agent/agent.yaml
     - images/web-terminal/Dockerfile
+    - images/web-terminal/requirements.in
+    - images/web-terminal/requirements.txt
     - infra/argocd-values.yaml
     - infra/aws-load-balancer-controller-values.yaml
     - infra/datadog-cluster-identity.sh
@@ -3398,6 +3400,7 @@ reads:
     - security
     - teardown/teardown.sh
     - verify/bootstrap_chart.py
+    - verify/fetch-inventory.yaml
     - verify/model_pin_check.py
   test_fleet_exit_codes.sh:
     - agent
@@ -9168,6 +9171,8 @@ reads:
     - gitops/workshop-agent/agent.yaml
     - images/watch-it-burn-backstage/playwright.config.ts
     - images/web-terminal/Dockerfile
+    - images/web-terminal/requirements.in
+    - images/web-terminal/requirements.txt
     - infra/argocd-values.yaml
     - infra/aws-load-balancer-controller-values.yaml
     - infra/datadog-cluster-identity.sh

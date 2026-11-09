@@ -1,0 +1,19 @@
+# ABOUTME: The notebook venv's top-level packages; requirements.txt is their full lock, every wheel by version and sha256.
+# ABOUTME: Regenerate the lock with the command below and commit both; the Dockerfile installs only the lock (#1273).
+#
+#   uv pip compile images/web-terminal/requirements.in --python-version 3.11 \
+#     --python-platform x86_64-unknown-linux-gnu --generate-hashes --only-binary :all: --no-header \
+#     -o images/web-terminal/requirements.txt
+#
+# Python 3.11 is bookworm's python3, which the Dockerfile's Debian snapshot installs. Wheels only, so no build backend
+# is fetched unhashed at build time. jupyterlab and jupyter-collaboration are held where the Dockerfile's comment says
+# (collaboration 5.x needs jupyterlab>=4.6); the rest took the latest release that resolved on 2026-11-09.
+jupyterlab==4.6.3
+jupyter-collaboration==5.0.1
+jupyter-resource-usage
+jupyterlab-git
+jupyterlab_execute_time
+ipywidgets
+boto3
+# pip itself, in place of the upgrade to whatever was latest that the venv used to take.
+pip

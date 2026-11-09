@@ -502,13 +502,52 @@ check("kubectl version is a literal, not a build-time lookup",
       and bool(re.search(r"ARG KUBECTL_VERSION=v\d+\.\d+\.\d+", DOCKERFILE)))
 # jupyter-collaboration 5.x requires jupyterlab>=4.6, having previously required <4. The constraint
 # inverted once already; pinning the wrong side resolves collaboration back a generation and the
-# extension silently refuses to load while pip reports success.
-jl = re.search(r'jupyterlab==(\d+)\.(\d+)', DOCKERFILE)
-check("jupyterlab pinned at or above the 4.6 collaboration floor",
-      bool(jl) and (int(jl.group(1)), int(jl.group(2))) >= (4, 6))
-check("jupyter-collaboration pinned to 5.x (a bare pin resolves it backwards)",
-      bool(re.search(r"jupyter-collaboration==5\.", DOCKERFILE)))
+# extension silently refuses to load while pip reports success. Since #1273 the notebook stack is the hashed lock
+# images/web-terminal/requirements.txt, generated from requirements.in, and the Dockerfile installs only the lock.
+REQ_IN = (REPO / "images/web-terminal/requirements.in").read_text()
+REQ_LOCK = (REPO / "images/web-terminal/requirements.txt").read_text()
+for name, text in (("requirements.in", REQ_IN), ("requirements.txt", REQ_LOCK)):
+    jl = re.search(r'^jupyterlab==(\d+)\.(\d+)', text, re.M)
+    check(f"{name}: jupyterlab pinned at or above the 4.6 collaboration floor",
+          bool(jl) and (int(jl.group(1)), int(jl.group(2))) >= (4, 6))
+    check(f"{name}: jupyter-collaboration pinned to 5.x (a bare pin resolves it backwards)",
+          bool(re.search(r"^jupyter-collaboration==5\.", text, re.M)))
+check("the Dockerfile installs the notebook stack from the lock with --require-hashes",
+      "COPY requirements.txt /opt/jupyter-requirements.txt" in DOCKERFILE
+      and bool(re.search(r"pip\s+install .*--require-hashes.* -r /opt/jupyter-requirements\.txt", DOCKERFILE)))
 check("code-server pinned to an exact version", bool(re.search(r"CODE_SERVER_VERSION=\d+\.\d+\.\d+", DOCKERFILE)))
+# #1273: each download names a version and is checked against a pinned sha256 before it is used, so a rebuild with
+# nothing in the repo changed ships the same bytes. A download is a line that writes "<file>" from "<url>" with -o; the line
+# after it must check that file against an ARG <NAME>_SHA256 holding 64 hex digits, and the URL must name no latest.
+lines = DOCKERFILE.splitlines()
+args = dict(re.findall(r"^ARG (\w+)=(\S+)$", DOCKERFILE, re.M))
+downloads = [(i, m) for i, l in enumerate(lines) if (m := re.search(r'\bcurl -fsSL -o "([^"]+)" "([^"]+)"', l))]
+check(f"the web-terminal Dockerfile downloads nine tools ({len(downloads)})", len(downloads) == 9)
+unchecked = []
+for i, m in downloads:
+    nxt = lines[i + 1] if i + 1 < len(lines) else ""
+    s = re.search(r'echo "\$\{(\w+_SHA256)\}  ' + re.escape(m.group(1)) + r'" \| sha256sum -c -', nxt)
+    if not s or not re.fullmatch(r"[0-9a-f]{64}", args.get(s.group(1), "")) or "latest" in m.group(2):
+        unchecked.append(m.group(2))
+check(f"each download is checked against a pinned sha256 on the line after it (unchecked: {unchecked})", not unchecked)
+# Read the commands only: the Dockerfile's comments name what #1273 replaced (NodeSource's setup_22.x script).
+commands = "\n".join(l for l in lines if not l.lstrip().startswith("#"))
+check("no fetch is piped to a shell or names a moving release",
+      not re.search(r"\|\s*(?:ba)?sh\b|releases/latest|/main/scripts/|setup_\d+\.x", commands))
+check("apt reads a fixed Debian snapshot, not the live archive",
+      bool(re.search(r"^ARG DEBIAN_SNAPSHOT=\d{8}T\d{6}Z$", DOCKERFILE, re.M))
+      and "snapshot.debian.org/archive/debian/${DEBIAN_SNAPSHOT}" in DOCKERFILE
+      and "snapshot.debian.org/archive/debian-security/${DEBIAN_SNAPSHOT}" in DOCKERFILE
+      and "deb.debian.org" not in DOCKERFILE)
+lock_pkgs = re.findall(r"^([A-Za-z0-9._-]+)==\S+ \\\n((?:    --hash=sha256:[0-9a-f]{64}(?: \\)?\n)+)", REQ_LOCK, re.M)
+named = [l.split("==")[0] for l in REQ_LOCK.splitlines() if re.match(r"^[A-Za-z0-9._-]+==", l)]
+check(f"every package in requirements.txt has a version and a sha256 ({len(lock_pkgs)} of {len(named)})",
+      len(lock_pkgs) == len(named) > 0)
+check("the lock pins pip itself, in place of an upgrade to the latest", "pip" in named)
+inventory = (REPO / "verify/fetch-inventory.yaml").read_text()
+wt = re.search(r"^  images/web-terminal/Dockerfile:\n((?:  - .*\n|    .*\n)+)", inventory, re.M)
+check("verify/fetch-inventory.yaml classes no line of the web-terminal Dockerfile live",
+      bool(wt) and "class: live" not in wt.group(1) and "class: pinned" in wt.group(1))
 
 print("== our own manifests must survive our own enforced policies ==")
 # Arming flips require-resource-limits and restrict-image-registries to Enforce. Any container we ship
