@@ -3119,6 +3119,25 @@ reads:
     - verify/playwright_browsers.py
     - verify/python.lock
   test_feedback_admin_1162_record.py:
+    - CLAUDE.md
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/chart_fetch.py
+    - verify/charts.lock
+    - verify/charts_lock.py
+    - verify/feedback_admin_1162.py
+    - verify/gh_comments.py
     - verify/test_feedback_admin_1162_live.py
   test_feedback_links.py:
     - gitops/ai-layer/web/active-skin.js
