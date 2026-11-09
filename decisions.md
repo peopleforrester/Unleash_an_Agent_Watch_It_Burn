@@ -47833,7 +47833,9 @@ agent prompt, 768 witch names, and 1,130 distinct prompts and replies from 1,099
 watch-it-burn-private. It caught 111 of the 155-text abuse set. guard-proxy's 40 terms today catch 37. It adds 1.1 ms
 median and 11.4 ms p99 to a `/chat` turn whose median is 3.8 s. It runs in Python, Go, OTTL and CEL, so one list covers
 `/chat` input (refused before the model) and reply (masked), the desk (#1268), `deploy_app` and the deployments page
-(#1269), the traces before Tempo and Datadog, and object names at admission.
+(#1269), the traces before Tempo and Datadog, and object names at admission. guard-proxy-agenticburn#78 already
+refuses and masks on `/chat` with the 40 terms (a7a5a36, awaiting the repin); its list and folding move to the
+spike's in a guard-proxy follow-up. guard-proxy reads `PROFANITY_LIST`, so the longer list alone needs no repin.
 
 **A classifier is added on the /chat prompt only: Bedrock Guardrails, Standard tier.** HATE, INSULTS and SEXUAL are
 at MEDIUM and VIOLENCE at LOW; MISCONDUCT and PROMPT_ATTACK are off. It flagged none of the 1,591 stage texts a
@@ -47860,8 +47862,9 @@ replies as INSULTS.
 **Not yet run on a cluster.** The KubeCon probe's community and admin runs with the floor deployed and every
 guardrail off at the start: `python3 verify/kubecon_probe.py community attackme.burritobot.co --context
 watch-it-burn-community --switch-context watch-it-burn-private ...` and `python3 verify/kubecon_probe.py admin
-burritobot-private.burritobot.co --context watch-it-burn-private ...`. The floor reaches no cluster until
-guard-proxy-agenticburn#78, #1268 and #1269 land. Offline, the term floor touches none of the 4,121 string literals of
+burritobot-private.burritobot.co --context watch-it-burn-private ...`. The floor reaches no cluster until Michael
+repins guard-proxy to a7a5a36 (guard-proxy-agenticburn#78, closed 2026-11-09: the `/chat` refusal and reply mask, on
+the 40 terms) and #1268 and #1269 land. Offline, the term floor touches none of the 4,121 string literals of
 the two probes, `topic_cases`, `challenge_traces` and the stage's servers, so no prompt or judge marker is masked.
 `verify/test_coc_floor_spike.py` holds the term floor's half on every change. It reads `/kubecon`'s page, not every
 page, and not `verify/kubecon_probe.py`. The chat page names that script, the scope map would then count the test as
