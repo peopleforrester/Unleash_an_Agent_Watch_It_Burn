@@ -45857,3 +45857,70 @@ after promotion; it is copy, and `test_kubecon_seg4_flow.py` holds it.
 **Tests run.** `python3 verify/test_ros_seg4_flow.py` and `python3 verify/test_kubecon_seg4_flow.py`, each exit 0,
 and the prose gate. The scoped Test and E2E commands are left to validation, which runs the tests that read the
 changed files. No dependency was added.
+
+## 2026-11-09 · #1243 · run 19496 · #1162's Feedback button opens the talk form on the live public bot
+
+Hecaton run 19496, at staging `762de799`, read #1162's live criterion on `watch-it-burn-community` and on both public
+hosts, 11:46Z to 11:48Z. Everything was read only: nothing on the cluster changed, no pod was deleted, and the
+presenter terminal login was not read or touched. No repo file other than decisions.md changed.
+
+**Repo side still holds, against `origin/staging`.** `event.js`, both facilitation files and the two tests are the
+same on the branch as on staging (`git diff --quiet HEAD origin/staging` on those paths).
+
+- `gitops/ai-layer/web/event.js` line 27: `feedbackUrl: "https://feedback.burritobot.co/?source=burritobot"`; its
+  line 8 comment says the button goes there VERBATIM with no cluster or user appended, and no comment says third
+  party.
+- `facilitation/kubecon-na-2026-phone-check.md`: the Feedback opens column names the form at
+  `feedback.burritobot.co/?source=burritobot`; "Submit the form, then the Sessionize link" has its submit-once table
+  (thanks page, its Sessionize link for session 1249553, the `/admin` source `burritobot` read); the Sessionize check
+  sits below it and now reads the thanks page's link.
+- `facilitation/kubecon-na-2026-run-of-show.md` segment 6: the one-line feedback ask on the take-home slide's QR, which
+  opens `https://feedback.burritobot.co/?source=deck` (line 2014).
+- `python3 verify/test_audience_event.py`: `All audience event checks passed.`, exit 0.
+  `python3 verify/test_audience_page_e2e.py`: `All audience page E2E checks passed.`, exit 0.
+
+**Argo CD and the console's ConfigMap, 11:46:49Z.** Every call named `--context watch-it-burn-community`.
+
+    $ kubectl --context watch-it-burn-community -n argocd get application ai-layer \
+        -o jsonpath='{.status.sync.status} {.status.health.status} {.status.sync.revision} {.spec.source.targetRevision}{.spec.sources[*].targetRevision}{"\n"}'
+    Synced Healthy 762de799fedf7925cee07f319f6515d75d21f773 staging
+    $ git merge-base --is-ancestor 603660fa 762de799 && echo "762de799 contains 603660fa"
+    762de799 contains 603660fa
+    $ kubectl --context watch-it-burn-community -n agent get deploy console \
+        -o custom-columns='NAME:.metadata.name,CM:.spec.template.spec.volumes[*].configMap.name'
+    console                      console-src-985kgch4t9,console-conf-5b228d4h6g
+    $ kubectl --context watch-it-burn-community -n agent get cm console-src-985kgch4t9 \
+        -o jsonpath='{.data.event\.js}' | grep -n feedbackUrl
+    8:// When feedbackUrl is set, the button goes there VERBATIM. No cluster or user is appended: a talk's room
+    27:  feedbackUrl: "https://feedback.burritobot.co/?source=burritobot",
+
+The console pod, `console-8dd799cc9-4drcc`, started 2026-11-09T05:59:28Z and runs on that hashed ConfigMap, so the
+#252 roll happened with no hand-deleted pod and there was no cause to find.
+
+**The served `event.js`, 11:47:21Z.**
+
+    $ curl -s https://attackme.burritobot.co/event.js | grep -n feedbackUrl
+    8:// When feedbackUrl is set, the button goes there VERBATIM. No cluster or user is appended: a talk's room
+    27:  feedbackUrl: "https://feedback.burritobot.co/?source=burritobot",
+    $ curl -s https://attackme.agenticburn.com/event.js | grep -n feedbackUrl
+    8:// When feedbackUrl is set, the button goes there VERBATIM. No cluster or user is appended: a talk's room
+    27:  feedbackUrl: "https://feedback.burritobot.co/?source=burritobot",
+
+Both hosts served byte-identical `event.js` and `burritbot.html` (73754 bytes), and each matched the committed file
+(`cmp`). `curl https://feedback.burritobot.co/?source=burritobot` answered 200.
+
+**The storefront's own init on the served files.** A throwaway script outside the repo cut the
+`(function init(){...})();` block from each host's served `burritbot.html`, ran it in node with
+`verify/test_audience_page_e2e.py`'s own HARNESS and the served `event.js`, with the page opened as
+`?cluster=watch-it-burn-community&user=a%40b.example` so an appended cluster or user would show:
+
+    attackme.burritobot.co: href=https://feedback.burritobot.co/?source=burritobot exact=True cluster=False user=False
+    attackme.agenticburn.com: href=https://feedback.burritobot.co/?source=burritobot exact=True cluster=False user=False
+
+**Left as it is.** #1241's draft, a live test of this same read (`verify/test_audience_feedback_live.py`), is on
+`origin/agent/1241-19489` and not in staging; this issue changes only decisions.md, so it was not ported.
+
+**Not yet run on a cluster.** Nothing; the read above is the issue's live check. The phone check's tap on a real phone
+stays with the phone-check checklist.
+
+**Tests run.** The two tests above and the prose gate. No dependency was added.
