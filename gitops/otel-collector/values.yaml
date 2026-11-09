@@ -492,8 +492,10 @@ config:
     # stage's 5,198 texts matches (the spike's measurement), HC-666's ticket among them. Go runs it in about 5 ms on a
     # 2,480-character reply.
     #
-    # Generated: `python3 verify/coc_mask_cases.py` prints the replace statement from the spike's list.
-    # verify/test_collector_coc_mask.py holds it equal to that and holds the placement; the tier test
+    # Generated: `python3 verify/coc_pattern_copies.py write` rewrites the pattern here and in the admission policy
+    # (gitops/namespaces/code-of-conduct-names.yaml) from the spike's list, and verify/test_coc_pattern_copies.py
+    # fails until every copy is the floor's (#1289). verify/test_collector_coc_mask.py holds the replace statement
+    # equal to `python3 verify/coc_mask_cases.py`'s and holds the placement; the tier test
     # verify/test_collector_coc_mask_e2e.py runs it through the pinned otelcol-contrib.
     transform/coc_mask:
       error_mode: ignore
