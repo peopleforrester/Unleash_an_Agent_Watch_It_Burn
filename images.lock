@@ -125,6 +125,11 @@ ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor-operator:v1.7.4-
 ghcr.io/peopleforrester/watch-it-burn:kyverno-v1.19.1-pr17085@sha256:6889b4142537ae9aee135c5c8a156cfcb5b100835a543306bf3c086a55bf3880 sha256:6889b4142537ae9aee135c5c8a156cfcb5b100835a543306bf3c086a55bf3880 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/kyverno-counter-fix 2026-11-09
 ghcr.io/peopleforrester/watch-it-burn:kyverno-reports-controller-v1.19.1-pr17085@sha256:90dac88c86402a7d03d6750f05eb4e51f344e5160abdc79a42bdd6b75960d8a3 sha256:90dac88c86402a7d03d6750f05eb4e51f344e5160abdc79a42bdd6b75960d8a3 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/kyverno-counter-fix 2026-11-09
 ghcr.io/peopleforrester/watch-it-burn:kyverno-background-controller-v1.19.1-pr17085@sha256:89d0d81502deb1226d88a192b1da68a868227a313b7d50f5c3e1b09ff24cd0c8 sha256:89d0d81502deb1226d88a192b1da68a868227a313b7d50f5c3e1b09ff24cd0c8 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/kyverno-counter-fix 2026-11-09
+# kagent's Go agent runtime runs v0.10.1 with its MCP client sending the active span's trace context (#1222, question
+# 1138): the image images/kagent-mcp-traceparent/build.sh builds from this checkout with crane 0.22.1 and Go 1.27.1 on
+# top of the ghcr.io/kagent-dev/kagent/golang-adk:0.10.1 row below, computed on 2026-11-09 by two clean builds that
+# gave the same digest, before its push. build-kagent-mcp-traceparent.yml copies it to its tag only at this digest.
+ghcr.io/peopleforrester/watch-it-burn:golang-adk-0.10.1-mcptrace@sha256:59bc5777ae74609446fde57324f4e33e606c819dd32fffc543243c0e7940f6c5 sha256:59bc5777ae74609446fde57324f4e33e606c819dd32fffc543243c0e7940f6c5 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/kagent-mcp-traceparent 2026-11-09
 reg.kyverno.io/kyverno/kyvernopre:v1.19.1 sha256:c25c47461f06f2845a48c319ae86fbbc1730a7b9ed5b701889c9dc1f9ee94b09 upstream:https://github.com/kyverno/kyverno 2026-11-04
 reg.kyverno.io/kyverno/kyverno:v1.19.1 sha256:b31d8511ae5fd6010e2a01ea72ebae08eb82fa51d91af14a1d9fe989949b4edb upstream:https://github.com/kyverno/kyverno 2026-11-04
 reg.kyverno.io/kyverno/background-controller:v1.19.1 sha256:8f1e9143373a27578cafc2d28d2c66ba0926c63b4c77e63de8d2fdd4a122859f upstream:https://github.com/kyverno/kyverno 2026-11-04

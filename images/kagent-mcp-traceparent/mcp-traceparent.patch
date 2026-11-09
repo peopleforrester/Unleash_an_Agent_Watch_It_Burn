@@ -1,0 +1,274 @@
+diff --git a/go/adk/pkg/mcp/registry.go b/go/adk/pkg/mcp/registry.go
+index 151a20f1553fb0a1b4903f8bbe0a3839408159ff..423f19d62b8f02ef518edb5896292b81749dea4b 100644
+--- a/go/adk/pkg/mcp/registry.go
++++ b/go/adk/pkg/mcp/registry.go
+@@ -14,6 +14,9 @@ import (
+ 	"github.com/kagent-dev/kagent/go/adk/pkg/constants"
+ 	"github.com/kagent-dev/kagent/go/api/adk"
+ 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
++	"go.opentelemetry.io/otel"
++	"go.opentelemetry.io/otel/propagation"
++	"go.opentelemetry.io/otel/trace"
+ 	"google.golang.org/adk/v2/tool"
+ 	"google.golang.org/adk/v2/tool/mcptoolset"
+ )
+@@ -225,10 +228,16 @@ func createTransport(ctx context.Context, params mcpServerParams) (mcpsdk.Transp
+ 		baseTransport.TLSClientConfig = tlsConfig
+ 	}
+ 
+-	var httpTransport http.RoundTripper = baseTransport
++	// Innermost layer: inject the W3C trace context of the request's active span, the
++	// execute_tool span that makes the call, so the MCP server's spans join the invocation
++	// trace under it (kagent-dev/kagent#2550). This is the header-only form kagent-dev/kagent#2809
++	// names as its alternative to otelhttp.NewTransport: it records no client span of its own.
++	// It sits under headerRoundTripper, so the active span outranks a traceparent forwarded
++	// from the A2A request by allowedHeaders; with no active span the request goes as it came.
++	var httpTransport http.RoundTripper = &traceContextRoundTripper{base: baseTransport}
+ 	if len(params.Headers) > 0 || len(params.AllowedHeaders) > 0 || params.PropagateToken || params.HeaderProvider != nil {
+ 		httpTransport = &headerRoundTripper{
+-			base:           baseTransport,
++			base:           httpTransport,
+ 			headers:        params.Headers,
+ 			allowedHeaders: params.AllowedHeaders,
+ 			propagateToken: params.PropagateToken,
+@@ -257,6 +266,23 @@ func createTransport(ctx context.Context, params mcpServerParams) (mcpsdk.Transp
+ 	return mcpTransport, nil
+ }
+ 
++// traceContextRoundTripper injects the globally configured propagator's fields
++// (traceparent and tracestate, and baggage when the context carries members) for
++// the request's active span. A request whose context has no valid span is sent
++// unchanged, so a header set by an outer layer survives.
++type traceContextRoundTripper struct {
++	base http.RoundTripper
++}
++
++func (rt *traceContextRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
++	if !trace.SpanContextFromContext(req.Context()).IsValid() {
++		return rt.base.RoundTrip(req)
++	}
++	req = req.Clone(req.Context())
++	otel.GetTextMapPropagator().Inject(req.Context(), propagation.HeaderCarrier(req.Header))
++	return rt.base.RoundTrip(req)
++}
++
+ // headerRoundTripper wraps an http.RoundTripper to add custom headers to all
+ // requests. It supports four sources of headers, applied in this order so that
+ // higher-priority sources win on collision:
+diff --git a/go/adk/pkg/mcp/trace_context_test.go b/go/adk/pkg/mcp/trace_context_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..f61d8da9e1296a05befe9d754b331d6298010d57
+--- /dev/null
++++ b/go/adk/pkg/mcp/trace_context_test.go
+@@ -0,0 +1,211 @@
++package mcp
++
++import (
++	"bytes"
++	"context"
++	"fmt"
++	"io"
++	"net/http"
++	"net/http/httptest"
++	"sync"
++	"testing"
++
++	"github.com/a2aproject/a2a-go/a2asrv"
++	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
++	"go.opentelemetry.io/otel"
++	"go.opentelemetry.io/otel/propagation"
++	sdktrace "go.opentelemetry.io/otel/sdk/trace"
++	"go.opentelemetry.io/otel/sdk/trace/tracetest"
++)
++
++// A traceparent from another trace, as guard-proxy's hop would forward it through allowedHeaders.
++const forwardedTraceparent = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
++
++func useTestTracing(t *testing.T) (*sdktrace.TracerProvider, *tracetest.SpanRecorder) {
++	t.Helper()
++	recorder := tracetest.NewSpanRecorder()
++	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
++	prevProvider := otel.GetTracerProvider()
++	prevPropagator := otel.GetTextMapPropagator()
++	otel.SetTracerProvider(tp)
++	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
++	t.Cleanup(func() {
++		otel.SetTracerProvider(prevProvider)
++		otel.SetTextMapPropagator(prevPropagator)
++		_ = tp.Shutdown(context.Background())
++	})
++	return tp, recorder
++}
++
++// sendThrough sends one POST through the client createTransport builds for params and
++// returns the traceparent and X-Static headers the server received.
++func sendThrough(t *testing.T, ctx context.Context, params mcpServerParams) (traceparent, static string) {
++	t.Helper()
++	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		traceparent = r.Header.Get("traceparent")
++		static = r.Header.Get("X-Static")
++		w.WriteHeader(http.StatusOK)
++	}))
++	defer srv.Close()
++	params.URL = srv.URL
++	params.ServerType = "http"
++	transport, err := createTransport(context.Background(), params)
++	if err != nil {
++		t.Fatalf("createTransport: %v", err)
++	}
++	streamable, ok := transport.(*mcpsdk.StreamableClientTransport)
++	if !ok {
++		t.Fatalf("transport = %T, want *mcpsdk.StreamableClientTransport", transport)
++	}
++	req, err := http.NewRequestWithContext(ctx, http.MethodPost, srv.URL, nil)
++	if err != nil {
++		t.Fatal(err)
++	}
++	resp, err := streamable.HTTPClient.Do(req)
++	if err != nil {
++		t.Fatalf("request failed: %v", err)
++	}
++	_ = resp.Body.Close()
++	return traceparent, static
++}
++
++func TestCreateTransport_InjectsActiveSpan(t *testing.T) {
++	tp, _ := useTestTracing(t)
++	ctx, span := tp.Tracer("test").Start(context.Background(), "execute_tool")
++	defer span.End()
++
++	got, static := sendThrough(t, ctx, mcpServerParams{Headers: map[string]string{"X-Static": "yes"}})
++	sc := span.SpanContext()
++	want := fmt.Sprintf("00-%s-%s-01", sc.TraceID(), sc.SpanID())
++	if got != want {
++		t.Fatalf("traceparent %q, want the active span's %q", got, want)
++	}
++	if static != "yes" {
++		t.Fatalf("static header lost through the trace layer: %q", static)
++	}
++}
++
++func TestCreateTransport_InjectsWithoutHeaderLayer(t *testing.T) {
++	tp, _ := useTestTracing(t)
++	ctx, span := tp.Tracer("test").Start(context.Background(), "execute_tool")
++	defer span.End()
++
++	got, _ := sendThrough(t, ctx, mcpServerParams{})
++	sc := span.SpanContext()
++	if want := fmt.Sprintf("00-%s-%s-01", sc.TraceID(), sc.SpanID()); got != want {
++		t.Fatalf("traceparent %q, want %q on a server with no headers configured", got, want)
++	}
++}
++
++func TestCreateTransport_ActiveSpanOutranksForwardedTraceparent(t *testing.T) {
++	tp, _ := useTestTracing(t)
++	meta := a2asrv.NewRequestMeta(map[string][]string{"traceparent": {forwardedTraceparent}})
++	a2aCtx, _ := a2asrv.WithCallContext(context.Background(), meta)
++	ctx, span := tp.Tracer("test").Start(a2aCtx, "execute_tool")
++	defer span.End()
++
++	got, _ := sendThrough(t, ctx, mcpServerParams{AllowedHeaders: []string{"traceparent"}})
++	sc := span.SpanContext()
++	if want := fmt.Sprintf("00-%s-%s-01", sc.TraceID(), sc.SpanID()); got != want {
++		t.Fatalf("traceparent %q, want the active span's %q over the forwarded %q", got, want, forwardedTraceparent)
++	}
++}
++
++func TestCreateTransport_NoSpanKeepsForwardedTraceparent(t *testing.T) {
++	useTestTracing(t)
++	meta := a2asrv.NewRequestMeta(map[string][]string{"traceparent": {forwardedTraceparent}})
++	ctx, _ := a2asrv.WithCallContext(context.Background(), meta)
++
++	got, _ := sendThrough(t, ctx, mcpServerParams{AllowedHeaders: []string{"traceparent"}})
++	if got != forwardedTraceparent {
++		t.Fatalf("traceparent %q, want the forwarded %q when no span is active", got, forwardedTraceparent)
++	}
++}
++
++func TestCreateTransport_NoSpanNoTraceparent(t *testing.T) {
++	useTestTracing(t)
++	got, _ := sendThrough(t, context.Background(), mcpServerParams{Headers: map[string]string{"X-Static": "yes"}})
++	if got != "" {
++		t.Fatalf("traceparent %q sent with no active span and none forwarded", got)
++	}
++}
++
++func TestCreateTransport_RecordsNoSpan(t *testing.T) {
++	tp, recorder := useTestTracing(t)
++	ctx, span := tp.Tracer("test").Start(context.Background(), "execute_tool")
++	sendThrough(t, ctx, mcpServerParams{Headers: map[string]string{"X-Static": "yes"}})
++	span.End()
++
++	ended := recorder.Ended()
++	if len(ended) != 1 || ended[0].Name() != "execute_tool" {
++		names := make([]string, 0, len(ended))
++		for _, s := range ended {
++			names = append(names, s.Name())
++		}
++		t.Fatalf("spans recorded %v, want only the test's execute_tool: the trace layer records none", names)
++	}
++}
++
++// TestCallTool_CarriesExecuteToolSpan runs a real MCP session over the transport, the way
++// mcptoolset does: it connects with no span active, then calls a tool under an execute_tool
++// span. The tools/call POST must name that span as its parent; the initialize POST names none.
++func TestCallTool_CarriesExecuteToolSpan(t *testing.T) {
++	tp, _ := useTestTracing(t)
++
++	server := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "trace-test", Version: "v0"}, nil)
++	type args struct{}
++	mcpsdk.AddTool(server, &mcpsdk.Tool{Name: "echo", Description: "echo"},
++		func(context.Context, *mcpsdk.CallToolRequest, args) (*mcpsdk.CallToolResult, any, error) {
++			return &mcpsdk.CallToolResult{Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: "ok"}}}, nil, nil
++		})
++	handler := mcpsdk.NewStreamableHTTPHandler(func(*http.Request) *mcpsdk.Server { return server }, nil)
++
++	var mu sync.Mutex
++	byMethod := map[string][]string{}
++	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		if r.Method == http.MethodPost {
++			body, _ := io.ReadAll(r.Body)
++			r.Body = io.NopCloser(bytes.NewReader(body))
++			for _, m := range []string{`"method":"initialize"`, `"method":"tools/call"`} {
++				if bytes.Contains(body, []byte(m)) {
++					mu.Lock()
++					byMethod[m] = append(byMethod[m], r.Header.Get("traceparent"))
++					mu.Unlock()
++				}
++			}
++		}
++		handler.ServeHTTP(w, r)
++	}))
++	defer srv.Close()
++
++	transport, err := createTransport(context.Background(), mcpServerParams{URL: srv.URL, ServerType: "http",
++		AllowedHeaders: []string{"traceparent"}})
++	if err != nil {
++		t.Fatalf("createTransport: %v", err)
++	}
++	client := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "trace-test-client", Version: "v0"}, nil)
++	session, err := client.Connect(context.Background(), transport, nil)
++	if err != nil {
++		t.Fatalf("connect: %v", err)
++	}
++	defer session.Close()
++
++	ctx, span := tp.Tracer("test").Start(context.Background(), "execute_tool echo")
++	if _, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: "echo", Arguments: map[string]any{}}); err != nil {
++		t.Fatalf("CallTool: %v", err)
++	}
++	span.End()
++
++	mu.Lock()
++	defer mu.Unlock()
++	sc := span.SpanContext()
++	want := fmt.Sprintf("00-%s-%s-01", sc.TraceID(), sc.SpanID())
++	calls := byMethod[`"method":"tools/call"`]
++	if len(calls) != 1 || calls[0] != want {
++		t.Fatalf("tools/call traceparents %q, want one %q", calls, want)
++	}
++	inits := byMethod[`"method":"initialize"`]
++	if len(inits) != 1 || inits[0] != "" {
++		t.Fatalf("initialize traceparents %q, want one empty: no span was active", inits)
++	}
++}
