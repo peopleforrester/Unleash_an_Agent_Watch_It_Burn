@@ -43666,3 +43666,45 @@ both inside the new Challenge 3's numbers, which only segment 4's own text may c
 spec line, now name the slide by its title. Rerun alone, each passed: the fetch inventory checks, the deck-shift
 checks and `verify/test_llm_guard_burst.py`. No live check was rerun, because the manifest change is unchanged
 since run 19288's replay, and no dependency was added.
+
+## 2026-11-09 · #1195 · run 19367 · A staging push is scoped by its newest green staging ancestor, not by the tip before it
+
+**Decision.** For a commit already in staging, `verify/ci-base-sha.sh` sets `HECATON_BASE_SHA` to the newest
+first-parent ancestor of the commit, the commit itself left out, whose verify-suites run on staging finished success.
+Since #1189 it used `github.event.before`, the tip before the push. Since #1113 a newer staging push cancels the run
+before it, so a cancelled push's changes were in no run's scope: `2800e073`'s own changes were in the cancelled run
+42480132771, and staging went green at `d7a1b91e` without running them. Scoped from the last green run, every change
+since it, a cancelled or failed push's included, is in the next run's scope. An agent branch past staging still gets
+the merge base and never calls the API.
+
+**How.** The base step reads `repos/<repo>/actions/workflows/verify-suites.yml/runs?branch=staging&event=push&status=success&per_page=100`
+with `gh api` and the job's own token (`GH_TOKEN: ${{ github.token }}` on the step, in place of `PUSH_BEFORE`). The
+script checks each run's conclusion, branch and event again before using it as a base. The workflow's permissions
+are now `contents: read` and `actions: read`. The e2e job's own block repeats `actions: read`, because a job's
+permissions replace the workflow's. When none of the newest 100 green runs is a first-parent ancestor (no green run
+yet, a force push past every one, or a root commit), `HECATON_BASE_SHA` is left unset and both suites run whole. A
+missing `GH_TOKEN` or `GITHUB_REPOSITORY`, a failed `gh api` call, or an answer without `workflow_runs` exits 1,
+naming which. Only the newest 100 are read: a staging that has gone 100 green runs without one on its first-parent
+line runs whole, which is the wider scope, never a narrower one.
+
+**The test.** `verify/test_verify_suites_workflow.py` runs the script in throwaway repositories with a stub `gh` first
+on PATH, which answers from a file the test writes and logs its arguments. In the cancelled-run case, staging is s1,
+then s2 (a push whose run was cancelled, adding `cancelled-push.txt`), then s3 (merging an agent branch), then s4, the
+tip being run. The API answer also holds runs that must never be the base: s4 in progress, s3 failed, s3 green on an
+agent branch, s2 green on another event, a green force-pushed commit, a green second parent and a green agent tip.
+The base must be s1, and `cancelled-push.txt` must be in the diff from that base to s4. Other cases: a rerun's own
+green run, the newest of two green ancestors, no green ancestor, no runs, a root commit, and the four failures above.
+The workflow checker fails on a base step without `GH_TOKEN`, with `PUSH_BEFORE` back, or a workflow or e2e job
+without `actions: read`. It printed "verify-suites.yml and ci-base-sha.sh hold" with no FAIL. With staging's
+`PUSH_BEFORE` script put back, 9 checks failed. With a mutation that took the tip before the push, 5 failed, the
+cancelled-run scope check among them ("the diff ... names ['s4']"). `test_fetch_inventory.py`,
+`test_workflow_artifact_cache.py`, `test_tf_plugin_cache.py`, `test_ci_chromium_libs.py` and `test_scope_tests.py`
+passed alone. No dependency was added.
+
+**Live check: no cluster.** The change is to the workflow and `verify/` files that no cluster runs. The script was run
+against the real Actions API from the staging tip `4dcf309c`, through a shim that hands `gh` this host's sign-in in
+place of a job token. It printed `HECATON_BASE_SHA=09f78672...`, the green run 42561866504, which gives 7 changed
+files against 3 from `373f5fa4`, the tip before. The same query found 87 green staging push runs, and the newest staging
+runs read 4dcf309c in progress, 09f78672 success, cdeaedfd failure and 3cf472df cancelled. With no token set it
+refused by name. The first staging push after promotion runs it with the job's own token. Its base step log line
+should name a green ancestor, and that is not yet seen on the runner.
