@@ -105,13 +105,15 @@ delivered session, and before any run that should open on an empty wall, from
 ./fleet.sh wall-reset
 ./fleet.sh wall-check --empty
 ./fleet.sh desk-reset
+./fleet.sh beacon-reset
+./fleet.sh start-check
 ```
 
 Then run `guards-off` on the private cluster's terminal, as above. `wall-reset`
 refuses, naming the cluster, while attackme's or burritobot-private's
 `/prompts` still holds a prompt, and restarts nothing. Otherwise it restarts
 the wall and waits until the wall reads both clusters and holds no prompt.
-`wall-check --empty` is the start-state check: it fails, with the count and when
+`wall-check --empty` is the wall's start-state check: it fails, with the count and when
 they arrived, while the wall holds any prompt, so a wall still showing what came
 before the reset reads as a FAIL here and not in the room. The same read by eye:
 `curl -s https://prompts.burritobot.co/api/prompts` shows `"prompts": []`. Then
@@ -119,6 +121,25 @@ reload the wall's tab, or open it now: a tab opened before the reset keeps its o
 cards and shows nothing new until the restarted wall's sequence number passes the
 one that tab last saw. A prompt sent
 after the reset shows within about 3 seconds.
+
+The last three clear the rest of what the room sees from the first attack on (#1144).
+`desk-reset` clears every deploy row on the one deployments page,
+`deployments.burritobot.co`, both clusters' alike, and must end
+`deployments.burritobot.co lists no deploy`. It keeps every filed ticket. The
+presenters may run `./fleet.sh desk-reset --tickets` instead, which also clears the
+filed tickets, the room's and the presenters' `HC-9xx`; it is their choice and off by
+default. Either way every built-in ticket, HC-666 included, stays. `beacon-reset`
+zeroes the shared beacon count (`beacon.burritobot.co/beacon/view`, the same count
+as `agenticburn.com/beacon/view`) and must end `the beacon view reads zero`. It needs
+the provisioning app's admin token, which it finds itself, in this order: an
+exported `WIB_ADMIN_TOKEN`, the `ADMIN_TOKEN` variable of the
+`watch-it-burn-provisioning` app on a host logged in to Railway (`railway login`), or
+`ADMIN_TOKEN` in `~/secrets/projects/watch-it-burn-provisioning.env`. It never prints
+the token, and the token goes in no file here. `start-check` is the start-state
+check for both: it reads each deployments page and the beacon view, posts nothing,
+and must pass, ending `every deployments page lists no deploy and the beacon view
+reads zero`. A FAIL names each page or count still holding something and the reset
+that clears it; run that reset and `start-check` again before the room arrives.
 
 **After the Go cutover (#738, #778), the reset is the same command and does more.** The Go
 guard-proxy keeps the counter, each session's spend and the runtime cost cap in a file on the
@@ -167,6 +188,7 @@ Since #1109 each call is judged in its own chat, and all four passed on 2026-11-
 | Deck (rounds-agenticburn commit) | | | |
 | Community bot reset first (`reset-bot` read `$0.0000 over 0 requests`?) | | | |
 | Prompt wall empty first (`wall-check --empty` passed?) | | | |
+| Deployments page and beacon count at zero first (`start-check` passed? `desk-reset --tickets` used?) | | | |
 | Challenge traces checked first (`challenge_traces.py` GREEN? FAILs filed as) | | | |
 | Whole slot (target 30:00) | | | |
 | Demo, segments 2 to 5 (target 22:00) | | | |
@@ -2529,7 +2551,8 @@ is merely slow rather than rebuilding:
   wall shows every roster cluster and holds no prompts". `wall-reset` refuses while
   either cluster's feed still holds a prompt and names the `reset-bot` to run. If the
   wall gets a prompt after this, run the three again on the day, before the room
-  arrives ("Run-through record" above).
+  arrives ("Run-through record" above). The two items below follow it each time:
+  `desk-reset`, then `beacon-reset` and `start-check`.
 - [ ] **Clear the one deployments page, after the seeds and the probe (#1144, #1159).**
   Both bots deploy onto one page, `deployments.burritobot.co`, the community cluster's
   desk (#1145): the probe's Jokers, the seeds' `c3-attack` Joker (labelled `private`)
@@ -2537,12 +2560,29 @@ is merely slow rather than rebuilding:
   `infra/terraform/fleet/`: `./fleet.sh desk-reset`. It clears every row on the one
   page, both clusters' alike, on the cluster holding attackme (a promoted standby once
   `backups.py` has promoted one), and keeps every ticket; `--tickets` also clears the
-  filed ones, the room's and the presenters' `HC-9xx`, and the fixed tickets, HC-666
-  among them, always stay. It runs inside the desk's own pod, the one place the desk
+  filed ones, the room's and the presenters' `HC-9xx`. That is the presenters' choice
+  and off by default, and the built-in tickets, HC-666 among them, always stay. It
+  runs inside the desk's own pod, the one place the desk
   answers a reset, so nobody on the public internet can clear the page. It must end
   `deployments.burritobot.co lists no deploy`, and
   `curl -s https://deployments.burritobot.co/deployments.json` then reads `[]`. It
   refuses the private cluster by name: its bot reads and reports on the public desk.
+- [ ] **Zero the beacon count and check the start state, after the desk (#1144, #1226, #1227).**
+  Every practice run's beacons stay on the room's count,
+  `beacon.burritobot.co/beacon/view`, until it is reset. Next to `wall-reset` and
+  `desk-reset`, before each run-through and before the delivered session, from
+  `infra/terraform/fleet/`: `./fleet.sh beacon-reset`, then `./fleet.sh start-check`.
+  `beacon-reset` must end `the beacon view reads zero`. It needs the provisioning
+  app's admin token and finds it itself: an exported `WIB_ADMIN_TOKEN`, else the
+  `ADMIN_TOKEN` variable of the `watch-it-burn-provisioning` app on a host logged in
+  to Railway (`railway login`), else `ADMIN_TOKEN` in
+  `~/secrets/projects/watch-it-burn-provisioning.env`. It never prints the token;
+  never write the token here or in any other file in the repo. With none of the three
+  it fails and names them. `start-check` reads every deployments page and the beacon
+  view, changes nothing, and must pass: it ends `every deployments page lists no
+  deploy and the beacon view reads zero` and exits 0. A FAIL names the page or count
+  still holding something and the reset that clears it; run that reset, then
+  `start-check` again, before the room arrives.
 
 ## Rollback on the day
 
