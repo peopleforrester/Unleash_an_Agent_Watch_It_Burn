@@ -50076,3 +50076,36 @@ Then, on each: the agent's GETs on agentgateway :3001 are answered 405 (`kubectl
 deploy/agentgateway -c agentgateway | grep 'http.method=GET'`), the agent's evil-mcp GETs on :3003 no longer end at 30
 seconds (`-c agentgateway-c7`), and `PRIVATE_CONTEXT=watch-it-burn-private COMMUNITY_CONTEXT=watch-it-burn-community
 python3 verify/test_coc_floor_probes_live.py` runs green on both. The next run on #1303 runs those three.
+
+## 2026-11-10 · #1306 · run 19827 · The kagent upstream report is drafted and reproduced; filing it waits on a person
+
+**What was asked.** Tell kagent upstream that a RemoteMCPServer timeout kills every streamable-HTTP MCP session after
+six timeouts, the cause #1303 found. Filing an issue on kagent-dev/kagent publishes, and a run publishes nothing, so
+this run drafted the report, checked it against kagent's latest release, reproduced it without a cluster, and asks
+whether to file it.
+
+**Still present upstream.** kagent v1.0.0 came out on 2026-11-09. Read from the source at v0.10.1 and v1.0.0:
+`go/adk/pkg/mcp/registry.go`, createTransport, still puts the timeout on the `http.Client` it hands to
+`StreamableClientTransport`; the RemoteMCPServer `timeout` still defaults to `30s` (v1alpha3 in v1.0.0); and go-sdk
+v1.8.0, which v1.0.0 pins, has the same retries-without-progress check in handleSSE as v1.6.1, so upgrading kagent
+does not end it. That goes into the report as "still present at v1.0.0, read from the source", not as measured.
+
+**Reproduced with go-sdk alone.** Run 19787's program put agentgateway in the path and was not committed. This one,
+`docs/research/2026-11-10-kagent-standalone-sse/main.go`, is a go-sdk streamable server behind `httptest` that never
+pushes, and a go-sdk client built as createTransport builds it, calling a tool once a second. On go-sdk v1.8.0 with a
+2s client timeout the first call failed at 19.0 s (19 passed, 6 failed); with `DisableStandaloneSSE` 25 of 25 passed;
+with no client timeout 25 of 25 passed. On v1.6.1, 20 passed and the first failed at 20.1 s; with
+`DisableStandaloneSSE`, 25 of 25. At kagent's default of 30s for 220 s, the first failure came at 187.4 s, the same 187
+seconds #1303 measured on watch-it-burn-private. Every failure read `standalone SSE stream: exceeded 5 retries without
+progress`.
+
+**The draft.** `upstream-issue.md` in that directory holds the title and the body: what happens, the versions, the
+lines in both projects, the cluster measurement from #1303, the reproduction with `main.go` inline, three fixes (bound
+each call with a context deadline instead of `http.Client.Timeout`; set `DisableStandaloneSSE`; expose `MaxRetries`,
+which only delays it) and the two workarounds. The command to file it, for whoever is told to:
+`gh issue create -R kagent-dev/kagent --title "RemoteMCPServer timeout ends every streamable-HTTP MCP session after
+six timeouts (standalone SSE stream)" --body-file docs/research/2026-11-10-kagent-standalone-sse/upstream-issue.md`.
+The two HTML comment lines at the top of the file can stay; GitHub does not render them.
+
+**Tests and live check.** The change is under `docs/` and in decisions.md, which no test reads and no cluster runs, so
+no live check; the prose gate passes. The reproduction ran as recorded above.
