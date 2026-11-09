@@ -50,8 +50,10 @@ rune2e = RUN_E2E.read_text()
 
 print("== yarn 4: the Backstage pin corepack resolves ==")
 package = json.loads((BACKSTAGE / "package.json").read_text())
-pm = re.fullmatch(r"yarn@(\d+)\.(\d+)\.(\d+)", package.get("packageManager", ""))
-check(f"package.json pins packageManager to an exact yarn ({package.get('packageManager')!r})", pm is not None)
+# The release's SHA-512 follows the version since #1167, so corepack checks its download; test_yarn_pins.py holds it.
+pm = re.fullmatch(r"yarn@(\d+)\.(\d+)\.(\d+)\+sha512\.[0-9a-f]{128}", package.get("packageManager", ""))
+check(f"package.json pins packageManager to an exact yarn and its hash ({package.get('packageManager')!r})",
+      pm is not None)
 version = ".".join(pm.groups()) if pm else ""
 check(f"the pinned yarn is yarn 4 ({version or 'none'})", bool(pm) and pm.group(1) == "4")
 
