@@ -904,7 +904,7 @@ sites:
     lines: 1
     class: pinned
     kind: terraform-provider
-    pin: .terraform.lock.hcl of the root it inits, its providers served from the artifact cache's mirror (tf_plugin_cache.py)
+    pin: 'the cluster root''s .terraform.lock.hcl, its providers served from the artifact cache''s mirror (tf_plugin_cache.py); its main.tf''s module versions, whose install tf_module_cache.py keeps in the artifact cache and seeds each later init from, with the network closed (#1247)'
     cached: true
   - match: .
     lines: 3
@@ -1230,7 +1230,7 @@ sites:
     lines: 1
     class: pinned
     kind: terraform-provider
-    pin: .terraform.lock.hcl of the root it inits, its providers served from the artifact cache's mirror (tf_plugin_cache.py)
+    pin: 'the cluster root''s .terraform.lock.hcl, its providers served from the artifact cache''s mirror (tf_plugin_cache.py); its main.tf''s module versions, whose install tf_module_cache.py keeps in the artifact cache and seeds each later init from, with the network closed (#1247)'
     cached: true
   verify/test_llm_bypass_live.py:
   - match: .
@@ -1423,7 +1423,7 @@ sites:
     lines: 1
     class: pinned
     kind: terraform-provider
-    pin: .terraform.lock.hcl of the root it inits, its providers served from the artifact cache's mirror (tf_plugin_cache.py)
+    pin: '.terraform.lock.hcl of the root it inits, its providers served from the artifact cache''s mirror (tf_plugin_cache.py); the cluster and network roots'' module versions in their main.tf, whose install tf_module_cache.py keeps in the artifact cache and seeds each later init from, with the network closed (#1247)'
     cached: true
   - match: .
     lines: 3
