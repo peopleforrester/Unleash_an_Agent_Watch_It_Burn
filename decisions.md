@@ -42087,3 +42087,59 @@ salsa dance moves." added to segment 1's section the section check fails. The fi
 
 **Tests run.** `python3 verify/test_replay_prompts.py`, green, and the prose gate. The whole Test and E2E commands are
 left to validation, which runs the tests that read the changed files.
+## 2026-11-09 · #1131 · run 19023 · OpenTofu's providers in plan-policy come from the host artifact cache's mirror too
+
+**What was asked.** #1119 served every terraform init's providers from a mirror in the host artifact cache, but the
+CLI config left registry.opentofu.org to `direct`, so the tofu half of `verify/test_plan_policy_e2e.py` (and so of
+`plan-policy.yml`) still downloaded hashicorp/aws on every job. The issue named two ways to vouch for tofu's zips: a
+lock recorded for registry.opentofu.org, or a check that OpenTofu's registry serves the zip SHA-256 a committed lock
+already records.
+
+**Why a lock of its own, not the existing locks.** The second way does not work. OpenTofu's registry serves its own
+builds of the hashicorp providers (`github.com/opentofu/terraform-provider-<type>`), not HashiCorp's zips. Asked on
+2026-11-09 for hashicorp/aws 6.71.0 linux_amd64, registry.opentofu.org named SHA-256 `fa881c39...` and
+registry.terraform.io named `cb57bbca...`, and none of the five hashicorp providers tofu needs had its OpenTofu SHA-256
+in any committed lock. Only datadog/datadog 3.91.0 matched, since both registries point at DataDog's own release.
+So `infra/policy/plan/opentofu/` holds a `versions.tf` pinning what tofu installs there (aws 6.71.0, cloudinit
+2.4.1, null 3.3.2, time 0.14.2, tls 4.4.2: on 2026-11-09 the newest version a committed infra/ lock pins for each,
+and between them every provider the fixtures and the two fleet roots need) and the `.terraform.lock.hcl` that
+`tofu providers lock -platform=linux_amd64` (tofu 1.13.2, the version `tools.yaml` pins) wrote for it, which records
+every platform's zh: hash and h1: hash. It is never planned or applied.
+
+**What changed.** `verify/tf_plugin_cache.py` mirrors both hosts. The CLI config's `filesystem_mirror` includes, and
+its `direct` excludes, `registry.terraform.io/*/*` and `registry.opentofu.org/*/*`, so a tofu provider the mirror
+lacks fails init by name and is never downloaded. `fill()` keys each provider by its full address, host included,
+so a registry.terraform.io lock's zh: hashes never vouch for an OpenTofu zip. Only a caller that runs tofu fills the
+OpenTofu half (`opentofu=True`, `prepare --opentofu`), so `iam-policy.yml`, `verify-suites.yml` and the terraform-only
+tier tests fetch no OpenTofu zip they would not use. With a prepared config, a tofu caller is refused before init
+when the mirror lacks an OpenTofu zip its lock pins, naming `prepare --opentofu`. `plan-policy.yml` runs
+`prepare --opentofu`, `test_plan_policy_e2e.py` asks for `opentofu=True`, and `plan-fleet.py` now prints each init's
+`- Installed` and `- Using` lines, so the e2e test fails any init, its own or plan-fleet's, that printed a signed
+(downloaded) provider rather than the mirror's `(unauthenticated)` one. `test_terraform_module_pins.py`, which treats
+every directory with a tracked `.tf` as a root, reads the OpenTofu lock's constraints under their own host.
+
+**The offline test.** `verify/test_tf_plugin_cache.py` shows, with the registry and the download stubbed, that an
+OpenTofu registry answer naming the SHA-256 that only the registry.terraform.io lock of the same provider and version
+records is refused with nothing fetched, indexed or linked; that a downloaded OpenTofu zip whose bytes the OpenTofu
+lock does not record, and an index entry naming a foreign SHA-256, are refused; that the zip the OpenTofu lock does
+vouch for is linked under registry.opentofu.org beside HashiCorp's own build; and, on the committed locks, that an
+answer naming HashiCorp's aws 6.71.0 build for registry.opentofu.org is refused. It also holds the committed lock to
+`versions.tf` and to every provider the fixtures and fleet roots need.
+
+**Run here, with no cluster.** The change touches no path the clusters run (`infra/policy/plan`, `verify/` and one
+workflow), so no live cluster check. The plan-policy e2e ran on this host with the pinned toolchain (`install-tools.py`
+into a scratch directory) after `python3 verify/tf_plugin_cache.py prepare --opentofu`, which took 7 s and looked up
+and verified each of the five OpenTofu zips against the new lock. `python3 verify/test_plan_policy_e2e.py`: 56 checks,
+`All plan-policy e2e checks passed.`, 2m54s. Every tofu install line read `(unauthenticated)`, none `(signed`, for
+example `cluster: - Installed hashicorp/aws v6.71.0 (unauthenticated)`. The first try failed only the two new
+plan-fleet checks, whose matcher missed the `<root>: ` prefix; fixed and run once more. A tofu init of
+`fixtures/violating` against a config whose mirror was empty failed with `provider registry.opentofu.org/hashicorp/aws
+was not found in any of the search locations`, the mirror its only location. `prepare --opentofu` rewrote the shared
+`terraformrc` in this host's artifact cache to the two-host config; a run on older code writes its own back, and
+terraform reads either the same way.
+
+**Tests run.** `test_tf_plugin_cache.py`, `test_plan_policy.py`, `test_fetch_inventory.py` (its count for
+`test_tf_plugin_cache.py` is 9 lines now, and two pins name the OpenTofu lock), `test_terraform_module_pins.py`,
+`test_event_tag.py`, `test_iam_policy_pipeline.py`, `test_iam_policy_coverage.py`, `test_iam_plan_render_cache.py`
+and `scope_tests.py check`, each green. The scoped Test and tools-tier commands are left to validation. No new
+package or dependency.
