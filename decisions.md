@@ -43861,3 +43861,11 @@ the pages take the new words through Argo CD once hecaton promotes the run.
 **Not yet run on a cluster.** `PRIVATE_CONTEXT=watch-it-burn-private python3 verify/test_two_hour_flow_live.py`, whose
 `c3-attack` beat reads this ask off lab.html, once the page is promoted; it reads the page from the repo, so it sends
 these words before then too, but its other beats switch the guards, which this run did not do.
+
+**Tests run in this run.** `challenges/LAB-TEXT.md` was regenerated with `bash verify/export-lab-text.sh`, as
+`verify/test_lab_text_export.py` requires after any lab.html change. Each of these printed its pass line, exit 0:
+`test_c3_prompt_copies.py`, `test_lab_text_export.py`, `test_replay_prompts.py`, `test_two_hour_flow_live_checks.py`,
+`test_kubecon_c3_recipe_block.py`, `test_968_live_run_owed.py`, `test_952_slide17_decision.py`,
+`test_old_2b_attack_retired.py`, `test_pantry_shut_record.py`, `test_stage_traces.py` and `test_scope_tests.py`. The
+prose gate printed `prose gate: pass`. The scoped `run-tests.sh` and `run-e2e-tools.sh` are left to hecaton's
+validation, as the run's governance asks; the report gives the one tier test run here. No dependency was added.
