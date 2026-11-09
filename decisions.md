@@ -46965,3 +46965,24 @@ does not need that. It is filed as a follow-up, to correct alongside the next ch
 **Tests run.** `python3 verify/test_guard_lease.py`, `test_fetch_inventory.py`, `test_kube_safety.py`,
 `test_lint.py` and `test_tests_own_inputs.py`, each exit 0. `python3 verify/scope_tests.py check` read 0 problems,
 and the prose gate passed. The scoped Test and E2E commands are left to validation.
+
+## 2026-11-09 · #1259 · run 19565 · a test holds guard-proxy's pin at or after the 2026-11-08 release-notes entry for #77
+
+**What changed.** `verify/test_guard_proxy_pin_1225.py` holds #1225's criterion: `gitops/ai-layer/guard-proxy` and
+`checksum/proxy-py` point at a guard-proxy-agenticburn main commit at or after a637e68, the commit of its 2026-11-08
+release-notes entry for guard-proxy-agenticburn#77. `test_guard_proxy_pin_1048.py` still holds main ancestry and the
+checksum, but its floor is dc78f1c, so a repin back to be88e1f with be88e1f's own checksum passed every test. The new
+test follows the #1048 test's shape and adds one thing: it reads guard-proxy's `docs/release-notes.md` on origin/main,
+finds the one entry headed `## 2026-11-08:` that names guard-proxy-agenticburn#77, and checks with `git log -S` that
+the commit that added its heading is a637e68, so the floor it holds is the one guard-proxy's own record names. It then
+runs its verdict on guard-proxy's history: a637e68 with its own checksum holds; be88e1f and 3c68224 (main's commit just
+before the entry) each fail as predating a637e68 with their own checksums; the current pin with be88e1f's checksum, or
+with none, fails on the checksum. The #1048 test is unchanged. `verify/scope-map.yaml` gains the new test's entry from
+`python3 verify/scope_tests.py write`. `bash verify/prior-drafts.sh 1259 origin/staging` printed NONE.
+
+**Tests run.** `python3 verify/test_guard_proxy_pin_1225.py` exit 0 at pin a637e68 with `5e0c8390277e`. As a mutant,
+a scratch commit moved the gitlink to be88e1f and `checksum/proxy-py` to be88e1f's `a32927a1851b`: the new test
+failed on the pin check (exit 1) and `test_guard_proxy_pin_1048.py` passed, the gap #1259 names; the commit was reset
+away. `python3 verify/test_scope_tests.py` printed ALL PASS. The scoped Test and E2E commands are left to validation.
+
+**Live check skipped.** The change touches only files under `verify/` that no cluster runs, and decisions.md.
