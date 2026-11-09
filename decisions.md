@@ -46626,8 +46626,7 @@ beacon-reset: done; the beacon view reads zero
 start-check: every deployments page lists no deploy and the beacon view reads zero
 ```
 
-Each exited 0. `beacon-reset` resolved the admin token through the Railway CLI (`resolve_admin_token`), which a
-dispatched run cannot reach (#1239); no token was printed. `https://agenticburn.com/beacon/view` also read
+Each exited 0. `beacon-reset` resolved the admin token through the Railway CLI (`resolve_admin_token`), which a dispatched run could not reach before #1239's Secrets Manager route; no token was printed. `https://agenticburn.com/beacon/view` also read
 `data-count="0"`. #1229's earlier run left beacon-reset red for want of the token; all three now pass back to back.
 
 ## 2026-11-09 · #760 · the challenge trace check, live (by hand)
