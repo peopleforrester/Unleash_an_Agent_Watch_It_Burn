@@ -45707,3 +45707,75 @@ Night Before's `beacon-reset` and `start-check` failed its check alone; deleting
 the block check alone. `python3 verify/test_scope_tests.py`: ALL PASS. The prose gate: pass. The scoped Test and E2E
 commands are left to hecaton's validation. No live check: the change touches only a test under `verify/` that no
 cluster runs, and decisions.md. No dependency was added.
+## 2026-11-09 · #1236 · run 19483 · require-resource-limits judges KubeArmor's workloads at their Pods, so the snitch Job is admitted at Deny
+
+**What was wrong.** On watch-it-burn-private the admin profile arms `require-resource-limits` as Deny. The KubeArmor
+operator builds its per-node snitch Job, the enforcer DaemonSet, the relay and the controller with no limits, and
+KubeArmorConfig has no field to give them any. #1081's LimitRange `kubearmor-default-limits` fills limits into Pods,
+but Kyverno's autogen rule (`status.autogen.configs.defaults`) judges the Job's pod template, so the Job was refused
+before any Pod existed. The snitch writes the `kubearmor.io/*` labels the enforcer DaemonSet selects on, so a new node
+got no enforcer (2026-11-08, #1042, run 18828).
+
+**The fix: the policy's exclusion, not the snitch's limits.** The operator offers no way to set the snitch's limits, so
+the policy gains one matchCondition, `kubearmor-workloads-judged-at-their-pods`:
+`!(request.namespace == 'kubearmor' && request.kind.kind != 'Pod')`. A Job, CronJob, DaemonSet, Deployment, ReplicaSet
+or StatefulSet in the kubearmor namespace is skipped, and every Pod there is still judged, with the limits the
+LimitRange fills in. Nothing outside the namespace changes: Beat 1's limit-less Deployment in an attendee namespace still
+fails at the Deployment, and autogen copies the condition into both generated rules (read back live, below). A
+namespaceSelector that took the namespace out whole was not used, since that would stop judging the Pods too. The
+armed root's kustomize patch replaces only `/spec/validationActions`, so the condition stays in place at Deny. The
+LimitRange's header now says the two halves only work together.
+
+**Tests.** `verify/test_kubearmor_snitch_admission.py` (offline, new) holds the condition's exact text, that it is the
+policy's only matchCondition, that the policy is still written against Pods with no namespaceSelector and with autogen
+on, that the LimitRange gives cpu and memory defaults in the namespace the condition names, and that arming patches
+only validationActions. `verify/test_kyverno_cel_policies.py` (tools tier) runs the policy through the Kyverno CLI
+v1.19.1, the deployed engine: as the operator's ServiceAccount, a limit-less snitch Job, DaemonSet, Deployment and
+CronJob in kubearmor are skipped; a bare limit-less Pod there still fails (the CLI applies no LimitRange, so that is
+the Pod rule holding); a limit-less Job in attendee-001 and a Deployment in `kubearmor-not` still fail. With the
+condition removed, the offline test failed 4 checks and the CLI test failed 4 (the four skips), so both hold the fix.
+Run alone with the fix: both exit 0, every check PASS. `python3 verify/scope_tests.py write` added the new test's map
+entry, and `verify/test_scope_tests.py` passed. The whole Test and E2E commands were not run; validation runs the
+scoped ones.
+
+**Live check on watch-it-burn-private (2026-11-09, 11:27Z to 11:29Z, under the guard lock).** Script
+`/var/lib/hecaton/runs/19483/live/snitch-check.sh`, log `/var/lib/hecaton/runs/19483/live/snitch-check.log`, held by
+`verify/guard_lease.py hold --context watch-it-burn-private`. One node, `ip-10-0-90-97`, policy at `["Deny"]` with no
+matchConditions, the hand-set labels of 2026-11-08 on the node.
+
+    BEFORE fix, dry-run limit-less Job in kubearmor: ... denied the request: Policy require-resource-limits failed
+    AFTER fix, dry-run limit-less Job in kubearmor: job.batch/snitch-1236-dryrun created (server dry run)
+    AFTER fix, dry-run limit-less Job in default:   ... denied the request: Policy require-resource-limits failed
+    autogen defaults matchConditions: [{"expression":"!(request.namespace == 'kubearmor' && request.kind.kind != 'Pod')", ...}]
+
+The fix was the branch's matchCondition, added to the live object by `kubectl patch`. Then every `kubearmor.io/*` label
+came off the node: the enforcer DaemonSet read DESIRED 0 and its pod terminated, as on a new node. The operator pod was
+deleted, so its node informer ran `OnAdd` for the node, the path a new node takes. 34 seconds later:
+
+    Installing snitch on node ip-10-0-90-97.us-west-2.compute.internal
+    Snitch was installed on node ip-10-0-90-97.us-west-2.compute.internal
+    jobs: kubearmor-snitch-s6lg7   Complete   1/1
+    label managers: snitch 2026-11-09T11:28:11Z
+    kubearmor labels after: apparmorfs=no btf=yes enforcer=bpf nri-socket=var_run_nri_nri.sock oci-hooks=no
+      kubearmor.io/rand=678k runtime=containerd seccomp=yes securityfs=yes socket=run_containerd_containerd.sock
+    pods: kubearmor-bpf-containerd-98c2c-s77md 1/1 Running
+
+So the snitch Job was admitted at Deny and the node got its labels, written by the snitch's own field manager, and an
+enforcer pod, with no hand step. The labels match the hand-set ones of 2026-11-08, plus the snitch's per-node `rand`.
+With its new ReplicaSet admitted, the operator also rolled the controller (`kubearmor-controller-86b79cf949`), on the
+same image and the same DD_SERVICE and DD_ENV as the ReplicaSet it replaced. The relay was unchanged.
+
+**Left on the cluster.** The matchCondition was removed again (`restored, dry-run limit-less Job in kubearmor: ...
+denied`, matchConditions empty, action `["Deny"]`, Argo CD's kyverno-policies `Synced Healthy`), so the policy is as
+found until Argo CD syncs it from staging. The node keeps the labels the snitch wrote, which equal the ones it had, and
+runs a new enforcer pod, a new operator pod and a new controller pod. No KubeArmorPolicy was applied or removed, and no
+guard or other policy was touched. The guard lock was released.
+
+**Not yet run on a cluster.** The fix arriving from git: once hecaton promotes this and Argo CD syncs
+kyverno-policies, `kubectl --context watch-it-burn-private get validatingpolicy require-resource-limits -o
+jsonpath='{.spec.matchConditions}'` should read the condition, and the next node roll or replacement on private should
+log `Snitch was installed` with no hand label. The admin KubeCon probe's Challenge 2 beat was not rerun here; the
+enforcer pod is new, and run 18828 saw a five-minute-old enforcer not yet hold a policy on containers that predated it,
+so the Night Before probe on private is the check of that beat.
+
+No dependency was added.
