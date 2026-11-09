@@ -87,11 +87,11 @@ variables, and set the expiry to 2026-11-13. Put the dashboard id, token and URL
 `--check` can find them.
 
 The QR code for the slide, with the same settings as the audience QR (`scripts/audience-qr.py`, segno 1.6.6 pinned
-in decisions.md):
+in decisions.md). The segno environment of `verify/package_cache.py` installs the wheel `verify/python.lock` pins,
+from the host artifact cache and hash-checked:
 
 ```bash
-python3 -m venv /tmp/qr && /tmp/qr/bin/pip install segno==1.6.6
-/tmp/qr/bin/python -c 'import json,segno; u=json.load(open("infra/datadog-room/share.json"))["public_url"]; segno.make(u, error="m", micro=False).save("facilitation/kubecon-na-2026-room-view-qr.svg", scale=10, border=4, dark="#000000", light="#ffffff", title=u)'
+python3 verify/package_cache.py run segno -- python -c 'import json,segno; u=json.load(open("infra/datadog-room/share.json"))["public_url"]; segno.make(u, error="m", micro=False).save("facilitation/kubecon-na-2026-room-view-qr.svg", scale=10, border=4, dark="#000000", light="#ffffff", title=u)'
 ```
 
 ## Checked live

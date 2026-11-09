@@ -1,10 +1,13 @@
 # ABOUTME: verify/package_cache.py serves python.lock's wheels from the host artifact cache and installs them offline
-# ABOUTME: with --require-hashes, and every Python and Node install in verify/, scripts/ and the CI jobs goes through it.
+# ABOUTME: with --require-hashes, and every Python and Node install in verify/, scripts/, infra/ and CI goes through it.
 """Offline, with uv stubbed and the fetcher counted (#1121). What it holds:
 
 - verify/python.lock parses, locks exactly the environments ENVS names, pins each one's own requirements at the
   versions ENVS asks for, and is in the form `write` renders. Each caller's pin is the lock's: playwright_browsers'
-  PLAYWRIGHT, the workshop-mcp image's mcp and pyyaml on its Python, the llm-guard tests' llm-guard, and segno.
+  PLAYWRIGHT, the workshop-mcp image's mcp and pyyaml on its Python, the llm-guard tests' llm-guard, segno, and
+  infra/policy/plan/tools.yaml's Checkov and moto on plan-policy.yml's Python.
+- infra/policy/plan/install-tools.py installs each of tools.yaml's Python tools by package_cache.install() into a fresh
+  venv with pip (the plan-policy job has no uv), and refuses a tools.yaml pin the lock does not hold (#1185).
 - best_wheel() picks the wheel a CPython prefers on manylinux x86_64, and none it cannot install.
 - wheelhouse(): a miss is fetched once per wheel and linked under its file name, with a requirements.txt that pins each
   by `--hash=sha256:`; a warm fill makes no fetch and leaves the fetch log as it was; a cached wheel whose bytes no
@@ -14,8 +17,9 @@
   wheelhouse, with uv's and pip's caches in the artifact root; a second call builds nothing, and a cached wheel that
   changed fails the call even with the environment built. An interpreter on another Python is refused before any
   install.
-- Nothing in verify/, scripts/ or .github/workflows/ installs a Python or Node package any other way: every `uv run
-  --with`, `pip install` and `npm`/`yarn` install found is one of the few named here, each with why.
+- Nothing in verify/, scripts/, infra/ or .github/workflows/ installs a Python or Node package any other way: every
+  `uv run --with`, `pip install` and `npm`/`yarn` install found is one of the few named here, each with why. The
+  scan's pattern is held against the install lines it must catch, install-tools.py's pip call before #1185 among them.
 - The Node install, run-e2e.sh's `corepack yarn install --immutable`, takes node_env() first, whose caches are in the
   artifact root with a checksum mismatch thrown, and the Backstage yarn.lock records a checksum for every package.
 
@@ -94,6 +98,21 @@ import topic_cases  # noqa: E402
 check(f"topic_cases.CLASSIFIER's llm_guard is the lock's ({llm_guard})", topic_cases.CLASSIFIER["llm_guard"] == llm_guard)
 check("the llm-guard environment takes torch's CPU build", pc.pinned("llm-guard", "torch") == "2.14.0+cpu")
 check("the segno environment pins segno 1.6.6, decisions.md's pin (#451)", pc.pinned("segno", "segno") == "1.6.6")
+PLAN = REPO / "infra/policy/plan"
+plan_tools = yaml.safe_load((PLAN / "tools.yaml").read_text(encoding="utf-8"))["python"]
+plan_wf = (REPO / ".github/workflows/plan-policy.yml").read_text(encoding="utf-8")
+plan_py = re.search(r"python-version: '(\d+\.\d+)'", plan_wf)
+check(f"tools.yaml names Python tools ({sorted(plan_tools)})", sorted(plan_tools) == ["checkov", "moto"])
+for name, spec in plan_tools.items():
+    env = spec.get("env")
+    check(f"tools.yaml's {name} names a lock environment ({env})", env in pc.ENVS and env in lock)
+    if env in lock:
+        check(f"the {env} environment pins tools.yaml's {name} {spec.get('version')} ({pc.pinned(env, name)})",
+              pc.pinned(env, name) == str(spec.get("version")))
+        check(f"the {env} environment is on plan-policy.yml's Python ({plan_py.group(1) if plan_py else '?'})",
+              bool(plan_py) and pc.ENVS[env].python == plan_py.group(1))
+check("the moto environment takes moto's server extra, which moto_server needs",
+      pc.ENVS["moto"].requires == ("moto[server]==5.2.4",))
 
 print("== best_wheel: the wheel the interpreter prefers ==")
 cases = [
@@ -291,6 +310,49 @@ finally:
     subprocess.run(["chmod", "-R", "u+w", str(SCRATCH)], check=False)
     subprocess.run(["rm", "-rf", str(SCRATCH)], check=False)
 
+print("== install-tools.py: each Python tool from its lock environment, hash-checked, into its own venv ==")
+import importlib.util  # noqa: E402
+import types  # noqa: E402
+
+spec_ = importlib.util.spec_from_file_location("install_tools", PLAN / "install-tools.py")
+install_tools = importlib.util.module_from_spec(spec_)
+spec_.loader.exec_module(install_tools)
+CALLS: list[tuple] = []
+real_install, real_subprocess = install_tools.package_cache.install, install_tools.subprocess
+install_tools.package_cache.install = lambda env, python, **kw: CALLS.append(("install", env, python, kw))
+install_tools.subprocess = types.SimpleNamespace(run=lambda cmd, **kw: CALLS.append(("run", cmd, kw)))
+tool_root = artifact_cache.scratch_dir("wib-install-tools-test-")
+try:
+    tool_bin = tool_root / "bin"
+    tool_bin.mkdir()
+    install_tools.python_tool("moto", plan_tools["moto"], tool_root, tool_bin)
+    venv = tool_root / "venvs" / "moto"
+    want = [("run", [sys.executable, "-m", "venv", "--clear", str(venv)], {"check": True}),
+            ("install", "moto", str(venv / "bin" / "python"), {"pip": True})]
+    check("it makes a fresh venv, then installs the moto environment into it with package_cache.install(pip=True)",
+          CALLS == want, str(CALLS))
+    link = tool_bin / "moto_server"
+    check("and links the tool's command into bin/",
+          link.is_symlink() and pathlib.Path(os.readlink(link)) == venv / "bin" / "moto_server")
+    CALLS.clear()
+    try:
+        install_tools.python_tool("moto", {**plan_tools["moto"], "version": "0.0.1"}, tool_root, tool_bin)
+        err = ""
+    except SystemExit as e:
+        err = str(e)
+    check("a tools.yaml version the lock does not pin is refused, naming both, before anything installs",
+          "tools.yaml pins 0.0.1" in err and f"pins {pc.pinned('moto', 'moto')}" in err and CALLS == [], err or str(CALLS))
+    try:
+        install_tools.python_tool("moto", {**plan_tools["moto"], "env": "nope"}, tool_root, tool_bin)
+        err = ""
+    except SystemExit as e:
+        err = str(e)
+    check("an environment the lock does not hold is refused by name", "python.lock has no environment 'nope'" in err
+          and CALLS == [], err)
+finally:
+    install_tools.package_cache.install, install_tools.subprocess = real_install, real_subprocess
+    subprocess.run(["rm", "-rf", str(tool_root)], check=False)
+
 print("== Node: yarn's caches in the artifact root, a mismatch thrown ==")
 ne = pc.node_env(pathlib.Path("/r"))
 check("node_env puts yarn's global cache and corepack's home in the artifact root, and throws on a mismatch",
@@ -323,10 +385,20 @@ rc_yml = yaml.safe_load((BACKSTAGE / ".yarnrc.yml").read_text(encoding="utf-8"))
 check("its .yarnrc.yml sets no checksum behavior, cache folder or global-cache switch of its own",
       not {"checksumBehavior", "cacheFolder", "enableGlobalCache", "globalFolder"} & set(rc_yml), str(sorted(rc_yml)))
 
-print("== nothing in verify/, scripts/ or .github/workflows/ installs a package another way ==")
-INSTALL = re.compile(r'\buv\s+run\b|"uv",\s*"run"|"--with",|\bpip3?\s+install\b|"pip",\s*"install"'
+print("== nothing in verify/, scripts/, infra/ or .github/workflows/ installs a package another way ==")
+# `"pip3?"\)?,\s*"install"` catches an argv that names pip by path, as install-tools.py's did before #1185.
+INSTALL = re.compile(r'\buv\s+run\b|"uv",\s*"run"|"--with",|\bpip3?\s+install\b|"pip3?"\)?,\s*"install"'
                      r'|\buv\s+pip\s+(?:install|sync)\b|\buvx\b|\bpipx\b|\bnpm\s+(?:ci|install|i)\b|\bnpx\b'
                      r'|\byarn\s+(?:add|install)\b|\bpnpm\b')
+MUST_CATCH = [
+    'subprocess.run([str(venv / "bin" / "pip"), "install", "--quiet", f"{spec[\'package\']}=={spec[\'version\']}"],',
+    'python3 -m venv /tmp/qr && /tmp/qr/bin/pip install segno==1.6.6',
+    '[sys.executable, "-m", "pip", "install", "checkov==3.3.30"]',
+    'uv run --with checkov==3.3.30 checkov', 'uvx checkov', 'npm ci', 'npx foo', 'yarn install',
+]
+missed = [ln for ln in MUST_CATCH if not INSTALL.search(ln)]
+check("the scan catches each install line it is for, install-tools.py's pip call before #1185 among them",
+      missed == [], str(missed))
 # Each file allowed to name one, and why. The rest of these files name none.
 ALLOWED = {
     "verify/package_cache.py": "the helper itself builds the hash-checked install commands",
@@ -345,7 +417,7 @@ ALLOWED = {
     "verify/test_wall_clock_burst_sister_e2e.py": "`uv run --frozen` on a sister repo's own uv.lock, whose hashes uv "
                                                   "checks, with UV_CACHE_DIR the artifact root's",
 }
-tracked = subprocess.run(["git", "-C", str(REPO), "ls-files", "verify", "scripts", ".github/workflows"],
+tracked = subprocess.run(["git", "-C", str(REPO), "ls-files", "verify", "scripts", "infra", ".github/workflows"],
                          capture_output=True, text=True, check=True).stdout.split()
 found: dict[str, list[str]] = {}
 for rel in tracked:
@@ -362,6 +434,8 @@ for rel in tracked:
 stray = {k: v for k, v in found.items() if k not in ALLOWED}
 check("no other file runs `uv run`, `uv run --with`, `pip install`, `uvx`, `pipx`, `npm`/`yarn` installs or `npx`",
       stray == {}, json.dumps(stray, indent=1))
+check(f"the scan reads infra/ ({sum(r.startswith('infra/') for r in tracked)} files), install-tools.py among them",
+      "infra/policy/plan/install-tools.py" in tracked)
 for rel in ("verify/prompts_wall_suite.py", "verify/test_wall_clock_burst_sister_e2e.py"):
     check(f"{rel} sets UV_CACHE_DIR to the artifact root's",
           'package_cache.installer_env()["UV_CACHE_DIR"]' in (REPO / rel).read_text(encoding="utf-8"))
