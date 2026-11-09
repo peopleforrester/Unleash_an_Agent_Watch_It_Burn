@@ -44589,3 +44589,73 @@ reproduces. Nothing was changed on either cluster.
 
 **Not yet run.** The workflow itself runs on GitHub once hecaton promotes this change to staging, where its runner's
 cache is cold, so it fills the cache from reg.kyverno.io and GitHub before it builds.
+## 2026-11-09 · #1034 · run 19401 · Live check on watch-it-burn-private: the enrolled weather feed reaches Open-Meteo only through the stage-2b waypoint
+
+**Where the issue stood.** `bash verify/prior-drafts.sh 1034 origin/staging` printed NONE. The issue names run
+17960's record on `origin/agent/980-17960` (commits 48521ebb and 3227d371), which never reached staging. Staging
+has since landed the waypoint's istiod rule (#1033, b61fb8d4) and the enrolment (#1032, 7fcc1013). With comment lines
+dropped, the draft's `egress-waypoint.yaml`, `agent-egress-fqdn.yaml` and weather-feed Deployment and Service are
+the same as staging's, and `git log 629c53ea..origin/staging` on the three stage-2 policies in
+`policies/network-policies/per-namespace/` is empty. So staging changed nothing that check exercised. The cluster
+did change: watch-it-burn-private now runs on one node, `ip-10-0-90-97`, created 2026-11-08 23:32 UTC, with Istio 1.30.4
+(istiod, ztunnel, istio-cni) and VPC CNI v1.23.2. Run 17960's record also split its rotation check across two
+namespaces. So this run did the whole check again in one scratch namespace, on staging's manifests, rather than port
+a record from a cluster that is no longer the same.
+
+**Live check, watch-it-burn-private, 2026-11-09 05:45 to 06:19 UTC, `--context watch-it-burn-private` on every
+call.** A scratch namespace, `check-1034-19401`, was created with no `istio.io/dataplane-mode` label. Into it went
+`agent-egress-allowlist`, `agent-allow-dns`, `agent-allow-intra-namespace`, the fix's `egress-waypoint.yaml` and
+`agent-egress-fqdn.yaml` (the istiod rule on TCP 15012 included), with only `namespace: agent` changed: eight
+objects. The waypoint came up Programmed and logged `connected to delta upstream XDS server ... id=1` at 05:45:23.
+Four pods ran the weather feed's pinned image (`workshop-mcp-mcp-1.29.1@sha256:9a26c18c...`): two labelled
+`app.kubernetes.io/name=weather-feed` and two `app.kubernetes.io/name=workshop-mcp`, one of each also labelled
+`istio.io/dataplane-mode=ambient` on the pod. The two labelled pods read `ambient.istio.io/redirection=enabled` and
+the other two had no annotation. Each opened TLS to four hosts and sent a GET:
+
+- enrolled feed: `api.open-meteo.com` and `geocoding-api.open-meteo.com` `HTTP/1.1 200 OK` (0.77 s, 0.70 s);
+  `example.com` and `www.wikipedia.org` timed out in the handshake. ztunnel logged both Open-Meteo connections with
+  `dst.service="api.open-meteo.com"` and `"geocoding-api.open-meteo.com"`, `dst.workload="egress-waypoint-54bbd666f8-s2h8x"`
+  and the waypoint's SPIFFE identity, and the other two as `error="io error: deadline has elapsed"` with no waypoint;
+- unenrolled feed: all four failed (timed out, or network unreachable), and ztunnel logged nothing for it. This is
+  the break that enrolment fixes;
+- unenrolled workshop-mcp stand-in: all four failed, so unenrolled it reaches no public host, as the decision not to
+  enrol workshop-mcp holds;
+- enrolled workshop-mcp stand-in: the two Open-Meteo hosts 200 through the waypoint, the other two timed out. This
+  is the route enrolling it would hand it.
+
+The two feed probes were then deleted, and the real `weather-feed` Deployment and Service, taken from
+`gitops/ai-layer/resources.yaml` with the namespace changed, went in with a `weather-feed-src` ConfigMap from
+`weather_feed.py`. Its pod `weather-feed-65d47f4cbd-k4v57` came up Ready, redirected, 0 restarts. From the
+unenrolled tool pod at 05:50:22, `/healthz` answered `{"ok": true}` and `/current?city=Portland` answered
+`"place": "Portland, Oregon, United States"`, 10.6 C, overcast, and ztunnel logged the feed's two Open-Meteo calls
+to the waypoint.
+
+istiod closed the waypoint's xDS stream at its age limit, and the waypoint logged `connected to delta upstream XDS
+server ... id=2` at 06:17:12, 31 min 49 s after the first connection, with no warning or error line in its log. After
+it, at 06:17:50, three `/current?city=Seattle` calls each answered `"Seattle, Washington, United States"`, 7.9 C, and
+the enrolled tool pod got 200 from both Open-Meteo hosts again and timeouts on the other two. ztunnel logged every one
+of those Open-Meteo connections to `egress-waypoint-54bbd666f8-s2h8x`.
+
+**test_mesh_live.py, with the enrolment synced.** Argo CD's `ai-layer` Application synced staging `925bed0d`
+at 05:45:15, during this check, and rolled the live feed to `weather-feed-66cd9db4d9-8pvw7` carrying
+`istio.io/dataplane-mode=ambient`. `CONTEXT=watch-it-burn-private python3 verify/test_mesh_live.py` at 05:50:41: 23
+checks passed and none failed, among them the feed carrying the label, redirected by istio-cni and Ready, evil-mcp-shim
+outside the mesh still reaching its `/healthz`, and ztunnel logging the console-to-guard-proxy connection with both
+SPIFFE identities. The two checks run 18817 found failing are the ones that pass now.
+
+**Left as found.** `kubectl delete ns check-1034-19401` completed at 06:19:36 and no namespace carries this run's
+`hecaton-run=19401` label. A snapshot before and after shows the istiod Deployment, the ztunnel and istio-cni-node
+DaemonSets and their pods, and `aws-node`, the same objects at the same generation and resourceVersion. Only istiod's
+three leader-election and IP-allocation ConfigMaps moved, its own bookkeeping, and `istio-ip-autoallocate` names
+nothing of the scratch namespace. In agent, the console, desk-relay, fake-ticket, web-terminal and weather-feed pods
+were replaced and desk-relay's Deployment and egress policy moved a generation, all by Argo CD's syncs of staging at
+05:44:57, 05:45:15 and 06:02:16; this run applied nothing to agent. `watch-it-burn-community` was not touched (it
+carries no Istio, #860). The manifests, probe script and outputs are under `/var/lib/hecaton/runs/19401/scratch/`.
+
+**Not yet run on a cluster.** `CONTEXT=watch-it-burn-private python3 verify/test_mesh_live.py`, which the issue
+names here until the enrolment synced, synced and ran above, so it is no longer owed. Still owed to #728's run: the
+fix itself applied to agent on a cluster, which this check stood in for in a scratch namespace.
+
+**Tests run.** This change touches only this file. The prose gate against origin/staging and the offline tests the
+scope selector names for it; the scoped Test and E2E commands are left to hecaton's validation. No dependency was
+added.
