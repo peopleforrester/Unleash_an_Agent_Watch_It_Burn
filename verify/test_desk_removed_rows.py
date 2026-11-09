@@ -247,8 +247,11 @@ CLIENTS = ("urllib.request", "http.client", "socket", "ssl", "subprocess", "requ
            "urllib3", "asyncio")
 check("ticket_site.py imports no client it could reach the API server with",
       not any(i == c or i.startswith(c + ".") for i in imported for c in CLIENTS), str(sorted(imported)))
+# codecs and unicodedata are the code-of-conduct mask's (#1269): it decodes its ROT13 term list and folds look-alike
+# letters, and neither reaches the network.
 check("and imports only the standard modules it needs to serve", {i.split(".")[0] for i in imported} <=
-      {"__future__", "hashlib", "html", "json", "logging", "os", "re", "secrets", "threading", "time", "urllib", "http"},
+      {"__future__", "codecs", "hashlib", "html", "json", "logging", "os", "re", "secrets", "threading", "time",
+       "unicodedata", "urllib", "http"},
       str(sorted(imported)))
 check("it names no API server, API path or token file",
       not re.search(r"KUBERNETES_SERVICE|kubernetes\.default|/api/v1|/apis/|serviceaccount/token|urlopen|"

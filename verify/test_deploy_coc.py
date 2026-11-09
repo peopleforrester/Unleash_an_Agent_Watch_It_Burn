@@ -218,7 +218,7 @@ FIELDS = {
     "a label value": lambda t: (json.dumps(deployment("tron", GOOD_IMAGE, labels={"team": word(t)})), ""),
     "an annotation": lambda t: (json.dumps(deployment("tron", GOOD_IMAGE, annotations={"note": f"for the {t} crew"})),
                                 ""),
-    "the image": lambda t: (json.dumps(deployment("tron", f"docker.io/{word(t)}/tron:1.0")), ""),
+    "the image": lambda t: (json.dumps(deployment("tron", f"ghcr.io/{word(t)}/tron:1.0")), ""),
     "an env value": lambda t: (json.dumps(deployment("tron", GOOD_IMAGE, env=[{"name": "GREETING", "value": t}])), ""),
     "args": lambda t: (json.dumps(deployment("tron", GOOD_IMAGE, args=["--motd", f"hello {t}"])), ""),
     "the command": lambda t: (json.dumps(deployment("tron", GOOD_IMAGE, command=["sh", "-c", f"echo {t}"])), ""),
@@ -340,7 +340,7 @@ for i, term in enumerate(TERMS):
     w = word(term)
     for remote in (False, True):
         for ok in (True, False):
-            row = landed({"name": f"joker-{w}", "ok": ok, "kind": f"Kind-{w}", "image": f"docker.io/{w}/app:{w}",
+            row = landed({"name": f"joker-{w}", "ok": ok, "kind": f"Kind-{w}", "image": f"ghcr.io/{w}/app:{w}",
                           "requested_by": f"{term} the Kelpie",
                           "detail": f'HTTP 403: admission webhook denied: Policy {w.lower()} failed: {term}'}, remote)
             hit = [f for f in ROW_FIELDS if FLOOR.spans(str(row.get(f, "")))]
