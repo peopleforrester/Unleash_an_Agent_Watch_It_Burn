@@ -2011,10 +2011,12 @@ attack." (`#/120`), the close on `#/121` to `#/123`, the take-home and feedback 
   (#455; "help me plan a birthday party" is the probe's paraphrase beat). A weird ask
   that fits none of its thirteen topics can still get through, so promise the listed
   asks and the paraphrases the probe sends, not every possible ask.
-- **Break it (the last minutes, #690):** in the public cluster's terminal, run
-  `finale-cap-on` (headroom $1.00 by default, or `finale-cap-on 0.50`). It sets the whole
-  cluster's cap to what the room has already spent plus the headroom, and prints both.
-  Then `cost-watch` on the screen: spent, cap, turns and a bar, every 2 seconds. Say:
+- **Break it (the last minutes, #690):** in the private terminal, the one already open,
+  run `finale-cap-on` (headroom $1.00 by default, or `finale-cap-on 0.50`). It reaches the
+  room's cluster, watch-it-burn-community, through the guardrails switch's link (#1271),
+  sets that cluster's cap to what the room has already spent plus the headroom, prints
+  both, and says the private cluster is unchanged. Then `cost-watch` on the screen, in the
+  same terminal: watch-it-burn-community's spent, cap, turns and a bar, every 2 seconds. Say:
   "We couldn't show everything in 30 minutes. For the rest of the session, try to drive
   BurritoBot's bill up to its cap and break the demo. You have our permission."
   - **What the room sees when it trips:** BurritoBot stops calling the model for everyone,

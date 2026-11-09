@@ -63,6 +63,11 @@ import json, os, subprocess, sys
 args = sys.argv[1:]
 with open(os.environ["FAKE_CALLS"], "a") as f:
     f.write(json.dumps(args) + "\\n")
+# _room asks Argo CD which cluster this is (#1271): a workshop cluster's profile, so the finale acts here. The
+# private terminal's route to the community cluster is verify/test_finale_cap_peer.py.
+if "application" in args and "lab-bootstrap" in args:
+    sys.stdout.write("admin")
+    sys.exit(0)
 rest = args[args.index("--") + 1:]
 assert rest[:2] == ["python3", "-c"], rest
 code = rest[2].replace("localhost:8080", "127.0.0.1:{PORT}")
