@@ -12,8 +12,9 @@ The map, verify/scope-map.yaml, has five parts:
     full    changed paths that run everything: the runners, this file, and the helpers and config that many tests
             read (every verify/ helper that more than SHARED_HELPER tests import or name must be listed here)
     unread  changed paths that are known and that no test reads beyond those whose own entry names them
-    bounds  helpers that build paths from repo data, or run git on a repository other than this tree's (a mirror, a
-            submodule), each with the paths that bound what it reads and why; test_scope_tests.py holds each bound
+    bounds  helpers and tests that build paths from repo data, or run git on a repository other than this tree's (a
+            mirror, a submodule, a clone), each with the paths that bound what it reads of this tree (none, for a clone
+            of another repo) and why; test_scope_tests.py holds each bound
     always  tests that run on every scoped run, each with why: they read the whole repo or its git history
     reads   every other test the two runners run, with each repo path it reads. A path covers itself and everything
             under it; one holding * or ? is a glob in which * also crosses /
@@ -941,6 +942,9 @@ def load_map(path: pathlib.Path = MAP) -> dict:
     doc["always"] = doc.get("always") or {}
     doc["reads"] = {k: list(v or []) for k, v in (doc.get("reads") or {}).items()}
     doc["bounds"] = doc.get("bounds") or {}
+    for b in doc["bounds"].values():
+        if isinstance(b, dict) and b.get("paths") is None and "paths" in b:
+            b["paths"] = []
     return doc
 
 
@@ -962,7 +966,9 @@ def structural(doc: dict, tree: Tree, verify: pathlib.Path = VERIFY) -> list[str
     for f, b in doc["bounds"].items():
         if f not in tree.files:
             bad.append(f"bounds: {f} is not a file in the repo")
-        if not isinstance(b, dict) or not str(b.get("why", "")).strip() or not b.get("paths"):
+        # An empty paths list is a bound too: sister_tree.py's git calls read a clone of another repo and nothing of
+        # this tree (#1078), so its why says so and it names no path.
+        if not isinstance(b, dict) or not str(b.get("why", "")).strip() or not isinstance(b.get("paths"), list):
             bad.append(f"bounds: {f} needs a why and the paths that bound it")
             continue
         for e in b["paths"]:
@@ -1130,7 +1136,7 @@ def dump(doc: dict, path: pathlib.Path = MAP) -> None:
     out += "bounds:" + ("" if doc["bounds"] else " {}") + "\n"
     for k, v in sorted(doc["bounds"].items()):
         out += f"  {k}:\n    why: {yaml.safe_dump(v['why'], width=10**6).strip().removesuffix(chr(10) + '...')}\n"
-        out += "    paths:\n" + "".join(f"      - {e}\n" for e in v["paths"])
+        out += "    paths:" + ("\n" if v["paths"] else " []\n") + "".join(f"      - {e}\n" for e in v["paths"])
     out += "always:\n" + "".join(f"  {k}: {yaml.safe_dump(v, width=10**6).strip().removesuffix(chr(10) + '...')}\n"
                                  for k, v in sorted(doc["always"].items()))
     out += "reads:\n"
