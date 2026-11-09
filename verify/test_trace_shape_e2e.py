@@ -46,6 +46,12 @@ v0.10.1 and a2a-sdk 0.3.26), with the a2a-sdk spans off as the workshop-agent ru
 the student's prompt, a run_shell curl to the beacon that the egress block stops, and get_marketing_intel, the two
 called in one turn and so wrapped in ADK's "execute_tool (merged)" span, which holds both responses and stays unmarked.
 
+#1163 is the ml_app. Datadog sets a trace's ml_app from its root span's service, and Whitney's sandbox org has one,
+burritobot. A message/send that skipped guard-proxy, sent to agentgateway by a research script or a run, has no guard span,
+so kagent's invocation was the copy's root and the trace filed under burritobot-agent. That turn is sent, and a kagent
+turn with no parent at all, and every root of every copied trace must go out as service burritobot, while kagent's
+other rows keep burritobot-agent and APM keeps burritobot-agent on all of kagent's spans.
+
 Fails when the binary is missing: run verify/fetch-e2e-tools.sh (verify/run-e2e-tools.sh does).
 """
 from __future__ import annotations
@@ -226,13 +232,43 @@ DROPPED = [
      {"http.request.method": "POST", "url.path": "/chat", "gen_ai.operation.name": "chat",
       "gen_ai.request.model": MODEL, "gen_ai.input.messages": PROMPT, "http.response.status_code": 429}),
 ]
+# #1163: a message/send that skipped guard-proxy, as docs/research/2026-11-08-ask-user/a2a_asks.py and dispatched runs
+# send it to agentgateway's :3000 with no traceparent, so the gateway's SERVER span is the trace's root. With no guard span,
+# kagent's invocation names a parent that is not in the copy, Datadog takes it as the root and sets the trace's ml_app
+# from its service: 140 traces in Whitney's sandbox org filed under burritobot-agent this way, 2026-11-01 to 11-08.
+# A second one has no invocation: a kagent span with no parent at all, the other root transform/llmobs_root_mark covers.
+DIRECT = [
+    ("direct-gateway", GATEWAY, "POST /", SERVER, None,
+     {"http.request.method": "POST", "url.path": "/", "server.address": "agentgateway.agent", "server.port": 3000}),
+    ("direct-gateway-out", GATEWAY, "Http", CLIENT, "direct-gateway",
+     {"agentgateway.outbound.kind": "Primary", "agentgateway.outbound.subtype": "Http"}),
+    ("direct-agent-server", AGENT, "POST /", SERVER, "direct-gateway-out",
+     {"http.method": "POST", "http.route": "/", "gen_ai.task.id": "t3", "gen_ai.conversation.id": "c3"}),
+    ("direct-invocation", AGENT, "invocation", INTERNAL, "direct-agent-server", {"gen_ai.conversation.id": "c3"}),
+    ("direct-invoke-agent", AGENT, "invoke_agent burritobot", INTERNAL, "direct-invocation",
+     {"gen_ai.operation.name": "invoke_agent", "gen_ai.agent.name": "burritobot"}),
+    ("direct-generate", AGENT, f"generate_content {MODEL}", INTERNAL, "direct-invoke-agent",
+     {"gen_ai.operation.name": "generate_content", "gen_ai.request.model": MODEL, "gen_ai.input.messages": PROMPT,
+      "gen_ai.output.messages": REPLY, "gen_ai.usage.input_tokens": 1650, "gen_ai.usage.output_tokens": 14}),
+]
+ORPHAN = [
+    ("orphan-invoke-agent", AGENT, "invoke_agent burritobot", INTERNAL, None,
+     {"gen_ai.operation.name": "invoke_agent", "gen_ai.agent.name": "burritobot", "gen_ai.conversation.id": "c4"}),
+    ("orphan-generate", AGENT, f"generate_content {MODEL}", INTERNAL, "orphan-invoke-agent",
+     {"gen_ai.operation.name": "generate_content", "gen_ai.request.model": MODEL, "gen_ai.input.messages": PROMPT,
+      "gen_ai.output.messages": REPLY, "gen_ai.usage.input_tokens": 1650, "gen_ai.usage.output_tokens": 14}),
+]
+TRACE_DIRECT = "0d1ec70f57a3b84d2f8e6a1b7c4d1163"
+TRACE_ORPHAN = "00a9a40f57a3b84d2f8e6a1b7c4d1163"
 # The statuses the instrumentation sets itself, as OTLP JSON. Every other span is sent unset.
 STATUS = {"drop-forward": {"code": ERROR[0], "message": FORWARD_503},
           "drop-forward-http": {"code": ERROR[0]}}
-ALL = SPANS + A2A + DROPPED
+ALL = SPANS + A2A + DROPPED + DIRECT + ORPHAN
 TRACE_OF = ({key: TRACE for key, *_ in SPANS} | {key: TRACE_A2A for key, *_ in A2A}
-            | {key: TRACE_CAPPED if key.startswith("capped") else TRACE_DROPPED for key, *_ in DROPPED})
+            | {key: TRACE_CAPPED if key.startswith("capped") else TRACE_DROPPED for key, *_ in DROPPED}
+            | {key: TRACE_DIRECT for key, *_ in DIRECT} | {key: TRACE_ORPHAN for key, *_ in ORPHAN})
 PARENT_OF = {key: parent for key, _, _, _, parent, _ in ALL}
+SERVICE_OF = {key: svc for key, svc, *_ in ALL}
 LLM_OPS = ("chat", "generate_content", "text_completion", "completion")  # Datadog's llm kind
 
 GENERATE_2_IN = [{"role": "tool", "parts": [{"type": "tool_call_response", "id": "run-shell-1",
@@ -438,7 +474,7 @@ for profile in PROFILES:
     every = {key: got.get(f"{TRACE_OF[key]}/{sid(key)}", {}) for key, *_ in ALL}
     span = {key: every[key] for key, *_ in SPANS}
     missing = sorted(key for key, s in every.items() if not s)
-    check(f"{profile}: all {len(ALL)} spans of the four turns reach APM", not missing,
+    check(f"{profile}: all {len(ALL)} spans of the six turns reach APM", not missing,
           f"missing {missing}\n        {waited}\n        collector log tail:\n{collector_log[-1500:]}")
 
     agent = {key: s for key, s in span.items() if s.get("service") == AGENT and key != "agent-server"}
@@ -501,6 +537,14 @@ for profile in PROFILES:
         inv = by_key[next(k for k, *_ in ALL if TRACE_OF[k] == trace and k.endswith("invocation"))] or {}
         check(f"{label}: kagent's invocation hangs from the root", (inv.get("parentSpanId") or "").lower() == root_id,
               str(inv.get("parentSpanId")))
+        # #1163: the invocation is the row that is a root when the guard is missing, so the copy sends it as service
+        # burritobot; here it sits under the guard's root and the trace's ml_app is the guard's either way.
+        kagent_rows = {key: s for key, s in by_key.items() if s and SERVICE_OF[key] == AGENT}
+        renamed = sorted(s.get("name") for key, s in kagent_rows.items()
+                         if s.get("service") != (GUARD if key.endswith("invocation") else AGENT))
+        check(f"{label}: the copy's invocation is service burritobot and kagent's other rows stay burritobot-agent",
+              inv.get("service") == GUARD and len(kagent_rows) > 1 and not renamed,
+              f"{sorted((s.get('name'), s.get('service')) for s in kagent_rows.values())}")
 
         def under_root(s: dict, hops: int = 20) -> bool:
             while hops and s:
@@ -599,6 +643,37 @@ for profile in PROFILES:
     ccopy = {k.split("/", 1)[1]: s for k, s in lgot.items() if k.startswith(copy_trace(TRACE_CAPPED) + "/")}
     check(f"{profile}: and its Agent Observability row is not red either",
           len(ccopy) == 1 and not any(is_error(s) for s in ccopy.values()), str([s.get("status") for s in ccopy.values()]))
+
+    # #1163: Datadog sets each trace's ml_app from its root span's service, and Whitney's sandbox org has one ml_app,
+    # burritobot. So every root of the copy, in every trace sent, guard turn or not, must be service burritobot.
+    by_trace: dict[str, dict[str, dict]] = {}
+    for k, s in lgot.items():
+        by_trace.setdefault(k.split("/", 1)[0], {})[k.split("/", 1)[1]] = s
+    root_services = sorted({(s.get("service"), s.get("name")) for spans in by_trace.values() for s in spans.values()
+                            if (s.get("parentSpanId") or "").lower() not in spans})
+    check(f"{profile}: every root in Agent Observability's copy is service burritobot, so every trace's ml_app is "
+          f"burritobot ({len(by_trace)} traces)",
+          len(by_trace) == 6 and {svc for svc, _ in root_services} == {GUARD}, str(root_services))
+    for trace, label, root_key in ((TRACE_DIRECT, "the message/send that skipped guard-proxy", "direct-invocation"),
+                                   (TRACE_ORPHAN, "the kagent turn with no parent", "orphan-invoke-agent")):
+        tcopy = by_trace.get(copy_trace(trace), {})
+        troots = sorted(s.get("name", "?") + "@" + i for i, s in tcopy.items()
+                        if (s.get("parentSpanId") or "").lower() not in tcopy)
+        check(f"{profile}: {label} has one root in the copy, kagent's {every[root_key].get('name')}",
+              troots == [f"{every[root_key].get('name')}@{sid(root_key)}"], f"roots {troots}")
+        check(f"{profile}: {label}: that root goes out as service burritobot, the ml_app Whitney's org has",
+              tcopy.get(sid(root_key), {}).get("service") == GUARD, str(tcopy.get(sid(root_key), {}).get("service")))
+        rest = sorted((s.get("name"), s.get("service")) for i, s in tcopy.items() if i != sid(root_key))
+        check(f"{profile}: {label}: kagent's other rows keep service burritobot-agent",
+              rest and all(svc == AGENT for _, svc in rest), str(rest))
+        gone = sorted(key for key, *_ in ALL if TRACE_OF[key] == trace and sid(key) in tcopy
+                      and (SERVICE_OF[key] != AGENT or key == "direct-agent-server"))
+        check(f"{profile}: {label}: no gateway span and no kagent request span is a row", not gone, str(gone))
+        check(f"{profile}: {label}: APM's copy keeps that span as service burritobot-agent",
+              every[root_key].get("service") == AGENT, str(every[root_key].get("service")))
+        kept = sorted(n for n, v in ((s.get("name"), values(s)) for s in tcopy.values())
+                      if n.startswith("generate_content") and "intValue" in v.get("gen_ai.usage.input_tokens", {}))
+        check(f"{profile}: {label}: its model call is still in the copy with its token counts", len(kept) == 1, str(kept))
 
 print("== a port taken before the collector binds it is the race, not a failure ==")
 # The race (run 18377, #1095), made to happen: the first port start_collector draws is held open here, so the collector
