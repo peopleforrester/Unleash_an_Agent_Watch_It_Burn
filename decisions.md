@@ -47073,3 +47073,45 @@ failed on the pin check (exit 1) and `test_guard_proxy_pin_1048.py` passed, the 
 away. `python3 verify/test_scope_tests.py` printed ALL PASS. The scoped Test and E2E commands are left to validation.
 
 **Live check skipped.** The change touches only files under `verify/` that no cluster runs, and decisions.md.
+
+## 2026-11-09 · #1235 · run 19566 · A replaced node's KubeArmor enforcer comes back from the snitch alone on watch-it-burn-private, and the admin probe passes Challenge 2 after it
+
+**What was owed.** Run 19505 left two live checks to the next run: the snitch relabelling a node with
+require-resource-limits as it arrives from git, and the admin Night Before probe's Challenge 2 KubeArmor beat after
+that. The policy itself is #1236's matchCondition (c768d47a), which replaced #1235's namespaceSelector on staging
+(#1264), and `test_kubearmor_snitch_admission.py`, `test_kubearmor_config_tracked.py` and the tools-tier
+`test_kyverno_cel_policies.py` hold it. This run changed no code.
+
+**Live check on watch-it-burn-private (14:33Z to 14:34Z, under the guard lock).** Script
+`/var/lib/hecaton/runs/19566/live/snitch-relabel.sh`, log `/var/lib/hecaton/runs/19566/live/snitch-relabel.log`,
+held by `verify/guard_lease.py hold --context watch-it-burn-private`. The policy read `["Deny"]` with the one
+matchCondition, autogen's `cronjobs` and `defaults` rules carried it, and Argo CD's kyverno-policies read `Synced
+Healthy` at staging d6003102, so it came from git and not from a hand patch. A run cannot replace a node group, so the
+check put the node into a new node's state: every `kubearmor.io/*` label came off `ip-10-0-90-97` (the enforcer
+DaemonSet went to DESIRED 0 and its pod terminated), then the operator pod was deleted, so its informer ran the path a
+new node takes.
+
+    job kubearmor-snitch-lwrgn   Complete   1/1   4s
+    labels: apparmorfs=no btf=yes enforcer=bpf nri-socket=var_run_nri_nri.sock oci-hooks=no rand=fwzj
+            runtime=containerd seccomp=yes securityfs=yes socket=run_containerd_containerd.sock
+    label managers: [{"manager":"snitch","time":"2026-11-09T14:33:46Z"}]
+    kubearmor-bpf-containerd-98c2c   DESIRED 1   READY 1   (pod kubearmor-bpf-containerd-98c2c-dtzgv 1/1 Running)
+    no denied or FailedCreate event in kubearmor
+
+**Admin probe after it.** `python3 verify/kubecon_probe.py admin burritobot-private.burritobot.co --context
+watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile accen-dev`, started at 14:35Z, a minute after the new
+enforcer came up, log `/var/lib/hecaton/runs/19566/live/admin-probe.log`: `34 beats: 34 PASS, 0 FAIL`, `KUBECON PROBE
+GREEN`, `exit=0`. The two beats #1235 names:
+
+    PASS  [3] Armed: ... KubeArmor Block with an enforcer on every node, egress locked
+    PASS  [3] Challenge 2: recipe read blocked and alerted (KubeArmor)
+              KubeArmor denied the read and its block-recipe-snoop alert fired
+
+**Left on the cluster.** The node keeps the labels the snitch wrote (the same set as before, a new `rand`), with a new
+enforcer, operator and controller pod. The probe ended with guards-off and guardrails-off on both clusters and released
+both locks. require-resource-limits still reads `["Deny"]`. No policy was patched.
+
+**Tests.** Run alone at base d6003102: `test_kubearmor_snitch_admission.py`, `test_kubearmor_config_tracked.py`,
+`test_kubecon_probe.py` (after `git submodule update --init gitops/ai-layer/guard-proxy`, which the worktree lacked)
+and `test_recipe_block_coverage.py`, each exit 0. The whole Test and E2E commands were not run; this change is
+decisions.md alone.
