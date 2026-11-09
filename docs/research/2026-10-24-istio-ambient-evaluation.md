@@ -7,7 +7,8 @@
 > PeerAuthentication is PERMISSIVE because of the NLB problem in section 3. agentgateway and workshop-agent
 > stay out, because of the port-exact Ingress rules #552 put on them. The apps STRICT policy, which applied
 > to nothing, is gone. The drop recommendation below was not taken. `verify/test_mesh_enrollment.py` holds the
-> manifests and `verify/test_mesh_live.py` the cluster.
+> manifests and `verify/test_mesh_live.py` the cluster. Since #980 the weather feed is enrolled too, because the
+> C1 stage-2b egress waypoint steers only enrolled pods; workshop-mcp and workshop-agent stay out.
 
 Michael, 2026-09-05, from the #236 audit: *"evaluate individually whether this could be useful rather than
 assume it is dead weight."*

@@ -16,7 +16,8 @@ Four parts, with no cluster and no network beyond localhost:
      ask that raises, an audit read that raises, a Joker delete that fails or raises; a row it cannot remove fails the
      beat, and an admin run's desk is its guardrails peer (main), never the private cluster's own desk;
   4. verify/one_desk_live.py, #1158's desk check: both ConfigMaps deleted and both rows and its ticket forgotten on every
-     path out, a failed filing, a raise mid-check, a failed delete and an interrupt included.
+     path out, a failed filing, a raise mid-check, a failed delete and an interrupt included; and its one-shot
+     deploy_app call waits for the desk report deploy_app sends from a daemon thread, so the row lands (#1223).
 """
 from __future__ import annotations
 
@@ -453,6 +454,40 @@ check("and the check says the ConfigMap may be left", any(r["step"] == "gone" an
 check("one_desk_live refuses one context for both clusters, and a stamp that is not a name",
       odl.main(["--community-context", "a", "--private-context", "a"]) == 2
       and odl.main(["--community-context", "a", "--private-context", "b", "--stamp", "Bad_Stamp"]) == 2)
+
+# The one-shot deploy_app call must outlive its own desk report (#1223). On 2026-11-09 run 19437's live run deployed
+# both ConfigMaps and the desk logged no /landed: the real _report sends from a daemon thread, which python3 -c killed
+# on exit. Here DEPLOY_TOOL's own code runs in a fresh interpreter against a stand-in server whose deploy_app does the
+# same (a daemon thread that reports after a pause) and also arms a daemon Timer, as a room Joker's scale-down does.
+FAKE_SERVER = """
+import threading, time
+def deploy_app(manifest, requested_by=""):
+    def send():
+        time.sleep(0.5)
+        print("REPORTED " + manifest, flush=True)
+    threading.Thread(target=send, daemon=True).start()
+    t = threading.Timer(600, print, args=("TIMER FIRED",))
+    t.daemon = True
+    t.start()
+    return "deployed ConfigMap/" + manifest
+"""
+code_at = odl.DEPLOY_TOOL.index("-c", odl.DEPLOY_TOOL.index("--")) + 1
+check("DEPLOY_TOOL runs one python3 -c in the shim container", odl.DEPLOY_TOOL[code_at - 2:code_at] == ["python3", "-c"]
+      and code_at == len(odl.DEPLOY_TOOL) - 1, str(odl.DEPLOY_TOOL))
+wrapper = ("import sys, types\n"
+           "server = types.ModuleType('server')\n"
+           f"exec({FAKE_SERVER!r}, server.__dict__)\n"
+           "sys.modules['server'] = server\n"
+           "sys.argv = ['-c', 'desk-check-t1223-community', 'Agatha the Gargoyle']\n"
+           f"exec({odl.DEPLOY_TOOL[code_at]!r})\n")
+started = time.monotonic()
+done = subprocess.run([sys.executable, "-I", "-c", wrapper], capture_output=True, text=True, timeout=60)
+took = time.monotonic() - started
+check("the one-shot deploy_app call prints its answer and waits for its desk report before it exits",
+      done.returncode == 0 and "deployed ConfigMap/desk-check-t1223-community" in done.stdout
+      and "REPORTED desk-check-t1223-community" in done.stdout, f"rc {done.returncode}: {done.stdout!r} {done.stderr!r}")
+check("and does not wait on a Timer deploy_app armed, which dies with the process as before",
+      "TIMER FIRED" not in done.stdout and took < odl.REPORT_JOIN_S, f"{took:.1f}s: {done.stdout!r}")
 
 check("no check above called aws, kubectl, eksctl, terraform or helm", not no_cloud.calls(), str(no_cloud.calls()))
 server.shutdown()

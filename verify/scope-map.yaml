@@ -100,6 +100,7 @@ always:
   test_agent_tools_sync.py: 'verify/test_fleet_converge_repairs.sh: it runs git on the tree or history as a whole; line 576 builds a path under the repo root from a value it finds at run time'
   test_american_english_gate.py: 'line 37 builds a path under the repo root from a value it finds at run time; line 38 builds a path under the repo root from a value it finds at run time; scripts/compile-design-doc.py: line 62 builds a path under the repo root from a value it finds at run time'
   test_backstage_catalog.py: line 106 builds a path under the repo root from a value it finds at run time
+  test_beat3_removed_shim_unreferenced.py: 'it runs git ls-files, which reads the tree or history as a whole; verify/test_poisoned_server_one_copy.py: it runs git ls-files, which reads the tree or history as a whole'
   test_c6_villain_endpoint.py: it runs git ls-files, which reads the tree or history as a whole
   test_challenge_fallbacks.py: line 189 builds a path under the repo root from a value it finds at run time
   test_chat_span_token_counts.py: it runs git ls-tree, which reads the tree or history as a whole
@@ -159,6 +160,7 @@ always:
   test_pantry_header_pin.py: it runs git cat-file, ls-tree, which reads the tree or history as a whole
   test_pantry_shut_record.py: 'verify/test_pantry_header_pin.py: it runs git cat-file, ls-tree, which reads the tree or history as a whole'
   test_platform_version_pins.py: 'line 165 builds a path under the repo root from a value it finds at run time; verify/test_observability.py: line 41 builds a path under the repo root from a value it finds at run time'
+  test_poisoned_server_one_copy.py: it runs git ls-files, which reads the tree or history as a whole
   test_prose_gate.py: 'verify/prose_gate.py: it runs git diff, ls-files, show, which reads the tree or history as a whole'
   test_replay_prompts.py: it runs git ls-files, which reads the tree or history as a whole; line 537 builds a path under the repo root from a value it finds at run time
   test_ros_deployments_removed_row.py: 'verify/prose_gate.py: it runs git diff, ls-files, show, which reads the tree or history as a whole'
@@ -173,6 +175,31 @@ always:
   test_tf_plugin_cache.py: 'it runs git ls-files, which reads the tree or history as a whole; verify/test_event_tag.py: it runs git ls-files, which reads the tree or history as a whole; verify/test_terraform_module_pins.py: it runs git ls-files, which reads the tree or history as a whole; verify/test_terraform_module_pins.py: line 70 builds a path under the repo root from a value it finds at run time'
   test_verify_suites_workflow.py: 'verify/ci-base-sha.sh: it runs git on the tree or history as a whole'
 reads:
+  test_1140_trace_check_owed.py:
+    - PROGRESS.md
+    - agent
+    - agent/desk-report-token
+    - challenges/c3-secret-grep/agent-prompt.txt
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - decisions.md
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/bootstrap/apps/kubearmor.yaml
+    - gitops/workshop-agent/agent.yaml
+    - images/workshop-mcp/Dockerfile
+    - infra/datadog-fleet/dashboard.yaml
+    - infra/datadog-fleet/fleet_monitors.py
+    - infra/datadog-fleet/leaderboard.yaml
+    - infra/datadog-fleet/monitors.yaml
+    - verify/agent_probe.py
+    - verify/guard_lease.py
+    - verify/kubecon_probe.py
+    - verify/stage_traces.py
+    - verify/topic_cases.py
   test_467_live_record.py:
     - CLAUDE.md
     - agent
@@ -3984,7 +4011,36 @@ reads:
     - observability-idp
     - policies
     - security
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/bootstrap_chart.py
+  test_gateway_api_crds_upstream_fetch.py:
+    - CLAUDE.md
+    - backstage
+    - gitops
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - gitops/bootstrap/apps/istio.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/gateway-api/standard-install.yaml
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/bootstrap_chart.py
+    - verify/test_gateway_api_crds_upstream.py
   test_gateway_forward.py:
     - agent
     - verify/gateway_forward.py
@@ -5319,16 +5375,38 @@ reads:
     - verify/topic_cases.py
   test_kyverno_counter_fix.py:
     - .github/workflows/build-kyverno-counter-fix.yml
+    - .gitmodules
     - VERSIONS.lock
+    - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/resources.yaml
     - gitops/bootstrap/apps/kyverno.yaml
     - images.lock
     - images/kyverno-counter-fix
     - images/kyverno-counter-fix/build.sh
     - images/kyverno-counter-fix/pr17085.patch
+    - images/llm-guard
     - scripts/ghcr_version_tag.py
+    - verify
     - verify/.tools/bin/crane
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/e2e-tools.lock
+    - verify/git_mirror.py
+    - verify/image_cache.py
+  test_kyverno_counter_fix_cache.py:
+    - .gitmodules
+    - gitops/ai-layer/guard-proxy
+    - images/kyverno-counter-fix/build.sh
+    - images/kyverno-counter-fix/pr17085.patch
+    - images/llm-guard
+    - verify
+    - verify/.tools/bin/crane
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/e2e-tools.lock
+    - verify/fetch-e2e-tools.sh
+    - verify/git_mirror.py
+    - verify/image_cache.py
   test_kyverno_profile_policies.py:
     - CLAUDE.md
     - agent
@@ -6569,6 +6647,30 @@ reads:
     - scripts/reload-routes.sh
     - verify/datadog-orgs.sh
     - verify/no-cloud.sh
+  test_presenter_ticket_live.py:
+    - agent
+    - agent/desk-report-token
+    - challenges/c3-secret-grep/agent-prompt.txt
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/bootstrap/apps/kubearmor.yaml
+    - gitops/workshop-agent/agent.yaml
+    - images/workshop-mcp/Dockerfile
+    - verify/agent_probe.py
+    - verify/desk_ticket_live.py
+    - verify/guard_lease.py
+    - verify/kubecon_probe.py
+    - verify/no-cloud.sh
+    - verify/no_cloud.py
+    - verify/presenter_ticket_live.py
+    - verify/support_desk_hosts.py
+    - verify/topic_cases.py
   test_presenter_ticket_range.py:
     - gitops/ai-layer/console.conf
     - gitops/ai-layer/resources.yaml
@@ -7410,6 +7512,30 @@ reads:
     - verify/bootstrap_chart.py
     - verify/collector_render.py
     - verify/test_trace_walkthrough_view.py
+  test_ros_seed_step_links.py:
+    - agent
+    - agent/desk-report-token
+    - challenges/c3-secret-grep/agent-prompt.txt
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/bootstrap/apps/kubearmor.yaml
+    - gitops/workshop-agent/agent.yaml
+    - images/workshop-mcp/Dockerfile
+    - infra/datadog-fleet/dashboard.yaml
+    - infra/datadog-fleet/fleet_monitors.py
+    - infra/datadog-fleet/leaderboard.yaml
+    - infra/datadog-fleet/monitors.yaml
+    - verify/agent_probe.py
+    - verify/guard_lease.py
+    - verify/kubecon_probe.py
+    - verify/stage_traces.py
+    - verify/topic_cases.py
   test_ros_seg3_switch_step.py:
     - facilitation/kubecon-na-2026-run-of-show.md
     - policies/kyverno-breakout/deny-external-registries.yaml
@@ -7465,6 +7591,30 @@ reads:
     - gitops/ai-layer/web/skin.js
     - gitops/ai-layer/web/skins.js
     - gitops/ai-layer/workshop-mcp-server.py
+  test_seed_step_matches_stage_traces.py:
+    - agent
+    - agent/desk-report-token
+    - challenges/c3-secret-grep/agent-prompt.txt
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/bootstrap/apps/kubearmor.yaml
+    - gitops/workshop-agent/agent.yaml
+    - images/workshop-mcp/Dockerfile
+    - infra/datadog-fleet/dashboard.yaml
+    - infra/datadog-fleet/fleet_monitors.py
+    - infra/datadog-fleet/leaderboard.yaml
+    - infra/datadog-fleet/monitors.yaml
+    - verify/agent_probe.py
+    - verify/guard_lease.py
+    - verify/kubecon_probe.py
+    - verify/stage_traces.py
+    - verify/topic_cases.py
   test_seg3_timing.py:
     - facilitation/kubecon-na-2026-run-of-show.md
   test_service_links.py:

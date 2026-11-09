@@ -7,8 +7,9 @@
 #
 #   desk-relay.yaml  the relay pod, its Service, and its own egress allow (desk_relay.py says why it is a pod).
 #   desk-relay-src   desk_relay.py, generated so a change to it rolls the relay through the content hash.
-#   the patch        workshop-mcp's TICKET_SITE_URL: the relay, which passes one ticket by its number and the deploy
-#                    report with the desk's token, and nothing else, so the admin bot still reads no ticket list (#1077).
+#   the patch        workshop-mcp's TICKET_SITE_URL: the relay, which passes one ticket by its number, and the deploy
+#                    report and the cluster reader's read (#1209) with the desk's token, and nothing else, so the admin
+#                    bot still reads no ticket list (#1077).
 # This cluster's own desk keeps serving support-burritobot-private and deployments-burritobot-private as it did
 # (decisions.md, #1158). Nothing here writes the desk-report-token Secret: fleet.sh desk-link writes the same token on
 # both KubeCon clusters. verify/test_public_desk.py holds it, and verify/test_bootstrap_chart_render.py builds it.

@@ -21,8 +21,17 @@ realm is answered with that realm's anonymous token, and a blob's redirect is fo
 image(layout_dir) reads a layout back: the image manifest (the platform's, for an index), its config and its layers'
 paths, each in the layout.
 
-Command line (build-loopback.sh runs it):
-  image_cache.py layout <ref@sha256:...> [platform]   print the layout's path, fetching it on a miss
+platform_layout(ref, out) is for a pin that names an index (#1216: images/kyverno-counter-fix/build.sh's three Kyverno
+bases, pinned by the index digests images.lock records). The cached layout of an index holds the one platform's image
+and none of the others, so `crane push` of it fails asking for another platform's manifest. platform_layout() takes the
+layout() above, hit or miss, and writes at out a layout whose index.json names only the platform's image manifest,
+with out/blobs a symlink to the cached layout's blobs, so nothing is copied. It returns that image manifest's digest,
+which is what `crane push out <registry>/<repo>` prints back. For a pin that names an image, it is the image itself.
+
+Command line (build-loopback.sh runs the first, images/kyverno-counter-fix/build.sh the second):
+  image_cache.py layout <ref@sha256:...> [platform]                 print the layout's path, fetching it on a miss
+  image_cache.py platform-layout <ref@sha256:...> <out> [platform]  write the platform's image as a layout at out,
+                                                                     and print its manifest's digest
 Any failure prints one line starting IMAGE CACHE FAILED to stderr and exits 1."""
 from __future__ import annotations
 
@@ -269,12 +278,44 @@ def image(dest: pathlib.Path, platform: str = PLATFORM) -> dict:
             "layers": [blobs / _hex(layer, str(dest)) for layer in doc["layers"]]}
 
 
+def platform_layout(ref: str, out: pathlib.Path, platform: str = PLATFORM, *, root: pathlib.Path | None = None,
+                    fetch: artifact_cache.Fetcher = registry_fetch, env: Mapping[str, str] | None = None) -> str:
+    """Write at out (which must not exist) a layout naming only the platform's image of ref, from its cached layout;
+    return that image manifest's digest, sha256:<hex>."""
+    src = layout(ref, platform, root=root, fetch=fetch, env=env)
+    blobs = src / "blobs" / "sha256"
+    top = json.loads((src / "index.json").read_text())["manifests"][0]
+    desc = {"mediaType": top["mediaType"], "digest": top["digest"], "size": top["size"]}
+    doc = json.loads((blobs / _hex(top, str(src))).read_bytes())
+    if _media_type(doc) in INDEX_TYPES:
+        child = _platform_child(doc, platform, ref)
+        h = _hex(child, ref)
+        if not (blobs / h).is_file():
+            raise LayoutMismatch(f"layout {src} lacks the {platform} manifest sha256:{h} its index names")
+        desc = {"mediaType": child.get("mediaType") or _media_type(json.loads((blobs / h).read_bytes())),
+                "digest": f"sha256:{h}", "size": (blobs / h).stat().st_size}
+    try:
+        out.mkdir()
+    except FileExistsError as e:
+        raise ImageCacheError(f"{out} is already there; platform_layout writes a new layout and replaces none") from e
+    (out / "blobs").symlink_to(src / "blobs", target_is_directory=True)
+    (out / "oci-layout").write_text('{"imageLayoutVersion":"1.0.0"}')
+    (out / "index.json").write_text(json.dumps({
+        "schemaVersion": 2, "mediaType": INDEX_TYPES[0],
+        "manifests": [{**desc, "annotations": {REF_NAME: ref}}]}, indent=2) + "\n")
+    return desc["digest"]
+
+
 def main(argv: list[str]) -> int:
     try:
         if len(argv) in (2, 3) and argv[0] == "layout":
             print(layout(argv[1], *argv[2:]))
             return 0
-        raise ImageCacheError("usage: image_cache.py layout <ref@sha256:...> [platform]")
+        if len(argv) in (3, 4) and argv[0] == "platform-layout":
+            print(platform_layout(argv[1], pathlib.Path(argv[2]), *argv[3:]))
+            return 0
+        raise ImageCacheError("usage: image_cache.py layout <ref@sha256:...> [platform] | "
+                              "image_cache.py platform-layout <ref@sha256:...> <out> [platform]")
     except (artifact_cache.ArtifactCacheError, OSError, ValueError, urllib.error.URLError) as e:
         print(f"IMAGE CACHE FAILED: {e}", file=sys.stderr)
         return 1

@@ -60,6 +60,12 @@ class FakeCluster:
     def tool_calls_since(self, since) -> list[dict]:
         return []
 
+    def tool_calls_during(self, since) -> list[dict]:
+        return []
+
+    def gateway_calls_during(self, since) -> list[str]:
+        return []
+
     def clear_room_joker(self) -> None:
         pass
 
