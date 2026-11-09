@@ -5068,6 +5068,12 @@ reads:
     - gitops/kubearmor-config/templates
     - gitops/kubearmor-config/templates/kubearmorconfig.yaml
     - gitops/kubearmor-config/values.yaml
+  test_kubearmor_snitch_admission.py:
+    - gitops/bootstrap/apps/kubearmor.yaml
+    - gitops/bootstrap/apps/kyverno-policies.yaml
+    - gitops/kubearmor-config
+    - gitops/kubearmor-config/templates/limitrange.yaml
+    - policies/kyverno/require-resource-limits.yaml
   test_kubecon_c3_live_checks.py:
     - agent
     - challenges/c3-secret-grep/agent-prompt.txt

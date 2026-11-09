@@ -29,6 +29,18 @@ spec:
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE"]
         resources: ["pods"]
+  # KubeArmor's workloads are judged at their Pods, not at the Job, DaemonSet, Deployment or ReplicaSet (#1236).
+  # The operator builds them with no limits, and KubeArmorConfig has no field to give them any. #1081's LimitRange
+  # (gitops/kubearmor-config/templates/limitrange.yaml) fills defaults into every Pod in the kubearmor namespace,
+  # but a LimitRange touches Pods only, and autogen judges the workload object's pod template, so with this policy at
+  # Deny the operator's per-node snitch Job was refused before any Pod existed. The snitch is what puts the
+  # kubearmor.io/* labels the enforcer DaemonSet selects on, so a new node on watch-it-burn-private got no enforcer
+  # (2026-11-08, #1042, run 18828). The Pods there are still judged by this policy, with the LimitRange's limits.
+  # Autogen copies matchConditions into the rules it generates, so the one condition covers both sides: a workload
+  # object in kubearmor is skipped, and a Pod there is not.
+  matchConditions:
+    - name: kubearmor-workloads-judged-at-their-pods
+      expression: "!(request.namespace == 'kubearmor' && request.kind.kind != 'Pod')"
   variables:
     - name: limitsSet
       expression: >-

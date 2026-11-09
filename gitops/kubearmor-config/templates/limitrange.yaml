@@ -9,6 +9,10 @@
 # fills these defaults in before validating admission runs, so the policy sees limits on every container. A container
 # that sets its own, like the operator's Deployment, keeps them.
 #
+# Pods only. A LimitRange never touches a Job, DaemonSet, Deployment or ReplicaSet, which Kyverno's autogen judges on
+# their pod templates, so require-resource-limits skips those objects in this namespace and judges their Pods, which
+# this fills (#1236). Without the two together, the operator's snitch Job is refused and a new node gets no enforcer.
+#
 # Wave -1: before the operator's Deployment (wave 0), so nothing it creates predates the defaults.
 apiVersion: v1
 kind: LimitRange
