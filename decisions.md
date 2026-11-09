@@ -46753,3 +46753,10 @@ either cluster, and no row of theirs on the page.
 **Tests run.** `python3 verify/test_guard_lease.py`, `python3 verify/test_fetch_inventory.py`, `python3
 verify/test_scope_tests.py` and `python3 verify/test_e2e_tools_tier.py` pass. The scoped Test command is left to
 validation. No dependency was added.
+
+**Red on staging before this change.** `python3 verify/test_kubearmor_config_tracked.py` fails two checks at the base
+`f20e8cdb`, before any change here. #1235's commit `e4bdbc8a` holds require-resource-limits to a namespaceSelector of
+NotIn kubearmor with no matchConditions. #1236's commit `c768d47a`, which landed after it, gave the policy the
+matchCondition `kubearmor-workloads-judged-at-their-pods` and no namespaceSelector. #1264 (open) is that fix. The scope
+map line above is the one that test's own source calls for. Without the line `test_scope_tests.py` fails on the drift
+instead, so the line stays, and this run does not settle #1235 against #1236.
