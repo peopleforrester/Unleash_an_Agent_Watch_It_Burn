@@ -4,7 +4,7 @@
 
 Inside the image, verify/e2e-image/gh is the gh on PATH. It sends one JSON line, {"argv": [...]}, to this server and
 prints what comes back, {"rc": n, "stdout": "...", "stderr": "..."}. The server runs the host's gh with that argv only
-when it begins `issue view`, the one read verify/gh_comments.py makes (#863); anything else gets exit 2 and a line
+when it begins `issue view`, the one read verify/gh_comments.py makes (#863); anything else gets exit 1 and a line
 naming what was refused, so the container cannot reach the host's gh for a write. The host's gh is found on PATH when
 the server starts (the hecaton wrapper on a dispatched run, the runner's gh with the job's GH_TOKEN in CI); none is a
 failure before any test runs.
@@ -31,11 +31,11 @@ def answer(gh: str, request: bytes) -> dict:
     try:
         argv = json.loads(request).get("argv")
     except (ValueError, AttributeError):
-        return {"rc": 2, "stdout": "", "stderr": "gh relay: the request is not a JSON object with an argv list\n"}
+        return {"rc": 1, "stdout": "", "stderr": "gh relay: the request is not a JSON object with an argv list\n"}
     if not isinstance(argv, list) or not all(isinstance(a, str) for a in argv):
-        return {"rc": 2, "stdout": "", "stderr": "gh relay: argv must be a list of strings\n"}
+        return {"rc": 1, "stdout": "", "stderr": "gh relay: argv must be a list of strings\n"}
     if tuple(argv[:2]) != ALLOWED:
-        return {"rc": 2, "stdout": "",
+        return {"rc": 1, "stdout": "",
                 "stderr": f"gh relay: only `gh issue view` is relayed to the host, not `gh {' '.join(argv)}`\n"}
     try:
         p = subprocess.run([gh, *argv], capture_output=True, text=True, timeout=TIMEOUT, stdin=subprocess.DEVNULL)

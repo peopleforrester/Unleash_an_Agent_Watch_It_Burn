@@ -189,8 +189,8 @@ print("== 5. e2e-image.sh run: present is used, absent is pulled once, unpullabl
 REF = e2e_image.ref()
 
 
-def launcher(state: str) -> tuple[subprocess.CompletedProcess, str]:
-    """Run `e2e-image.sh run` with a podman stand-in whose image is present, pullable or neither."""
+def launcher(state: str, *tests: str) -> tuple[subprocess.CompletedProcess, str]:
+    """Run `e2e-image.sh run [tests]` with a podman stand-in whose image is present, pullable or neither."""
     with tempfile.TemporaryDirectory() as tmp:
         t = pathlib.Path(tmp)
         fakebin = t / "bin"
@@ -215,7 +215,7 @@ exit 3
         env = {**os.environ, "PATH": f"{fakebin}:{os.environ['PATH']}",
                "WIB_ARTIFACT_CACHE": str(cache), "HECATON_TOOLS_CACHE": ""}
         try:
-            r = subprocess.run(["bash", str(HERE / "e2e-image.sh"), "run"], capture_output=True, text=True, env=env,
+            r = subprocess.run(["bash", str(HERE / "e2e-image.sh"), "run", *tests], capture_output=True, text=True, env=env,
                                timeout=120)
         finally:
             shutil.rmtree(cache, ignore_errors=True)
@@ -235,6 +235,13 @@ check("with the host's gh reached through the relay socket, and no AWS or KUBECO
       bool(runs) and ":/run/wib-gh " in runs[0] and "AWS_" not in runs[0] and "KUBECONFIG" not in runs[0],
       runs[0] if runs else "")
 check("rootless podman keeps the user's own ids", bool(runs) and "--userns=keep-id" in runs[0])
+check("with no test named, the whole tier runs: nothing follows the runner's own name",
+      bool(runs) and runs[0].endswith('run-e2e-tools.sh "$@" tier'), runs[0] if runs else "")
+r, calls = launcher("present", "test_ttyd_ws_auth.py", "verify/test_turn_guard_e2e.py")
+runs = [ln for ln in calls.splitlines() if ln.startswith("podman run ")]
+check("tier tests named after `run` reach run-e2e-tools.sh inside, to run alone (#1190)", r.returncode == 0
+      and bool(runs) and runs[0].endswith('run-e2e-tools.sh "$@" tier test_ttyd_ws_auth.py verify/test_turn_guard_e2e.py'),
+      runs[0] if runs else calls + r.stderr)
 r, calls = launcher("pullable")
 check("an image the host lacks is pulled once, then run", r.returncode == 0
       and calls.count("podman pull ") == 1 and calls.count("podman run ") == 1, calls + r.stderr)

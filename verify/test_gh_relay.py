@@ -6,8 +6,8 @@ run with this host's python (its shebang names the image's).
 What it holds:
   - `gh issue view <n> -R <repo> --json comments` comes back with the host gh's stdout, stderr and exit code, the exit
     4 of a gh with no token included, which verify/gh_comments.py reads as "no token";
-  - any other gh call (`gh api`, `gh issue comment`, `gh pr view`) gets exit 2 and a line naming what was refused, and
-    the host gh never runs for it;
+  - any other gh call (`gh api`, `gh issue comment`, `gh pr view`) fails with exit code 1 and a line naming what was
+    refused, and the host gh never runs for it;
   - the client with no socket exits 4 naming where it looked, and the server with no gh on PATH fails before serving.
 """
 from __future__ import annotations
@@ -76,8 +76,8 @@ echo "a warning on stderr" >&2
         for refused in (["api", "repos/o/r/issues/1/comments"], ["issue", "comment", "1", "--body", "x"],
                         ["pr", "view", "1"], ["issue"], []):
             r = gh(*refused)
-            check(f"`gh {' '.join(refused)}` is refused with exit 2, naming it",
-                  r.returncode == 2 and "only `gh issue view` is relayed" in r.stderr, f"{r.returncode} {r.stderr}")
+            check(f"`gh {' '.join(refused)}` is refused with exit code 1, naming it",
+                  r.returncode == 1 and "only `gh issue view` is relayed" in r.stderr, f"{r.returncode} {r.stderr}")
         check("and the host gh ran for none of them", log.read_text() == calls, log.read_text())
     finally:
         server.terminate()
