@@ -47669,3 +47669,25 @@ fetch_inventory.py is reworded to name no install command, so the module stays o
 `python3 verify/test_fetch_inventory.py` printed `All fetch inventory checks passed.` and `python3
 verify/test_scope_tests.py` printed `ALL PASS`, each exit 0. No live check: the change touches verify/ files no
 cluster runs and decisions.md. The scoped Test and E2E commands are left to validation.
+## 2026-11-09 · #1272 · run 19598 · The CI tools job on staging 00ac68fd failed on a scratch copy test_docs_current.py read
+
+**Cause.** The CI run on staging 00ac68fd (GitHub Actions run 42641761632) failed its `e2e tools suite` job on one
+check: the offline suite, which `run-e2e-tools.sh` runs beside the tier tests, four at a time. In it
+`verify/test_docs_current.py` raised FileNotFoundError on `tmpe1xcdo51/ai-layer/guard-proxy/AGENTS.md`. That test
+walks every `*.md` under the repo root with `rglob`, skipping `tmp/`, the repo's ignored scratch (#1119). Three tier
+tests, `test_ai_layer_rollout.py`, `test_guard_proxy_go_otel.py` and `test_guard_proxy_spend_store.py`, copied
+`gitops/ai-layer` (and with it the guard-proxy submodule's Markdown) into `tempfile.TemporaryDirectory(dir=REPO)`, a
+`tmpXXXXXXXX/` at the root, which the walk does not skip. One of them removed its copy between the walk listing the file
+and opening it. The same job's standalone offline suite passed, as there no tier test ran beside it.
+
+**Fix.** The three tests make their copy under `REPO / "tmp"` (created when missing), which the walk already skips.
+`gitops/ai-layer` holds no symlink and no `../` reference, so the copy renders the same at any depth. The
+walk itself is unchanged: the scope selector reads its `rglob` to class what it reads, and that stays true.
+`test_party_refresh_rate.py` and the backups tests also make scratch at the root, but they write no Markdown, so
+they are left as they are.
+
+**Tests run.** `python3 verify/test_docs_current.py` printed `All documentation-currency checks passed.` `python3
+verify/scope_tests.py write` left the map unchanged. `HECATON_BASE_SHA=5e6e56e0 bash verify/run-e2e-tools.sh` ran
+the scoped offline suite (88 tests, `ALL OFFLINE RENDER-GATE TESTS GREEN`) and 6 tier tests, the three changed
+ones included, in 6m42s, and read `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. No `tmp*` directory was left at the root.
+No live check: the change touches verify/ files no cluster runs and decisions.md.
