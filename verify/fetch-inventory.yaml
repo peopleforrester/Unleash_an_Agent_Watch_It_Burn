@@ -211,7 +211,7 @@ sites:
     cached: false
   images/web-terminal/entrypoint.sh:
   - match: localhost:8080
-    lines: 5
+    lines: 4
     class: live
     kind: cluster
     target: guard-proxy's control API on localhost:8080, reached from the attendee terminal inside the guard-proxy pod with kubectl exec
@@ -1211,6 +1211,11 @@ sites:
   verify/test_finale_cap.py:
   - match: urlopen
     lines: 2
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_finale_cap_peer.py:
+  - match: urlopen
+    lines: 5
     class: loopback
     why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
   verify/test_fleet_apply_failure_exit.sh:
