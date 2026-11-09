@@ -46,7 +46,9 @@ pin = pr.pinned()
 
 print("== decisions.md's newest pantry replays line ==")
 records = [m for m in pr.RECORD_RE.finditer(text)]
-stray = [ln for ln in text.splitlines() if pr.RECORD_PREFIX in ln and not pr.RECORD_RE.search(ln)]
+# A record names its numbers right after the prefix; prose that only mentions the line does not.
+stray = [ln for ln in text.splitlines() if re.search(re.escape(pr.RECORD_PREFIX) + r" \d", ln)
+         and not pr.RECORD_RE.search(ln)]
 check("every `pantry replays:` line in decisions.md reads as the live test prints it", not stray, f"{stray[:2]}")
 check("decisions.md records the live pantry replays on the public bot", bool(records),
       f"no line matches {pr.RECORD_RE.pattern!r}: run verify/test_pantry_shut_live.py and record its line")
