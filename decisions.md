@@ -50303,3 +50303,29 @@ test reads alone, so no tier run here.
 call: `agent_tool_failures_since` and `gateway_tool_calls_since` over the last hour on watch-it-burn-private and
 watch-it-burn-community each returned `[]` with kubectl exit 0, so the new argv reads both clusters. Nothing on either
 cluster changed.
+
+## 2026-11-10: #1279 resumed (run 19832): run 19785's draft ported onto staging 0abba686
+
+**Why it did not land.** Run 19785's change passed its gates but conflicted with staging in `verify/scope-map.yaml`
+at promotion: staging's caee92d8 (#1303) added the `test_agentgateway_mcp_get_e2e.py` and `test_mcp_standalone_stream.py`
+entries while the run worked. `bash verify/prior-drafts.sh 1279 origin/staging` named `origin/agent/1279-19785` with two
+edits in place (`gitops/ai-layer/resources.yaml`, `verify/scope-map.yaml`, both from caee92d8) and the decisions.md
+append. caee92d8 changes evil-mcp's RemoteMCPServer timeout and adds two scope-map entries, nothing the draft reads or
+claims, so the draft is squashed onto 0abba686 as one commit with both sides kept, unchanged from run 19785's design.
+`python3 verify/scope_tests.py write` adds nothing to the merged map.
+
+**Tests run,** each once, alone, all exit 0: `test_coc_guardrail_tf.py`, `test_fleet_import_state.py`,
+`test_iam_policy_structural.py`, `test_tf_module_cache.py`, `test_mcp_standalone_stream.py` (staging's new test on the
+same file), `test_scope_tests.py`, `test_pin_coc_guardrail.sh`, `test_fleet_converge_repairs.sh` and
+`test_fleet_standbys.sh`. The rest of the scoped Test and E2E commands is left to validation.
+
+**Live check,** read-only, with no change to either cluster. The guard-proxy Deployment as committed, applied with
+`--dry-run=server` as Argo CD's application controller, printed `deployment.apps/guard-proxy configured (server dry
+run)` on watch-it-burn-community and watch-it-burn-private. On both, guard-proxy runs as `guard-proxy-reader` with one
+ready replica and there is no `agent/coc-guardrail` ConfigMap; accen-dev us-west-2 lists no guardrail. guard-proxy's
+pin is still a7a5a369, behind 48cc2ca, so it ignores the CONDUCT_GUARDRAIL_* env until it is repinned.
+
+**Not yet run on a cluster.** Unchanged from run 19636's entry: the cluster root's apply on both clusters (an
+operator's act, not a run's), then `infra/terraform/fleet/fleet.sh converge instructors` to write the ConfigMap, then
+guard-proxy's env naming the guardrail and an ApplyGuardrail call as `guard-proxy-reader` returning
+GUARDRAIL_INTERVENED on an insult and NONE on a stage prompt, once guard-proxy is pinned at or after 48cc2ca.
