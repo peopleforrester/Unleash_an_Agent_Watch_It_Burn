@@ -42007,3 +42007,27 @@ after promotion; it is copy, and `test_kubecon_seg4_flow.py` holds it.
 **Tests run.** `python3 verify/test_ros_seg4_flow.py`, `python3 verify/test_kubecon_seg4_flow.py` and
 `python3 verify/test_desk_ticket_live.py`, each green, plus the two `_both` tests above and the prose gate. The whole
 Test and E2E commands are left to validation, which runs the tests that read the changed files.
+
+## 2026-11-09 · #1143 · run 19055 · A test holds the run-of-show's account of segment 1's prompts to the linked-list ask
+
+#1104 cut segment 1 to the one linked-list ask on `/kubecon`, in `facilitation/kubecon-na-2026/fallback/prompts.yaml`
+and in the run-of-show. `verify/test_replay_prompts.py` already held the page and the prompt set to it (segment 1's
+replay selection is exactly `linked-list`, and the page shows only "How do I reverse a linked list?" under segment 1).
+No test read the run-of-show's half: the Night Before replay bullet's "(the linked-list ask, one model call, ...)" and
+"`DONE: 1 of 1 delivered`".
+
+The same test now reads that bullet, from the `--segment 1` command to the next bullet, and checks that it names the
+linked-list ask and a model-call count in words that match segment 1's prompts in `prompts.yaml`, that its only DONE
+line counts those prompts, and that it says nothing of the order, the other off-topic asks, plural model calls or
+turns, or any prompt's text. It also checks that segment 1's own section of the run-of-show quotes no prompt from the
+set but the linked-list ask. When the bullet is not where the test reads it, the check fails naming the command and
+the file.
+
+Each check was made to fail before it was trusted: with the bullet put back to its pre-#1104 text (the order and the
+four off-topic asks, five model calls, `DONE: 5 of 5 delivered`) three of the new checks fail, and with "Teach me some
+salsa dance moves." added to segment 1's section the section check fails. The file was restored after each.
+
+**Live check.** Skipped: the change touches only a test under `verify/` that no cluster runs.
+
+**Tests run.** `python3 verify/test_replay_prompts.py`, green, and the prose gate. The whole Test and E2E commands are
+left to validation, which runs the tests that read the changed files.
