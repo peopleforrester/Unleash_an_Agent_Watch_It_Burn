@@ -47568,3 +47568,16 @@ read it; this run left it in place. The `agent/terminal-auth` Secret was not rea
 
 **Tests run.** Only this entry changed, so no offline or tier test reads it; the prose gate was run on it. The whole
 Test and E2E commands were not run and are left to validation.
+## 2026-11-09 · #1266 · run 19583 · run-e2e.sh's header says the removed-row check takes its rows off the desk with /desk-forget
+
+Since #1254, `verify/test_deployments_removed_live.py` deletes its two Deployments and removes its two rows from the
+desk with /desk-forget in the `finally` of its steps 3 to 8, so the rows go whatever ended the run. The paragraph on
+it in `verify/run-e2e.sh`'s header still said its rows stayed on the desk, greyed. It now says the check deletes what
+it made and removes its two rows with /desk-forget (#1254), whatever ended the run. Only the comment changed.
+
+**No live check.** The change is a comment in `verify/run-e2e.sh`, which no cluster runs.
+
+**Tests.** `bash -n verify/run-e2e.sh` passed. No test reads the reworded words (`git grep` for the old sentence
+found only the comment). `scope_tests.py` scopes this change and names the offline and tools tests
+that read `verify/run-e2e.sh`, five in the tools tier. They were not run here; validation runs them. No dependency
+was added.

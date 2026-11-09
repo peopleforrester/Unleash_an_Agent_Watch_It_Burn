@@ -23,7 +23,8 @@
 # #1051's removed-row check (test_deployments_removed_live.py) also runs on COMMUNITY_CONTEXT: it lands two room
 # Deployments of zero replicas, sets the two registry policies to Deny on that cluster alone for about two minutes,
 # holds the deployments page to greying the public one as "removed at <time>" and not the internal one, and puts the
-# policies back. No model call; its two rows stay on the desk, both greyed once it deletes what it made.
+# policies back. No model call; it deletes what it made and removes its two rows from the desk with /desk-forget
+# (#1254), whatever ended the run.
 #
 # #1209's live criterion (test_private_removed_row_live.py, #1250) runs on PRIVATE_CONTEXT and COMMUNITY_CONTEXT: it
 # lands a public and an internal room Deployment of zero replicas on the private cluster, reported through desk-relay,
