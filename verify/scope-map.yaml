@@ -571,6 +571,12 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/no-cloud.sh
+  test_agency_role_check.py:
+    - agent
+    - gitops/ai-layer/resources.yaml
+    - verify/agency_role_check.py
+    - verify/no-cloud.sh
+    - verify/no_cloud.py
   test_agent_bypass_shapes.py:
     - CLAUDE.md
     - agent

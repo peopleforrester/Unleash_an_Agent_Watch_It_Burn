@@ -46286,3 +46286,41 @@ The logs are `/var/lib/hecaton/runs/19508/tier3.log` and `lockinit-warm.log`. Th
 run; validation runs the tests that read the changed files. No dependency was added.
 
 **No live check.** The change is under `verify/`, which no cluster runs, and this entry (#1062).
+## 2026-11-09 · #1151 · run 19510 · guard-agency-on's Role read on both clusters: guard-proxy's field, and a kubectl check beside it
+
+**Which path was taken.** The `/controls` field needs guard-proxy, since `/controls` is guard-proxy's `read_controls`
+in guard-proxy-agenticburn, which this repo pins as a submodule. The request is filed as
+[guard-proxy-agenticburn#76](https://github.com/peopleforrester/guard-proxy-agenticburn/issues/76), "/controls: report
+whether the least-privilege Role (no create or patch on Deployments and Pods) is applied". Its run 18682 added
+`infra.agency_scoped` beside `rbac_scoped` in 3c68224: true when the agent/workshop-agent Role grants no create or
+patch (or a wildcard) on apps Deployments or core Pods, false when it does, null when the Role cannot be read. That
+reading is what tells c6-least-privilege-role.yaml from c5-scoped-role.yaml and both c8 Roles, which all keep those
+verbs. #1225's repin (run 19452) moved the submodule to a637e68, which carries 3c68224, so the field is pinned on
+staging. This run did not repin anything.
+
+**The kubectl check.** Until the pinned proxy answers on both clusters, the live pass reads the Role with kubectl:
+`python3 verify/agency_role_check.py watch-it-burn-community watch-it-burn-private`. Each argument is a kube-context,
+named with `--context` on its one `kubectl get role workshop-agent -n agent -o json`; with none, or a blank one, it
+prints a FAIL line and exits 2 having run no kubectl. Per cluster it prints `applied` when the Role's permissions,
+each rule expanded to (API group, resource, verb, resource name), are the set c6-least-privilege-role.yaml grants, and
+`not applied` otherwise, naming the challenge-fixes Role it is (or that it is none of them) and whether it grants
+create or patch on Deployments or Pods, the reading `agency_scoped` makes. It exits 1 when a Role cannot be read. Since
+both clusters run a637e68 (below), the check and `/controls` can be read side by side; it stays as the reading
+that does not depend on which proxy a cluster runs.
+
+**Offline test.** `verify/test_agency_role_check.py` runs the check through a kubectl on PATH that serves one Role
+per context from `gitops/ai-layer/resources.yaml`: c6 (and c6 with its rules split and reordered) reads applied;
+c5-scoped, c8-broad, c8-scoped and the shipped Role read not applied, each named, with workload writes granted; c6
+with one rule more matches none. It holds the unreadable case, the three no-context cases with no kubectl run, and
+that every call is that one `get` with its `--context`. Its `verify/scope-map.yaml` entry came from
+`python3 verify/scope_tests.py write`.
+
+**Live, read-only, on both clusters.** `python3 verify/agency_role_check.py watch-it-burn-community
+watch-it-burn-private` printed `not applied: the workshop-agent Role is c8-broad-role.yaml (create or patch on
+Deployments or Pods: granted)` for each, exit 0. Both clusters' `agent/guard-proxy` carry `checksum/proxy-py`
+`5e0c8390277e` (a637e68), and each one's `/controls`, read through the API server's service proxy, reported
+`rbac_scoped: false, agency_scoped: false`, which agrees. With no context the check exited 2. Nothing was changed on
+either cluster.
+
+**Tests run.** `python3 verify/test_agency_role_check.py` (all PASS, exit 0), `python3 verify/test_scope_tests.py`
+and the prose gate. No dependency was added.
