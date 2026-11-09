@@ -118,7 +118,12 @@ with tempfile.TemporaryDirectory() as tmp:
         lab["processors"].setdefault(k, full["processors"][k])
     cf = tmp / "lab.yaml"
     cf.write_text(yaml.safe_dump(lab), encoding="utf-8")
-    proc = subprocess.Popen([binary, f"--config=file:{cf}"], env=ENV, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    # The collector's log goes to a file, not a pipe nobody reads while it starts: a start-up log past 64 KB, as
+    # #1277's code-of-conduct mask makes in the traces pipeline, blocked the collector before it opened its receiver
+    # (#1283, #1286). A pipe read only on exit also showed nothing for a collector still running at the deadline.
+    log = tmp / "lab-collector.log"
+    with log.open("w", encoding="utf-8") as lf:
+        proc = subprocess.Popen([binary, f"--config=file:{cf}"], env=ENV, stdout=subprocess.DEVNULL, stderr=lf)
     url = f"http://127.0.0.1:{port}/v1/traces"
 
     def post(body: dict) -> int:
@@ -134,7 +139,9 @@ with tempfile.TemporaryDirectory() as tmp:
                 break
             except OSError:
                 if time.time() > deadline or proc.poll() is not None:
-                    print((proc.stderr.read() if proc.poll() is not None else "")[-600:], file=sys.stderr)
+                    why = "still not listening after 30 s" if proc.poll() is None else f"exited {proc.returncode}"
+                    tail = log.read_text(encoding="utf-8", errors="replace")[-600:]
+                    print(f"the lab collector {why}; the tail of {log.name}:\n{tail}", file=sys.stderr)
                     check("the lab pipeline starts", False)
                     raise SystemExit(1)
                 time.sleep(0.3)

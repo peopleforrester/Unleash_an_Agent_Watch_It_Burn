@@ -114,8 +114,13 @@ def run(profile: str, secret: bool, tmp: pathlib.Path) -> None:
     }
     cf = tmp / f"{profile}-{secret}-cfg.yaml"
     cf.write_text(yaml.safe_dump(cfg), encoding="utf-8")
-    proc = subprocess.Popen([str(OTELCOL), f"--config=file:{cf}", *feature_gate_args(profile)], env=ENV,
-                            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    # The collector's log goes to a file, not a pipe nobody reads while it starts: a start-up log past 64 KB, as
+    # #1277's code-of-conduct mask makes in the traces pipeline, blocked the collector before it opened its receiver
+    # (#1283, #1286).
+    log = tmp / f"{profile}-{secret}-collector.log"
+    with log.open("w", encoding="utf-8") as lf:
+        proc = subprocess.Popen([str(OTELCOL), f"--config=file:{cf}", *feature_gate_args(profile)], env=ENV,
+                                stdout=subprocess.DEVNULL, stderr=lf)
     try:
         # The bound only stops a collector that never listens. 30 seconds ran out on a loaded host with the
         # collector still running and its stderr empty (run 17911, #889's suite, one of six starts), so a slow start
@@ -135,10 +140,11 @@ def run(profile: str, secret: bool, tmp: pathlib.Path) -> None:
                             proc.wait(timeout=10)
                         except subprocess.TimeoutExpired:
                             proc.kill()
-                    err = proc.stderr.read() or ""
+                    err = log.read_text(encoding="utf-8", errors="replace")
                     why = (f"still not listening on {port} after {waited:.0f} s" if alive
                            else f"exited {proc.returncode} after {waited:.0f} s")
-                    check(f"{label}: the collector starts on the shipped logs pipeline", False, f"{why}: {err[-600:]}")
+                    check(f"{label}: the collector starts on the shipped logs pipeline", False,
+                          f"{why}; the tail of {log.name}: {err[-600:]}")
                     return
                 time.sleep(0.3)
         code = post(port, AGENT_PATH, RECORD)
