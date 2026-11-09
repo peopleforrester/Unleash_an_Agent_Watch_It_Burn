@@ -47165,6 +47165,7 @@ guardrails off. The `agent/terminal-auth` Secret was not read or touched.
 on this entry. `verify/test_kyverno_counter_fix.py` and the scoped E2E command were green at run 18659's `0eaf014b` and
 are left to validation.
 ## 2026-11-07 · #1094 · run 18386 · A turn that ends in kagent's ask_user shows the guest Nova's scratchpad; the persona now says never to call ask_user and to ask in its reply
+
 ## 2026-11-07 · #1094 · run 18386 · A turn that ends in kagent's ask_user shows the guest Nova's scratchpad; a draft persona rule against ask_user (dropped by run 19291, below)
 
 **Why this run.** Run 18327 (#1089) asked fresh chats "What was the last thing I asked you, word for word as best you
