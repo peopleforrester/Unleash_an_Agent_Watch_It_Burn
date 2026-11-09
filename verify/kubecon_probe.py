@@ -767,9 +767,22 @@ def judge_start_state(m: dict) -> tuple[bool, str]:
     return True, ("AI guards off, C7 gateway rule open; RBAC broad, Kyverno at Audit, no KubeArmor policy, egress open")
 
 
+def unenforced_nodes(nodes: dict, pods: dict) -> list[str]:
+    """The Ready nodes with no Ready KubeArmor enforcer pod (label kubearmor-app=kubearmor), from `kubectl get nodes`
+    and that pod list, each as JSON. The enforcer DaemonSet selects only the nodes the operator's snitch Job labelled,
+    so a node whose snitch was refused reads DESIRED 0 and runs none (#1235): block-recipe-snoop then blocks nothing
+    there, which this names before Challenge 2 reads it as a recipe leak."""
+    def ready(obj: dict) -> bool:
+        return any(c.get("type") == "Ready" and c.get("status") == "True"
+                   for c in (obj.get("status") or {}).get("conditions") or [])
+    enforced = {(p.get("spec") or {}).get("nodeName") for p in pods.get("items") or [] if ready(p)}
+    return sorted(n["metadata"]["name"] for n in nodes.get("items") or []
+                  if ready(n) and n["metadata"]["name"] not in enforced)
+
+
 def judge_armed(m: dict) -> tuple[bool, str]:
-    """After guardrails-on: the scoped Role, both registry policies at Deny, block-recipe-snoop at Block, and the
-    agent egress set in place."""
+    """After guardrails-on: the scoped Role, both registry policies at Deny, block-recipe-snoop at Block with a Ready
+    KubeArmor enforcer on every Ready node, and the agent egress set in place."""
     bad = []
     if m.get("rbac_scoped") is not True:
         bad.append("the workshop-agent Role is " + ("unreadable" if m.get("rbac_scoped") is None else "still broad"))
@@ -778,11 +791,17 @@ def judge_armed(m: dict) -> tuple[bool, str]:
             bad.append(f"{name} is {m.get(key) or 'not installed'}, not Deny")
     if m.get("kubearmor_action") != "Block":
         bad.append(f"block-recipe-snoop is {m.get('kubearmor_action')!r}, not Block")
+    unenforced = m.get("kubearmor_unenforced")
+    if unenforced is None:
+        bad.append("the KubeArmor enforcer pods or the nodes are unreadable")
+    elif unenforced:
+        bad.append(f"no Ready KubeArmor enforcer on {', '.join(unenforced)} (are its kubearmor.io/* labels there?)")
     if not m.get("networkpolicy"):
         bad.append("no agent-egress-allowlist NetworkPolicy")
     if bad:
         return False, "; ".join(bad)
-    return True, "RBAC scoped, Kyverno Deny on both registry policies, KubeArmor Block, egress locked"
+    return True, ("RBAC scoped, Kyverno Deny on both registry policies, KubeArmor Block with an enforcer on every node, "
+                  "egress locked")
 
 
 def judge_guardrails_switched(rc: int, out: str, state: str) -> tuple[bool, str]:
@@ -1337,7 +1356,17 @@ class KubeconCluster(Cluster):
         rc, out = self._stdout_rc("-n", "agent", "get", "kubearmorpolicy", "block-recipe-snoop", "-o",
                                   "jsonpath={.spec.action}")
         m["kubearmor_action"] = out.strip() if rc == 0 else None
+        m["kubearmor_unenforced"] = self.kubearmor_unenforced()
         return m
+
+    def kubearmor_unenforced(self) -> list[str] | None:
+        """The Ready nodes with no Ready KubeArmor enforcer (unenforced_nodes), or None when either list is unreadable."""
+        rc, nodes = self._stdout_rc("get", "nodes", "-o", "json")
+        prc, pods = self._stdout_rc("-n", "kubearmor", "get", "pods", "-l", "kubearmor-app=kubearmor", "-o", "json")
+        try:
+            return unenforced_nodes(json.loads(nodes), json.loads(pods)) if rc == 0 and prc == 0 else None
+        except (ValueError, KeyError, TypeError):
+            return None
 
     def gateway(self) -> dict | None:
         rc, out = self._stdout_rc("-n", "agent", "get", "deployment", "agentgateway", "-o", "json")

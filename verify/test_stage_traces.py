@@ -127,7 +127,8 @@ class FakePrivate(st.StageCluster):
         action = ["Deny"] if self.armed else ["Audit"]
         return {"guards": dict(self.g), "evil_tools": list(self.tools), "c7_rule": self.rule,
                 "kyverno_actions": action, "breakout_actions": action, "networkpolicy": self.armed,
-                "kubearmor_action": "Block" if self.armed else None, "rbac_scoped": self.role == kp.RBAC_FIX}
+                "kubearmor_action": "Block" if self.armed else None, "rbac_scoped": self.role == kp.RBAC_FIX,
+                "kubearmor_unenforced": []}
 
     def toggle(self, q):
         self.log.append(f"toggle {q}")
