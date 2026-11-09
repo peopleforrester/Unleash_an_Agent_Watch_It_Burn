@@ -46472,3 +46472,40 @@ touched. At 11:33Z https://beacon.burritobot.co/beacon/view read `data-count="1"
 **Not yet run.** The secret has to be filled once with the provisioning service's real `ADMIN_TOKEN`. That needs a
 host signed in to Railway, so the run escalated it. Then `./fleet.sh beacon-reset` from a run must end `beacon-reset:
 done; the beacon view reads zero`, which is the issue's third criterion. No dependency was added.
+
+## 2026-11-09 · #1239 · run 19504 · the Secrets Manager route ported from run 19488, and the live beacon reset to zero
+
+**Why.** Run 19488's change (the entry above) failed hecaton's `tests` gate, so it never reached staging.
+`prior-drafts.sh 1239 origin/staging` printed START from `origin/agent/1239-19488`, with one drift line, an in-place
+edit of the run-of-show by 762de799 (#1237). The draft cherry-picked cleanly, and 762de799 does not touch the two
+beacon-reset paragraphs the draft edits. Runs 19498 and 19501 left no commits.
+
+**What stopped it.** The scoped `run-tests.sh` failed one test, `test_fetch_inventory.py`. The draft adds a curl shim to
+`verify/test_fleet_beacon_reset.sh`, along with its comment and two checks on curl's arguments, and
+`verify/fetch-inventory.yaml` still listed that file's catch-all `none` entry at 2 lines when the scan now finds 5. The
+entry now claims 5, and its `why` names the shim. No line in the test reaches anything off the host. The rest of the
+draft is unchanged.
+
+**Tests run.** `python3 verify/test_fetch_inventory.py` passed after the fix. Under the no-cloud guard the runner uses,
+`test_fleet_beacon_reset.sh`, `test_ops_view.py`, `test_admin_actions.sh`, `test_fleet_start_check.sh` and
+`test_fleet_wall_reset.sh` each exited 0. Before the fix, the scoped `run-tests.sh`
+(`HECATON_BASE_SHA=$(git merge-base HEAD origin/staging)`) failed only `test_fetch_inventory.py`. The scoped Test
+and E2E commands are left to hecaton's validation. No dependency was added.
+
+**Live, from this run's host, accen-dev session sourced.** The secret `watch-it-burn/provisioning-admin-token` now
+exists in accen-dev us-west-2 (created 2026-11-09T11:50:37Z, after run 19488 escalated it). It holds the token as a
+plain string. Before the reset, at 11:54:45Z, https://beacon.burritobot.co/beacon/view read `data-count="1"`. Then
+`./fleet.sh beacon-reset` from `infra/terraform/fleet/`, with no `WIB_ADMIN_TOKEN`, no Railway login and no secrets
+env file, so the token could only come from the new fourth source, exited 0:
+
+```
+  PASS  https://watch-it-burn-provisioning-production.up.railway.app/beacon/reset answered 200, cleared 1 beacon(s)
+  PASS  https://beacon.burritobot.co/beacon/view reads 0
+beacon-reset: done; the beacon view reads zero
+exit=0
+```
+
+At 11:54:51Z the view read `data-count="0"`. A `grep -F` of the saved output against the secret's value, which was held
+in a variable and never printed, found no match: the token is not in the output. No cluster was read or changed, and
+the `agent/terminal-auth` Secret was not touched. The reset is the change the issue asked for, so nothing was put
+back.
