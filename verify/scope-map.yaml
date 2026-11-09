@@ -9047,3 +9047,26 @@ reads:
     - images.lock
     - images/web-terminal
     - scripts/ghcr_version_tag.py
+  test_yarn_pins.py:
+    - images/watch-it-burn-backstage
+    - images/watch-it-burn-backstage/README.md
+    - images/watch-it-burn-backstage/package.json
+    - images/watch-it-burn-backstage/packages/backend/Dockerfile
+    - images/watch-it-burn-backstage/yarn-plugins/conditional-checksums.cjs
+    - images/watch-it-burn-backstage/yarn-plugins/conditional-checksums.lock
+    - images/watch-it-burn-backstage/yarn.lock
+    - scripts
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/run-e2e.sh
+    - verify/yarn_pins.py
+  test_yarn_pins_e2e.py:
+    - images/watch-it-burn-backstage
+    - images/watch-it-burn-backstage/.yarn/releases
+    - images/watch-it-burn-backstage/.yarn/releases/yarn-4.*.cjs
+    - images/watch-it-burn-backstage/yarn-plugins/conditional-checksums.cjs
+    - scripts
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/run-e2e.sh
+    - verify/yarn_pins.py
