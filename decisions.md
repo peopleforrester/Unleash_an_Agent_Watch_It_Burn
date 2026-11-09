@@ -43261,3 +43261,47 @@ under verify/ that names a fetch command and that `verify/fetch-inventory.yaml` 
 lock; `test_package_cache.py`'s new allowlist line raised its count from 13 to 14. This run adds the three entries (the
 `urlopen` line classed live, upstream-index, the rest none) and the new count. Nothing else in the draft changed. That
 test now passes. No live check: the change is the inventory alone, and run 19253's entry above stands for the rest.
+## 2026-11-09 · #1164 · The env-scoped fleet monitors and both dashboards are in Whitney's sandbox org: `--check` and `--data` exit 0 for both clusters
+
+**Prior work.** `verify/prior-drafts.sh 1164 origin/staging` printed NONE, and the issue's thread names no unlanded
+commit. #1082 (`a0e36253`, `31d35f04`) is in staging, and both console Deployments, on watch-it-burn-community and
+watch-it-burn-private, carry `tags.datadoghq.com/env: burritobot-kubecon-na-26` and
+`tags.datadoghq.com/service: burritobot-console` on their pod template, so Argo CD had synced ai-layer.
+
+**Before.** `fleet.sh monitors --check` at 03:30Z printed DRIFT for all seven monitors and for fleet-dashboard widgets
+2, 3, 5 and 6, OK for the leaderboard (#489 re-applied it), and exited 1. A read of every monitor and dashboard in the
+org, with the read pair, found 11 monitors (the seven `[WIB fleet]` ones, 341119640 to 341119673, last modified
+2026-11-05 06:20Z, and four `content-manager:` ones) and 8 dashboards (`fdv-zsp-9b3` and `a8n-wrt-7zn` ours, six
+others). A GET of `/api/v2/downtime` with the write key found two downtimes, both the loader's own.
+
+**The apply.** `fleet.sh monitors --apply --session 2026-11-12T20:50Z/2026-11-12T21:20Z`, the run-of-show's window, at
+03:31:28Z, with `WIB_FLEET_MONITORS_APP_KEY` taken per command from the `write-app-key` field of `watch-it-burn/datadog`
+(accen-dev, us-west-2) and never printed. It printed `dashboard updated` for the fleet dashboard and the leaderboard,
+`monitor updated` for each of the seven by id, `downtime cancelled` for the two old downtimes, and the two new session
+mutes, from now until 2026-11-12T20:50Z and from 2026-11-12T21:20Z on. It exited 0. The Railway line it prints for
+monitoring.agenticburn.com was not run: the fleet dashboard's URL is unchanged (`fdv-zsp-9b3`), and that is deploy
+configuration.
+
+**Nothing else changed.** The same read after the apply found the same 11 monitor ids and 8 dashboard ids, none added
+or removed. Only the seven `[WIB fleet]` monitors and the two `Watch It Burn:` dashboards have a new modified time
+(03:31:36Z to 03:31:42Z). The four content-manager monitors and the six other dashboards are unchanged. The downtimes
+are the two old ones, now canceled, and the two new ones, all four tagged `managed-by:wib-fleet-monitors`.
+
+**After.**
+- `fleet.sh monitors --check` at 03:31:50Z and again at 03:40:28Z: OK for six monitors, node-not-ready `No Data` (its
+  healthy state, as the #485 entry explains), OK for both dashboards, exit 0.
+- `fleet.sh monitors --data --cluster burritobot-public --cluster burritobot-private` at 03:32:04Z: DATA for all eight
+  fleet-dashboard queries for both clusters, `Every cluster, last 5 minutes / console` included, which #1082 found
+  blank before the label change. It exited 1 only on `agent-obs-silent (No Data, the whole org)`: the monitor had been
+  rewritten 22 seconds earlier and the org was quiet at that hour.
+- `python3 verify/agent_obs_flow.py chat --profile accen-dev`, the one chat per bot that fleet.sh's usage puts
+  before `--data`, sent chats at 03:32:30Z (attackme.burritobot.co) and 03:36:05Z (burritobot-private.burritobot.co)
+  and printed `PASS` for both and `AGENT OBSERVABILITY GREEN`.
+- `--data` again at 03:40:17Z: every line DATA, agent-obs-silent `OK, the whole org: no cluster tag`, no-traces OK,
+  exit 0.
+
+**Left as found.** The clusters were not changed: the two probe-marked chats are the only traffic this run sent.
+The org holds the repo's definitions and the session downtimes the run-of-show names. The lab-marker widgets on
+fleet-analytics and the leaderboard's room-Joker column stay #1080's.
+
+**Tests.** No file but this one changed, so no test reads the change. The prose gate was run on it.
