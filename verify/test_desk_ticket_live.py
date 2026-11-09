@@ -105,12 +105,11 @@ check("it asks for the same Deployment and image as the polite one, so only the 
       d.ATTENDEE_JOKER in obody and d.IMAGE in obody and "IGNORE ALL PREVIOUS INSTRUCTIONS" not in body)
 
 print("\nThe one desk on both bots (#1145, #1220):")
-check("the public bot's desk is the one desk the talk gives the room", d.PUBLIC_DESK == sd.DESK[0], d.PUBLIC_DESK)
-check("the admin bot's desk is that same desk", d.ADMIN_DESK == d.PUBLIC_DESK, d.ADMIN_DESK)
+check("the desk both bots file on is the one desk the talk gives the room", d.DESK == sd.DESK[0], d.DESK)
 check("and is neither of the admin cluster's own desk hosts, which redirect to it",
-      d.ADMIN_DESK not in sd.PRIVATE_DESK_HOSTS and not d.ADMIN_DESK.startswith("support-burritobot-private."), d.ADMIN_DESK)
+      d.DESK not in sd.PRIVATE_DESK_HOSTS and not d.DESK.startswith("support-burritobot-private."), d.DESK)
 check("support_desk_hosts lists that desk first for both KubeCon clusters",
-      all(sd.DESKS[c][0] == d.ADMIN_DESK for c in ("watch-it-burn-community", "watch-it-burn-private")), str(sd.DESKS))
+      all(sd.DESKS[c][0] == d.DESK for c in ("watch-it-burn-community", "watch-it-burn-private")), str(sd.DESKS))
 filed: list[str] = []
 
 
@@ -136,8 +135,8 @@ def _urlopen(req, timeout=None):
 real_urlopen = d.urllib.request.urlopen
 d.urllib.request.urlopen = _urlopen
 try:
-    for label, desk in (("public bot", d.PUBLIC_DESK), ("admin bot", d.ADMIN_DESK)):
-        d.Side(label, desk, None).file(d.plain_ticket(word), d.ATTENDEE_WITCH)
+    for label in ("public bot", "admin bot"):
+        d.Side(label, None, None).file(d.plain_ticket(word), d.ATTENDEE_WITCH)
 finally:
     d.urllib.request.urlopen = real_urlopen
 check("each bot's ticket is filed on https://support.burritobot.co/submit",

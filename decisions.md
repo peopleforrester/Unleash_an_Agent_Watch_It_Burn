@@ -45653,3 +45653,35 @@ bots' `/cost` counters (to record on #503).
 **Tests.** This change is this decisions.md entry alone, so no test was written or changed; the prose gate ran on it.
 The whole Test and E2E commands were not run; validation runs the tests that read the changed file. No dependency was
 added.
+
+## 2026-11-09 · #1257 · run 19472 · Staging's heavy gate went red on three tests that two runs' changes broke between them
+
+**What failed.** Hecaton's heavy gate on staging `f897ece7` failed `run-tests.sh` on `test_desk_ticket_live.py`,
+`test_public_desk.py` and `test_scope_tests.py`. Each failed the same way here on `06323bc4`, run alone. The gate's own
+logs under its check directory were not readable from the run, so each was read from a run here.
+
+**test_desk_ticket_live.py.** It stopped on `AttributeError: module 'desk_ticket_live' has no attribute
+'PUBLIC_DESK'`. #1220's `93c5abd3` added a block, "The one desk on both bots", that reads `d.PUBLIC_DESK` and
+`d.ADMIN_DESK` and builds `Side(label, desk, None)` with a desk string. `93c5abd3` was written before #1224's
+`f526bf22` and landed after it, and its change to `desk_ticket_live.py` itself did not survive: #1224 had already moved
+the module to one `DESK_URL`, `DESK` and a `Side(label, probe, desk)` whose `file` posts to `DESK_URL`, and its own
+check holds that the module has no `ADMIN_DESK`. The block now reads `d.DESK` and files both bots' tickets through
+`Side(label, None, None)`. It checks the same four things it did: the desk is the one the talk gives the room, it is
+neither of the admin cluster's own desk hosts, support_desk_hosts lists it first for both clusters, and each bot's
+ticket goes to `https://support.burritobot.co/submit`.
+
+**test_scope_tests.py.** Its map check named `test_desk_ticket_live.py reads verify/support_desk_hosts.py, which its
+entry does not cover`: `93c5abd3` added that import without the map entry. `python3 verify/scope_tests.py write` added
+the one line.
+
+**test_public_desk.py.** It stopped on `TimeoutError` in `oversized()`. #1252's `1960a3af` made `oversized()` send the
+headers alone, since the relay then refused on the declared length without reading. #1220's `810fa4d9` then made the
+relay read and drop a body up to `DRAIN_MAX` before its 413. Together they hang: the relay waits for 4097 bytes that
+never come and the client's 5-second read times out. `oversized()` now sends the whole body, as a real caller does,
+and asserts the length is within `DRAIN_MAX`; the body past `DRAIN_MAX` is still checked by the raw-socket check
+`810fa4d9` added. The relay is unchanged.
+
+**Tests run.** Run alone after the fix: `python3 verify/test_desk_ticket_live.py` exit 0, `python3
+verify/test_public_desk.py` exit 0 (the 4k and 512k refusals both read 413), `python3 verify/test_scope_tests.py` exit
+0. The scoped Test and E2E commands are left to hecaton's validation. No live check: the change touches only tests
+under `verify/`, its map and decisions.md, which no cluster runs. No dependency was added.

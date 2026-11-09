@@ -184,18 +184,21 @@ def http(method: str, url: str, body: bytes | None = None, headers: dict | None 
 
 
 def oversized(url: str, length: int) -> int:
-    """POST that declares a body of `length` bytes and sends none of it, and return the status.
+    """POST a body of `length` bytes, all of it, and return the status.
 
-    The relay refuses on the declared Content-Length without reading the body, then closes. A client still writing the
-    body raced that close: staging 429d97e1's CI got BrokenPipeError instead of the 413 (#1252). Sending the headers
-    alone checks the same refusal with no race: the relay has everything it reads before it answers."""
+    The relay used to refuse on the declared Content-Length without reading the body, so a client still writing raced
+    its close (#1252), and this sent the headers alone. Since #1220 the relay reads and drops a body up to DRAIN_MAX
+    before its 413, so a client that sends only the headers leaves the relay waiting on a body that never comes, and the
+    read here times out: that failed staging f897ece7's heavy gate (#1257). The whole body is sent, as a real caller
+    sends it, and the 413 is read after it."""
+    assert length <= relay.DRAIN_MAX, f"{length} is over DRAIN_MAX: the relay closes unread, see the raw-socket check"
     parts = urllib.parse.urlsplit(url)
     conn = HTTPConnection(parts.hostname, parts.port, timeout=5)
     try:
         conn.putrequest("POST", parts.path)
         conn.putheader("Content-Type", "application/json")
         conn.putheader("Content-Length", str(length))
-        conn.endheaders()
+        conn.endheaders(b"x" * length)
         r = conn.getresponse()
         r.read()
         return r.status

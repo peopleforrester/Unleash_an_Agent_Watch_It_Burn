@@ -2697,6 +2697,7 @@ reads:
     - verify/kubecon_probe.py
     - verify/no-cloud.sh
     - verify/no_cloud.py
+    - verify/support_desk_hosts.py
     - verify/topic_cases.py
   test_diagram_chip_apps.py:
     - gitops/ai-layer/web/diagram.html
