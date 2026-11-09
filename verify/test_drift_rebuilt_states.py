@@ -365,12 +365,12 @@ with tempfile.TemporaryDirectory(prefix="drift-rebuilt-") as tmp:
     parked = pathlib.Path(tmp) / "parked.tfstate"
     priv.rename(parked)
     rc, out = w.run()
-    check(f"with private's state gone it is unmanaged, exit 2, and the checker fails (got {rc})",
+    check(f"with private's state gone it is unmanaged, exit code 2, and the checker fails (got {rc})",
           rc == 2 and f"`{PRIVATE}`" in "\n".join(verdict(out, rc)["unmanaged"] or [])
           and any("not clean" in p for p in judge(out, rc)) and any("Unmanaged" in p for p in judge(out, rc)))
     parked.rename(priv)
     rc, out = w.run(FAKE_TF_DRIFT=f"{COMMUNITY}.tfstate")
-    check(f"with community drifted it is a finding, exit 2, and the checker fails (got {rc})",
+    check(f"with community drifted it is a finding, exit code 2, and the checker fails (got {rc})",
           rc == 2 and any(f"cluster {COMMUNITY}" in p for p in judge(out, rc)))
     bnd = pathlib.Path(tmp) / w.paths[f"boundary {PROFILE}"]
     bnd.rename(parked)
