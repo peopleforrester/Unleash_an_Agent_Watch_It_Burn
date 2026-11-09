@@ -5346,16 +5346,38 @@ reads:
     - verify/topic_cases.py
   test_kyverno_counter_fix.py:
     - .github/workflows/build-kyverno-counter-fix.yml
+    - .gitmodules
     - VERSIONS.lock
+    - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/resources.yaml
     - gitops/bootstrap/apps/kyverno.yaml
     - images.lock
     - images/kyverno-counter-fix
     - images/kyverno-counter-fix/build.sh
     - images/kyverno-counter-fix/pr17085.patch
+    - images/llm-guard
     - scripts/ghcr_version_tag.py
+    - verify
     - verify/.tools/bin/crane
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/e2e-tools.lock
+    - verify/git_mirror.py
+    - verify/image_cache.py
+  test_kyverno_counter_fix_cache.py:
+    - .gitmodules
+    - gitops/ai-layer/guard-proxy
+    - images/kyverno-counter-fix/build.sh
+    - images/kyverno-counter-fix/pr17085.patch
+    - images/llm-guard
+    - verify
+    - verify/.tools/bin/crane
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/e2e-tools.lock
+    - verify/fetch-e2e-tools.sh
+    - verify/git_mirror.py
+    - verify/image_cache.py
   test_kyverno_profile_policies.py:
     - CLAUDE.md
     - agent
