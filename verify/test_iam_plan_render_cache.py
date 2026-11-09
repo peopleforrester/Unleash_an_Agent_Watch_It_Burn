@@ -41,7 +41,7 @@ with open(os.environ["STUB_RECORD"], "a") as f:
                         "may_break": os.environ.get("TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE"),
                         "cache": os.environ.get("TF_PLUGIN_CACHE_DIR"),
                         "config": os.environ.get("TF_CLI_CONFIG_FILE"),
-                        "proxy": os.environ.get("HTTPS_PROXY"), "git": os.environ.get("GIT_CONFIG_VALUE_0"),
+                        "proxy": os.environ.get("HTTPS_PROXY"), "github_to": os.environ.get("GIT_CONFIG_VALUE_0"),
                         "seeded": seeded}) + "\\n")
 if args[0] == "init" and not seeded and 'module "' in open(os.path.join(work, "main.tf")).read():
     os.makedirs(os.path.join(mods, "eks"))
@@ -84,7 +84,7 @@ with tf_plugin_cache.scratch("iam-render-cache-") as tmp:
               all(c["config"] == config for c in calls), calls)
         want = "installed" if root == "cluster" else "none"
         check(f"{root}: its modules are {want}, and its init runs with the network as it found it",
-              iam_plan_render.MODULES_FROM == [want] and calls[0]["proxy"] is None and calls[0]["git"] is None,
+              iam_plan_render.MODULES_FROM == [want] and calls[0]["proxy"] is None and calls[0]["github_to"] is None,
               (iam_plan_render.MODULES_FROM, calls))
 
     print("the cluster rendered again, its modules kept")
@@ -97,10 +97,10 @@ with tf_plugin_cache.scratch("iam-render-cache-") as tmp:
     check("its init finds the kept modules already in place", calls[0]["seeded"] is True, calls)
     check("its modules are kept, not installed", iam_plan_render.MODULES_FROM == ["kept"], iam_plan_render.MODULES_FROM)
     check("its init runs with HTTPS through a refused port and GitHub rewritten to it",
-          calls[0]["proxy"] == closed["HTTPS_PROXY"] and calls[0]["git"] == "https://github.com/"
+          calls[0]["proxy"] == closed["HTTPS_PROXY"] and calls[0]["github_to"] == "https://github.com/"
           and closed["HTTPS_PROXY"].startswith("http://127.0.0.1:"), calls[0])
     check("plan and show run with the network as found (they install nothing)",
-          all(c["proxy"] is None and c["git"] is None for c in calls[1:]), calls)
+          all(c["proxy"] is None and c["github_to"] is None for c in calls[1:]), calls)
     check("the one install was logged, the kept render added nothing",
           len((art / "fetch.log").read_text().splitlines()) == 1, (art / "fetch.log").read_text())
     check("the prepared config is the one that installs from the root's mirror only",
