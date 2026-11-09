@@ -47600,3 +47600,53 @@ clusters:
   shipped Role back on both clusters.
 
 The "Not yet run on a cluster" line in the #1152 entry above is now run.
+## 2026-11-09 · #1251 · run 19556 · The fetch inventory scans images/, and classes every line it finds there
+
+**What.** `verify/fetch_inventory.py` scanned verify/, .github/workflows/ and scripts/ only, so a fetch added to an
+image build script that a workflow or tier test runs was never classed. ROOTS now includes images/. The build scripts
+in question are images/kyverno-counter-fix/build.sh (build-kyverno-counter-fix.yml, test_kyverno_counter_fix_cache.py),
+images/villains/build-loopback.sh (push-jokers.yml, test_joker_build_digest.py) and images/villains/build.sh, which
+build-loopback.sh runs. All of images/ is scanned rather than a list of those three, so a new build script or
+Dockerfile is classed from its first line, as a new file under verify/ is. `verify/prior-drafts.sh 1251
+origin/staging` printed NONE.
+
+**Two lines the scan could not see, now found.** build.sh's `image_cache.py" platform-layout` (#1216) did not match
+the artifact-cache family, which knew only `layout`; the family now reads `(platform-)layout` and
+`image_cache.(platform_)layout(`. images/villains/build.sh runs crane as `"$CR" append` and `"$CR" mutate`, which the
+crane family's word match does not see; the family now also finds `"$CR"`, `"${CR}"`, `"$CRANE"` or `"${CRANE}"` when
+a crane verb follows. The wider pattern adds two lines of verify/image_cache.py's docstring and usage text and one
+of test_kyverno_counter_fix.py's text checks, each classed `none`, as the lines around them are.
+
+**Left out.** `images/watch-it-burn-backstage/.yarn/releases/` (VENDORED) is the yarn release Backstage's .yarnrc.yml
+runs, third-party code checked in whole. Its minified lines name yarn's own commands, and the fetches it makes are
+the `yarn install` call sites already classed where they run. The submodule at images/llm-guard is a gitlink, which
+`git ls-files` does not open.
+
+**What images/ holds.** 64 lines in 14 files, classed in `verify/fetch-inventory.yaml`:
+- The counter-fix build: the git mirror ensure (pinned git-commit) and the platform layouts (pinned container-image),
+  both through the host artifact cache; its clone of the mirror and its four crane calls are loopback, since build.sh
+  accepts no registry but 127.0.0.1.
+- build-loopback.sh: the image layout (pinned container-image, cached) and its crane push (loopback). build.sh's two
+  `"$CR"` lines are loopback as push-jokers.yml and the tier test run them, through build-loopback.sh's wrapper; the
+  entry's `why` says a hand run reads JOKER_BASE from ghcr.io by digest and pushes there.
+- Dockerfiles: tool-pin's grpcio and workshop-mcp's mcp and pyyaml are pinned python-package, not cached. web-terminal's
+  Dockerfile, which build-web-terminal.yml builds, holds ttyd, kubectl and code-server by version (pinned tool, no
+  checksum) and nine floating fetch lines classed live: the apt archive, PyPI (pip itself and five unpinned notebook
+  packages), the AWS CLI's unversioned zip, NodeSource's setup script, helm's get-helm-3 on main, and the latest
+  release of eksctl, k9s and yq. workshop-mcp's apt-get line is live too.
+- web-terminal/entrypoint.sh's five urlopen calls reach guard-proxy's control API on localhost:8080 inside its pod
+  (live cluster, as verify/input-guard.sh's are).
+- The rest (READMEs, comments, the .dockerignore, yarn.lock's header) is `none`.
+
+`python3 verify/fetch_inventory.py summary` now reads 924 call sites in 244 files (857 in 230 before, the 67 new
+being images/'s 64 and the three above): pinned 67, live 123, loopback 96, none 638.
+
+**Not changed here.** The web-terminal Dockerfile's floating fetches keep their floating URLs and are classed live;
+pinning them is filed as a follow-up. The scan has no family for a Dockerfile's FROM or for apt-get, so those lines are
+found only when they also name a scanned command; that is a follow-up too.
+
+**Tests run.** `python3 verify/test_fetch_inventory.py` printed `All fetch inventory checks passed.` (68 checks,
+exit 0). With the ROOTS and pattern change undone it failed 12 checks, each new one included.
+`python3 verify/fetch_inventory.py check` read `every call site classed`, with no NOTE line. `python3
+verify/scope_tests.py write` left the map unchanged. No live check: the change touches verify/ files no cluster runs
+and decisions.md. The scoped Test and E2E commands are left to validation.
