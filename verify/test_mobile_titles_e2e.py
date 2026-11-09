@@ -18,8 +18,8 @@ At 1280 the bar is one row with its labels and the card shows its tagline with n
 unchanged.
 
 Which fonts the host has decides how wide a label renders (#1047: a label fit on netcup and was cut off on Tanjiro's
-CI runner). So the page measures the bar and falls back to icons, then to a smaller font, rather than resting on the
-host's fonts, and this test does not rest on them to prove it. It renders the page twice: as shipped, and as a copy
+CI runner). So the page measures the bar and drops its domain, falls back to icons, closes its gaps, then steps to a
+smaller font (#1253), rather than resting on the host's fonts, and this test does not rest on them to prove it. It renders the page twice: as shipped, and as a copy
 whose header buttons carry 4px of letter-spacing, about 40px wider per label than any font the host could pick. That
 copy must still pass every check, and at 680px, where the shipped page keeps its four labels, it must show icons,
 so the fit is shown to work on the widest fonts, not only on the ones this host happens to have.

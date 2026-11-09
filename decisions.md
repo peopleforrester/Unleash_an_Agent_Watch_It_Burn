@@ -46642,3 +46642,54 @@ and the Night Before step, which the run-of-show already has ("Check each challe
 
 No failure, so no issue is filed. Challenge 2, red on 2026-11-07, passes since #1109 judges each of its calls in its
 own chat.
+## 2026-11-09 · #1253 · run 19531 · The chat page holds its phone layout on DejaVu Sans, and a tier test renders it there
+
+**What broke.** #1252 made the CI tier draw the chat page in Liberation Sans. On DejaVu Sans, about 15% wider, three
+layouts of `gitops/ai-layer/web/burritbot.html` still broke, as a desktop Linux browser whose sans-serif is DejaVu
+draws them. Reproduced here at staging `f20e8cdb` with a fonts.conf that reads only `/usr/share/fonts/truetype/dejavu`,
+and with a second that adds `NotoColorEmoji.ttf`, the set Tanjiro's runner had:
+- `test_chat_phone_screen_e2e.py`: at 390 and 412px, on both bots, the witch line wrapped and the card header was
+  91px against at most 72 (8 checks). The widest name took 216px and its button 137px, with about 324px to share at
+  390px.
+- `test_chat_pane_overlap_e2e.py`: the private bot at 761 and 768px scrolled sideways, scrollWidth 797 (DejaVu alone)
+  or 821 (with emoji). The brand kept its domain above 760px, and the bar counted as overflowing only on a phone.
+- `test_mobile_titles_e2e.py`, with emoji only: at 320px the wide-font copy's icons ran past the edge (scrollWidth
+  328), even with the buttons at 8px.
+
+**The fix, in the page's own fit script (`hbfit`).** The bar now counts as overflowing at any width when it is wider
+than its box. While it overflows, the script takes one step at a time and stops at the first that fits:
+`.hbnodom` drops the brand's domain, then on a phone `.hbicons`, then `.hbtight` closes the bar's padding and gaps
+(8px sides, 4px gaps, 2px between buttons, 6px button padding), then the #1047 half-pixel step down to 8px. A bar
+that fits takes no step, so Liberation Sans and desktop widths draw as before. The witch line gets the same kind of
+fit, on a phone only: where the re-roll button would wrap under the name, the name and the button step down
+together, half a pixel at a time, the button 1px under the name, never below 9px for the name. A line that still
+wraps at 9px, as at 320px, goes back to the CSS size and wraps, which #1214 allows there. The fit runs on load,
+resize, fonts ready and after each re-roll. It sets only `style.fontSize` on the button and never its text, title
+or label (#762; `test_witch_name_vocab.py` passes). The code lives in `hbfit` because `verify/chat-saved-harness.js` cuts the
+main script at the `</script>` before `</body>`, and a script placed after the main one would put its own `</script>` there instead.
+
+**The test.** `verify/test_chat_wide_font_e2e.py` (tools tier) finds DejaVuSans.ttf and NotoColorEmoji.ttf in the
+FONTCONFIG_FILE's directories and the system's and user's. It links them into two font sets, "DejaVu alone" and
+"DejaVu with colour emoji", and for each one checks in Chromium that the page's body font stack draws as DejaVu Sans.
+It then runs the three tests whole with that FONTCONFIG_FILE. A missing font file fails, naming it. On the page
+before the fix it failed 5 checks, the issue's breaks exactly. On the fix it passed all 10 in 57s.
+`verify/test_mobile_titles.py` now reads the new steps in order, the two classes' CSS and the witch-line fit.
+
+**Tests run (run 19531).** With the fix, each of the three browser tests exited 0 under DejaVu alone, under DejaVu with
+emoji, and under this host's own fonts (Liberation Sans). `python3 verify/test_chat_wide_font_e2e.py` exit 0;
+`python3 verify/test_mobile_titles.py`, `test_witch_name_vocab.py`, `test_chat_ui.py`, `test_mobile_layout.py` and
+`test_scope_tests.py` exit 0. `test_chat_witch_name.py` fails here, before and after this change, on the guard-proxy
+submodule not being checked out in this worktree, which this change does not touch. `scope_tests.py write` added the
+new test's entry and the line `test_kubearmor_config_tracked.py` was behind by
+(`policies/kyverno/require-resource-limits.yaml`, #1235's read), which `test_scope_tests.py` failed every change on.
+The whole Test and E2E commands were not run; validation runs the tests that read the changed files.
+
+**Live baseline, before promotion.** `python3 verify/test_chat_phone_screen_e2e.py --live` loads the deployed
+https://attackme.burritobot.co/ and https://burritobot-private.burritobot.co/ with /chat answered by the test. On this
+host's fonts it passed ("All chat phone screen checks passed."). With the DejaVu-and-emoji fonts.conf it failed the
+same 8 checks as above (card header 91px at 390 and 412 on both bots). No cluster was read through kubectl or
+changed, and `agent/terminal-auth` was not touched.
+
+**Not yet run on a cluster.** The fix itself: once Argo CD syncs it, run
+`FONTCONFIG_FILE=<a fonts.conf reading DejaVu alone> python3 verify/test_chat_phone_screen_e2e.py --live`, which
+should then pass.
