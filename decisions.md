@@ -46509,3 +46509,39 @@ At 11:54:51Z the view read `data-count="0"`. A `grep -F` of the saved output aga
 in a variable and never printed, found no match: the token is not in the output. No cluster was read or changed, and
 the `agent/terminal-auth` Secret was not touched. The reset is the change the issue asked for, so nothing was put
 back.
+## 2026-11-09 · #1245 · run 19497 · The app's .yarnrc.yml registers the conditional-checksums plugin, and nothing sets YARN_PLUGINS
+
+**What changed.** `images/watch-it-burn-backstage/.yarnrc.yml` now lists `yarn-plugins/conditional-checksums.cjs` under
+`plugins`, so every yarn the app runs loads it, a plain `yarn install` in the README's local development section
+included. Run 19253 on #1167 could not edit that file and loaded the plugin through `YARN_PLUGINS` instead. Those
+settings are gone from `verify/run-e2e.sh` (the `export` before `corepack yarn install --immutable`), the backend
+Dockerfile (the `ENV` line; the `COPY` of `yarn-plugins` stays, since yarn will not start without the file
+`.yarnrc.yml` names, and it still comes before `yarn workspaces focus`) and the README's build step, so the plugin has
+one registration. The comments in run-e2e.sh, the Dockerfile, the README's hash-pins section and `verify/yarn_pins.py`
+say where the plugin is loaded from now.
+
+**Tests.** `verify/test_yarn_pins.py` replaces its three `YARN_PLUGINS` checks with these: the app's `.yarnrc.yml` has
+`plugins: [{path: yarn-plugins/conditional-checksums.cjs}]` and nothing else under that key, the Dockerfile copies
+`.yarnrc.yml` and `yarn-plugins` before its install, the README's build step runs a plain `yarn install --immutable`,
+and none of run-e2e.sh, the Dockerfile and the README names `YARN_PLUGINS`. With the `plugins` block removed it failed
+the first check; with `YARN_PLUGINS=` put back on the README's install line it failed the last two. Both changes were
+then undone. `verify/test_yarn_pins_e2e.py` (tools tier) used to name the plugin to its scratch installs with
+`YARN_PLUGINS`. Its scratch projects now carry the app's own `plugins` entry, read from the app's `.yarnrc.yml`, in
+their `.yarnrc.yml`, so every install it runs is a plain `yarn install`. The premise project gets no entry.
+`yarn_pins.yarn_env()` already drops every `YARN_*` of the caller's.
+
+**Checked.** In the app, `node .yarn/releases/yarn-4.13.0.cjs plugin runtime` lists `plugin-conditional-checksums`.
+A plain `yarn install --immutable --mode=skip-build` in the app, with package_cache.py node-env's global cache and no
+`YARN_PLUGINS`, printed `5 platform-conditional package(s) match yarn-plugins/conditional-checksums.lock` in its fetch
+step and ended `exit=0` (2781 packages, 41 s). Its `node_modules` and install state were removed afterwards.
+
+**Live check skipped.** The change is under `images/`, but it changes only how the Backstage image is built. No image
+was rebuilt and no pin moved, so the two clusters run the same Backstage digest as before and have nothing new to
+show. What a cluster check would have shown, that the plugin runs, the install above shows directly.
+
+**Not yet run on a cluster.** Nothing. The next Backstage image rebuild (README step 1 and the Dockerfile) is the first
+build to load the plugin from `.yarnrc.yml`.
+
+**Tests run.** `python3 verify/test_yarn_pins.py` and `python3 verify/test_yarn_pins_e2e.py`, each exit 0, and the
+prose gate. `python3 verify/scope_tests.py write` left the map as it was. The scoped Test and E2E commands are left to
+validation. No dependency was added.

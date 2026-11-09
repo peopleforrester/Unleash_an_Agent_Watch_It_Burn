@@ -8,8 +8,10 @@
 - the plugin reads that path, with the same line rule as yarn_pins.LOCK_LINE, and wraps the fetch step.
 - package.json's packageManager is yarn@<version>+sha512.<hex>, the hex the SHA-512 of the committed release
   yarnPath names (which is what corepack downloads from repo.yarnpkg.com, checked by hand in #1167's run).
-- run-e2e.sh runs corepack-check and exports YARN_PLUGINS before `corepack yarn install --immutable`; the Dockerfile
-  copies yarn-plugins and sets YARN_PLUGINS before its `yarn workspaces focus`; the README's build step sets it.
+- the app's .yarnrc.yml lists the plugin under `plugins`, once, so every yarn in the app loads it, a plain
+  `yarn install` included (#1245); nothing sets YARN_PLUGINS (run-e2e.sh, the Dockerfile, the README), so the plugin
+  has the one registration; run-e2e.sh runs corepack-check before `corepack yarn install --immutable`; the Dockerfile
+  copies .yarnrc.yml and yarn-plugins before its `yarn workspaces focus`.
 - corepack_check() on a made-up COREPACK_HOME: none yet passes, a matching folder passes, a changed yarn.js, a changed
   .corepack bin or hash, and a packageManager with no hash each fail, naming the file and both values.
 - parse_lock(), npm_base(), fetch_npm() (with a stub fetch) and the Registry document rules, without node.
@@ -24,6 +26,8 @@ import pathlib
 import re
 import sys
 import tempfile
+
+import yaml
 
 VERIFY = pathlib.Path(__file__).resolve().parent
 REPO = VERIFY.parent
@@ -94,26 +98,33 @@ check(f"yarnPath names the packageManager release ({release.name})", release.nam
 actual = hashlib.sha512(release.read_bytes()).hexdigest() if release.is_file() else ""
 check(f"the pin is the committed release's SHA-512 ({pinned[:16]}...)", actual == pinned, actual)
 
-print("== each install loads them ==")
+print("== each install loads them: .yarnrc.yml registers the plugin, and nothing else does ==")
+rc = yaml.safe_load((APP / ".yarnrc.yml").read_text(encoding="utf-8")) or {}
+check(f"the app's .yarnrc.yml lists {yp.PLUGIN_REL} under plugins, once and alone",
+      rc.get("plugins") == [{"path": yp.PLUGIN_REL}], str(rc.get("plugins")))
+check("and that path is the committed plugin", (APP / yp.PLUGIN_REL).is_file())
 rune2e = (VERIFY / "run-e2e.sh").read_text(encoding="utf-8")
 body = re.search(r"^backstage_e2e\(\) \{\n(.*?)^\}", rune2e, re.M | re.S)
 b = body.group(1) if body else ""
 at_check = b.find('python3 "${SCRIPT_DIR}/yarn_pins.py" corepack-check "${PWD}"')
-at_plugin = b.find(f'export YARN_PLUGINS="${{PWD}}/{yp.PLUGIN_REL}"')
 at_env = b.find('done <<<"${node_env}"')
 at_install = b.find("corepack yarn install --immutable")
 check("run-e2e.sh checks COREPACK_HOME's yarn, after node-env sets it and before corepack runs",
       0 <= at_env < at_check < at_install, f"{at_env} {at_check} {at_install}")
-check("and names the plugin in YARN_PLUGINS before the install", 0 <= at_plugin < at_install)
 dockerfile = (APP / "packages/backend/Dockerfile").read_text(encoding="utf-8")
 at_copy = dockerfile.find("COPY --chown=node:node yarn-plugins ./yarn-plugins")
-at_env = dockerfile.find(f"ENV YARN_PLUGINS=/app/{yp.PLUGIN_REL}")
+at_rc = dockerfile.find("COPY --chown=node:node .yarnrc.yml ./")
 at_focus = dockerfile.find("yarn workspaces focus")
-check("the Dockerfile copies yarn-plugins and sets YARN_PLUGINS before its install",
-      0 <= at_copy < at_focus and 0 <= at_env < at_focus, f"{at_copy} {at_env} {at_focus}")
+check("the Dockerfile copies .yarnrc.yml and yarn-plugins before its install",
+      0 <= at_copy < at_focus and 0 <= at_rc < at_focus, f"{at_copy} {at_rc} {at_focus}")
 readme = (APP / "README.md").read_text(encoding="utf-8")
-check("the README's build step sets YARN_PLUGINS on its install",
-      f"YARN_PLUGINS=/src/{yp.PLUGIN_REL} yarn install --immutable" in readme)
+check("the README's build step runs a plain `yarn install --immutable`",
+      "&&\n   yarn install --immutable && yarn tsc && yarn build:backend'" in readme)
+# Two registrations would load the plugin twice; it guards against wrapping the fetch step twice, but they should not
+# coexist (#1245).
+setters = [name for name, text in (("verify/run-e2e.sh", rune2e), ("packages/backend/Dockerfile", dockerfile),
+                                   ("the README", readme)) if "YARN_PLUGINS" in text]
+check("nothing sets YARN_PLUGINS beside it (run-e2e.sh, the Dockerfile, the README)", setters == [], str(setters))
 
 print("== corepack_check() on a made-up COREPACK_HOME ==")
 with tempfile.TemporaryDirectory() as tmp:

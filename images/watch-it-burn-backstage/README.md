@@ -18,7 +18,7 @@ buildah, from this directory:
 ctr=$(buildah from ghcr.io/peopleforrester/lab-platform/mirror/library/node:24.22.2-trixie-slim-e053394f1551@sha256:e053394f15519046270b637f0655c284d2fc844e013451fcb36e02dcfba29280)
 buildah run --network=host -v "$PWD":/src --workingdir /src "$ctr" -- bash -c \
   'apt-get update -qq && apt-get install -y -qq python3 g++ build-essential libsqlite3-dev &&
-   YARN_PLUGINS=/src/yarn-plugins/conditional-checksums.cjs yarn install --immutable && yarn tsc && yarn build:backend'
+   yarn install --immutable && yarn tsc && yarn build:backend'
 buildah rm "$ctr"
 # 2. build and push the image
 buildah bud --layers --network=host -f packages/backend/Dockerfile \
@@ -53,8 +53,9 @@ ask for a vulnerable range. Two came from Dependabot alerts:
 `yarn.lock` records a checksum for every package except the platform-conditional ones, the native binaries such as
 `@esbuild/linux-x64` that carry a `conditions:` line: Yarn 4 neither writes nor checks one for those (#1167).
 `yarn-plugins/conditional-checksums.lock` records each one's cache checksum, and
-`yarn-plugins/conditional-checksums.cjs`, loaded through `YARN_PLUGINS` (`verify/run-e2e.sh`, the Dockerfile and
-step 1 above set it), fails an install whose zip for one of them differs, before anything is linked. After a change
+`yarn-plugins/conditional-checksums.cjs`, which `.yarnrc.yml` lists under `plugins` so that every `yarn install` in
+this directory loads it (step 1 above, the Dockerfile, `verify/run-e2e.sh` and the local development steps below),
+fails an install whose zip for one of them differs, before anything is linked. After a change
 to `yarn.lock`, rewrite the lock with `python3 verify/yarn_pins.py write` (it needs the network: each tarball is
 checked against npm's `dist.integrity` and then zipped by the committed yarn).
 
