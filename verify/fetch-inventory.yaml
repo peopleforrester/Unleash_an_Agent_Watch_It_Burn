@@ -779,6 +779,11 @@ sites:
     lines: 3
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_ask_user_reply.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: the pinned guard-proxy's /chat on 127.0.0.1, which the test starts behind a stand-in agent it also starts
   verify/test_audience_feedback_live.py:
   - match: urlopen
     lines: 1

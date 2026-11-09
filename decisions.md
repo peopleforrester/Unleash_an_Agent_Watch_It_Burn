@@ -47354,3 +47354,16 @@ The per-chat data and the two logs are in `/var/lib/hecaton/runs/19549/live/` on
 
 **Tests.** `python3 verify/test_ask_user_reply.py` printed `ALL ASK_USER REPLY CHECKS GREEN`. The scoped Test and E2E
 commands are left to hecaton's gate.
+
+## 2026-11-09 · #1094 · run 19571 · Run 19549's gate failed on the new test's unlisted loopback urlopen in the fetch inventory
+
+**Cause.** Hecaton's `tests` gate for run 19549 failed on `test_fetch_inventory.py` alone. Run alone on this branch, it
+printed `verify/test_ask_user_reply.py:128: a fetch call site missing from the inventory (no entry for this file)`, the
+`urllib.request.urlopen` that posts the replayed turn to the pinned guard-proxy's `/chat`. That test came in with run
+19291's draft, so the same unlisted line most likely failed run 19291's gate too. The `--context is empty` line in the
+gate output is another test's expected failure case, not a red.
+
+**Fix.** `verify/fetch-inventory.yaml` lists `verify/test_ask_user_reply.py` with its one `urlopen` line as `loopback`:
+guard-proxy on 127.0.0.1, started by the test in front of a stand-in agent that the test also starts. Then
+`python3 verify/test_fetch_inventory.py` printed `All fetch inventory checks passed.` Nothing that a cluster runs
+changed, so no live check was run. Run 19549's live record above stands.
