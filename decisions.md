@@ -44880,3 +44880,41 @@ tier tests, is run 17941's result on its own base `24670870` (with `add3386b` on
 staging, which is 661 commits later. The live results are likewise from 2026-11-06 at the revisions named above.
 This port ran no live check, because it changes only decisions.md, which no cluster runs (CLAUDE.md, Dispatched runs,
 point 1).
+
+## 2026-11-09 · #1218 · run 19443 · The NetworkPolicy drill passes on both clusters at staging 873e8f26, and floor.md's window and register still match the pins
+
+**What was asked.** #205's Kubernetes-plane case was last run live by run 17941 on staging `24670870`. Since then
+`gitops/ai-layer/resources.yaml`, which holds the drill's target, and `docs/floor.md` have changed. #1218 asked for the
+documented self-heal window and the unmanaged register to be checked against the chart pins and the repo, and for the
+drill to run again on both clusters. `verify/prior-drafts.sh 1218 origin/staging` printed `NONE`, so no draft was ported.
+
+**The pins and the target, read again.** `infra/deploy-full-idp.sh` installs chart `10.11.7`, Argo CD `v3.5.7`, as
+floor.md says, and both clusters run `quay.io/argoproj/argocd:v3.5.7`. lab-platform's `internal/bootstrap/charts.go`
+on its main (`4fc24e6c`) pins `ArgoCDChartVersion = "10.11.3"` and `ArgoCDAppVersion = "v3.5.6"`, also as floor.md
+says. `agent/platform-console-egress` is still a NetworkPolicy in `gitops/ai-layer/resources.yaml`, owned by
+`ai-layer`, with the same spec (console pods, egress open to all). Neither `infra/argocd-values.yaml` nor
+`deploy-full-idp.sh` sets a reconciliation, self-heal or webhook knob. The register's three parts (attendee keys,
+`ignore_changes`, hand-made event objects) match the repo: no Terraform root has `ignore_changes`, and the
+`agent/terminal-auth` row already names #1069 and #1074. So floor.md and the drill needed no change, and this entry is
+the only edit. `python3 verify/test_drift_floor.py` printed `All drift-floor checks passed.` and
+`python3 verify/test_drift_selfheal_ops.py` printed `Self-heal operation checks passed.`
+
+**The drill, live.** Both clusters were on staging `873e8f26` (this run's base), `ai-layer` Synced and Healthy, last
+synced at 05:59:28Z on watch-it-burn-community and 06:02:16Z on watch-it-burn-private. Then
+`CONTEXT=<ctx> python3 verify/test_drift_selfheal_live.py` ran on each, holding that cluster's guard lock, and each
+exited 0 with `Self-heal drill passed.`:
+
+| Cluster | Quiet before the delete | Back after | How it was healed | Sync that did it |
+|---|---|---|---|---|
+| watch-it-burn-community | 3410 s, autoHealAttemptsCount 0 | 2.5 s | a selective self-heal of 1 resource, no hooks run | automated, started 06:56:21Z, `Succeeded` |
+| watch-it-burn-private | 3242 s, autoHealAttemptsCount 0 | 2.6 s | a selective self-heal of 1 resource, no hooks run | automated, started 06:56:21Z, `Succeeded` |
+
+Both are inside the 30 s window floor.md documents. Each policy came back as a new uid (`33e15e92` on community,
+`756f590a` on private, both created 06:56:21Z) with Argo CD's tracking annotation and git's spec. Read at 06:56:39Z,
+`ai-layer` and the `lab-bootstrap` root are Synced and Healthy on both clusters at revision `873e8f26`, so both are as
+found. The `agent/terminal-auth` Secret was neither read nor written.
+
+**Not yet run on a cluster.** Nothing: this run changed no code, and the drill ran on both clusters.
+
+**Tests.** Only the two offline drift tests above were run by hand. The scoped suite for this change, which touches
+only decisions.md, is left to validation, as the issue's Notes ask. No dependency was added.
