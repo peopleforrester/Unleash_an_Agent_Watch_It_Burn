@@ -49671,3 +49671,13 @@ removed those rows before this check began.
 **Not yet run on a cluster.** The change running from staging through Argo CD. Once promoted, the next run on this
 issue reads `https://burritobot-private.burritobot.co/deployments.json?witch=<slug>` for a witch with a private row and
 expects that row alone. It also reads the admin chat page and expects the link to appear.
+
+**Run 19743, after run 19546 failed validation.** The tests gate failed on `verify/test_fetch_inventory.py` alone. Its
+scan finds every line that calls a fetch, and the new `verify/test_private_chat_deployments.py` has one `urlopen` with
+no entry in `verify/fetch-inventory.yaml`. That call reaches only the desk, relay and stub servers the test starts on
+127.0.0.1, so the file now has a `loopback` entry, as `verify/test_public_desk.py` does. The gate's
+`--context is empty` line came from a test that passed and is not this change's. On the rebased branch these all exit
+0: `python3 verify/test_fetch_inventory.py`, `python3 verify/fetch_inventory.py check`, the new test,
+`verify/test_public_desk.py`, `verify/test_private_desk_redirect.py`, `verify/test_desk_remote_reports.py`,
+`verify/test_presenter_ticket_range.py`, `verify/test_one_desk_tools.py` and `verify/test_scope_tests.py`. The live
+check above still stands, since no cluster-facing file changed. The scoped Test and E2E commands are left to validation.
