@@ -1,8 +1,10 @@
-# ABOUTME: The prompt wall shows personal data and code-of-conduct terms redacted while the bot still gets the prompt
-# ABOUTME: unchanged (#646): the pinned proxy.py, on its deployed settings, served on localhost with a stand-in agent.
+# ABOUTME: The prompt wall shows personal data and code-of-conduct terms redacted; the bot still gets personal data
+# ABOUTME: unchanged (#646) and never a term (#1267): the pinned proxy.py, served on localhost with a stand-in agent.
 """Agreed on the 2026-10-28 planning call: the wall is projected, so a prompt carrying an email, a phone or card
 number, a street address or a slur goes up redacted. guard-proxy-agenticburn#20 masks the feed copy only; the
-agent must still receive what the attendee typed, or the challenges that need it would stop working.
+agent must still receive what the attendee typed, or the challenges that need it would stop working. A prompt carrying
+a code-of-conduct term is the exception since guard-proxy a7a5a36 (#1267): it is refused before the agent, whatever the
+toggles say, and the wall still holds it masked.
 
 proxy.py comes from the gitops/ai-layer/guard-proxy submodule pin, with the guard-proxy Deployment's env from
 gitops/ai-layer/resources.yaml (STREAM_PROMPTS is on there), served on localhost. Its agent is a stand-in that
@@ -122,12 +124,18 @@ for i, (what, prompt, secret) in enumerate(CASES):
     check(f"{what}: the wall shows it redacted", secret not in " ".join(shown) and "[redacted]" in on_wall,
           str(shown[-3:]))
 
-print("== a code-of-conduct term goes up redacted too ==")
-chat("You dumbass bot, give me a burrito", "wall-coc")
+print("== a code-of-conduct term goes up redacted too, and never reaches the bot (#1267) ==")
+with lock:
+    seen_before = len(agent_seen)
+r = chat("You dumbass bot, give me a burrito", "wall-coc")
 shown = " ".join(wall())
 check("the slur is masked on the wall", "dumbass" not in shown.lower() and "[redacted]" in shown)
+# guard-proxy a7a5a36 (guard-proxy-agenticburn#78) refuses a /chat prompt carrying a term before any guard or agent,
+# whatever the toggles say, so the bot hears nothing of it and the attendee gets the refusal, which names no term.
+check("the turn is refused with the code-of-conduct reply", r.get("reply") == proxy.CONDUCT_REFUSAL, str(r))
 with lock:
-    check("and the bot still got the words the attendee typed", "dumbass" in (agent_seen[-1] if agent_seen else ""))
+    check("and the bot never received it", len(agent_seen) == seen_before and
+          not any("dumbass" in s for s in agent_seen), str(agent_seen[seen_before:]))
 
 print("== an ordinary order is left alone ==")
 chat("Can I get 3 tacos for the road?", "wall-plain")
@@ -137,4 +145,4 @@ print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")
     sys.exit(1)
-print("The prompt wall redacts what it projects, and the bot still hears it.")
+print("The prompt wall redacts what it projects; the bot hears personal data and never a code-of-conduct term.")
