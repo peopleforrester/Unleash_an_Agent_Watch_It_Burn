@@ -44,9 +44,12 @@ SEG4, SEG5, SEG6, ROW4, ROW5 = "### Segment 4:", "### Segment 5:", "### Segment 
 # The tests that hold segment 4's slides to the 2026-11-07 deck, and so quote its numbers: the run-of-show's (#1098)
 # and the /kubecon page's (#1100); and the one that holds the stage-trace seeds to the notes of the slides that open
 # Challenge 3's and Challenge 4's traces, #/48 and #/68 (#1138); and the one that holds segment 4's desk lines, which
-# quote what #/46 and #/47's "deploy" open (#1160).
+# quote what #/46 and #/47's "deploy" open (#1160); and the one that holds the Night Before seed step to its four
+# Datadog links, #/48 and #/68 among them, and fails on #/65 there (#1205); and the one that holds that step's table
+# of the four links, #/48 and #/68 among them, to verify/stage_traces.py (#1206).
 SEG4_READERS = {"verify/test_ros_seg4_flow.py", "verify/test_kubecon_seg4_flow.py", "verify/test_stage_trace_slides.py",
-                "verify/test_support_desk_named.py"}
+                "verify/test_support_desk_named.py", "verify/test_ros_seed_step_links.py",
+                "verify/test_stage_seed_links.py"}
 LOW, HIGH = 44, 64  # the new Challenge 3, which the old deck's Challenge 3, Challenge 4 and close numbers land in
 HASH_FROM = 43      # #/43 is slide 44
 # The Night Before step that names each challenge's Datadog link by hash, #/48 and #/68 among them (#1139), from its

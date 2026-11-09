@@ -13,6 +13,8 @@ on:
       - 'verify/ci-artifact-cache.sh'
       - 'verify/artifact_cache.py'
       - 'verify/artifact-cache.sh'
+      - 'verify/image_cache.py'
+      - 'verify/git_mirror.py'
       - '.github/workflows/build-kyverno-counter-fix.yml'
       - 'scripts/ghcr_version_tag.py'
 
@@ -46,6 +48,10 @@ jobs:
           tar -xzf "${archive}" -C "${RUNNER_TEMP}/bin" "${member}"
           echo "CRANE=${RUNNER_TEMP}/bin/crane" >> "${GITHUB_ENV}"
           "${RUNNER_TEMP}/bin/crane" version
+      # build.sh reads its three pinned bases from the runner's artifact cache as OCI layouts keyed by their digests
+      # (verify/image_cache.py), pushed to this registry before crane append builds on them, and the kyverno source
+      # from the cache's bare mirror at its pinned commit (verify/git_mirror.py) (#1216). reg.kyverno.io and GitHub
+      # are read only on a miss, so on a warm cache the build reaches no registry but this one on loopback.
       - name: Build the three controllers with build.sh into crane's registry on loopback
         run: |
           nohup "${CRANE}" registry serve --address 127.0.0.1:5000 >"${RUNNER_TEMP}/registry.log" 2>&1 &

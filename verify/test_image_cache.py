@@ -181,6 +181,38 @@ try:
                  ic.ImageCacheError)
     check("a platform the index lacks fails, naming the ones it has", "linux/s390x" in msg and "linux/amd64" in msg, msg)
 
+    print("== platform_layout: the platform's image of an index as a layout of its own, to push (#1216) ==")
+    out = base / "platform-out"
+    got = ic.platform_layout(INDEX_REF, out, root=ix_root, fetch=never)
+    check("it returns the amd64 image manifest's digest, not the index's", got == f"sha256:{sha(manifest)}", got)
+    named = json.loads((out / "index.json").read_text())["manifests"]
+    check("its index.json names only that manifest, with its media type and size",
+          [(d["digest"], d["mediaType"], d["size"]) for d in named]
+          == [(f"sha256:{sha(manifest)}", ic.MANIFEST_TYPES[0], len(manifest))], str(named))
+    check("it is an OCI layout", json.loads((out / "oci-layout").read_text()) == {"imageLayoutVersion": "1.0.0"})
+    check("its blobs are the cached layout's, linked and not copied",
+          (out / "blobs").is_symlink() and (out / "blobs").resolve() == (ixd / "blobs").resolve())
+    check("image() reads it back as the amd64 image", ic.image(out)["manifest"] == json.loads(manifest)
+          and [p.read_bytes() for p in ic.image(out)["layers"]] == [layer])
+    msg = raises(lambda: ic.platform_layout(INDEX_REF, out, root=ix_root, fetch=never), ic.ImageCacheError)
+    check("it refuses to write over a directory that is already there", str(out) in msg and "already" in msg, msg)
+    img_out = base / "platform-image"
+    check("for a pin that names an image, it is that image",
+          ic.platform_layout(REF, img_out, root=root, fetch=never) == f"sha256:{sha(manifest)}"
+          and [d["digest"] for d in json.loads((img_out / "index.json").read_text())["manifests"]]
+          == [f"sha256:{sha(manifest)}"])
+    cli_out = base / "platform-cli"
+    r = subprocess.run([sys.executable, str(VERIFY / "image_cache.py"), "platform-layout", INDEX_REF, str(cli_out),
+                        "linux/amd64"], capture_output=True, text=True,
+                       env={**os.environ, "WIB_ARTIFACT_CACHE": str(ix_root), "HTTPS_PROXY": "http://127.0.0.1:9"})
+    check("the command line prints the digest on a hit, with every proxy a closed port",
+          r.returncode == 0 and r.stdout.strip() == f"sha256:{sha(manifest)}", r.stdout + r.stderr)
+    (ixd / "blobs" / "sha256" / sha(manifest)).unlink()
+    msg = raises(lambda: ic.platform_layout(INDEX_REF, base / "platform-gone", root=ix_root, fetch=never),
+                 ic.LayoutMismatch)
+    check("a cached layout that lost the platform's manifest fails by name and fetches nothing", sha(manifest) in msg,
+          msg)
+
     print("== the registry fetcher: an anonymous Bearer token, and a blob's redirect followed without it ==")
     seen: list[tuple[str, str | None]] = []
 

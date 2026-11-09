@@ -147,6 +147,39 @@ check("each copy goes through ghcr_version_tag.py's crane: row with images.lock 
       'python3 scripts/ghcr_version_tag.py "crane:127.0.0.1:5000/peopleforrester/watch-it-burn:${tag}" '
       f'"{GHCR}:${{tag}}" images.lock' in runs)
 
+print("== the build reads its bases and its source from the host artifact cache (#1216) ==")
+code = "\n".join(l for l in build.splitlines() if not l.lstrip().startswith("#"))
+check("build.sh names the kyverno repository once, as KYVERNO_URL",
+      pin("KYVERNO_URL") == "https://github.com/kyverno/kyverno.git" and code.count("github.com/kyverno/kyverno.git") == 1)
+check("the source comes from git_mirror.py's bare mirror at KYVERNO_COMMIT, not a clone of GitHub",
+      'git_mirror.py" ensure "${KYVERNO_URL}" "${KYVERNO_COMMIT}")"' in code
+      and re.search(r"git (-c \S+ )*clone[^\n]*https?://", code) is None and "--branch" not in code,
+      "want python3 ${VERIFY}/git_mirror.py ensure ${KYVERNO_URL} ${KYVERNO_COMMIT}, and no network clone")
+check("the clone reads the mirror and checks out the pinned commit, detached",
+      'clone --quiet --shared --no-checkout "${mirror}" "${tmp}/src"' in code
+      and 'checkout --quiet --detach "${KYVERNO_COMMIT}"' in code)
+check("the mirror's tag must name KYVERNO_COMMIT, or the build stops naming both hashes",
+      'rev-parse --verify --quiet "refs/tags/${KYVERNO_TAG}^{commit}"' in code
+      and "is ${tagged} in the mirror ${mirror}, not ${KYVERNO_COMMIT}" in code)
+check("the checkout's HEAD must be KYVERNO_COMMIT, or the build stops naming both hashes",
+      "is at ${head}, not ${KYVERNO_COMMIT}" in code)
+check("each base comes from image_cache.py's layout of its pinned digest, as its amd64 image",
+      'image_cache.py" platform-layout "${BASE[${bin}]}" "${tmp}/base-${bin}" linux/amd64)"' in code)
+check("crane pushes it to the loopback registry, where it must land on that image's digest",
+      'LOCAL_BASE[${bin}]="${addr}/kyverno-base/${bin}@${digest}"' in code
+      and 'pushed="$("${crane}" --insecure push "${tmp}/base-${bin}" "${addr}/kyverno-base/${bin}")"' in code
+      and '[[ "${pushed}" == "${LOCAL_BASE[${bin}]}" ]]' in code)
+appends = re.findall(r"append --platform linux/amd64 -b \"([^\"]+)\"", code)
+check("crane append builds on the loopback copy, and on nothing else", appends == ["${LOCAL_BASE[${bin}]}"], f"{appends}")
+check("crane append is not asked for base annotations, so where the base was read from is not in the digest",
+      "--set-base-image-annotations" not in code)
+remote = sorted(set(re.findall(r"(?:reg\.kyverno\.io|ghcr\.io|docker\.io|github\.com)[^\s\"]*", code))
+                - {b for b in bases.values()} - {"github.com/kyverno/kyverno.git", "github.com/kyverno/kyverno/pkg/version.BuildVersion=${BUILD_VERSION}"})
+check("no other remote reference is in build.sh's code: the bases are pins, the URL is the mirror's key",
+      remote == [], f"{remote}")
+check("the workflow runs again when image_cache.py or git_mirror.py changes",
+      {"verify/image_cache.py", "verify/git_mirror.py"} <= set(paths), f"{paths}")
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")

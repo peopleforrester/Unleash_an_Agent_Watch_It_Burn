@@ -37,9 +37,9 @@ sites:
     class: loopback
     why: crane's own registry on 127.0.0.1:5000, which the job starts
   - match: .
-    lines: 2
+    lines: 3
     class: none
-    why: 'a step name, and the call that hands scripts/ghcr_version_tag.py a crane: build on loopback, whose fetches are classed there'
+    why: 'a step name, a comment on where build.sh reads its bases and source (#1216), and the call that hands scripts/ghcr_version_tag.py a crane: build on loopback, whose fetches are classed there'
   .github/workflows/iam-policy.yml:
   - match: setup-python
     lines: 1
@@ -405,10 +405,10 @@ sites:
     lines: 3
     class: pinned
     kind: container-image
-    pin: the reference's own @sha256 digest (build.sh's JOKER_BASE); each manifest and blob through artifact_cache.get_retrying by its sha256
+    pin: the reference's own @sha256 digest (images/villains/build.sh's JOKER_BASE, images/kyverno-counter-fix/build.sh's BASE); each manifest and blob through artifact_cache.get_retrying by its sha256, platform_layout through layout()
     cached: true
   - match: .
-    lines: 3
+    lines: 5
     class: none
     why: the docstring and the command-line usage; none runs a fetch
   verify/input-guard.sh:
@@ -520,6 +520,12 @@ sites:
     lines: 10
     class: none
     why: docstrings and messages, and `playwright install --dry-run`, which downloads nothing
+  verify/presenter_ticket_live.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: lab-endpoint
+    target: the one support desk's public host on the KubeCon community cluster (/ticket/<n>), and its fake-ticket service through a kubectl port-forward on 127.0.0.1 (/presenter-ticket, #1221)
   verify/probe_pod.py:
   - match: .
     lines: 1
@@ -623,9 +629,43 @@ sites:
     why: a docstring, and the list of host tools the test stubs; nothing leaves the host
   verify/test_kyverno_counter_fix.py:
   - match: .
-    lines: 5
+    lines: 12
     class: none
-    why: checks on build.sh's and the workflow's text that name crane; nothing leaves the host
+    why: checks on build.sh's and the workflow's text that name crane, git_mirror.py and image_cache.py; nothing leaves the host
+  verify/test_kyverno_counter_fix_cache.py:
+  - match: '"registry", "serve"|urlopen|"--insecure"'
+    lines: 6
+    class: loopback
+    why: crane's own registry on 127.0.0.1, which the test starts
+  - match: '"clone", "--quiet", "--bare", "--shared"'
+    lines: 1
+    class: loopback
+    why: a copy of the host artifact cache's kyverno mirror, a repository on this host, into the test's scratch cache root
+  - match: image_cache\.layout\(|"CRANE":\ crane
+    lines: 2
+    class: pinned
+    kind: container-image
+    pin: images/kyverno-counter-fix/build.sh (BASE, the three Kyverno bases by index digest, from image_cache.py's OCI layouts; reg.kyverno.io only on a miss)
+    cached: true
+  - match: git_mirror\.ensure\(
+    lines: 1
+    class: pinned
+    kind: git-commit
+    pin: images/kyverno-counter-fix/build.sh (KYVERNO_COMMIT, from git_mirror.py's bare mirror of KYVERNO_URL; GitHub only on a miss)
+    cached: true
+  - match: .
+    lines: 7
+    class: none
+    why: docstrings, comments, messages and the CRANE variable's checks
+  verify/test_presenter_ticket_live.py:
+  - match: 'curl -s -X POST localhost:18080'
+    lines: 1
+    class: none
+    why: a literal the test looks for in the run-of-show's segment 4, the presenters' command; it runs nothing
+  - match: urlopen
+    lines: 5
+    class: loopback
+    why: the support desk's own server on 127.0.0.1, which the test starts (#1221)
   verify/test_presenter_ticket_range.py:
   - match: urlopen
     lines: 1
@@ -940,10 +980,6 @@ sites:
     class: none
     why: a regex over the desk's source
   verify/test_desk_ticket_live.py:
-  - match: _urlopen|real_urlopen
-    lines: 3
-    class: none
-    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   - match: urlopen
     lines: 4
     class: loopback

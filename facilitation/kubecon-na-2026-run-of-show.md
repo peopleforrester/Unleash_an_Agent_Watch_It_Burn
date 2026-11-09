@@ -2383,7 +2383,11 @@ is merely slow rather than rebuilding:
 
   Each seed is its own session, `wib-stage-<key>-<stamp>`, where `<key>` is the seed
   (`c1-attack` to `c4-fixed`) and `<stamp>` the UTC minute the run started, the same
-  for all nine. The prompts go without the probe marker, so the trace reads as the
+  for all nine. A seed whose ask misses the tool its slide shows is asked again in a
+  fresh session, the same id with `-2` after it, then `-3`, up to four asks (#1210):
+  Nova Pro skips the call on some asks. That seed's row in `tmp/stage-traces.json`
+  names the session that made the call, and its `missed` entry the ones that did not,
+  so search the row's session. The prompts go without the probe marker, so the trace reads as the
   prompt shown (the prompts show in the
   private bot's column of the prompt wall, except the PII one: the feed masks it to
   `[redacted]`, and a masked prompt is left off `/display` (#915) and, with
@@ -2397,7 +2401,8 @@ is merely slow rather than rebuilding:
   of the PII in it. Then it prints one link per seed plus the room's and the
   presenters' live tabs, and writes them, with the stamp (`"stamp"`), to
   `tmp/stage-traces.json`. It must end `SEEDED GREEN`. Write the stamp into the
-  presenters' notes: every trace below is found by its session id.
+  presenters' notes, with the `-2` or later on any seed that was asked again: every
+  trace below is found by its session id.
 
   **The four Datadog links.** The deck opens Datadog once per challenge, from the
   slide that shows the attack's trace, not from saved views. Where those links point

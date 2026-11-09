@@ -56,8 +56,16 @@ SIDES = ("community", "private")
 _TOOL = "import sys; sys.path.insert(0, '/app'); import server; "
 READ_TOOL = ["-n", "agent", "exec", "deploy/workshop-mcp", "-c", "shim", "--", "python3", "-c",
              _TOOL + "print(server.read_support_ticket(sys.argv[1]))"]
+# deploy_app reports its row to the desk from a daemon thread (workshop-mcp-server.py's _report), which a one-shot
+# python3 -c kills on exit. Run 19437's first live run (#1223) deployed both ConfigMaps and the desk logged no /landed
+# at all, so the page step read no row. The call now joins the threads deploy_app started, the report among them, for
+# up to REPORT_JOIN_S each, and leaves a Timer (a room Joker's scale-down) to die with the process, as before.
+REPORT_JOIN_S = 10
 DEPLOY_TOOL = ["-n", "agent", "exec", "deploy/workshop-mcp", "-c", "shim", "--", "python3", "-c",
-               _TOOL + "print(server.deploy_app(sys.argv[1], requested_by=sys.argv[2]))"]
+               _TOOL + "import threading; before = set(threading.enumerate()); "
+               "out = server.deploy_app(sys.argv[1], requested_by=sys.argv[2]); print(out, flush=True); "
+               f"[t.join({REPORT_JOIN_S}) for t in threading.enumerate() "
+               "if t not in before and not isinstance(t, threading.Timer)]"]
 
 
 def check_name(stamp: str, side: str) -> str:

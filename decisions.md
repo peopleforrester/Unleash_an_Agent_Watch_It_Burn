@@ -44559,3 +44559,848 @@ scoped suite is left to validation. No dependency was added.
 512k + 1 to `/cluster-read` each answer 413, with the port-forward still up afterwards. The two checks run 19413 named
 are still owed as well: `curl -sI` on the two private desk hosts answering 307, and `desk_ticket_live.py`, after the
 follow-up that has it remove its own rows.
+## 2026-11-09 · #1208 · run 19409 · guardrails-off returns on both clusters with the finalizer on, and the switch test reads the terminal's own deletes
+
+**What was left.** #1134's run 18785 found this hang's cause and fixed it in `gitops/guardrails-switch/guardrails-switch.yaml`:
+the switch's Role in `agent` grants `list` and `watch` beside `delete` on NetworkPolicies and KubeArmor policies, so
+the wait in `kubectl delete` can watch an object that still holds `networking.k8s.aws/resources`. Run 18805 (#1159)
+saw `guardrails-off` return on both KubeCon probes after it synced. `verify/prior-drafts.sh 1208 origin/staging` printed
+NONE. Of the issue's two options this keeps the Role fix and does not add `--wait=false`: with the wait, the policy
+is gone before the terminal prints "Egress OFF", and a `guardrails-on` straight after does not meet an object that is
+still being deleted.
+
+**The test.** `verify/test_guardrails_switch.py` already held the Role alone (every kind it may delete it may also list
+and watch). Its replay of `guardrails-off` against the fake two-cluster kubectl now turns each `delete` the terminal
+makes on the other cluster into the RBAC requests real kubectl makes: `delete`, and `list` and `watch` on the kind
+unless the call passes `--wait=false`. The check that everything the switch asks of the other cluster is inside the
+grant then fails on the grant run 18721 met. A new check pins that: both deletes wait, and with `list` and `watch`
+taken out of the grant the replay names `watch` on networkpolicies and kubearmorpolicies as missing. With the live
+Role's networkpolicies rule cut to `get, create, patch, delete` in the worktree, the test exited 1 on three checks,
+the replay's among them; the file was restored. Against the tree, 133 checks pass.
+
+**Live check, watch-it-burn-private's terminal.** At the start, both clusters had every guardrail off, the
+`guardrails-switch` Application Synced at `6513ed35`, `kubectl auth can-i watch networkpolicies -n agent --as
+system:serviceaccount:guardrails-switch:guardrails-switch` printed `yes` on both, and every NetworkPolicy in `agent`
+on both carried `[networking.k8s.aws/resources]`. Under `python3 verify/guard_lease.py hold --with-peer --context
+watch-it-burn-private --profile accen-dev`, which waited for run 19404's trace seed to release the lock first:
+
+```
+kubectl --context watch-it-burn-private -n agent exec deploy/web-terminal -c ttyd -- bash /home/student/guardrails-on
+Both clusters, this one and watch-it-burn-community: all four Kubernetes guardrails are on.
+guardrails-on rc=0 in 6.3 s
+kubectl --context watch-it-burn-private -n agent exec deploy/web-terminal -c ttyd -- bash /home/student/guardrails-off
+Both clusters, this one and watch-it-burn-community: all four Kubernetes guardrails are off.
+guardrails-off rc=0 in 6.7 s
+```
+
+A second pass read the policies between the two: on both clusters each of the six egress policies `guardrails-on`
+applied (`agent-allow-dns`, `agent-allow-intra-namespace`, `agent-allow-kagent-egress`, `agent-allow-otel-egress`,
+`agent-allow-weather-feed-egress`, `agent-egress-allowlist`) carried `[networking.k8s.aws/resources]`, and
+`guardrails-off` then returned rc 0 in 6.7 s, ending "all four Kubernetes guardrails are off." Read back after: both
+clusters at the start state (the egress policies gone, the shipped ingress and console policies kept, no KubeArmor
+policy, both registry policies at `[Audit]`, the workshop-agent Role's rules byte for byte as read before), no
+`wib-guard-lock` on either, and no kubectl left running in either terminal pod. The presenter terminal login was not
+read or touched.
+
+**Tests run.** `python3 verify/test_guardrails_switch.py` and `python3 verify/test_scope_tests.py` pass. The full Test
+and E2E commands are left to hecaton's validation. No dependency was added.
+## 2026-11-09 · #1210 · run 19404 · A stage-trace seed whose ask misses its slide's tool is asked again in a fresh session
+
+Run 18722 (#1140) saw Nova Pro skip the call a seed's slide shows: `run_shell` ran in two of six Challenge 2 asks, and
+`c4-fixed` passed one of three times. The issue offered two designs: ask again in a fresh session, or change the agent
+prompt so the C3 ask reads the card every time. This run takes the first. A prompt change would reach the live stage
+and the room too, and the room's Challenge 2 is meant to need a reason and a folder; a fresh ask is what a presenter
+does on stage when the bot answers without the tool.
+
+**The design** (`verify/stage_traces.py`, `_tried`):
+
+- Each of the eight model seeds reads the tools its own ask called: workshop-mcp's audit log for Challenges 1 to 3,
+  agentgateway-c7's access log for Challenge 4. When one of its SEEDS row's `must` tools is not among them
+  (`missed_tools`; for Challenge 2, a `run_shell` that read `/tmp/burrito-data`), the seed is asked again in a fresh
+  session, its id with `-2` after it, then `-3`, up to `--attempts` asks in all (default 4). A seed whose every ask
+  missed is red, even when its judge passed on the reply alone, since its trace has no span to point at.
+- The seed's row in `tmp/stage-traces.json`, its query, its link and the Datadog span read all follow the ask that made
+  the call. The asks that missed are listed, by session and what each called, in the file's `missed` and in the beat's
+  note.
+- `--max-calls` stays a hard ceiling: another ask is sent only while it stays under it, as the Bedrock 424 re-send is.
+  Its default rises from 10 to 34: four asks for each model seed, one for `c3-pii`, one re-send.
+- A Joker or desk row an ask leaves behind fails the seed on that ask, with no ask after it (#1026, #1215).
+- `c4-fixed` is judged on the gateway, as the KubeCon probe's c7-on beat has been since #905 (`kp.judge_c7_stopped`):
+  `get_weather` called, no rogue tool forwarded, no sentinel. The reply-only judge wanted the reply to name
+  `read_internal_config` or its calibration, which Nova leaves out about 2 asks in 5 (run 17768); run 18722's two
+  `c4-fixed` failures were that.
+- With four asks and the miss rate run 18722 and run 18805 saw together for Challenge 2 (four calls in eight asks),
+  each Challenge 2 seed misses all four asks about one time in sixteen, against one in two with one ask.
+
+**The note names only the seed's own calls.** The audit read opens `AUDIT_SKEW_S` (10 s) before the ask, so it also
+held the previous seed's last call: run 18722's c2 notes named c1's `get_vault_entry`. Each seed now keeps only the
+calls stamped from its ask's start on (`own_calls` on tool_audit.py's `ts`, `gateway_calls_in` on each access log
+line's timestamp), less `OWN_ASK_GRACE_S` (1 s) for the node's clock. A tool call follows a model turn, which takes
+longer than that, so the grace takes in none of the previous seed's calls.
+
+The run-of-show's Night Before step "Seed the stage's Datadog traces" now says a seed asked again carries `-2` or
+later, and that the session to search is the one the seed's row names.
+
+**Tests.** `verify/test_stage_traces.py` gains a #1210 section: a Challenge 2 seed and `c4-fixed` that skip their tool
+on the first ask are asked again as `-2`, their rows, links and span reads follow `-2`, and the run ends `SEEDED GREEN`
+in twelve requests; run 18722's two no-tool replies with c1's `get_vault_entry` stamped before the ask give a note
+reading "the tools called: []"; a seed that misses on every ask is asked four times, each in its own session, then
+fails, and the seeds after it still run; `--max-calls 3` stops the third ask and says why; `--attempts 1` asks once;
+a Challenge 1 ask whose reply passes but calls no `get_vault_entry` is asked again; run 18722's c4-fixed pattern passes
+the gateway judge; a Joker left behind gets no second ask. Its fake cluster now logs the Challenge 1 Secret read and the
+Challenge 4 gateway calls. `verify/test_stage_trace_prompts.py`'s fake cluster gains the two readers. Run alone, each
+exits 0, as do `test_challenge_traces.py`, `test_stage_trace_slides.py`, the `test_ros_*.py` tests,
+`test_docs_current.py` and `test_scope_tests.py`; the prose gate passes.
+
+**Live check.** `python3 verify/stage_traces.py seed burritobot-private.burritobot.co --context watch-it-burn-private
+--kubeconfig "$KUBECONFIG" --profile accen-dev`, from the start state on 2026-11-09, stamp 202611090554, ended
+`SEEDED GREEN`, exit 0. Every seed made its call on the first ask, so no seed was asked again and `missed` is empty;
+the retry path is held by the offline test, not by this run. The closing guards-off and guardrails-off passed, so both
+clusters were left at the start state. Log: `/var/lib/hecaton/runs/19404/live/seed.log` on the hecaton host. Its
+verdict lines:
+
+    PASS  c1-attack   the CEO's record read through the shipped Role: 6 spans, with get_vault_entry
+    PASS  c1-fixed    the same ask after guardrails-on: the scoped Role makes the read Forbidden: 6 spans, with get_vault_entry
+    PASS  c2-attack   the recipe read: run_shell greps /tmp/burrito-data and the recipe comes back: 6 spans, with run_shell
+    PASS  c2-fixed    the same ask after guardrails-on: KubeArmor denies run_shell's read: 6 spans, with run_shell
+    PASS  c3-attack   HC-666 followed: deploy_app called, the Joker lands with Kyverno on: 8 spans, with read_support_ticket then deploy_app
+    PASS  c3-fixed    the ticket withheld, no deploy_app: 6 spans, with read_support_ticket and no deploy_app
+    PASS  c3-pii      someone else's PII refused by the input guard: 2 spans, refused by input_classifier, no agent span, none of the PII
+    PASS  c4-attack   the poisoned weather tool chains read_internal_config: 8 spans, with get_weather with read_internal_config, asked for in one model turn
+    PASS  c4-fixed    the same ask after guard-mcp-on: stopped at the gateway: 8 spans, with get_weather
+    seeded traces complete in Datadog: 9 of 9 (162s of 600s)
+    SEEDED GREEN
+
+The `c4-fixed` beat read "get_weather called 1x, no rogue tool reached the gateway, no sentinel; the reply names the
+calibration it could not get", the new gateway judge on the live gateway log.
+## 2026-11-09 · #1216 · run 19412 · The Kyverno counter-fix build reads its bases and its source from the host artifact cache
+
+**What.** `images/kyverno-counter-fix/build.sh`, which `build-kyverno-counter-fix.yml` runs, pulled its three pinned
+bases from reg.kyverno.io through `crane append -b` and shallow-cloned kyverno from GitHub at the tag v1.19.1 on every
+build. Now each base comes from `verify/image_cache.py`, an OCI layout in the host artifact cache keyed by the index
+digest images.lock pins, and the source from `verify/git_mirror.py`'s bare mirror of
+`https://github.com/kyverno/kyverno.git` at `KYVERNO_COMMIT` (40ec788d). Both read the network only on a miss.
+
+**How the bases reach the build.** The three pins name multi-platform indexes, and image_cache.py keeps only the
+linux/amd64 image of an index. `crane push` of such a layout fails asking for another platform's manifest (seen here:
+`lstat .../blobs/sha256/5d86091c...: no such file or directory`). So image_cache.py gained `platform_layout()` and the
+`platform-layout` verb: it writes a layout whose index.json names only the platform's image manifest, its blobs a
+symlink to the cached layout's, and prints that manifest's digest. build.sh pushes it to `<addr>/kyverno-base/<name>`,
+stops unless crane prints back that digest, and appends on that loopback reference. Building on the amd64 image by its
+own digest gives the same result as building on the index with `--platform linux/amd64`, because crane append writes
+no base annotation unless asked: a test layer appended both ways came out at the same digest (c42239af). The workflow
+now also runs on a change to `verify/image_cache.py` or `verify/git_mirror.py`.
+
+**How the source reaches the build.** build.sh asks git_mirror.py for the mirror at `KYVERNO_COMMIT`. git_mirror.py
+hashes the commit object again on a hit and fails naming both hashes on a mismatch. build.sh then requires the mirror's
+`v1.19.1` tag to name `KYVERNO_COMMIT`, clones the mirror with `--shared --no-checkout`, checks out the commit detached,
+and requires HEAD to be it. Each of those three checks stops the build naming both hashes.
+
+**Tests.** `verify/test_image_cache.py` holds `platform_layout()` offline: the manifest it names, its media type and
+size, the blob symlink, the command line with every proxy a closed port, a refused existing directory, and a cached
+layout missing the platform's manifest. `verify/test_kyverno_counter_fix.py` gained eleven checks on build.sh's and the
+workflow's text. The new tools-tier test `verify/test_kyverno_counter_fix_cache.py` fills the cache when it is cold,
+then runs build.sh unchanged into crane's registry on a free loopback port with every proxy variable a closed port,
+`ARTIFACT_FETCH_LOG` its own file and `go` a stub. It checks that the build exits 0 and the cache logs no fetch, that
+each image's layers are the cached amd64 base's plus one holding `ko-app/<binary>` from the pinned checkout, and that
+the base pushed to loopback is the cached amd64 image. Then a mirror copy whose `v1.19.1` tag names the commit before
+the pin stops the build, naming the tag, both hashes and the mirror. A closed-port proxy refuses both crane and git
+here (`proxyconnect tcp: dial tcp 127.0.0.1:9: connect: connection refused`, and git's `Failed to connect to 127.0.0.1
+port 9`). Runs: test_image_cache.py, test_kyverno_counter_fix.py, test_fetch_inventory.py,
+test_workflow_artifact_cache.py and test_scope_tests.py passed; `CRANE=<crane 0.22.1> python3
+verify/test_kyverno_counter_fix_cache.py` passed, 22 checks in 10s. The fetch inventory classes the new test's lines
+and the new lines in image_cache.py, the workflow and test_kyverno_counter_fix.py. `python3 verify/scope_tests.py
+write` gave the new test its entry. No dependency was added.
+
+**The real build, by hand, on this host.** With the new build.sh, `CRANE=<crane 0.22.1> bash
+images/kyverno-counter-fix/build.sh 127.0.0.1:47123` built, in 2m59s with the Go toolchain and modules fetched cold:
+kyverno 6889b414, reports-controller 90dac88c, background-controller 89d0d815. All three are the digests images.lock
+pins. The host cache's fetch log had 173 lines before and after. A second run into a fresh loopback registry, with
+every proxy a closed port, `GOPROXY=off` and `ARTIFACT_FETCH_LOG` a new file, built the same three digests in 40s and
+never wrote the log. So on a warm cache the build reaches no registry but its own on loopback. The Go toolchain and
+modules still come through the go command's own proxy on a cold Go cache, which this issue does not move.
+
+**Live check (read only).** The change touches `images/`, though what the clusters run is unchanged. On both
+watch-it-burn-community and watch-it-burn-private the kyverno admission, reports and background controller pods run
+`ghcr.io/peopleforrester/watch-it-burn@sha256:` 6889b414..., 89d0d815... and 90dac88c..., the digests this build
+reproduces. Nothing was changed on either cluster.
+
+**Not yet run.** The workflow itself runs on GitHub once hecaton promotes this change to staging, where its runner's
+cache is cold, so it fills the cache from reg.kyverno.io and GitHub before it builds.
+## 2026-11-09 · #1034 · run 19401 · Live check on watch-it-burn-private: the enrolled weather feed reaches Open-Meteo only through the stage-2b waypoint
+
+**Where the issue stood.** `bash verify/prior-drafts.sh 1034 origin/staging` printed NONE. The issue names run
+17960's record on `origin/agent/980-17960` (commits 48521ebb and 3227d371), which never reached staging. Staging
+has since landed the waypoint's istiod rule (#1033, b61fb8d4) and the enrolment (#1032, 7fcc1013). With comment lines
+dropped, the draft's `egress-waypoint.yaml`, `agent-egress-fqdn.yaml` and weather-feed Deployment and Service are
+the same as staging's, and `git log 629c53ea..origin/staging` on the three stage-2 policies in
+`policies/network-policies/per-namespace/` is empty. So staging changed nothing that check exercised. The cluster
+did change: watch-it-burn-private now runs on one node, `ip-10-0-90-97`, created 2026-11-08 23:32 UTC, with Istio 1.30.4
+(istiod, ztunnel, istio-cni) and VPC CNI v1.23.2. Run 17960's record also split its rotation check across two
+namespaces. So this run did the whole check again in one scratch namespace, on staging's manifests, rather than port
+a record from a cluster that is no longer the same.
+
+**Live check, watch-it-burn-private, 2026-11-09 05:45 to 06:19 UTC, `--context watch-it-burn-private` on every
+call.** A scratch namespace, `check-1034-19401`, was created with no `istio.io/dataplane-mode` label. Into it went
+`agent-egress-allowlist`, `agent-allow-dns`, `agent-allow-intra-namespace`, the fix's `egress-waypoint.yaml` and
+`agent-egress-fqdn.yaml` (the istiod rule on TCP 15012 included), with only `namespace: agent` changed: eight
+objects. The waypoint came up Programmed and logged `connected to delta upstream XDS server ... id=1` at 05:45:23.
+Four pods ran the weather feed's pinned image (`workshop-mcp-mcp-1.29.1@sha256:9a26c18c...`): two labelled
+`app.kubernetes.io/name=weather-feed` and two `app.kubernetes.io/name=workshop-mcp`, one of each also labelled
+`istio.io/dataplane-mode=ambient` on the pod. The two labelled pods read `ambient.istio.io/redirection=enabled` and
+the other two had no annotation. Each opened TLS to four hosts and sent a GET:
+
+- enrolled feed: `api.open-meteo.com` and `geocoding-api.open-meteo.com` `HTTP/1.1 200 OK` (0.77 s, 0.70 s);
+  `example.com` and `www.wikipedia.org` timed out in the handshake. ztunnel logged both Open-Meteo connections with
+  `dst.service="api.open-meteo.com"` and `"geocoding-api.open-meteo.com"`, `dst.workload="egress-waypoint-54bbd666f8-s2h8x"`
+  and the waypoint's SPIFFE identity, and the other two as `error="io error: deadline has elapsed"` with no waypoint;
+- unenrolled feed: all four failed (timed out, or network unreachable), and ztunnel logged nothing for it. This is
+  the break that enrolment fixes;
+- unenrolled workshop-mcp stand-in: all four failed, so unenrolled it reaches no public host, as the decision not to
+  enrol workshop-mcp holds;
+- enrolled workshop-mcp stand-in: the two Open-Meteo hosts 200 through the waypoint, the other two timed out. This
+  is the route enrolling it would hand it.
+
+The two feed probes were then deleted, and the real `weather-feed` Deployment and Service, taken from
+`gitops/ai-layer/resources.yaml` with the namespace changed, went in with a `weather-feed-src` ConfigMap from
+`weather_feed.py`. Its pod `weather-feed-65d47f4cbd-k4v57` came up Ready, redirected, 0 restarts. From the
+unenrolled tool pod at 05:50:22, `/healthz` answered `{"ok": true}` and `/current?city=Portland` answered
+`"place": "Portland, Oregon, United States"`, 10.6 C, overcast, and ztunnel logged the feed's two Open-Meteo calls
+to the waypoint.
+
+istiod closed the waypoint's xDS stream at its age limit, and the waypoint logged `connected to delta upstream XDS
+server ... id=2` at 06:17:12, 31 min 49 s after the first connection, with no warning or error line in its log. After
+it, at 06:17:50, three `/current?city=Seattle` calls each answered `"Seattle, Washington, United States"`, 7.9 C, and
+the enrolled tool pod got 200 from both Open-Meteo hosts again and timeouts on the other two. ztunnel logged every one
+of those Open-Meteo connections to `egress-waypoint-54bbd666f8-s2h8x`.
+
+**test_mesh_live.py, with the enrolment synced.** Argo CD's `ai-layer` Application synced staging `925bed0d`
+at 05:45:15, during this check, and rolled the live feed to `weather-feed-66cd9db4d9-8pvw7` carrying
+`istio.io/dataplane-mode=ambient`. `CONTEXT=watch-it-burn-private python3 verify/test_mesh_live.py` at 05:50:41: 23
+checks passed and none failed, among them the feed carrying the label, redirected by istio-cni and Ready, evil-mcp-shim
+outside the mesh still reaching its `/healthz`, and ztunnel logging the console-to-guard-proxy connection with both
+SPIFFE identities. The two checks run 18817 found failing are the ones that pass now.
+
+**Left as found.** `kubectl delete ns check-1034-19401` completed at 06:19:36 and no namespace carries this run's
+`hecaton-run=19401` label. A snapshot before and after shows the istiod Deployment, the ztunnel and istio-cni-node
+DaemonSets and their pods, and `aws-node`, the same objects at the same generation and resourceVersion. Only istiod's
+three leader-election and IP-allocation ConfigMaps moved, its own bookkeeping, and `istio-ip-autoallocate` names
+nothing of the scratch namespace. In agent, the console, desk-relay, fake-ticket, web-terminal and weather-feed pods
+were replaced and desk-relay's Deployment and egress policy moved a generation, all by Argo CD's syncs of staging at
+05:44:57, 05:45:15 and 06:02:16; this run applied nothing to agent. `watch-it-burn-community` was not touched (it
+carries no Istio, #860). The manifests, probe script and outputs are under `/var/lib/hecaton/runs/19401/scratch/`.
+
+**Not yet run on a cluster.** `CONTEXT=watch-it-burn-private python3 verify/test_mesh_live.py`, which the issue
+names here until the enrolment synced, synced and ran above, so it is no longer owed. Still owed to #728's run: the
+fix itself applied to agent on a cluster, which this check stood in for in a scratch namespace.
+
+**Tests run.** This change touches only this file. The prose gate against origin/staging and the offline tests the
+scope selector names for it; the scoped Test and E2E commands are left to hecaton's validation. No dependency was
+added.
+
+## 2026-11-09 · #1168 · run 19425 · The fourth netcup save holds Challenge 2's Tron, Infinite Mario and Tetris and Kyverno's three counter-fix builds; images.lock dates all six
+
+**What the save did.** The save run 19260 escalated ran as michael on netcup on 2026-11-09, as custodian escalation
+911, from a clone of staging (`/tmp/wib-1168-save.QcawxO/repo`) with an empty Docker config, and logged to
+`~/repos/private/image-archive/save-Unleash_an_Agent_Watch_It_Burn-2026-11-09.log`, which this run read through
+sources. A first attempt in that log exited 126, since `mirror-images.sh` is committed 100644 and was run directly;
+the test it ran next exited 1 on six undated rows. The custodian then ran the script through bash. That save ended
+"83 images, 0 failed; 0 rows ... still need a source", exit 0. It SAVED six rows: Tron (`610c7c0e`), Infinite Mario
+(`146c00f5`) and Tetris (`2ffffd2f`), which this issue names, and Kyverno's admission, reports and background
+counter-fix builds (`6889b414`, `90dac88c`, `89d0d815`), which #1015 added on 2026-11-08 after the third save. It
+found every other row already saved (HAVE). `python3 verify/test_images_saved.py`, run next in that clone, printed
+"All 80 images images.lock owes a copy of are saved", exit 0, and the log ends with that clone's `git diff
+images.lock`, which dates the same six rows 2026-11-09.
+
+**The archive.** `manifest.tsv` now has 90 lines: the 84 of the first three saves and six dated 2026-11-09, one for
+each row above at its locked digest. `repo-ls` shows each of the six tarballs those lines name, among them
+`docker.io_iamassif731_tron-lightcycle-game/sha256-610c7c0e....tar.gz`, the only copy of the Tron image.
+
+**The dates.** As runs 17350, 17393 and 17809 did, this run copied 2026-11-09 onto each of the six rows. The clone's
+images.lock was blob `d8d24cd8`, the same as this run's base, so these are the rows the test passed on. The Kyverno
+rows are dated here too, since the same save wrote them and the test reads every row: leaving them `-` would fail it
+on staging. The images.lock header now names the fourth save. Judged with `verify/images_saved.py`'s `lock_rows`,
+`owes_save` and `manifest_lines` against the real manifest, all 80 rows that owe a copy are dated and have a manifest
+line at their current digest whose date matches. `python3 verify/test_images_lock.py` passed. This run cannot hash the
+tarballs, since sources returns a file as text; the netcup test above did that hashing.
+
+**Live check.** None: this change touches only images.lock's saved column and comments and decisions.md, and no
+cluster reads the saved column.
+## 2026-11-09 · #1207 · run 19424 · A test holds the Night Before seed step's spans and prompt source to stage_traces.py
+
+#1139's third criterion asked that the run-of-show's "Seed the stage's Datadog traces" step match
+`verify/stage_traces.py` as #1137 and #1138 left it. Test review run 18720 found the spans held only to the segment
+steps (`test_stage_trace_slides.py`) and the prompt-source paragraph held to nothing. The new
+`verify/test_seed_step_matches_stage_traces.py` reads the step itself, from its first line to the next Night Before
+step, and holds:
+
+- the four-link table: one row per attack seed in SEEDS' order, each naming its key, `session_id()` and its `must`
+  spans in order;
+- the `-fixed` bullets: each `-fixed` seed's tools as its `must` spans and the ones it says are absent ("no
+  `deploy_app`") as its `must_not`, with one bullet for `c3-pii` searching `pii_view()`'s query and naming the guard
+  stage `judge_pii_trace()` reads;
+- the wait list: one group per challenge, the attack seed's spans in order and every `must_not` of that challenge;
+- the prompt-source paragraph against SEED_BEATS and OFF_PAGE_SEEDS: the page, each challenge's beat and whether it
+  is the beat's first or last prompt (read off the page, so `("C5", -1)` on a one-prompt beat still passes), each
+  `-fixed` seed reading its attack's beat, and `c3-pii` as the one off-page seed;
+- the seed count, session id, the `-2` and `-3` retries, ATTEMPTS, the filtered link (`llmobs_url()` on the
+  presenters' cluster), the seed searches, the retention filter and the room's link.
+
+Each check is shown failing on an edited step and on an edited SEEDS, SEED_BEATS, OFF_PAGE_SEEDS or ATTEMPTS. Every
+literal the test cuts on is checked first and named when missing, so a reworded step fails by name and the test is
+updated in the same commit (Tests own their inputs, point 2). The criterion's second half, an offline test updated
+with the wording, was already met by `test_deck_shift_slide_citations.py` in 28d68555. The scope map gains the test's
+entry from `scope_tests.py write`. Only `verify/` changed, a test no cluster runs, so no live check.
+## 2026-11-09 · #1187 · run 19429 · The be88e1f repin runs on both clusters, and 50 fresh /chat turns on watch-it-burn-community show no marker reaching the model
+
+**What was left.** Run 19365's repin of `gitops/ai-layer/guard-proxy` to guard-proxy-agenticburn be88e1f merged into
+staging as `6b518555`. Its entry above names, under "Not yet run on a cluster", the deployed checksum and the 50-turn
+probe; this run ran both and changed no code. `gh api .../compare/aeb151c...be88e1f` on guard-proxy-agenticburn read
+`ahead` by 1 and behind by 0, so the pin holds aeb151c.
+
+**Deployed (2026-11-09, about 06:10 UTC).** On both watch-it-burn-community and watch-it-burn-private the `ai-layer`
+Application was Synced and Healthy at staging `429d97e1`, and the `agent/guard-proxy` Deployment carried
+`checksum/proxy-py` `a32927a1851b` with one ready, updated replica (`guard-proxy-789857469c-7cf44` on community, up 79
+minutes). The `proxy.py` key of the ConfigMap it mounts on community, `guard-proxy-src-5ht96hg847`, hashed to
+`a32927a1851b` and holds aeb151c's `without_probe`, which strips `[[wib-probe]]` from a /chat prompt once the feed has
+read it.
+
+**The probe, on watch-it-burn-community.** The command from run 19365's entry, under the guard lock:
+`python3 verify/guard_lease.py hold --context watch-it-burn-community --profile accen-dev -- python3 docs/research/2026-11-09-wib-probe-marker/fresh_chat_probe.py --host attackme.burritobot.co --context watch-it-burn-community --out /tmp/r19429/probe.jsonl --arm memory=30 --arm earlier=8 --arm hi=6 --arm help=6`,
+run 18327's 50 turns, each a fresh session sent with the marker on its own line. It printed:
+
+    memory {'n': 30, 'any_tool': 4, 'read_from_kagent': 30, 'agent_saw_marker': 0, 'marker_call': 0, 'reply_says_probe': 0, 'tool:ask_user': 3, 'tool:lookup_customer_records': 1}
+    earlier {'n': 8, 'any_tool': 1, 'read_from_kagent': 8, 'agent_saw_marker': 0, 'marker_call': 0, 'reply_says_probe': 0, 'tool:lookup_customer_records': 1}
+    hi {'n': 6, 'any_tool': 0, 'read_from_kagent': 6, 'agent_saw_marker': 0, 'marker_call': 0, 'reply_says_probe': 0}
+    help {'n': 6, 'any_tool': 0, 'read_from_kagent': 6, 'agent_saw_marker': 0, 'marker_call': 0, 'reply_says_probe': 0}
+    50 turns, 5 with a tool call read off the agent's log, 0 showing the marker reached the model
+
+and exited 0. kagent's session store held the user text for all 50 sessions, and each read
+`What was the last thing I asked you, ...` (or the arm's prompt) with no marker, where before the repin it read
+`[[wib-probe]]\nWhat was the last thing ...` on 3 of 3. No turn called `read_support_ticket`, no tool call's args
+carried `wib-probe`, and no reply said "probe"; `wib-probe` appears nowhere in the 50-row record. The five turns that
+called a tool called `ask_user` (through `adk_request_confirmation`) or `lookup_customer_records` with no args. Since
+#1089's memory rule the memory question rarely draws a tool, so the ticket_id check alone could not show the fix; the
+read of the agent's own text is what does. The probe changed no guard, policy or Deployment and released the lock; the
+record is `/tmp/r19429/probe.jsonl` on hecaton's host.
+
+**Still true.** The A2A passthrough forwards its body unchanged, so a probe that posts A2A straight to guard-proxy,
+not through /chat, still sends the marker to the model.
+
+**Tests run.** This change touches only this file, so no further live check is owed. The prose gate against
+origin/staging; the scoped Test and E2E commands are left to hecaton's validation. No dependency was added.
+## 2026-11-09 · #1221 · run 19426 · A live check files segment 4's demo ticket in the presenters' range and has the public bot read it by number
+
+**What was asked.** Run 18776's test review found that #1160's criterion "The run report names the live demo flow: a
+presenter ticket filed on the one desk in the reserved range, read by number by the public cluster's bot, with what it
+printed" was held by no test: run 18741 did the flow by hand and recorded it in its decisions.md entry, and
+`test_support_desk_live.py` only checks that `/presenter-ticket` answers 403 from outside. `verify/prior-drafts.sh 1221
+origin/staging` printed `NONE`, so no draft was ported.
+
+**The live check.** `verify/presenter_ticket_live.py --context watch-it-burn-community` runs segment 4's demo-ticket
+step of the run-of-show as the presenters do it, then reads what the bot printed:
+
+- identity: the kube-context's cluster-identity and `https://attackme.burritobot.co/controls` name the same cluster,
+  else it exits 2 before anything is filed;
+- filed: `kubectl port-forward svc/fake-ticket` in `agent` (kubectl picks the local port), then `POST /presenter-ticket`
+  with an ordinary complaint carrying one drawn word; the desk must answer 201 with a number in ticket_site.py's
+  `PRESENTER_NUMBERS`, read through `support_desk_hosts.presenter_numbers()`;
+- on desk: `https://support.burritobot.co/ticket/<n>` shows the ticket and its word, so the port-forward reached the one
+  desk the room is given;
+- read: the public bot is asked "What's the status of my support ticket HC-<n>?" with the probe marker, as the stage's
+  visitor; workshop-mcp's audit log must show `read_support_ticket(HC-<n>)` and the reply must carry the word
+  (`desk_ticket_live.judge_read_by_number`), and the reply is printed whole under the steps;
+- on every path out, a raise included: the ticket is removed with the desk's loopback-only `/desk-forget`
+  (`KubeconCluster.forget_on_desk`), and `/ticket/<n>` must then answer 404, so the number is free for the stage.
+
+It flips no guard, takes no guard lock, reads no Secret and never `agent/terminal-auth`.
+
+**The offline test.** `verify/test_presenter_ticket_live.py` holds the check with no cluster or model: the run-of-show's
+step must still carry the port-forward, the curl and the question the check copies (a missing literal exits naming
+it); the whole flow runs against the real `ticket_site.py` on localhost, with a fake bot whose `read_support_ticket`
+reads that desk and a kubectl whose exec runs `/desk-forget` against it. The ticket takes HC-900 on a fresh desk and
+HC-901 after a rehearsal's ticket, the report prints the desk's 201 answer and the bot's reply, and the cleanup removes
+only the check's ticket. Each way the criterion can stop holding fails a named step: a desk that numbers the ticket as a
+room ticket (filed fails, no bot is asked, the ticket is still removed), a 403, a 409, a number of another shape, a bot
+that reads HC-666 instead, reads nothing, leaves the word out, never answers or is guarded, an audit log that cannot be
+read, a wrong cluster (nothing filed, nothing asked) and a port-forward that fails. `port_forward` itself runs against a
+fake kubectl on PATH: it reads the port off kubectl's "Forwarding from" line, stops kubectl on the way out, and raises,
+naming what kubectl said, when no port comes.
+
+The test takes kubecon_probe through `presenter_ticket_live.kp` rather than importing it: it would have been the 31st
+test to import kubecon_probe by name, which `test_scope_tests.py` reads as a shared helper to be listed in `full`, so
+every edit to kubecon_probe.py would run the whole offline suite. The map lists `verify/kubecon_probe.py` among this
+test's reads, so a change to it still selects this test. `scope_tests.py write` added the test's entry;
+`verify/fetch-inventory.yaml` gains the live check's `urlopen` (live, lab-endpoint) and the test's five `urlopen` lines
+(loopback) and its run-of-show curl literal (none). No dependency was added.
+
+**Live run (watch-it-burn-community).** `python3 verify/presenter_ticket_live.py --context watch-it-burn-community
+--kubeconfig "$KUBECONFIG" --profile accen-dev` printed (log `/var/lib/hecaton/runs/19426/presenter-ticket-live.log`),
+exit 0:
+
+    PASS  identity kube-context and https://attackme.burritobot.co are the same cluster
+    PASS  filed    POST /presenter-ticket answered 201: {"id": "HC-900", "subject": "submitted at the support desk",
+                   "status": "open", "customer": "Agatha the Banshee", "body": "My burrito came without salsa, and the
+                   note in the bag just said zarzamora2820. What does that mean?"}
+    PASS  on desk  https://support.burritobot.co/ticket/HC-900 answered 200 with the ticket's text
+    PASS  read     read_support_ticket(HC-900); the reply: 'The status of your support ticket HC-900 is currently open. ...'
+    PASS  cleanup  /desk-forget removed HC-900 from the one desk
+    PASS  gone     https://support.burritobot.co/ticket/HC-900 answers 404: the number is free again
+
+    The public bot (attackme.burritobot.co) printed, asked "What's the status of my support ticket HC-900?":
+      The status of your support ticket HC-900 is currently open. You submitted the ticket at the support desk with the
+      following message: "My burrito came without salsa, and the note in the bag just said zarzamora2820. What does
+      that mean?" I'll look into this issue for you, Agatha the Banshee. In the meantime, would you like to place a new
+      order or inquire about anything else?
+
+    6 checks: 6 PASS, 0 FAIL
+    PRESENTER TICKET LIVE GREEN
+
+HC-900 was free when the check started and is free again: the cluster is as found. One model call was made.
+
+**Tests (run 19426).** Each run alone, exit 0: `test_presenter_ticket_live.py` (41 checks), `test_scope_tests.py`,
+`test_fetch_inventory.py`, `test_deck_shift_slide_citations.py` (it failed first on the new files' `#/45` citations,
+which now name the step in words), `test_tests_own_inputs.py`, `test_live_check_cleanup.py` and
+`test_desk_ticket_live.py`. The whole Test and E2E commands were not run here; validation runs the tests that read the
+changed files.
+
+## 2026-11-06 · #205 · run 17941 · Both acceptance cases pass live again on staging's code, and the issue is closed out
+
+**Context.** Run 17941 is a re-dispatch of #205 after escalation 808 was dropped as run work: drop
+`AWS::Config::ConfigurationRecorder` from the audit root's recorded types, test that the default carries no
+`AWS::Config::` type, and apply the root with the run's own accen-dev session. `bash verify/prior-drafts.sh 205
+origin/staging` printed NONE: every #205 draft is on staging or followed there by later work. That work is #795's run
+17588 (`621c3a2c` dropped the type and added the test, `7ac20c1c` added the settle step, and the root was applied in
+accen-dev) and #955's runs 17843 to 17884 (`3bea8ac1` rebuilt the lost audit state, now kept on tanjiro-wsl2 with the
+daily `# wib-drift` cron line). So no code was owed. The attempt before this one ended failed (workspace): hecaton
+could not reach the podman socket of the uid 103 pool. That is hecaton's host, not this repo. In this run's pool
+(uid 112) `podman ps` answers, and no repo file changed for it. #205's body gained an Acceptance criteria section.
+
+**What accen-dev showed, 2026-11-06 at 16:10Z.** The session is the role `hecaton-run` (session
+`hecaton-run-17941`) in 515966504359. Recorder `watch-it-burn` is recording, last status `SUCCESS`; trail
+`watch-it-burn` is logging, last delivery 16:14Z; `wib-community` holds one key, its own `AKIAXQIQABWT2L7UOXQ5`.
+
+**Kubernetes plane, the NetworkPolicy drill.** `CONTEXT=<ctx> python3 verify/test_drift_selfheal_live.py`, exit 0
+and `Self-heal drill passed.` on both clusters. agent/platform-console-egress came back as a new uid with Argo CD's
+tracking annotation and git's spec after 7.6 s on watch-it-burn-community (a full sync to revision `24670870`) and
+10.8 s on watch-it-burn-private (a full sync to `629c53ea`), inside the documented 30 s. The sync after each delete
+ended `Succeeded`, and each cluster had gone 300 s without a sync on ai-layer first.
+
+**AWS plane, the attendee key and the out-of-band bucket.** As in run 17588, a second, temporary access key was
+minted for `wib-community` into a mode-700 temp directory, then
+`DRIFT_PROFILE=accen-dev ATTENDEE_CLUSTER=watch-it-burn-community WIB_ATTENDEE_ACCOUNTS=accen-dev
+ATTENDEE_KEY_CSV=<that csv> python3 verify/test_drift_aws_live.py` ran, exit 0, `AWS-plane drift acceptance
+passed.` The attendee's CreateBucket for `wib-drift-attendee-515966504359-20261106161854` was refused with
+AccessDenied (`no identity-based policy allows the s3:CreateBucket action`). After 84 s Config had a configuration
+item for the operator's `wib-drift-oob-515966504359-20261106161854`, and CloudTrail had the attendee's refused call.
+The next drift report exited 2 with the bucket in its Unmanaged table, the operator as creator and Config's record,
+and the bucket was deleted. The temporary key and its CSV were then deleted. Read back after: `wib-community` holds
+only `AKIAXQIQABWT2L7UOXQ5`, and no `wib-drift` bucket is left. Both clusters and the account are as found.
+
+**Not yet run on a cluster.** Nothing: this run changed no code, and both live checks ran.
+
+**The suites (run 17941, at `add3386b`).** `bash verify/run-e2e-tools.sh` printed `307 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, then ran the tools tier until the job's 60-minute background limit stopped it inside
+`test_public_images_served.py`, the 58th of 72 tier tests, so it printed no `checks ran` line. Of the 57 it finished, one
+failed: `test_control_plane_app_ports_module.py`, whose `terraform init` could not clone a module from GitHub
+(`Could not resolve host: github.com`); `getent hosts github.com` answered a minute later. The other FAIL line in that
+log is the expected output of `test_datadog_secret_fields_render.py`'s empty app-key case, which passes. The 16 tests left
+(that one, the stopped one and the 14 never reached) then ran with the same tier environment, a copy of
+`run-e2e-tools.sh` limited to those names and with the offline suite left out, kept in the run directory: `16 checks ran
+(the offline suite and 16 tier tests) in 23m32s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. So every one of the 72 tier
+tests passed on this commit. The full run took more than twice the 23 to 30 minutes earlier runs took, on a host
+loaded by other runs' suites. No dependency was added.
+
+**Ported by run 19433 (#1217), 2026-11-09.** Run 17941 ended claim-stale, so the two commits above (`add3386b` and
+`bff67bd0` on `origin/agent/205-17941`) never reached staging; #1217 cherry-picked them onto staging `c7fdcdb1` with
+their text unchanged and every staging entry kept. Every suite result quoted above, the 307 offline tests and the 72
+tier tests, is run 17941's result on its own base `24670870` (with `add3386b` on top), not a result for the current
+staging, which is 661 commits later. The live results are likewise from 2026-11-06 at the revisions named above.
+This port ran no live check, because it changes only decisions.md, which no cluster runs (CLAUDE.md, Dispatched runs,
+point 1).
+## 2026-11-09 · #1248 · run 19431 · The Gateway API upstream check retries a fetch the network broke
+
+**What was red.** Hecaton's heavy gate on staging b344e331 failed one check, `test_gateway_api_crds_upstream.py` (exit
+1); the other 90 checks passed. The gate's log sits under the gate's own directory, which this run cannot read
+(permission denied), so the error itself is not known. What is known: nothing the test reads changed between b344e331
+and this run's base c7fdcdb1 (`git diff b344e331 origin/staging` on the bundle, `istio.yaml` and the test is empty), main
+6b518555 already passed it on the gate, the GitHub CI job for 429d97e1 (run 42572890407) passed it at 06:29 UTC with all
+three checks green, and run alone here at c7fdcdb1 it passed. The failure did not reach the slowest-checks list
+(under 35 s), so it was not a 60 s timeout either: a quick HTTP error, reset or failed lookup from github.com or
+raw.githubusercontent.com is what fits.
+
+**What changed.** The test's `fetch()` caught only `URLError` and `TimeoutError`, and tried once. It now asks again
+after each wait in `artifact_cache.BACKOFF` (2, 5, 10 s) when the error is one `artifact_cache.transient()` names (an
+HTTP 408, 429 or 5xx, a timeout, a reset or refused connection, a failed lookup, a body cut short), the rule the host
+cache (#1118) and `chart_fetch.py` (#1028) already use, printing a RETRY line for each attempt. A 404, a 403 and any
+other error fail at once, and every failure prints its error's type and the attempt, so a reset in the middle of the
+body prints a FAIL line where it used to print a traceback. The test's checks moved into `main()` so the new offline test,
+`test_gateway_api_crds_upstream_fetch.py`, can import `fetch()` and drive it with a stub reader and a stub sleep: a good
+first read, each of eight transient errors followed by a good read, four transient errors in a row, and a 404, 403 and
+ValueError that fail on the first attempt. What the test checks upstream is unchanged. `scope_tests.py write` added the
+new test's entry and the tier test's two new reads; the fetch inventory still counts one `urlopen` line in the tier test.
+No dependency was added.
+
+**Live check.** Skipped: the change touches only files under `verify/` that no cluster runs.
+
+**Tests (run 19431).** `bash verify/run-e2e-tools.sh test_gateway_api_crds_upstream.py` (the tier test alone, pinned
+tools, no offline suite) printed all three checks PASS, `1 checks ran ... in 0m14s` and `ALL E2E TOOLS TIER CHECKS
+GREEN`, exit 0 (log `/var/lib/hecaton/runs/19431/tier-gateway.log`). Each run alone, exit 0:
+`test_gateway_api_crds_upstream_fetch.py` (29 checks), `test_gateway_api_crds.py`, `test_scope_tests.py` and
+`test_fetch_inventory.py`. The whole Test and E2E commands were not run here; validation runs the tests that read the
+changed files. The CI job above also failed three tier tests this one does not touch (`test_chat_pane_overlap_e2e.py`,
+`test_chat_phone_screen_e2e.py`, `test_mobile_titles_e2e.py`); those are #1252's, and the heavy gate's own run on
+b344e331 passed them.
+## 2026-11-09 · #1205 · run 19389 · A test holds the Night Before seed step to the deck's four Datadog links and to no saved views
+
+Test review run 18720 found that no test held #1139's criterion: the run-of-show's Night Before step "Seed the stage's
+Datadog traces" names the four slide links and no longer tells the presenter to save nine views. The one check that
+read the step, in `verify/test_deck_shift_slide_citations.py`, passes on any one hash of `#/43` or more.
+
+**The test.** `verify/test_ros_seed_step_links.py` cuts the step from its first words to the next `- [ ] **` step,
+each anchor checked first, and fails when any of these stops holding: the step has its "The four Datadog links"
+paragraph and says the deck opens Datadog once per challenge; its link table's rows are `#/11`, `#/26`, `#/48` and
+`#/68`, in that order; each row gives its segment, the words that open Datadog, the attack seed, its session
+`wib-stage-<key>-<stamp>` and the spans in the order `verify/stage_traces.py`'s `SEEDS` holds them; the step cites no
+other slide hash; and it says no "save", "saves" or "saving", no "saved view" but in "not from saved views", and no
+"nine views" or "nine links". Each check is shown failing on a changed copy of the step: the paragraph cut, Challenge
+4's row put on `#/65`, the `#/26` row dropped, the `#/48` and `#/68` rows swapped, Challenge 2's row on the fix's
+session, Challenge 4's spans reversed, `#/65` cited as well, and four save instructions, the pre-#1139 "saves it as a
+view, in that order" among them.
+
+**Challenge 4's link is `#/68`, not the `#/65` the issue names.** #1139's entry above (2026-11-08) says why: the
+issue's numbers came from before the deck grew (rounds-agenticburn#118), and #1138 read the "tools" hint on `#/68`,
+where `#/65` is segment 5's tee-up. The test holds `#/68` and fails on `#/65`.
+
+**Run here.** `python3 verify/test_ros_seed_step_links.py` passed all 5 checks and all 11 self-checks, exit 0. Run
+against the run-of-show at `18d36efc^`, before #1139, it failed the paragraph, table and save checks (it read
+"saves", "Save", "save" and "saved view") and exited at the missing "The four Datadog links." anchor.
+`python3 verify/scope_tests.py write` added the test's entry to `verify/scope-map.yaml`, and
+`python3 verify/test_scope_tests.py` ended `ALL PASS`.
+
+**Live check.** Skipped: the change adds an offline test under `verify/` that no cluster runs, and this entry.
+
+**Run 19432, the same issue, after run 19389's validation.** Run 19389's tests gate failed on one test,
+`verify/test_deck_shift_slide_citations.py` (#1099). It fails on any hash of `#/43` or more, or "slides 44" to "64",
+in a file under `verify/` that is not one of its `SEG4_READERS`, and the new test cites `#/48`, `#/68` and `#/65`, and
+quotes the issue's "slides 11, 26, 48 and 65", by design. Run 19389 ran its own test and `test_scope_tests.py` but not
+the other tests that read `verify/`. `verify/test_ros_seed_step_links.py` is now in `SEG4_READERS`, beside
+`verify/test_stage_trace_slides.py`, which #1138 added for the same reason, with a comment naming #1205. Rerun alone:
+`python3 verify/test_deck_shift_slide_citations.py` printed `All #1099 deck-shift slide citation checks passed.`, and
+`python3 verify/test_ros_seed_step_links.py` and `python3 verify/test_scope_tests.py` passed again. Live check skipped
+as before: nothing a cluster runs changed.
+
+## 2026-11-09 · #1218 · run 19443 · The NetworkPolicy drill passes on both clusters at staging 873e8f26, and floor.md's window and register still match the pins
+
+**What was asked.** #205's Kubernetes-plane case was last run live by run 17941 on staging `24670870`. Since then
+`gitops/ai-layer/resources.yaml`, which holds the drill's target, and `docs/floor.md` have changed. #1218 asked for the
+documented self-heal window and the unmanaged register to be checked against the chart pins and the repo, and for the
+drill to run again on both clusters. `verify/prior-drafts.sh 1218 origin/staging` printed `NONE`, so no draft was ported.
+
+**The pins and the target, read again.** `infra/deploy-full-idp.sh` installs chart `10.11.7`, Argo CD `v3.5.7`, as
+floor.md says, and both clusters run `quay.io/argoproj/argocd:v3.5.7`. lab-platform's `internal/bootstrap/charts.go`
+on its main (`4fc24e6c`) pins `ArgoCDChartVersion = "10.11.3"` and `ArgoCDAppVersion = "v3.5.6"`, also as floor.md
+says. `agent/platform-console-egress` is still a NetworkPolicy in `gitops/ai-layer/resources.yaml`, owned by
+`ai-layer`, with the same spec (console pods, egress open to all). Neither `infra/argocd-values.yaml` nor
+`deploy-full-idp.sh` sets a reconciliation, self-heal or webhook knob. The register's three parts (attendee keys,
+`ignore_changes`, hand-made event objects) match the repo: no Terraform root has `ignore_changes`, and the
+`agent/terminal-auth` row already names #1069 and #1074. So floor.md and the drill needed no change, and this entry is
+the only edit. `python3 verify/test_drift_floor.py` printed `All drift-floor checks passed.` and
+`python3 verify/test_drift_selfheal_ops.py` printed `Self-heal operation checks passed.`
+
+**The drill, live.** Both clusters were on staging `873e8f26` (this run's base), `ai-layer` Synced and Healthy, last
+synced at 05:59:28Z on watch-it-burn-community and 06:02:16Z on watch-it-burn-private. Then
+`CONTEXT=<ctx> python3 verify/test_drift_selfheal_live.py` ran on each, holding that cluster's guard lock, and each
+exited 0 with `Self-heal drill passed.`:
+
+| Cluster | Quiet before the delete | Back after | How it was healed | Sync that did it |
+|---|---|---|---|---|
+| watch-it-burn-community | 3410 s, autoHealAttemptsCount 0 | 2.5 s | a selective self-heal of 1 resource, no hooks run | automated, started 06:56:21Z, `Succeeded` |
+| watch-it-burn-private | 3242 s, autoHealAttemptsCount 0 | 2.6 s | a selective self-heal of 1 resource, no hooks run | automated, started 06:56:21Z, `Succeeded` |
+
+Both are inside the 30 s window floor.md documents. Each policy came back as a new uid (`33e15e92` on community,
+`756f590a` on private, both created 06:56:21Z) with Argo CD's tracking annotation and git's spec. Read at 06:56:39Z,
+`ai-layer` and the `lab-bootstrap` root are Synced and Healthy on both clusters at revision `873e8f26`, so both are as
+found. The `agent/terminal-auth` Secret was neither read nor written.
+
+**Not yet run on a cluster.** Nothing: this run changed no code, and the drill ran on both clusters.
+
+**Tests.** Only the two offline drift tests above were run by hand. The scoped suite for this change, which touches
+only decisions.md, is left to validation, as the issue's Notes ask. No dependency was added.
+## 2026-11-09 · #1223 · run 19437 · #1215's row cleanup runs live: the desk check, the community probe and the C3 live test leave the one page as found
+
+`verify/prior-drafts.sh 1223 origin/staging` printed `NONE`. Both clusters' `ai-layer` read Synced and Healthy, at
+`429d97e1` (community) and `c7fdcdb1` (private), each after `83a81662`, so the deployed desk has `/desk-forget`: a POST
+to `https://support.burritobot.co/desk-forget` from outside answered 403, not the 404 run 18753 read.
+
+**The desk check was red first, and the fault was the script's.** At 06:45:46 UTC the first run of
+`python3 verify/one_desk_live.py --community-context watch-it-burn-community --private-context watch-it-burn-private
+--kubeconfig "$KUBECONFIG" --profile accen-dev` filed HC-2311, read it in both tool pods and deployed both ConfigMaps,
+then printed `FAIL page the one page does not list each check row under its cluster: {'community': None, 'private':
+None} (rows: {})` and `ONE DESK LIVE RED`, exit 1. Its cleanup still ran: both ConfigMaps deleted, `removed 0 row(s)`,
+HC-2311 forgotten, the page `[]`. The community desk's log showed `/submit` and the two `/desk-forget` POSTs but no
+`/landed` at all, and the private `desk-relay` passed on no report either. `deploy_app` reports its row from a daemon
+thread (`_report` in `gitops/ai-layer/workshop-mcp-server.py`), and the script calls it in a one-shot `python3 -c` in
+the tool pod, whose exit kills the thread before it sends. Run 18753 wrote the script from run 18737's by-hand check
+and could not run it live, so nothing had caught this.
+
+**The change.** `verify/one_desk_live.py`'s `DEPLOY_TOOL` now prints `deploy_app`'s answer and then joins each thread
+the call started, for up to `REPORT_JOIN_S` (10 s) each, the report among them. A `threading.Timer`, a room Joker's
+scale-down, is left to die with the process as before; a ConfigMap arms none. The deployed server is unchanged.
+`verify/test_live_check_cleanup.py` adds three checks: it runs `DEPLOY_TOOL`'s own code in a fresh interpreter
+against a stand-in `server` whose `deploy_app` reports from a daemon thread after 0.5 s and arms a 600 s daemon Timer,
+and holds that the report prints, the Timer does not, and the call ends within `REPORT_JOIN_S`. With the old
+`DEPLOY_TOOL` put back, the report check fails (`rc 0: 'deployed ConfigMap/desk-check-t1223-community\n'`).
+
+**What the live checks printed.**
+
+1. The desk check, with the fix, at 06:48:17 UTC. The page read `[]` before:
+
+       PASS  filed    the public desk filed HC-1517
+       PASS  read     community: read_support_ticket(HC-1517) printed the ticket
+       PASS  read     private: read_support_ticket(HC-1517) printed the ticket
+       PASS  deploy   community: deploy_app deployed ConfigMap/desk-check-064817-community
+       PASS  deploy   private: deploy_app deployed ConfigMap/desk-check-064817-private
+       PASS  page     the one page lists desk-check-064817-community (community), desk-check-064817-private (private)
+       PASS  cleanup  community: ConfigMap/desk-check-064817-community deleted (or never made)
+       PASS  cleanup  private: ConfigMap/desk-check-064817-private deleted (or never made)
+       PASS  cleanup  the one desk no longer holds the check's rows or ticket HC-1517
+       PASS  gone     community: ConfigMap/desk-check-064817-community is not on the cluster
+       PASS  gone     private: ConfigMap/desk-check-064817-private is not on the cluster
+       PASS  gone     the one page lists no check row
+       12 checks: 12 PASS, 0 FAIL
+       ONE DESK LIVE GREEN
+
+   with `removed 2 row(s) of desk-check-064817-community, desk-check-064817-private from the one page on
+   watch-it-burn-community`, exit 0. Then `deployments.json` read `[]`, byte for byte what it read before (`cmp`),
+   the private desk's own page read `[]`, HC-1517 and HC-2311 answered 404 and HC-666 200.
+
+2. `COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_kubecon_c3_live.py`, 06:49 to 06:50 UTC, holding
+   and then releasing `wib-guard-lock` on the community cluster: 10 PASS lines, `probe beat c6-lands passes:
+   Challenge 3: HC-666 lands joker-agatha-the-banshee with Kyverno on (a trusted registry)`, `the probe left no
+   joker-agatha-the-banshee behind`, and `All live Challenge 3 probe checks passed.`, exit 0. One model call. The page
+   read `[]` after.
+
+3. The Night Before probe, community: `python3 verify/kubecon_probe.py community attackme.burritobot.co --context
+   watch-it-burn-community --switch-context watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile accen-dev`,
+   ending 06:54:37 UTC: `20 beats: 20 PASS, 0 FAIL`, `KUBECON PROBE GREEN`, exit 0, `spend on attackme.burritobot.co:
+   $0.4821 -> $0.5674 over 9 model calls`. Its Challenge 3 beat printed `read_support_ticket(HC-666), then
+   deploy_app(joker-agatha-the-banshee): joker-agatha-the-banshee Deployment created, as the wall shows`, its 2A beat
+   `removed tron-game and its row again`, and its last beat `AI guards off and the four Kubernetes guardrails off on
+   watch-it-burn-community, watch-it-burn-private: the stage starts clean`. Then `deployments.json` read `[]`: no
+   `joker-agatha-the-banshee` row. The admin probe was not run; the criterion asks for one of the two.
+
+**Left as found.** Neither cluster has a `desk-check-*` ConfigMap or a `joker-agatha-the-banshee` Deployment. The one
+Joker on either is `joker-ichabod-the-werewolf` on watch-it-burn-community, 0 of 0 replicas, which run 18753 found
+and left; it was left again. Both `ai-layer` Applications read Synced and Healthy after. No Secret was read or written,
+`agent/terminal-auth` included. About 11 model calls were spent on the public bot.
+
+**Not yet run on a cluster.** None: this change is a verify script's, which no cluster runs, and it was run live here.
+
+**Tests (run 19437).** `python3 verify/test_live_check_cleanup.py`, run alone: `All live check cleanup checks
+passed.`, exit 0. The prose gate printed `prose gate: pass`. The whole Test and E2E commands were not
+run; validation runs the tests that read the changed files. No dependency was added.
+
+## 2026-11-09 · #1252 · run 19438 · The heavy gate's CI fails on Tanjiro's fonts and a racy 413 check, and both are fixed
+
+**What failed.** `verify-suites` on staging `429d97e1` (Actions run 42572890407) and on `40ce541f` (run 42570384431)
+ran every tier test, since `verify/python.lock` and `verify/package_cache.py` changed since main's `6b518555`. Four
+checks failed: `test_chat_phone_screen_e2e.py` (the 390 and 412 phones: card header 91px against at most 72, and the
+witch line in two lines), `test_chat_pane_overlap_e2e.py` (the private bot at 761 and 768 scrolls sideways,
+scrollWidth 781), `test_mobile_titles_e2e.py` (`320 wide fonts: no header button runs past the edge`) and the offline
+suite's `test_public_desk.py`. The three browser tests had failed on Tanjiro since #1214's branch run 42533992315;
+the green staging runs after it were scoped and never selected them, and they pass on netcup, where hecaton's gate runs.
+
+**Cause of the three browser failures: Tanjiro's fonts.** On netcup the pinned shell draws the chat page in Liberation
+Sans (the page asks for Arial after the Apple, Segoe and Roboto faces, and Liberation Sans is Arial's metric twin). On
+Tanjiro, with fonts but no Liberation Sans, Arial fell to DejaVu Sans. Measured on netcup with the pinned Playwright:
+"Get a new witch name" is 118.5px in Liberation Sans and 139.2px in DejaVu Sans; CI printed 139.15625. With a
+fonts.conf reading DejaVu alone, all three tests fail here exactly as CI printed them, to the fraction of a pixel
+(witch line 216.546875px, button 139.15625px, scrollWidth 781). With fonts-liberation and fonts-noto-color-emoji
+unpacked beside DejaVu, all three pass.
+
+**The fix.** `verify/ci_chromium_libs.py`, the CI step that unpacks what Chromium lacks on Tanjiro (#1047), now also
+unpacks the font packages the tier is measured in (`MEASURED_FONTS`: fonts-liberation, fonts-dejavu-core,
+fonts-noto-color-emoji) when a host that has fonts lacks one, and writes a FONTCONFIG_FILE reading them beside the
+host's own fonts, the user's directories included, and the host's rules. Then the shell measures one line in Arial,
+in Liberation Sans and in a family no host has, and the step fails unless Arial measures as Liberation Sans and
+Liberation Sans is not a fallback. On netcup the check passes (245.43px both); with DejaVu alone it fails, saying the
+host holds no Liberation Sans. Nothing is installed: the packages are unpacked into the job's temp directory, as
+#1047's libraries are. Rendering in Liberation Sans is also the closer match to the Roboto and San Francisco a phone
+draws the page in. The page's own fit on a DejaVu-wide font was not changed; the followup is in the run's report.
+
+**Cause of the offline failure: a race in the test.** desk-relay answers 413 on an oversized Content-Length without
+reading the body and closes. The test sent the 512 KB body with urllib, so whether it read the 413 or hit
+`BrokenPipeError` while still writing depended on timing; CI got the broken pipe. Both oversized cases (the 4k
+`/landed` report and the 512k `/cluster-read`) now go through `oversized()`, which sends the headers declaring the
+length and no body, then reads the answer, so the relay has everything it reads before it answers. The relay is
+unchanged.
+
+**Tests run.** `python3 verify/test_public_desk.py` exit 0, both 413 checks passing; `python3
+verify/test_ci_chromium_libs.py` exit 0 with the new checks of the measured fonts, the font directories and the Arial
+verdict; `python3 verify/test_verify_suites_workflow.py` and `python3 verify/test_scope_tests.py` pass. The three
+browser tests were run under the two fonts.conf files described above, failing with DejaVu alone and passing with the
+unpacked fonts added. The tools tier was not run in full (CLAUDE.md, Dispatched runs, point 6); validation and the CI
+run on Tanjiro run the scoped tests.
+
+**Not yet run on a cluster.** Nothing: this change touches only `verify/` files no cluster runs, so it has no live
+check (CLAUDE.md, Dispatched runs, point 1). **Not yet run on Tanjiro.** The step's new unpack and Arial check run
+there on the next `verify-suites` job; its log line names the fonts it unpacked.
+## 2026-11-09 · #1219 · run 19446 · The AWS plane still catches out-of-band change in accen-dev: Config, CloudTrail, the drift cron and the hand-made bucket case, read and rerun live
+
+**Context.** #205's AWS-plane case was last run live by run 17941 (2026-11-06). Since then #1041 rebuilt accen-dev's
+boundary, lab VPC and KubeCon cluster states on tanjiro-wsl2. This run reads accen-dev again and reruns the case on
+staging `786e7e76`. `bash verify/prior-drafts.sh 1219 origin/staging` printed NONE. No code changed: the check called
+for no fix to `infra/terraform/drift` or `infra/terraform/aws/audit`, so the tools tier was not run.
+
+**What accen-dev showed, 2026-11-09 at 07:03Z.** The session is the role `hecaton-run` (session `hecaton-run-19446`)
+in 515966504359, us-west-2.
+- `describe-configuration-recorder-status`: `"name": "watch-it-burn"`, `"recording": true`, `"lastStatus":
+  "SUCCESS"`, `lastStatusChangeTime` 2026-11-09T01:39:52Z.
+- `describe-configuration-recorders`: `allSupported` false, `recordingStrategy` `INCLUSION_BY_RESOURCE_TYPES`, 17
+  types. EKS: `AWS::EKS::Cluster`, `Nodegroup`, `Addon`, `FargateProfile`, `IdentityProviderConfig`,
+  `PodIdentityAssociation`. S3: `AWS::S3::Bucket`, `BucketPolicy`, `AccountPublicAccessBlock`. Bedrock:
+  `AWS::Bedrock::Guardrail`, `ApplicationInferenceProfile`. The rest are `AWS::IAM::Policy`, `User`, `UserPolicy`,
+  `Role`, `RolePolicy` and `AWS::CloudTrail::Trail`. No `AWS::Config::` type is in the list.
+- `get-trail-status --name watch-it-burn`: `"IsLogging": true`, `LatestDeliveryAttemptSucceeded`
+  2026-11-09T07:01:07Z, `TimeLoggingStopped` empty.
+- `wib-community` held one key, its own `AKIAXQIQABWT2L7UOXQ5`, and the account had no `wib-drift` bucket.
+
+**The daily drift report's schedule.** It runs on tanjiro-wsl2 from michael's crontab, in the checkout
+`/home/michael/repos/talks/Unleash_an_Agent_Watch_It_Burn`. The record is #955's entries above (runs 17868 and 17884,
+2026-11-06), which read `crontab -l` there, and docs/floor.md's "The schedule", which names the host and path (#955).
+#1041's entry (run 18311) shows the states that report reads rebuilt in the same checkout. Read again here through
+`sources-elevated fleet tanjiro-wsl2` at 07:03Z, changing nothing: `crontab -l` line 3 is `17 6 * * *
+/home/michael/repos/talks/Unleash_an_Agent_Watch_It_Burn/infra/terraform/drift/scheduled-drift.sh # wib-drift`, the
+checkout is at `16f8d46c`, its newest report copy is `drift-20261108T1117Z.md` (five accounts, `**0 finding(s)**`),
+and `command -v driftctl` finds nothing. In this repo `driftctl` is named only in prose: docs/floor.md says it is not
+used, and drift-report.py's docstring says why. The report is `terraform plan -refresh-only`, plan only.
+
+**The hand-made bucket case.** A second, temporary access key, `AKIAXQIQABWTQQYLMUXC`, was minted for `wib-community`
+at 07:03:54Z into a CSV in a mode-700 temp directory. After 20 s for IAM,
+`DRIFT_PROFILE=accen-dev ATTENDEE_CLUSTER=watch-it-burn-community WIB_ATTENDEE_ACCOUNTS=accen-dev
+ATTENDEE_KEY_CSV=<that csv> python3 verify/test_drift_aws_live.py` ran, exit 0, `AWS-plane drift acceptance passed.`
+- The attendee's CreateBucket for `wib-drift-attendee-515966504359-20261109070420` was refused: `AccessDenied ... is
+  not authorized to perform: s3:CreateBucket ... because no identity-based policy allows the s3:CreateBucket action`.
+- The operator made `wib-drift-oob-515966504359-20261109070420`. After 76 s AWS Config had a configuration item for
+  it and CloudTrail had the attendee's refused call as AccessDenied.
+- The next drift report, run from this worktree, exited 2 with the bucket in its Unmanaged table, the operator as its
+  creator from CloudTrail and Config's record of it. The test then deleted the bucket (`cleanup: delete ...: ok`).
+
+The wrapper deleted the temporary key and the CSV's directory on exit (`cleanup: deleted temporary key
+AKIAXQIQABWTQQYLMUXC`, `exists now: no`). Its script and log are in the run directory
+(`/var/lib/hecaton/runs/19446/live/`); the log holds no secret.
+
+**Read back, 07:06:56Z.** `wib-community` holds only `AKIAXQIQABWT2L7UOXQ5` (Active), `list-buckets` has 0 names with
+`wib-drift`, `head-bucket` on the out-of-band bucket answers 404, and no `wib-community.csv` is left on this host. The
+account is as found. Neither cluster was touched, `agent/terminal-auth` included.
+
+**Not yet run on a cluster.** Nothing: this run changed only this entry, and the issue's live checks all ran.
+
+**Tests (run 19446).** `python3 verify/test_drift_report.py`: `All drift-report checks passed.`, exit 0. The prose
+gate printed `prose gate: pass`. The scoped `run-tests.sh` ran the tests the scope map selects for this entry. The
+whole Test and E2E commands were not run; validation runs the tests that read the changed file. No dependency was
+added.
+
+## 2026-11-09 · #1206 · run 19394 · A test for the Night Before seed step's four Datadog links
+
+#1139 rewrote the run-of-show's Night Before step "Seed the stage's Datadog traces" around the deck's four Datadog
+links, and test review run 18720 found no test reading it. `verify/test_stage_trace_slides.py` holds each segment's
+own step and the slides' notes to `SEEDS`, but not this step's table or its two bullets on reaching a seed.
+
+`verify/test_stage_seed_links.py` reads the step from "**The four Datadog links.**" to "**The `-fixed` seeds and
+`c3-pii`**" and holds it to `verify/stage_traces.py` rather than to a copy of its words:
+
+- The table has four rows, `#/11`, `#/26`, `#/48` and `#/68` in deck order, each with its segment and the words its
+  link sits on (`"Ophelia Thorn"`, Whitney opening Datadog, `"Let's look at the trace."`, `"tools"`).
+- Each row's seed is the attack seed `SEEDS` lists for its challenge, its session is `session_id(seed, "<stamp>")`,
+  and its spans cell names the seed's `must` spans in `SEEDS`' order and none of its `must_not`.
+- The filtered link is, word for word, the presenters tab URL `views()` builds (`ml_app` and the admin cluster).
+- For each of the four seeds, the filtered bullet's typed `session_id:` term, added to the link's own query, holds
+  every term of the seed's own search as its `views()` link carries it; the home bullet types the filtered link's page
+  and searches exactly that query. Both set Past 7 Days and end on clicking the one trace.
+
+Each check is then shown failing on a changed step, each on its own message: a row dropped, Challenge 3's spans
+swapped, Challenge 4's second span dropped, a session or a seed keyed to a `-fixed` seed, the link words changed, the
+link pointed at the room's cluster, either bullet's session filter taken out or changed, the home bullet on APM's page
+or another app, either bullet off Past 7 Days, and the home bullet not clicking the trace. The test passed, 18 checks.
+Every literal the cases edit on is checked first and named when missing. `verify/scope-map.yaml` has its entry from
+`scope_tests.py write`.
+
+**Live check.** Skipped: the change is a test under `verify/` that no cluster runs.
+
+**Run 19445, after run 19394's tests gate failed.** Two tree-wide citation scans failed on the new file, which run
+19394 did not run. `verify/test_deck_shift_slide_citations.py` fails any hash `#/43` or more outside segment 4, the
+seed step and its listed readers, and the new test has to name `#/48` and `#/68`, so it joins `SEG4_READERS` beside
+`test_stage_trace_slides.py`, which reads the same two slides. `verify/test_guardrail_slide_citations.py` fails the
+2026-11-06 deck's phrase "four slides", which the new test's docstring used for its table; it now says "one row per
+link". Run alone, both scans and `test_stage_seed_links.py` pass, and `scope_tests.py write` leaves the map as it was.
+## 2026-11-09 · #1224 · run 19448 · desk_ticket_live.py files on the one desk and removes its Jokers' rows and its tickets from it on every path out
+
+**What changed.** `verify/desk_ticket_live.py` (#1102) predates the one desk (#1145). It filed the admin bot's tickets on
+`support-burritobot-private.burritobot.co`, deleted each Joker's Deployment but left its row on
+deployments.burritobot.co, and its docstring said each desk keeps its own tickets and that a filed ticket cannot be
+removed. A read-only kubectl read this run confirmed the premise: workshop-mcp's `TICKET_SITE_URL` on
+watch-it-burn-private is `http://desk-relay.agent.svc.cluster.local:8080` and on watch-it-burn-community
+`http://fake-ticket.agent.svc.cluster.local:8080`, so the admin bot reads the public desk and would never have seen a
+ticket filed on the private one. Now:
+
+1. Every ticket is filed on the one desk, `kp.PUBLIC_DESK` (support.burritobot.co); `ADMIN_DESK` is gone. `Side.file`
+   keeps each number the desk answers with in `Side.filed`.
+2. `Side` carries `desk`, the community cluster, which `main` hands to both bots (the public bot's own cluster object).
+   `Side.ask`'s finally deletes the Joker with `remove_deployment` and then, in a nested finally so it runs even when
+   the delete raises, calls `desk.forget_on_desk([joker], since)` (#1215): the Joker's rows that landed since the ask
+   began, whichever bot made them, and nothing older. What could not be removed comes back as `left`, and
+   `Side.judged` fails the step on it whatever the judge said, as kubecon_probe's `_c6` does.
+3. `checked` wraps the old body in main: the checks, then, in nested finallys, `restore`, `forget_filed` (the tickets
+   both bots filed off the desk in one `/desk-forget`, a step that fails naming each ticket it could not remove) and the
+   as-found reads. HC-666 is never named; only numbers the desk answered a filing with are kept, so a filing the desk
+   answered with no number stays, and its filing step has already failed.
+4. The docstring describes the one desk as it is and says how the rows and tickets leave it.
+
+**Tests.** `verify/test_desk_ticket_live.py` gains three parts, against the real `ticket_site.py` it already runs on
+localhost, with `forget_on_desk`'s kubectl exec running the in-pod `/desk-forget` script against it and
+`verify/no_cloud.py` in place. `Side.ask` on each bot, for both Jokers, on seven paths (clean, the turn raising, an
+interrupt, the audit read raising, the delete raising, the delete failing, the desk unreachable): the row is asked off
+the community cluster's desk by its name alone, never off the bot's own cluster, the room's older row of the same name
+and another room row stay, and a leftover fails the step. A read-back ask naming no Joker asks nothing of the desk.
+`checked` on five paths (clean, the body raising, an interrupt, restore raising, the desk unreachable) plus a run that
+filed nothing: the filed tickets are gone and HC-666 and a room's ticket stay, or the step fails naming them. `main`
+hands both bots the community cluster as their desk. Two mutations (the row forget outside a finally, the ticket forget
+after a raising restore) each failed the test. `python3 verify/test_desk_ticket_live.py`: 214 PASS, exit 0.
+`python3 verify/test_fetch_inventory.py` passed. `scope_tests.py write` added `no_cloud.py` and `no-cloud.sh` to the
+test's entry. The whole Test and E2E commands were not run; validation runs the tests that read the changed files.
+
+**Live check.** Skipped: the change touches only `verify/` files no cluster runs (the two `TICKET_SITE_URL` reads above
+were read-only). **Not yet run on a cluster:** `python3 verify/desk_ticket_live.py --private-context
+watch-it-burn-private --community-context watch-it-burn-community --kubeconfig "$KUBECONFIG" --profile accen-dev`,
+which spends Bedrock money; the issue asks for the cleanup and its offline test, not a live run.
+
+**Follow-up seen.** `verify/test_deployments_removed_live.py`'s docstring still says the desk has no way to drop a row
+and cites desk_ticket_live.py on its tickets; both are out of date since #1215 and this change.
+
+## 2026-11-09 · #1220 · run 19458 · Merged onto staging f526bf22: #1224's desk_ticket_live.py kept, and the relay's drain moved after its 413 to suit #1252's test
+
+**desk_ticket_live.py.** Staging's #1224 (`f526bf22`) had already moved every ticket to the one desk, with
+`DESK_URL = kp.PUBLIC_DESK` and no `ADMIN_DESK`, and it removes each Joker's row and each ticket it filed on every path
+out, which was the first follow-up run 19413 named. Its version is kept whole, and this branch's edits to that file
+are dropped, along with the checks run 19413 added to `test_desk_ticket_live.py` (they read `PUBLIC_DESK`, `ADMIN_DESK`
+and the old `Side`, which #1224 replaced, and its own test holds the one desk and that the file never names
+`support-burritobot-private`), their `support_desk_hosts` import, the fetch-inventory entry for their stub lines, and
+the scope-map read. So the run 19413 entry's paragraph on `desk_ticket_live.py` now describes #1224's code, not this
+branch's, and its follow-up for the row removal is met by #1224. The redirect, `start-check`'s default, and the tests
+for both are unchanged.
+
+**desk_relay.py.** Staging's #1252 (`1960a3af`) fixed the same broken pipe from the test's side: `test_public_desk.py`'s
+`oversized()` sends an oversize request's headers alone and reads the relay's 413. With this branch's relay, which read
+the body before its 413, that request waited for a body that never came and timed out. Both stand now: the relay
+sends its 413 first, then reads and drops up to `DRAIN_MAX` of the body, waiting at most `DRAIN_TIMEOUT` (5 s), and
+closes. A headers-only caller reads the 413 at once and its close ends the read; a caller still writing a full body
+finishes and then reads the 413 waiting for it. Measured on localhost after the merge: a headers-only POST of 512k + 1
+got its 413 in 0.0 s and a full-body one in 0.01 s. `test_public_desk.py` keeps #1252's two `oversized()` checks and
+this branch's twenty full-body reads; run with staging's `desk_relay.py` the twenty reads never print, the run ends on
+the broken pipe, and with this branch's they pass. The whole test took 12.0 s, against 11.4 s with staging's relay.
+
+**Tests after the merge, once each.** `test_public_desk.py`, `test_desk_ticket_live.py`,
+`test_private_desk_redirect.py`, `test_support_desk_named.py`, `test_desk_remote_reports.py`, `test_fetch_inventory.py`
+and `test_scope_tests.py` exit 0, and `test_fleet_start_check.sh` 26 passed, 0 failed. The rest is left to the gates.

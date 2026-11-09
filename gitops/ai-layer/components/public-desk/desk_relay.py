@@ -43,11 +43,13 @@ TOKEN_HEADER = "X-Desk-Report-Token"   # the public desk's header (#1157, ticket
 MAX_REPORT = 4 * 1024                  # the public console's client_max_body_size for /remote-landed
 MAX_READ = 512 * 1024                  # the desk's MAX_READ_BODY, and the public console's limit for /remote-cluster-read
 MAX_ID = 40                            # the desk keeps a ticket id to 40 characters
-# An oversize body up to this size is read and dropped before the 413, as nginx discards one before its own 413, so the
-# caller reads the 413 and not a broken pipe: answering before the body is read closed the socket under a sender still
-# writing (#1220 measured 9 of 40 POSTs of 512k + 1 ending in EPIPE). A body declared larger is answered at once and the
-# connection closed unread, so no caller holds the relay reading.
+# After its 413 the relay reads and drops an oversize body up to this size before it closes, as nginx's lingering close
+# does, so a caller still writing finishes and reads the 413 rather than a broken pipe: closing on the 413 alone reset a
+# sender mid-body (#1220 measured 9 of 40 POSTs of 512k + 1 ending in EPIPE). The 413 goes first, so a caller that sent
+# only the headers (#1252's test) reads it at once; its close ends the read. A body declared larger, or a sender silent
+# for DRAIN_TIMEOUT seconds, is not waited for, so no caller holds the relay reading.
 DRAIN_MAX = 2 * MAX_READ
+DRAIN_TIMEOUT = 5
 TIMEOUT = 5
 
 
@@ -100,14 +102,18 @@ class Handler(BaseHTTPRequestHandler):
     def _body(self, limit: int) -> bytes | None:
         n = int(self.headers.get("Content-Length") or 0)
         if n > limit:
-            left = n if n <= DRAIN_MAX else 0
-            while left > 0:
-                chunk = self.rfile.read(min(left, 64 * 1024))
-                if not chunk:
-                    break
-                left -= len(chunk)
             self.close_connection = True
             self._json(413, {"error": f"at most {limit} bytes"})
+            left = n if n <= DRAIN_MAX else 0
+            try:
+                self.connection.settimeout(DRAIN_TIMEOUT)
+                while left > 0:
+                    chunk = self.rfile.read1(min(left, 64 * 1024))
+                    if not chunk:
+                        break
+                    left -= len(chunk)
+            except OSError:
+                pass   # the caller closed or went quiet; it has the 413
             return None
         return self.rfile.read(n)
 
