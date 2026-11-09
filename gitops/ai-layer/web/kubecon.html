@@ -96,7 +96,7 @@
     <tr><td>2</td><td>5</td><td>M+W</td><td>Challenge 1: the CEO's secret leaks</td><td>none: no fix here</td></tr>
     <tr><td>3</td><td>5</td><td>W+M</td><td>Challenge 2: the Kubernetes catch-all</td><td><code>guardrails-on</code>, both clusters</td></tr>
     <tr><td>4</td><td>7</td><td>W+M</td><td>Challenge 3, <code>#/43</code> to <code>#/64</code>: a support ticket gets the bot to deploy something</td><td><code>guard-agency-on</code>, then <code>guard-input-on</code></td></tr>
-    <tr><td>5</td><td>5</td><td>M+W</td><td>Challenge 4, <code>#/65</code> to <code>#/98</code>: find the poisoned MCP tool</td><td><code>guard-mcp-on</code></td></tr>
+    <tr><td>5</td><td>5</td><td>M+W</td><td>Challenge 4, <code>#/65</code> to <code>#/113</code>: find the poisoned MCP tool</td><td><code>guard-mcp-on</code></td></tr>
     <tr><td>6</td><td>5</td><td>M+W</td><td>OWASP close, burritos only, break it</td><td><code>guard-topic-on</code></td></tr>
   </table>
   <p class="note">Every challenge runs one pattern: <b>challenge slide</b> (a line or two of tee-up, then the call to
@@ -444,19 +444,19 @@
     last one never gives the bot the choice."</p>
   </section>
 
-  <!-- SEGMENT 5: Challenge 4 (C7), #/65 to #/98: find the poisoned MCP tool, then guard-mcp-on -->
+  <!-- SEGMENT 5: Challenge 4 (C7), #/65 to #/113: find the poisoned MCP tool, then guard-mcp-on -->
   <section class="seg">
     <h2><span class="n">SEGMENT 5 · 5 min</span> Challenge 4: the poisoned weather tool</h2>
     <details class="more"><summary>The story</summary>
-    <p class="premise">Michael and Whitney, the deck's <code>#/65</code> to <code>#/98</code>. "BurritoBot gets
+    <p class="premise">Michael and Whitney, the deck's <code>#/65</code> to <code>#/113</code>. "BurritoBot gets
     its tools from MCP servers." and "But not every MCP server can be trusted." (#/65 and #/66). The challenge
     (#/67), "Find the poisoned MCP tool.", and two minutes of play on the public bot, the prompt wall optional. The
     hint (#/68), "Ask BurritoBot what tools it has.", whose "tools" opens Datadog; then Michael's live weather ask on
     the private bot, the recipe under the forecast, and its trace. "LLM03: Supply Chain" (#/69). "Let's turn on an
     MCP gateway." (#/70): <code>guard-mcp-on</code> on the private bot. "Try your attack again." (#/71), the room's
     retry on the public bot, which <code>guard-mcp-on</code> reaches (#1132). Then the MCP gateway, agentgateway in the notes (#/72 and #/73),
-    the two diagrams, without and then with the gateway (#/74 to #/96), and its rule before and after (#/97 and
-    #/98).</p>
+    the two diagrams, without and then with the gateway (#/74 to #/111), and its rule before and after (#/112 and
+    #/113). The close starts at #/114.</p>
     </details>
 
     <article class="beat" data-beat="C7" data-segment="5">
@@ -473,8 +473,8 @@
       <div class="toggle" onclick="cp(this)"><span class="lbl">Fix · private terminal</span>guard-mcp-on<button class="cp">copy</button></div>
       <div class="marker"><span class="lbl">Success marker, private bot, after the fix</span>After <code>guard-mcp-on</code>:
       agentgateway's MCP authorization rule on evil-mcp's bind allows only the one registered tool,
-      <code>get_weather</code>, so the gateway stops the rogue <code>tools/call</code> before the tool runs. Give
-      it the reload delay the run-of-show's segment 5 records before re-asking. Do not say the MCP server's reply
+      <code>get_weather</code>, so the gateway stops the rogue <code>tools/call</code> before the tool runs. Wait
+      about five seconds before re-asking, as #/70's notes say: the terminal prints when each cluster has the rule. Do not say the MCP server's reply
       is scanned before the model reads it (#480, not built). The same search for
       <code>wib-stage-c4-fixed-&lt;stamp&gt;</code> shows no
       <code>read_internal_config</code> span.</div>

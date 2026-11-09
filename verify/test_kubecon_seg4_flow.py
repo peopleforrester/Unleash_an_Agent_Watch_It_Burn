@@ -3,11 +3,14 @@
 """The presenter page, `gitops/ai-layer/web/kubecon.html`, follows the run-of-show's segments 4 and 5 (#1141).
 
 rounds-agenticburn#102, built 2026-11-08, put Challenge 3 on the deck's `#/43` to `#/61` and Challenge 4 on `#/62`
-to `#/72`; #1196 moved them to `#/43` to `#/64` and `#/65` to `#/98` after rounds-agenticburn#112 and #118, and #1141 moved the run-of-show's segments 4 and 5 onto those URL hashes. This test holds the page to them:
+to `#/72`; #1196 moved them to `#/43` to `#/64` and `#/65` to `#/98` after rounds-agenticburn#112 and #118, and #1141
+moved the run-of-show's segments 4 and 5 onto those URL hashes. Rounds `cfbd9ba` redrew Challenge 4's diagrams as
+thirty-eight slides, so Challenge 4 is `#/65` to `#/113` in the 127-slide deck at rounds main `faf4005` (#1270). This
+test holds the page to them:
 
   1. The glance table's row 4 names Challenge 3 with `#/43` to `#/64` and no Joker; row 5 names Challenge 4 with
-     `#/65` to `#/98`.
-  2. Segment 4's story cites `#/43` to `#/64`, and segment 5's `#/65` to `#/98`, each once, in ascending order, and
+     `#/65` to `#/113`.
+  2. Segment 4's story cites `#/43` to `#/64`, and segment 5's `#/65` to `#/113`, each once, in ascending order, and
      their beats come in the run-of-show's order. The trace, LLM01, the switch and the retry carry the same hashes
      in the run-of-show.
   3. In the Challenge 3 block the presenters' attack (`#/47`) comes before its Datadog trace (`#/48`), and the trace
@@ -46,7 +49,7 @@ C6_OPEN = '<article class="beat" data-beat="C6" data-segment="4">'
 ROW4_OPEN, ROW5_OPEN = "<tr><td>4</td><td>7</td>", "<tr><td>5</td><td>5</td>"
 ROS_SEG4, ROS_SEG5, ROS_SEG6 = "### Segment 4:", "### Segment 5:", "### Segment 6:"
 FIRST, LAST = 43, 64
-FIRST5, LAST5 = 65, 98
+FIRST5, LAST5 = 65, 113
 
 # The story's beats, as the page words them with its tags removed, in the run-of-show's order.
 BEATS = [
@@ -79,8 +82,9 @@ BEATS5 = [
     ("guard-mcp-on (#/70)", "(#/70): guard-mcp-on"),
     ("the retry (#/71)", '"Try your attack again." (#/71), the room\'s retry on the public bot, which guard-mcp-on reaches'),
     ("the gateway (#/72 and #/73)", "agentgateway in the notes (#/72 and #/73)"),
-    ("the diagrams (#/74 to #/96)", "without and then with the gateway (#/74 to #/96)"),
-    ("the rule (#/97 and #/98)", "its rule before and after (#/97 and #/98)"),
+    ("the diagrams (#/74 to #/111)", "without and then with the gateway (#/74 to #/111)"),
+    ("the rule (#/112 and #/113)", "its rule before and after (#/112 and #/113)"),
+    ("the close starts at #/114", "The close starts at #/114."),
 ]
 # The same beats' hashes in the run-of-show, for the ones the page and the run-of-show both name.
 ROS_NUMBERS = [
@@ -210,9 +214,9 @@ def problems(page: str, ros: str) -> dict[str, list[str]]:
     block = plain(seg_html.split(C6_OPEN, 1)[1].split("</article>", 1)[0]) if C6_OPEN in seg_html else ""
     ros_seg = flat(ros.split(ROS_SEG4, 1)[1].split(ROS_SEG6, 1)[0].replace("`", ""))
     out: dict[str, list[str]] = {}
-    out["the glance rows name Challenge 3 on #/43 to #/64 and Challenge 4 on #/65 to #/98, and no Joker"] = (
+    out["the glance rows name Challenge 3 on #/43 to #/64 and Challenge 4 on #/65 to #/113, and no Joker"] = (
         ([] if "Challenge 3, #/43 to #/64:" in row else [f"row 4 reads {row!r}"])
-        + ([] if "Challenge 4, #/65 to #/98:" in row5 else [f"row 5 reads {row5!r}"])
+        + ([] if "Challenge 4, #/65 to #/113:" in row5 else [f"row 5 reads {row5!r}"])
         + [w for w in ("Joker", "joker") if w in row])
     slides = expand(SLIDE_PAREN.finditer(premise))
     out[f"segment 4's story cites #/{FIRST} to #/{LAST}, each once, in order"] = (
@@ -281,11 +285,18 @@ def swap(text: str, old: str, new: str) -> str:
     return text.replace(old, new, 1)
 
 
-ROWS = "the glance rows name Challenge 3 on #/43 to #/64 and Challenge 4 on #/65 to #/98, and no Joker"
+ROWS = "the glance rows name Challenge 3 on #/43 to #/64 and Challenge 4 on #/65 to #/113, and no Joker"
 OUTSIDE = "no slide 44 to 64 and no #/43 or later outside segments 4 and 5 and rows 4 and 5"
 fails_on("the old row put back",
          swap(page, "Challenge 3, <code>#/43</code> to <code>#/64</code>: a support ticket gets the bot to deploy something",
               "Challenge 3: ticket HC-666 deploys your Joker"), ROWS)
+fails_on("the pre-#1270 row 5, Challenge 4 on #/65 to #/98, put back",
+         swap(page, "Challenge 4, <code>#/65</code> to <code>#/113</code>:",
+              "Challenge 4, <code>#/65</code> to <code>#/98</code>:"),
+         ROWS)
+fails_on("the pre-#1270 diagrams, #/74 to #/96, put back in segment 5's story",
+         swap(page, "(#/74 to #/111)", "(#/74 to #/96)"),
+         f"segment 5's story cites #/{FIRST5} to #/{LAST5}, each once, in order")
 fails_on("a hash cited out of order in the story",
          swap(page, "Then its trace (#/48)", "Then its trace (#/49)"),
          f"segment 4's story cites #/{FIRST} to #/{LAST}, each once, in order")
@@ -351,4 +362,4 @@ if failures:
     for f in failures:
         print(f"  - {f}")
     sys.exit(1)
-print("The /kubecon page's segments 4 and 5 and their rows follow the run-of-show's, #/43 to #/98 (#1141, #1196).")
+print("The /kubecon page's segments 4 and 5 and their rows follow the run-of-show's, #/43 to #/113 (#1141, #1270).")

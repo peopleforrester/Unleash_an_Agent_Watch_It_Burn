@@ -47691,3 +47691,57 @@ verify/scope_tests.py write` left the map unchanged. `HECATON_BASE_SHA=5e6e56e0 
 the scoped offline suite (88 tests, `ALL OFFLINE RENDER-GATE TESTS GREEN`) and 6 tier tests, the three changed
 ones included, in 6m42s, and read `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. No `tmp*` directory was left at the root.
 No live check: the change touches verify/ files no cluster runs and decisions.md.
+## 2026-11-09 · #1270 · run 19592 · Segment 5 and /kubecon follow the 127-slide deck, and a live test reads the deck rounds serves
+
+Rounds redrew Challenge 4's diagrams as thirty-eight slides (rounds `cfbd9ba`) and retired the appendix (`389c384`),
+so the deck went from 154 slides to 127. The deck https://rounds.agenticburn.com served on 2026-11-09 was byte for
+byte rounds main `faf4005` (sha256 `ff39da1c...`), one commit past the `1204390` the issue walked: `faf4005` changed
+only `#/70`'s Do note, to "Wait about five seconds: the terminal prints when each cluster has the rule." This run
+read that deck. `verify/prior-drafts.sh 1270 origin/staging` printed NONE.
+
+**The run-of-show.** Segment 5 cites Challenge 4 as `#/65` to `#/113`: the challenge `#/65` to `#/73`, the diagrams
+`#/74` to `#/111` with each of the thirty-eight Say notes quoted word for word (generated from the deck, not typed),
+the YAML `#/112` and `#/113`, and "The close starts at `#/114`". Row 5 reads `#/65` to `#/113` (it read `#/68` to
+`#/98`), and row 6 and a new lead line in segment 6 cite the close, `#/114` to `#/126`, slide by slide. Both "154
+slides" now read 127. `#/70`'s step gives the deck's wait of about five seconds in place of "not measured yet", and
+the Night Before C7 step now holds its printed delay against that wait. The live check also found segment 4's `#/55`
+drifted: since rounds `9c80fb7` its notes end at `Let's walk through it.` with no block-list sentence and no Then
+say, so the step quotes the deck's note and keeps the layering point as an unquoted answer for when the room asks.
+
+**Timing.** Counted over the Say and Then say notes at 150 words a minute, Do steps left out (the method gives 748
+and 739 words on rounds `f73c102`, against the 744 and 730 #1196 recorded): segment 5 is 823 words over 49 slides,
+about 5 minutes 30 seconds, 283 on the challenge, 478 on the diagrams and 62 on the YAML; segment 4 is 672, about 4
+minutes 30 seconds, 59 of them on `#/46` and `#/47`. The over-the-slot paragraph and both Timing paragraphs say so.
+The issue's 840 differs by its count of the notes' markers.
+
+**/kubecon.** Row 5, the segment 5 comment and its story cite `#/65` to `#/113`, the diagrams `#/74` to `#/111`, the
+rule `#/112` and `#/113`, and say the close starts at `#/114`; the fix marker gives the five-second wait.
+
+**The tests.** `verify/test_ros_seg4_flow.py`'s DIAGRAM_NOTES are the deck at `faf4005` (`#/56` to `#/64` unchanged,
+`#/74` to `#/111` new), segment 5 must cite `#/65` to `#/113`, every "the deck has N slides" must say 127, and row 5
+names the range; new self-checks put back 154 and the rule on `#/97` and `#/98`. `verify/test_kubecon_seg4_flow.py`
+holds the page to `#/65` to `#/113`, with self-checks for the old row and the old diagram range.
+`verify/test_deck_shift_slide_citations.py` cuts segments 4 to 6 and rows 4 to 6, since segment 6 now cites by hash,
+and counts the new test among the files that quote hashes. The new `verify/test_ros_deck_live.py` (`# E2E TIER:
+tools`, needs the network) fetches `https://rounds.agenticburn.com/attendee.html` and fails naming each slide where
+the run-of-show's slide count, a diagram note, a Say or "reads" quote or `>` line in a step, a `"..." (#/N)` in
+segments 4 to 6, the table or /kubecon, or the run from `#/43` to the close no longer matches. It reads only what
+the deck serves, so it is not a copy that stays green while the deck moves; a Night Before step runs it. Its
+self-checks fail it on a slide added, a note reworded, a slide inserted at `#/46`, a quote reworded and the close moved.
+Run against rounds `f73c102` it fails, naming the count and each of `#/77` on.
+
+**Live check.** The deck read above is this issue's live check: `python3 verify/test_ros_deck_live.py` printed six
+PASS and nine self-check PASS, "The run-of-show and /kubecon follow the 127-slide deck rounds serves (#1270).",
+exit 0. `/kubecon` on watch-it-burn-private (`https://burritobot-private.burritobot.co/kubecon`, 200) is byte for
+byte staging's page, still reading `#/65` to `#/98`; `attackme.burritobot.co/kubecon` answers 404, as the page is the
+presenters'. No cluster was changed.
+
+**Not yet run on a cluster.** After promotion, `/kubecon` on watch-it-burn-private reads `Challenge 4, #/65 to #/113`
+in its row 5 (`curl -s https://burritobot-private.burritobot.co/kubecon | grep -o 'Challenge 4, <code>#/65</code> to
+<code>#/[0-9]*</code>'`).
+
+**Tests run.** `python3 verify/test_ros_seg4_flow.py`, `python3 verify/test_kubecon_seg4_flow.py`,
+`python3 verify/test_deck_shift_slide_citations.py`, `python3 verify/test_ros_deck_live.py` and
+`python3 verify/test_scope_tests.py` passed, and the prose gate passed. `python3 verify/scope_tests.py write` added
+the new test's entry. The whole Test and E2E commands were not run and are left to validation. No dependency was
+added.

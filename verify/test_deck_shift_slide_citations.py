@@ -14,7 +14,8 @@ the old Challenge 4 and close 51 on. This test holds:
   2. Every file git tracks or would track under `facilitation/`, `challenges/` and `verify/`, read with backticks
      and `*` blanked and whitespace flattened, cites no slide number in 44 to 64 after "slide" or "slides" (each
      number of a list or range: "slides 20 and 25 to 27") and no hash `#/N` with N of 43 or more, except in the
-     run-of-show's segment 4 (`### Segment 4:` to `### Segment 5:`) and its segments-table row 4, in the Night Before
+     run-of-show's segments 4 to 6 (`### Segment 4:` to `## Abstract points to segments`) and its segments-table rows
+     4 to 6, which cite the deck by hash (#1141; segment 6 and row 6 since #1270), in the Night Before
      step "Seed the stage's Datadog traces", which names the slide that opens each challenge's trace (#1139), and in SEG4_READERS,
      the tests that hold segment 4 to the deck, and the numbering line itself. Numbers of 65 or more after "slide" pass: they are the shifted ones.
      This test's own docstring and fixtures name the forms it bans, so it is the one file the search leaves out.
@@ -39,17 +40,20 @@ NUMBERING = ("Slide numbers in this file count from 1, the title slide being sli
              "and is one less, so slide 44 is #/43 at https://rounds.agenticburn.com.")
 LINE_START = "Slide numbers in this file count from 1"
 SEG4, SEG5, SEG6, ROW4, ROW5 = "### Segment 4:", "### Segment 5:", "### Segment 6:", "| 4 | 7 |", "| 5 | 5 |"
-# Since #1141, segment 5 and its row cite rounds-agenticburn#102's Challenge 4 by hash (#/62 to #/72), so the cut
-# runs from segment 4 to segment 6 and drops rows 4 and 5.
+ROW6, AFTER_SEGMENTS = "| 6 | 5 |", "## Abstract points to segments"
+# Since #1141, segment 5 and its row cite rounds-agenticburn#102's Challenge 4 by hash, and since #1270 segment 6 and
+# its row cite the close, #/114 to #/126, so the cut runs from segment 4 to the section after segment 6 and drops rows
+# 4 to 6.
 # The tests that hold segment 4's slides to the 2026-11-07 deck, and so quote its numbers: the run-of-show's (#1098)
 # and the /kubecon page's (#1100); and the one that holds the stage-trace seeds to the notes of the slides that open
 # Challenge 3's and Challenge 4's traces, #/48 and #/68 (#1138); and the one that holds segment 4's desk lines, which
 # quote what #/46 and #/47's "deploy" open (#1160); and the one that holds the Night Before seed step to its four
 # Datadog links, #/48 and #/68 among them, and fails on #/65 there (#1205); and the one that holds that step's table
-# of the four links, #/48 and #/68 among them, to verify/stage_traces.py (#1206).
+# of the four links, #/48 and #/68 among them, to verify/stage_traces.py (#1206); and the one that holds the
+# run-of-show to the deck rounds serves, read live, and quotes the close's hashes in its self-checks (#1270).
 SEG4_READERS = {"verify/test_ros_seg4_flow.py", "verify/test_kubecon_seg4_flow.py", "verify/test_stage_trace_slides.py",
                 "verify/test_support_desk_named.py", "verify/test_ros_seed_step_links.py",
-                "verify/test_stage_seed_links.py"}
+                "verify/test_stage_seed_links.py", "verify/test_ros_deck_live.py"}
 LOW, HIGH = 44, 64  # the new Challenge 3, which the old deck's Challenge 3, Challenge 4 and close numbers land in
 HASH_FROM = 43      # #/43 is slide 44
 # The Night Before step that names each challenge's Datadog link by hash, #/48 and #/68 among them (#1139), from its
@@ -97,19 +101,19 @@ def hits(text: str) -> list[str]:
 
 
 def ros_outside_seg4(ros: str) -> str:
-    """The run-of-show with segments 4 and 5, the segments table's rows 4 and 5 and the seed step cut out."""
+    """The run-of-show with segments 4 to 6, the segments table's rows 4 to 6 and the seed step cut out."""
     need(ros, SEG4, ROS_REL)
     need(ros, SEED_STEP, ROS_REL)
     i = ros.index(SEED_STEP)
     need(ros[i + 1:], NEXT_STEP, f"{ROS_REL} after {SEED_STEP!r}")
     ros = ros[:i] + ros[ros.index(NEXT_STEP, i) + 1:]
-    need(ros, SEG6, ROS_REL)
+    need(ros, AFTER_SEGMENTS, ROS_REL)
     head, rest = ros.split(SEG4, 1)
-    tail = rest.split(SEG6, 1)[1]
+    tail = rest.split(AFTER_SEGMENTS, 1)[1]
     need(head, LINE_START, ROS_REL)
     i = head.index(LINE_START)
     head = head[:i] + head[head.index("\n\n", i):]
-    lines = [ln for ln in (head + "\n" + SEG6 + tail).splitlines() if not ln.startswith((ROW4, ROW5))]
+    lines = [ln for ln in (head + "\n" + AFTER_SEGMENTS + tail).splitlines() if not ln.startswith((ROW4, ROW5, ROW6))]
     return "\n".join(lines)
 
 
@@ -169,8 +173,8 @@ texts = {f: t for f in files if (t := read_text(f)) is not None}
 found = scan(texts, me)
 for f in found:
     print("  " + f)
-check("no slide number 44 to 64 and no hash #/43 or more outside segments 4 and 5 and their readers", not found)
-check("segments 4 and 5 cite the new deck by hash, so cutting them is what makes the run-of-show pass",
+check("no slide number 44 to 64 and no hash #/43 or more outside segments 4 to 6 and their readers", not found)
+check("segments 4 to 6 cite the new deck by hash, so cutting them is what makes the run-of-show pass",
       bool(hits(ros)) and not hits(ros_outside_seg4(ros)))
 
 print("== each check can fail ==")
@@ -179,9 +183,9 @@ no_line = ros.replace(ros[ros.index(LINE_START):ros.index("Four challenges,")], 
 check("with the numbering line removed, the numbering check fails", not numbering_ok(no_line)[0])
 moved = no_line.replace(TABLE, ros[ros.index(LINE_START):ros.index("Four challenges,")] + TABLE, 1)
 check("with the numbering line moved below the first step, the numbering check fails", not numbering_ok(moved)[0])
-need(ros, SEG6 + " The OWASP close", ROS_REL)
-planted = ros.replace(SEG6 + " The OWASP close", SEG6 + " The OWASP close (slide 51)", 1)
-check("a pre-shift number planted in segment 6 is found",
+need(ros, AFTER_SEGMENTS + "\n", ROS_REL)
+planted = ros.replace(AFTER_SEGMENTS + "\n", AFTER_SEGMENTS + " (slide 51)\n", 1)
+check("a pre-shift number planted in the section after segment 6 is found",
       bool(scan({ROS_REL: planted}, me)))
 seed_end = ros.index(NEXT_STEP, ros.index(SEED_STEP)) + 1
 after_seed = ros[:seed_end] + "- [ ] **Open the deck at #/50 first.**\n" + ros[seed_end:]

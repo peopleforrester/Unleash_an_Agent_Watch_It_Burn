@@ -7619,6 +7619,9 @@ reads:
     - verify/bootstrap_chart.py
     - verify/collector_render.py
     - verify/test_trace_walkthrough_view.py
+  test_ros_deck_live.py:
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/ai-layer/web/kubecon.html
   test_ros_seed_step_links.py:
     - agent
     - agent/desk-report-token
