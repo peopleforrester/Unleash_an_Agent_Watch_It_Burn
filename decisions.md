@@ -44908,3 +44908,13 @@ against the run-of-show at `18d36efc^`, before #1139, it failed the paragraph, t
 `python3 verify/test_scope_tests.py` ended `ALL PASS`.
 
 **Live check.** Skipped: the change adds an offline test under `verify/` that no cluster runs, and this entry.
+
+**Run 19432, the same issue, after run 19389's validation.** Run 19389's tests gate failed on one test,
+`verify/test_deck_shift_slide_citations.py` (#1099). It fails on any hash of `#/43` or more, or "slides 44" to "64",
+in a file under `verify/` that is not one of its `SEG4_READERS`, and the new test cites `#/48`, `#/68` and `#/65`, and
+quotes the issue's "slides 11, 26, 48 and 65", by design. Run 19389 ran its own test and `test_scope_tests.py` but not
+the other tests that read `verify/`. `verify/test_ros_seed_step_links.py` is now in `SEG4_READERS`, beside
+`verify/test_stage_trace_slides.py`, which #1138 added for the same reason, with a comment naming #1205. Rerun alone:
+`python3 verify/test_deck_shift_slide_citations.py` printed `All #1099 deck-shift slide citation checks passed.`, and
+`python3 verify/test_ros_seed_step_links.py` and `python3 verify/test_scope_tests.py` passed again. Live check skipped
+as before: nothing a cluster runs changed.
