@@ -295,14 +295,18 @@ check("--watch sleeps its interval and the page reloads on it",
 print("== fleet.sh ops: resolves the token, states the account, fails loudly ==")
 fake_bin = pathlib.Path(tempfile.mkdtemp())
 (fake_bin / "railway").write_text("#!/bin/sh\nexit 1\n")
+# The Secrets Manager copy of the token (#1239) is fleet.sh's last source: a fake aws answers as the CLI does for a
+# secret that is not there, so the no-token case reaches no AWS account.
+(fake_bin / "aws").write_text("#!/bin/sh\necho \"ResourceNotFoundException\" >&2\nexit 254\n")
 (fake_bin / "python3").write_text('#!/bin/sh\nprintf "token=%s\\n" "$WIB_ADMIN_TOKEN"; printf "%s\\n" "$@"\n')
 for f in fake_bin.iterdir():
     f.chmod(0o755)
 empty_home = tempfile.mkdtemp()
 path = f"{fake_bin}:{os.environ['PATH']}"
 r = fleet("ops", env={"PATH": path, "HOME": empty_home})
-check("no resolvable token: exit 1 with the two ways to supply one",
-      r.returncode == 1 and "cannot resolve the provisioning admin token" in r.stderr)
+check("no resolvable token: exit 1 naming the ways to supply one, the Secrets Manager secret included",
+      r.returncode == 1 and "cannot resolve the provisioning admin token" in r.stderr
+      and "watch-it-burn/provisioning-admin-token" in r.stderr and "ResourceNotFoundException" not in r.stderr)
 logs = pathlib.Path(tempfile.mkdtemp())
 r = fleet("ops", "sabrina", "--watch", "30",
           env={"PATH": path, "HOME": empty_home, "WIB_ADMIN_TOKEN": TOKEN, "WIB_OPS_HTML": str(logs / "v.html"),
