@@ -48883,3 +48883,33 @@ is comments only, so nothing new needs to run there.
 `python3 verify/test_coc_admission.py` and `python3 verify/test_collector_coc_mask.py` (their copies' files gained
 comment lines), once each, all PASS. `git grep` for the reworded comment lines under verify and scripts found no
 test that reads them. No dependency was added.
+## 2026-11-09 · #1040 · run 19702 · Segment 3's budget re-read against the deck of 2026-11-09; the rehearsal's times and choice are not on record anywhere a run can read
+
+**Why this run.** Hecaton put #1040's rehearsal on Michael's calendar, ending Mon 2026-11-09 14:45 EST, and under
+hecaton#483 a run treats that act as done once the slot ends. This run started one minute after it.
+`verify/prior-drafts.sh 1040 origin/staging` printed NONE: run 18244's draft is in staging.
+
+**What the rehearsal left.** Nothing a run can read. The Timing table's Rehearsal column, the Run-through record's
+Segment 3 row and its Date row ("not yet run") are empty on staging `6b57eb9f`. The issue thread has no comment with
+times or a choice. The deck repo's `PROGRESS.md` and `decisions.md` at `4dd5bbb0` name no rehearsal or timing, and the
+knowledge repo at `ecc8e60` records a room rehearsal of 2026-11-08 for the CNCF Bingo talk only. #615, the two timed
+run-throughs, was dropped by Michael on 2026-11-01 as handled outside this repo. So the three criteria that need the
+rehearsal's beat times and its choice stay open: a run cannot invent a stopwatch reading, and the choice among the cut,
+the deck's waits and a minute from another segment is theirs from the rehearsal.
+
+**The deck moved since run 18244's budget.** The first criterion asks for the deck as it stands when the rehearsal
+times it, and that is deck commit `4dd5bbb0` (2026-11-09 18:44Z), not `903f26cb`. Reading `attendee.html` at both,
+slides 14 to 44 keep their headings and order, and every note on slides 14 to 42 is the same but two. Slide 27 gains a
+Say line of 25 words (rounds-agenticburn#103, `fe5223de`; `c15b9634` before it still had none), about 10 seconds, said
+as the recap's minute opens and so inside the cut's 10 seconds for that beat. Slide 42, the NetworkPolicy YAML, gains 9
+words (rounds-agenticburn#167, `ed161a4c`): slides 30 to 42 now read 326 Say words against 317, about 2 minutes 10
+seconds, 4 seconds more and still inside the sets' 2:15; the cut advances the YAML slides without their notes, so its
+column does not move. Slides 14 to 17 read 172 words, as before. The table's figures hold, and the Timing paragraph
+now says so with both commits. The count is the same method as run 18244's: the text after "Say:" up to "Do:" in each
+slide's notes, which reproduces its 172, 32, 29 and 317 on `903f26cb`.
+
+**Test.** `verify/test_seg3_timing.py` also holds the re-read sentence (deck commit `4dd5bbb0` and the 326 words), and
+a broken copy without it fails. It printed `SEGMENT 3 TIMING GREEN`. `verify/scope_tests.py write` added nothing: the
+test reads no new file.
+
+**No live check.** The change is the run-of-show's prose and an offline test; nothing a cluster runs reads them.

@@ -13,7 +13,8 @@ Its last row, "Segment 3", is each column's total. This test holds:
   3. The paragraph's own totals agree with the table: "about 8 minutes 40 seconds" for the deck as it is, and the
      cut's "about 6 minutes", to the nearest minute of the cut's total.
   4. The budget is for the 2026-11-07 deck: it names slide 29's retry and the guardrail sets on slides 30 to 42,
-     and no longer the four single guardrail slides.
+     and no longer the four single guardrail slides. It also names its re-read of 2026-11-09 against deck commit
+     4dd5bbb0, the deck the rehearsal times, with the 326 words slides 30 to 42 then read.
 
 Each cut on repo text first checks its literal is there and exits naming the literal and the file when it is not
 ("Tests own their inputs"). Each check is also run on a copy of the text with one beat changed, so a check that
@@ -100,6 +101,8 @@ def verdicts(block: str) -> dict[str, bool]:
     out["the budget names slide 29's retry and the sets on slides 30 to 42"] = (
         "slide 29's retry" in flat and "one set per guardrail on slides 30 to 42" in flat)
     out["the budget names the 2026-11-07 deck commit it was read from"] = "deck commit `903f26cb`" in flat
+    out["the budget names the 2026-11-09 re-read, deck commit 4dd5bbb0, and its 326 words on slides 30 to 42"] = (
+        "deck commit `4dd5bbb0`" in flat and "slides 30 to 42 read 326 words" in flat)
     return out
 
 
@@ -137,6 +140,10 @@ def main() -> None:
           not verdicts(re.sub(r"one\s+set\s+per\s+guardrail\s+on\s+slides\s+30\s+to\s+42", "four guardrail slides",
                               block))[
               "the budget names slide 29's retry and the sets on slides 30 to 42"])
+
+    check("a budget without the 2026-11-09 re-read fails the re-read check",
+          not verdicts(block.replace("`4dd5bbb0`", "`903f26cb`"))[
+              "the budget names the 2026-11-09 re-read, deck commit 4dd5bbb0, and its 326 words on slides 30 to 42"])
 
     if failures:
         print(f"\n{len(failures)} FAILED", file=sys.stderr)

@@ -1254,6 +1254,15 @@ words a minute: 32 words on slide 28 and 29 on slide 29, then 317 across slides 
 about 2 minutes 7 seconds before the 13 advances and slide 36's deny message read aloud.
 By the same measure the tee-up's notes on slides 14 to 17 come to 172 words, about 70
 seconds, so the rehearsal may find that beat longer than its 45.
+Re-read on 2026-11-09 against deck commit `4dd5bbb0`, the deck the rehearsal of that day
+times, slides 14 to 42 keep their headings, their order and every note but two, and the
+figures below hold. Slide 27 gains a Say line of 25 words ("Take some time to exploit
+BurritoBot now that you have the hint.", rounds-agenticburn#103, `fe5223de`), about 10
+seconds, said as the recap's minute opens and inside the cut's 10 seconds for it. Slide 42,
+the NetworkPolicy YAML, gains 9 words on the HTTPS send it stops and the DNS it leaves open
+(rounds-agenticburn#167, `ed161a4c`), so slides 30 to 42 read 326 words, about 2 minutes 10
+seconds, some 4 seconds inside the sets' 2:15 and none in the cut, which advances the YAML
+slides without their notes. Slides 14 to 17 still read 172 words.
 
 | Beat | Slides | As the deck has it | With the cut | Rehearsal |
 |---|---|---|---|---|
