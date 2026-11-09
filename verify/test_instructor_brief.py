@@ -304,7 +304,10 @@ for b, n in (("C5", 1), ("C6", 3), ("C7", 4)):
     blk = " ".join(beat_blocks.get(b, []))
     check(f"{b} is played on the public bot and fixed on the private bot",
           "public bot" in blk and "private bot" in blk)
-    check(f"{b} names its Datadog tab as Challenge {n}", f"Datadog Challenge {n} tab" in blk)
+    # Since #1139 each trace is reached from the slide's Datadog link by its seed's session id, not a saved view on a
+    # Datadog Challenge N tab (#1249), as the run-of-show's Night Before step "Seed the stage's Datadog traces" says.
+    check(f"{b} reaches its trace by the seed's session id, wib-stage-c{n}-attack-<stamp>, on Past 7 Days",
+          f"<code>wib-stage-c{n}-attack-&lt;stamp&gt;</code> on Past 7 Days" in " ".join(blk.split()))
 # The 2026-11-01 review (#776): Challenge 1 runs no fix of its own; RBAC arms with segment 3's guardrails-on (#774).
 # The output guard is still not a fix for it (Michael, 2026-10-31).
 _c5 = " ".join(" ".join(beat_blocks.get("C5", [])).split())
@@ -319,11 +322,32 @@ check("Challenge 1 ends on the OWASP Top 10 for LLMs, naming LLM02 and LLM06, as
 # Each challenge's trace comes right after the presenters' live attack and before its fix (#818).
 for b, n, fix in (("C5", 1, None), ("C6", 3, "guard-agency-on"), ("C7", 4, "guard-mcp-on")):
     blk = " ".join(" ".join(beat_blocks.get(b, [])).split())
-    tab = f"Datadog Challenge {n} tab, after the attack"
-    check(f"{b}'s private-bot attack marker comes before its trace, Datadog Challenge {n} tab, after the attack",
+    tab = "The trace, after the attack"
+    check(f"{b}'s private-bot attack marker comes before its trace, The trace, after the attack",
           _before(blk, "Success marker, private bot (", tab))
     if fix:
         check(f"{b}'s trace comes before its fix, {fix}", _before(blk, tab, fix))
+# The page names no saved view and no Datadog Challenge N tab anywhere (#1249): the old setup, before #1139.
+_OLD_SETUP = re.compile(r"saved view|Challenge \d tab\b")
+check("the page names no saved view and no Datadog Challenge N tab (#1249)",
+      not _OLD_SETUP.search(KUBECON))
+check("self-check: the old Challenge 3 wording put back is caught",
+      bool(_OLD_SETUP.search(KUBECON + "<b>Datadog Challenge 3 tab, after the attack</b> The tab's second saved view")))
+_flat_page = " ".join(KUBECON.split())
+check("the Datadog control says each trace is reached from its slide's link by the seed's session id on Past 7 Days, "
+      "as the Night Before step says",
+      "Each challenge's trace is reached from the Datadog link on its slide (#1139): search its seed's session id, "
+      "<code>wib-stage-&lt;key&gt;-&lt;stamp&gt;</code>, on Past 7 Days" in _flat_page
+      and "Night Before step \"Seed the stage's Datadog traces\"" in _flat_page
+      and "Night Before step \"Seed the stage's Datadog traces\"" in ROS)
+check("Challenge 2's trace, c2-attack, is reached the same way",
+      "<code>wib-stage-c2-attack-&lt;stamp&gt;</code> on Past 7 Days" in _flat_page)
+check("Challenge 3's fixed and PII seeds are found by their own session ids, c3-pii in APM's traces",
+      "<code>wib-stage-c3-fixed-&lt;stamp&gt;</code>" in _flat_page
+      and "<code>service:burritobot @session.id:wib-stage-c3-pii-&lt;stamp&gt;</code> on Past 7 Days" in _flat_page
+      and "@session.id:wib-stage-c3-pii-<stamp>" in ROS)
+check("Challenge 3's trace comes before its fix, guard-agency-on, and the attack's seed before the fixed one",
+      _before(_flat_page, "wib-stage-c3-attack-&lt;stamp&gt;", "wib-stage-c3-fixed-&lt;stamp&gt;"))
 check("Challenge 3 runs least privilege as guard-agency-on, and admission is not one of its fixes (#775)",
       "guard-agency-on" in " ".join(beat_blocks.get("C6", []))
       and "guard-admission-on" not in " ".join(beat_blocks.get("C6", [])))

@@ -93,11 +93,13 @@ ROS_NUMBERS = [
 # The Challenge 3 block's order: the attack, its trace, then the fixes.
 BLOCK_ORDER = [
     ("the presenters' attack (#/47)", "Success marker, private bot (the presenters' attack, #/47)"),
-    ("its trace (#/48)", "Datadog Challenge 3 tab, after the attack (#/48):"),
-    ("the attack's saved view", "c3-attack"),
+    ("its trace (#/48)", "The trace, after the attack (#/48):"),
+    ("the attack's seed, by its session id", "wib-stage-c3-attack-<stamp> on Past 7 Days"),
+    ("the attack's seed", "c3-attack"),
     ("least privilege first", "guard-agency-on"),
     ("then the input guard", "guard-input-on"),
-    ("the fixed saved view", "c3-fixed"),
+    ("the fixed seed, by its session id", "wib-stage-c3-fixed-<stamp>"),
+    ("the fixed seed", "c3-fixed"),
 ]
 KEPT = [
     ("the deployments page, optional during play",
@@ -113,7 +115,8 @@ KEPT = [
     ("only presenter numbers on the admin bot", "On the admin bot, read only a presenter number or HC-666"),
     ("the presenters' path", "localhost:18080/presenter-ticket"),
     ("Kyverno trusts the internal registry", "the internal registry Kyverno trusts"),
-    ("the double duty's saved view", "c3-pii"),
+    ("the double duty's seed, in APM's traces by its session id",
+     "service:burritobot @session.id:wib-stage-c3-pii-<stamp> on Past 7 Days"),
     ("#1132 at the retry, in the notes", "Since #1132 both commands switch both clusters"),
 ]
 # Segment 5's one prompt, as staging had it before #1141 (#1063's children own the prompts).
@@ -290,7 +293,8 @@ fails_on("the trace moved ahead of the attack in the story",
          swap(swap(page, "Then its trace (#/48), ", ""),
               "The hint (#/47),", "Then its trace (#/48), the hint (#/47),"),
          "the story's beats come in the run-of-show's order")
-_trace = page[page.index("<b>Datadog Challenge 3 tab"):page.index("leads to.</div>") + len("leads to.</div>")]
+need(page, "<b>The trace, after the attack\n      (#/48)", PAGE_PATH)
+_trace = page[page.index("<b>The trace, after the attack\n      (#/48)"):page.index("leads to.</div>") + len("leads to.</div>")]
 fails_on("the Datadog line moved above the attack's marker",
          swap(swap(page, _trace, "</div>"),
               "<span class=\"lbl\">Success marker, private bot (the presenters'", _trace + "<span class=\"lbl\">Success "
