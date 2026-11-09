@@ -49257,3 +49257,26 @@ proposed list moves there, so nothing in the room is slow today. A follow-up nam
 **Tests.** `python3 verify/test_coc_floor_latency.py` passed (15 checks, 0 failures, 0.5 s). The whole Test and
 E2E commands were not run; validation runs what the scope map selects. No live check: the change is a test under
 `verify/` and its map entry, which no cluster runs.
+
+## 2026-11-09 · #1292 · run 19727 · run 19692's latency test, rebased onto staging, and the slow input now in the room
+
+**What.** Run 19692's draft (`verify/test_coc_floor_latency.py`, its scope-map entry and the entry above) moved off
+the doc lane because it changed code, so this run finished it. `verify/draft-drift.sh` named one drift,
+`verify/scope-map.yaml`, which 4ffa1dfd and #1290/#1291's entries edited next to the draft's lines. The draft was
+rebased onto staging e423837c, the map taken from staging and its entry written again with
+`python3 verify/scope_tests.py write`, which `git` allows in this lane. It wrote the same 19 paths the draft had,
+and `scope_tests.py check` reads 0 problems. The README section the test reads changed on staging since the draft
+(#1290's edits); every figure the test holds is unchanged there.
+
+**Tests.** `python3 verify/test_coc_floor_latency.py` on the rebased tree: 15 PASS, 0 failures, 0.6 s (costliest
+turn 4.48 ms against the recorded 16 ms max; a reply ten times as long costs 9.2 times as much). With the README's
+1.07 ms changed to 1.27 it failed on the term floor row, and the file was restored. `python3
+verify/test_scope_tests.py` passed. The whole Test and E2E commands were not run; validation runs what the map
+selects. No live check: the change is a test under `verify/` and its map entry, which no cluster runs.
+
+**Correction to the entry above.** It says nothing in the room is slow today because guard-proxy runs the 40-term
+list. On staging that no longer holds: #1269 ported the proposed pattern into `workshop-mcp-server.py` and
+`ticket_site.py`. Timed on this checkout with the port's own block from `workshop-mcp-server.py`, `coc_spans()` on
+a run of `5$` costs 66 ms at 1,000 characters, 276 ms at 2,000 and 1,070 ms at 4,000; `4@` costs 11, 48 and 134 ms.
+The spike's `floor.py` grows the same way. Realistic text stays linear, which the test's second check holds. A
+follow-up names the pattern's repeated leetspeak classes for every copy `test_coc_pattern_copies.py` holds.
