@@ -43181,3 +43181,32 @@ echo sent nothing. Nothing on watch-it-burn-private was touched.
 
 **Tests.** This change is prose alone (decisions.md), so no offline or tools tier test was run in the run (Dispatched
 runs point 6), and validation runs the scoped ones. No dependency was added.
+
+## 2026-11-09 · #1169 · run 19286 · A test holds the run-of-show's deployments-page paragraph and puts it through prose_gate.py
+
+**Why.** #1051 rewrote the sweep paragraph in `facilitation/kubecon-na-2026-run-of-show.md` ("The Kubernetes guardrails
+switch (#774)") to say the deployments page keeps every app that landed, that one the sweep removed stays listed,
+greyed, and reads "..., removed at <time>" within about a minute and a half of `guardrails-on`, and that a
+`registry.burritobot.co` app's line is left as it was. Test review run 18571 found no test read those words.
+`bash verify/prior-drafts.sh 1169 origin/staging` printed NONE, so this is the issue's first draft.
+
+**The test.** `verify/test_ros_deployments_removed_row.py` (new, offline) finds the paragraph by its section and its
+first words, checking each anchor first and exiting with its name when one is gone. It holds five claims in the
+paragraph, in order, and holds the old wording ("still lists what landed", "record of the room") out of the file. Each
+of those checks is run again on a copy with the claim cut or the old words put back, and fails there. It then checks
+that the quote is what the page writes: `gitops/ai-layer/ticket_site.py`'s page script appends ", removed at " and the
+time and sets the class `removed` in one place, and the page's style greys `li.removed`. Last, it checks the paragraph
+carries no em-dash or en-dash, and drives `verify/prose_gate.py` in a throwaway repo whose base is the run-of-show with
+the paragraph cut out: the file as it stands passes, and the paragraph with an em-dash, the talk's hype verb or the
+third-person verb the gate reads as "let's" fails, naming the label. The offline suite runs where hecaton is absent, so
+the test uses the stand-in scanner `verify/test_prose_gate.py` uses, `verify/fixtures/prose-gate/fake_aiisms.py`. That
+stand-in knows only those three hits, so the real scanner was run once here on the same base and tree:
+`prose gate: pass, 1 public-prose file(s) read against 589bd5ce4a8b`.
+
+`python3 verify/scope_tests.py write` put the test in the map's `always` list, as it does `test_prose_gate.py`, since
+both run `prose_gate.py`, which runs git; the test takes under a second.
+
+**Tests run.** `python3 verify/test_ros_deployments_removed_row.py` printed `All run-of-show deployments removed-row
+checks passed.`, and `python3 verify/test_scope_tests.py` printed `ALL PASS`. The full Test and E2E commands are left to
+hecaton's validation. No live cluster check: the change touches only a test under `verify/` that no cluster runs, the
+scope map and decisions.md. No dependency was added.
