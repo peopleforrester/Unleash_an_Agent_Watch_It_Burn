@@ -30,6 +30,7 @@ calls, clears both kinds and keeps every fixed ticket (FIXED_TICKETS: HC-7731, H
 """
 from __future__ import annotations
 
+import codecs
 import hashlib
 import html
 import json
@@ -39,6 +40,7 @@ import re
 import secrets
 import threading
 import time
+import unicodedata
 import urllib.parse
 from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -306,6 +308,90 @@ def clear_filed_tickets() -> int:
     return len(gone)
 
 
+# --- the code-of-conduct floor (#1269, part of #1267) ---------------------------------------------------------------
+# The #1267 spike's proposed term floor, docs/research/2026-11-09-coc-floor/floor.py's Floor("proposed"), carried here
+# whole and on the standard library alone, since this file runs by itself from its ConfigMap. It is always on: no
+# guardrail switch reaches it. Each character of a text is folded on its own before matching (zero-width characters
+# dropped, accents and compatibility forms reduced to their base letter, Cyrillic and Greek look-alikes mapped to
+# Latin, lower case), so a match maps back onto the original text one to one. Each term then matches as a whole word
+# with repeated letters, leetspeak, "*" for a vowel, or spelt out with one separator between every letter. The terms
+# are ROT13-encoded, as the spike keeps them, so the tree and a search of it show none. This block is the same in
+# workshop-mcp-server.py and ticket_site.py; verify/test_deploy_coc.py holds the two copies equal, the terms equal to
+# the spike's terms-proposed.rot13, and the match to floor.py's on the spike's texts.
+_COC_TERMS_ROT13 = (
+    'shpx,shpxf,shpxrq,shpxre,shpxref,shpxvat,shpxva,shpxnoyr,shpxsnpr,shpxurnq,shpxjvg,spx,shx,shd,sipx,cuhpx,zbgure'
+    'shpxre,zbgureshpxvat,fuvg,fuvgf,fuvggl,fuvggvat,fuvggrq,fuvgurnq,fuvgsnpr,ohyyfuvg,ubefrfuvg,qvcfuvg,phag,ovgpu,'
+    'ovgpurf,ovgpuvat,ovngpu,onfgneq,qvpx,qvpxurnq,pbpx,pbpxfhpxre,chffl,nffubyr,nefrubyr,qhzonff,wnpxnff,jnaxre,gjng'
+    ',cevpx,fgsh,tgsb,jgs,avttre,avttn,snttbg,snt,qlxr,genaal,genaavr,furznyr,ergneq,ergneqrq,gneq,fcnm,zbatbybvq,xvx'
+    'r,fcvp,puvax,tbbx,jrgonpx,ornare,enturnq,gbjryurnq,cnxv,pbba,jbc,qntb,ubaxl,erqfxva,mvccreurnq,frk,cbea,cbeab,oy'
+    'bjwbo,unaqwbo,phz,phzfubg,qvyqb,ubeal,gvgf,gvggvrf,obbof,ahqrf,rebgvp,guerrfbzr,nany frk,wrex bss,wnpx bss,anxrq'
+    ' obql,fyhg,juber,encr,encrq,encvfg,encvat,xvyy lbhefrys,xvyy hefrys,xlf,unat lbhefrys,urvy uvgyre,fvrt '
+    'urvy,juvgr cbjre,tnf gur wrjf,craqrwb,craqrwn,zvreqn,chgn,chgb,pnoeba,puvatn,puvatnqn,znevpba,wbqre,pbñb,iretn,c'
+    'hgnva,zreqr,pbaaneq,fnybcr,raphyr,raphyre,chgr,fpurvffr,fpurvßr,uherafbua,sbgmr,jvpufre,svpx '
+    'qvpu,fpuynzcr,pnenyub,cbeen,ivnqb,ohprgn,inssnaphyb,fgebamb,pnmmb,chggnan'
+)
+COC_TERMS = tuple(codecs.decode(_COC_TERMS_ROT13, "rot13").split(","))
+_COC_LEET = {"a": "4@", "b": "8", "c": "(", "e": "3", "g": "9", "i": "1!|", "l": "1|", "o": "0", "s": "5$", "t": "7+"}
+_COC_SEP = r"[\s._*\-]"
+_COC_ZERO_WIDTH = frozenset("\u00ad\u200b\u200c\u200d\u2060\ufeff")
+# Cyrillic and Greek letters that render as Latin ones
+_COC_HOMOGLYPH = str.maketrans("аеорсухіјѕԁԛԝкмтвнАЕОРСУХІЈЅКМТВНαοερτυνκιΑΒΕΖΗΙΚΜΝΟΡΤΥΧ",
+                               "aeopcyxijsdqwkmtbhaeopcyxijskmtbhaoeptuvkiabezhikmnoptyx")
+
+
+def _coc_fold(text: str) -> tuple[str, list[int]]:
+    """The text folded one character at a time, and for each folded character the index it came from."""
+    out, where = [], []
+    for i, ch in enumerate(text):
+        if ch in _COC_ZERO_WIDTH:
+            continue
+        base = unicodedata.normalize("NFKD", ch)
+        base = "".join(c for c in base if not unicodedata.combining(c)) or ch
+        base = base[0].translate(_COC_HOMOGLYPH).lower()
+        out.append(base[0] if base else ch)
+        where.append(i)
+    return "".join(out), where
+
+
+def _coc_letter(ch: str) -> str:
+    alts = re.escape(ch) + "".join(re.escape(c) for c in _COC_LEET.get(ch, ""))
+    return "[" + alts + (r"\*" if ch in "aeiou" else "") + "]"
+
+
+def _coc_term(term: str) -> str:
+    words = _coc_fold(term)[0].split()
+    joined = (_COC_SEP + "+").join("".join(_coc_letter(c) + "+" for c in w) for w in words)
+    if len(words) == 1 and len(words[0]) >= 3:
+        return f"(?:{joined}|{_COC_SEP.join(_coc_letter(c) for c in words[0])})"
+    return f"(?:{joined})"
+
+
+_COC_RE = re.compile(r"(?<![a-z0-9])(?:" + "|".join(_coc_term(t) for t in sorted(COC_TERMS, key=len, reverse=True))
+                     + r")s?(?![a-z0-9])")
+
+
+def coc_spans(text: str) -> list[tuple[int, int]]:
+    """Where in the text the floor's terms are, as (start, end) indexes into the text as given."""
+    folded, where = _coc_fold(str(text or ""))
+    return [(where[m.start()], where[m.end() - 1] + 1) for m in _COC_RE.finditer(folded)]
+
+
+def coc_hit(*texts) -> bool:
+    """Whether any of the texts carries a term of the floor."""
+    return any(coc_spans(t) for t in texts)
+
+
+def coc_mask(text: str, with_: str = "[redacted]") -> str:
+    """The text with each of the floor's terms replaced by `with_`."""
+    text = str(text or "")
+    out, last = [], 0
+    for a, b in coc_spans(text):
+        out.append(text[last:a] + with_)
+        last = b
+    return "".join(out) + text[last:]
+# --- end of the code-of-conduct floor ---------------------------------------------------------------------------------
+
+
 # --- what the bot deployed (#685) --------------------------------------------------------------------------------
 # workshop-mcp's deploy_app posts each result here. A report is shown under a witch's name only when the Deployment
 # is joker-<a generated name>; anything else is an unnamed Joker, so the wall never repeats a name a model invented.
@@ -367,7 +453,8 @@ def _check_row(r: dict, names: set[str], since: float) -> bool:
 def forget_on_desk(names: list[str], since: float = 0.0, tickets: list[str] = ()) -> dict:
     """Remove the rows named in `names` that landed at or after `since`, and the filed tickets in `tickets`; what it
     removed and what of it is left (named_left and tickets_left are 0 unless something went wrong)."""
-    wanted = set(names)
+    # A row's name is stored masked (record_landing, #1269), so a check names it either way.
+    wanted = set(names) | {coc_mask(n) for n in names}
     ids = {str(t).strip().upper() for t in tickets}
     with _lock:
         keep = [r for r in LANDINGS if not _check_row(r, wanted, since)]
@@ -468,8 +555,13 @@ def record_landing(name: str, ok: bool, detail: str, image: str = "", requested_
                                                 if name.startswith("joker-") else None) or ""
     # kind is the one deploy_app created (#1049), so a cluster read of that kind can say the row's app is gone. A row
     # with no kind (a report from before #1049) is covered by no read and is never marked removed.
-    row = {"name": name[:63], "kind": str(kind)[:63], "who": who_deployed(name, witch), "witch": witch,
-           "image": str(image)[:300], "ok": bool(ok), "detail": "" if ok else plain_refusal(str(detail)[:400]),
+    # Every text field is masked with the code-of-conduct floor (#1269), whatever the guardrails' state: deploy_app
+    # refuses such a deploy before it reports, so this is the second net, for a report from a deploy_app that predates
+    # the check or from the other cluster's desk-relay (/remote-landed). A name is cut to 63 characters, then masked,
+    # as a cluster read's names are (parse_cluster_read), so the two still compare equal.
+    row = {"name": coc_mask(name[:63]), "kind": coc_mask(str(kind)[:63]), "who": coc_mask(who_deployed(name, witch)),
+           "witch": coc_mask(witch), "image": coc_mask(str(image)[:300]), "ok": bool(ok),
+           "detail": "" if ok else coc_mask(plain_refusal(str(detail)[:400])),
            "at": time.strftime("%H:%M:%S"), "ts": time.time(), "removed_at": "", "removed_ts": None,
            "cluster": LOCAL_CLUSTER if cluster is None else str(cluster)[:63]}
     with _lock:
@@ -509,8 +601,9 @@ def parse_cluster_read(d) -> tuple[float, bool, dict[str, set[str]]]:
         raise BadReport("kinds must map each kind the read covered to the list of names of that kind")
     if ok and not kinds:
         raise BadReport("a successful read covers at least one kind")
-    # A row's name is kept to 63 characters, so a listed name is compared the same way.
-    return float(taken_at), ok, {k: {n[:63] for n in v} for k, v in kinds.items()}
+    # A row's name is kept to 63 characters and masked with the code-of-conduct floor (record_landing, #1269), so a
+    # listed name is compared the same way, and a masked row still reads as running while its app runs.
+    return float(taken_at), ok, {k: {coc_mask(n[:63]) for n in v} for k, v in kinds.items()}
 
 
 def record_cluster_read(d, cluster: str | None = None) -> dict:
