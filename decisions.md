@@ -46765,3 +46765,56 @@ changed, and `agent/terminal-auth` was not touched.
 **Not yet run on a cluster.** The fix itself: once Argo CD syncs it, run
 `FONTCONFIG_FILE=<a fonts.conf reading DejaVu alone> python3 verify/test_chat_phone_screen_e2e.py --live`, which
 should then pass.
+## 2026-11-09 · #1250 · run 19530 · A live test holds that a private deploy Kyverno removes reads greyed on deployments.burritobot.co
+
+**What.** Test review run 19411 found no test of #1209's third criterion: a deploy on watch-it-burn-private that
+Kyverno's remove-untrusted-room-workloads deletes shows greyed on deployments.burritobot.co. `verify/prior-drafts.sh 1250
+origin/staging` printed NONE. `verify/test_private_removed_row_live.py` is that test, in the live-cluster suite
+(`# SUITE: e2e`, run by `verify/run-e2e.sh` with PRIVATE_CONTEXT and COMMUNITY_CONTEXT). It is
+`verify/test_deployments_removed_live.py` (#1051) carried to the private cluster's path: the rows go through desk-relay
+to the public desk, and the page read is the public one.
+
+**What it does.** Under the guard lock on both clusters (`run_held(..., with_peer=True)`), it lands three Deployments of
+zero replicas with the room label: on the private cluster one on a public.ecr.aws image and one on
+registry.burritobot.co, and on the community cluster one more with the first one's name. It reports each the way that
+cluster's deploy_app does: the two private ones through desk-relay's `/landed`, the community one to its own desk's
+`/landed`. deployments.burritobot.co must list all three unmarked, and still unmarked after a read interval. Then it sets
+the private cluster's two registry policies to Deny, as the terminal's `_kg on kyverno` does, and polls the public
+page. Within 180 s the private public row has to read "removed at HH:MM:SS". In that same read, the private internal row
+and the community row with the same name must both stay unmarked, so a private read that greyed a community row fails it.
+The page's own script, run in node on those rows, must render the private line with the class it greys and the other
+two without it. On every path out it puts the policies back and deletes the three Deployments. It then removes the three
+rows from the one desk with `/desk-forget` (#1215) and checks that both clusters and the page are as found. It fails
+when the reads stop reaching the public desk (the state before #1209: step 7 times out). It also fails when the public
+desk applies a private read to community rows, or when the page stops greying a removed row.
+
+**Registered.** `verify/test_guard_lease.py`'s SWITCHERS (it patches validationActions, and holds the lock with
+`with_peer=True`), `verify/fetch-inventory.yaml` (the port-forwarded `/landed`, the public page, and the desk's
+loopback `/desk-forget` from its pod), and a paragraph in `verify/run-e2e.sh`'s header. `python3 verify/scope_tests.py
+write` gave live tests no entry. It added one line that was already drifting: `test_kubearmor_config_tracked.py`
+reads `policies/kyverno/require-resource-limits.yaml`, from #1235's change. That line is committed with this change.
+
+**Live check.** The two clusters already ran #1209's change (both ai-layer Applications Synced at `f20e8cdb`, desk-relay
+logging `POST /cluster-read -> 200`), both clusters' registry policies read Audit at the start, and no Secret was read.
+`PRIVATE_CONTEXT=watch-it-burn-private COMMUNITY_CONTEXT=watch-it-burn-community python3
+verify/test_private_removed_row_live.py` printed `PRIVATE REMOVED-ROW LIVE CHECK GREEN`, exit 0:
+
+```
+  ..    marked 22 s after the arm: {"name": "wib-1250-public-141210", ..., "at": "13:13:55", "removed_at": "13:15:14", "cluster": "private"}
+  PASS  and the community row of the removed name is unmarked: a private read greys no community row
+  PASS  the page's script renders 'Someone deployed nginx at 13:13:55, removed at 13:15:14 private' with the class it greys
+  PASS  the page's script renders 'Someone deployed maintenance-shell at 13:13:59 private' ungreyed
+  PASS  the page's script renders 'Someone deployed nginx at 13:14:02 community' ungreyed
+  PASS  https://deployments.burritobot.co/deployments.json lists no row of this check's names
+  PASS  every Deployment, StatefulSet, DaemonSet, Job and CronJob in agent on watch-it-burn-community is as found
+```
+
+That first run used the file before its failure messages were tidied (a `marks()` helper, wrapped lines). The committed
+file (`3cda45c0`) was then run once more and printed `PRIVATE REMOVED-ROW LIVE CHECK GREEN`, exit 0, with every check
+passing. The row `wib-1250-public-141653` was marked 43 s after the arm (`removed_at` 13:20:14, cluster private), and the
+community row of its name stayed unmarked. Both runs left both clusters' policies at Audit, no Deployment of theirs on
+either cluster, and no row of theirs on the page.
+
+**Tests run.** `python3 verify/test_guard_lease.py`, `python3 verify/test_fetch_inventory.py`, `python3
+verify/test_scope_tests.py` and `python3 verify/test_e2e_tools_tier.py` pass. The scoped Test command is left to
+validation. No dependency was added.
