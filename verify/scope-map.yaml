@@ -2104,6 +2104,7 @@ reads:
     - verify/scope-map.yaml
     - verify/topic_cases.py
   test_coc_pattern_linear.py:
+    - .gitmodules
     - challenges/PROMPT-CATALOG.md
     - docs/research/2026-11-09-coc-floor
     - docs/research/2026-11-09-coc-floor/abuse-set.rot13.tsv
@@ -2124,9 +2125,14 @@ reads:
     - gitops/namespaces/code-of-conduct-names.yaml
     - gitops/otel-collector/values.yaml
     - gitops/workshop-agent/agent.yaml
+    - images/llm-guard
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/coc_linear_cases.py
     - verify/coc_mask_cases.py
     - verify/coc_pattern_copies.py
+    - verify/ensure-submodules.sh
+    - verify/git_mirror.py
     - verify/topic_cases.py
   test_collector_act2_redaction.py:
     - gitops
