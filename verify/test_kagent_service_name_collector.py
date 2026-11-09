@@ -115,8 +115,13 @@ def run(profile: str, tmp: pathlib.Path) -> tuple[dict, set, set]:
     }
     cf = tmp / f"{profile}-cfg.yaml"
     cf.write_text(yaml.safe_dump(cfg), encoding="utf-8")
-    proc = subprocess.Popen([str(OTELCOL), f"--config=file:{cf}", *feature_gate_args(profile)], env=ENV, stdout=subprocess.DEVNULL,
-                            stderr=subprocess.PIPE, text=True)
+    # The collector's log goes to a file, not a pipe nobody reads while it starts: #1277's code-of-conduct mask puts a
+    # statement of some 25 KB in the traces pipeline, the start-up log repeats it past 200 KB, and on a 64 KB pipe the
+    # collector blocked writing it before it opened the receiver (#1283).
+    log = tmp / f"{profile}-collector.log"
+    with log.open("w", encoding="utf-8") as lf:
+        proc = subprocess.Popen([str(OTELCOL), f"--config=file:{cf}", *feature_gate_args(profile)], env=ENV,
+                                stdout=subprocess.DEVNULL, stderr=lf)
 
     def post(path: str, body: dict) -> int:
         req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", data=json.dumps(body).encode(),
@@ -132,8 +137,9 @@ def run(profile: str, tmp: pathlib.Path) -> tuple[dict, set, set]:
                 break
             except OSError:
                 if time.time() > deadline or proc.poll() is not None:
-                    err = proc.stderr.read() if proc.poll() is not None else ""
-                    check(f"{profile}: the collector starts on the shipped pipelines", False, err[-600:])
+                    why = "still not listening after 30 s" if proc.poll() is None else f"exited {proc.returncode}"
+                    check(f"{profile}: the collector starts on the shipped pipelines", False,
+                          f"{why}: {log.read_text(encoding='utf-8', errors='replace')[-600:]}")
                     return {}, set(), set()
                 time.sleep(0.3)
         check(f"{profile}: one /chat's spans and kagent's token metric are accepted (200)",

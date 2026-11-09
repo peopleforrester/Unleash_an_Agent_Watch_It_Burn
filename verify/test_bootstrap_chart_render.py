@@ -159,12 +159,20 @@ if KUBECTL and patches:
             "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization",
             "resources": [os.path.relpath(REPO / "gitops/ai-layer", d)], "patches": patches}), encoding="utf-8")
         k = subprocess.run([KUBECTL, "kustomize", d], capture_output=True, text=True)
-    svc = next((x for x in yaml.safe_load_all(k.stdout) if x and x.get("kind") == "Service"
-                and x["metadata"]["name"] == "console"), {}) if k.returncode == 0 else {}
-    ann = (svc.get("metadata") or {}).get("annotations") or {}
+    # The console Service's own annotations, read from gitops/ai-layer built without the patch, so a
+    # Service annotation added there (#1258's deregistration delay) does not break a count held here.
+    k0 = subprocess.run([KUBECTL, "kustomize", str(REPO / "gitops/ai-layer")], capture_output=True, text=True)
+
+    def console_annotations(out: str) -> dict:
+        svc = next((x for x in yaml.safe_load_all(out) if x and x.get("kind") == "Service"
+                    and x["metadata"]["name"] == "console"), {})
+        return (svc.get("metadata") or {}).get("annotations") or {}
+    ann = console_annotations(k.stdout) if k.returncode == 0 else {}
+    own = console_annotations(k0.stdout) if k0.returncode == 0 else {}
     check("kustomize applies it: the console Service carries the certificate and keeps its own annotations",
-          all(ann.get(a) == v for a, v in ops.items()) and ann.get("service.beta.kubernetes.io/aws-load-balancer-type")
-          == "external" and len(ann) == len(ops) + 4, k.stderr.strip()[:300] or str(ann))
+          bool(own) and own.get("service.beta.kubernetes.io/aws-load-balancer-type") == "external"
+          and not set(own) & set(ops) and ann == {**own, **ops},
+          (k.stderr or k0.stderr).strip()[:300] or f"own={own} patched={ann}")
 fd["spec"]["source"].get("kustomize", {}).pop("patches", None) if fd else None
 check("and changes nothing else in the Application", bool(fd) and fd == plain)
 r = render("-f", str(values_path("burn")), "--set", f"revision={COMMIT}", "--set", "frontDoor.certificateArn=console-tls")
