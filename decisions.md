@@ -42095,3 +42095,95 @@ the roster names as they resolve, so until lab-platform#122 moves the wildcard i
 `aws elbv2 describe-listeners` on the console Service's NLB showing port 443 TLS with this ARN, and
 `check-tls.sh --connect-to <that NLB> attackme.agenticburn.com` (and `burritobot-private.agenticburn.com` on the
 admin cluster). That is the leg Michael's comment on lab-platform#130 names.
+## 2026-11-09 · #660 · run 18996 · Run 17504's front door checks ported to staging and run again live on both clusters: the issued certificate serves on a TLS 443 listener with the terminal websocket through it
+
+**The draft.** `bash verify/prior-drafts.sh 660 origin/staging` printed START from `origin/agent/660-17504`, three
+commits not in staging (f39e76b7, 0264f541, a40a2e0c: the listener and websocket checks in `verify/front_door_tls_live.py`,
+`--connect-to` on `infra/terraform/fleet/check-tls.sh`, the empty-zone retry, and the entry above), with one DRIFT line,
+decisions.md edited in place, which both sides only appended to. No staging commit since the draft's base (eef74952)
+touched the five code files, so the three commits were cherry-picked whole and both entries kept. The issue's thread
+holds no report from run 17504 and no "Not merged" line for it, and its run directory cannot be read from here, so
+why the draft did not land is not on record. One thing differs from the draft: `verify/scope-map.yaml` gains
+`verify/ttyd_ws.py` under `test_front_door_tls_live_logic.py`, which `python3 verify/scope_tests.py write` added
+because the test reads it through the websocket probe; `verify/test_scope_tests.py` passes with it. Run 14580's
+`wip` draft was one decisions.md entry from before the live work and was not taken.
+
+**The certificate, checked again (2026-11-09 00:50Z).** `infra/front-door-cert.sh accen-dev us-west-2` printed
+`found arn:aws:acm:us-west-2:515966504359:certificate/8bae04a8-4896-4123-8de4-88aa6e4f75d8`, then `ISSUED: give it to
+labctl event up as --front-door-cert=<arn>` and the bare ARN, exit 0. `describe-certificate` reads ISSUED, issued
+2026-11-05T07:44:03Z, valid to 2027-05-22, SANs `*.agenticburn.com` and `*.burritobot.co`, both domain validations
+SUCCESS. Both zones answer NS `dns1.registrar-servers.com` and `dns2.registrar-servers.com` (Namecheap), and both
+validation CNAMEs resolve: `_4d348e16229f1796413ec16e36e29d56.agenticburn.com` to
+`_a29fcc4eb94adc0bce08cab3decf1f70.wzccmgtwzk.acm-validations.aws` and `_90187e86eafa67a1d14cbd74ee24810d.burritobot.co`
+to `_e7304390c80b79c4d4e72c7ed42df78a.wzccmgtwzk.acm-validations.aws`. No DNS write ran in this run: the records were
+written after run 17359's escalation (the 2026-11-05 #638 entry), so `set-demo-dns.py` had nothing to do, dry run or
+`--apply`. The account is accen-dev (515966504359), the one lab-platform#130's record names as the holder of the
+roster clusters, in us-west-2, the region labctl refuses any other certificate from (lab-platform#297). The ARN is
+already on lab-platform#344, posted by #638's run with the `--front-door-cert=` form labctl takes.
+
+**The live run, both clusters at once (01:07Z to 01:20Z).** The first start of each check failed before touching a
+cluster: `kustomize does not build gitops/ai-layer with the patch (are the submodules checked out? bash
+verify/ensure-submodules.sh)`. The worktree had no submodules; `bash verify/ensure-submodules.sh` checked out
+`gitops/ai-layer/guard-proxy` at 5772a5d8d7cb and `images/llm-guard` at 31962f2074f7 from the host's artifact cache,
+and both checks were started again. On watch-it-burn-community, `python3 verify/front_door_tls_live.py --context
+watch-it-burn-community --arn <the ARN> --aws-profile accen-dev --region us-west-2 --name attackme.agenticburn.com
+--name attackme.burritobot.co --hold 480` printed:
+
+```
+created agent/front-door-check on watch-it-burn-community with arn:aws:acm:us-west-2:515966504359:certificate/8bae04a8-4896-4123-8de4-88aa6e4f75d8
+its NLB: k8s-agent-frontdoo-dbada8fc1e-ec054f89b0b31858.elb.us-west-2.amazonaws.com
+PASS: 443 verifies for attackme.agenticburn.com against the system roots: subject *.agenticburn.com, SANs ['*.agenticburn.com', '*.burritobot.co'], issuer Amazon
+PASS: through the NLB's re-encrypt to nginx, GET / for attackme.agenticburn.com answers HTTP/1.1 200 OK
+PASS: 443 verifies for attackme.burritobot.co against the system roots: subject *.agenticburn.com, SANs ['*.agenticburn.com', '*.burritobot.co'], issuer Amazon
+PASS: through the NLB's re-encrypt to nginx, GET / for attackme.burritobot.co answers HTTP/1.1 200 OK
+PASS: describe-listeners on arn:aws:elasticloadbalancing:us-west-2:515966504359:loadbalancer/net/k8s-agent-frontdoo-dbada8fc1e/ec054f89b0b31858: port 443 is TLS with arn:aws:acm:us-west-2:515966504359:certificate/8bae04a8-4896-4123-8de4-88aa6e4f75d8, policy ELBSecurityPolicy-TLS13-1-2-2021-06; listeners [(80, 'TCP'), (443, 'TLS')]
+PASS: the terminal's websocket upgrade on /terminal/ws for attackme.agenticburn.com gets 101 through the TLS listener and the re-encrypt to nginx; the tty subprotocol with no credential gets 502
+PASS: the terminal's websocket upgrade on /terminal/ws for attackme.burritobot.co gets 101 through the TLS listener and the re-encrypt to nginx; the tty subprotocol with no credential gets 502
+holding agent/front-door-check and k8s-agent-frontdoo-dbada8fc1e-ec054f89b0b31858.elb.us-west-2.amazonaws.com for 480s
+deleted agent/front-door-check
+exit=0
+```
+
+The same on watch-it-burn-private for `burritobot-private.agenticburn.com` and `burritobot-private.burritobot.co`, on
+NLB `k8s-agent-frontdoo-e06d2905f3-88adf043353efc4e.elb.us-west-2.amazonaws.com`: every line PASS, the listeners
+`[(443, 'TLS'), (80, 'TCP')]` with the same policy and ARN, the plain upgrade 101 and the tty subprotocol 502 for
+both names, `deleted agent/front-door-check`, `exit=0`. Neither run needed the empty-zone retry this time.
+
+While each Service was held, the issue's own commands ran through its NLB. `aws elbv2 describe-listeners` on each
+load balancer, read directly: port 443 `TLS`, `ELBSecurityPolicy-TLS13-1-2-2021-06`, the ARN above, and port 80
+`TCP`; `describe-target-groups` reads the two 443 target groups (`k8s-agent-frontdoo-dc9400a408`,
+`k8s-agent-frontdoo-3d6c1601ec`) as protocol `TLS`, the re-encrypt to nginx, and the two 80 ones as `TCP`. Then
+`bash infra/terraform/fleet/check-tls.sh --connect-to k8s-agent-frontdoo-dbada8fc1e-ec054f89b0b31858.elb.us-west-2.amazonaws.com
+attackme.agenticburn.com attackme.burritobot.co` printed, for each name, `PASS https 200`, `PASS TLS chain validates`,
+`PASS SAN covers <name>`, `PASS cert valid 193 more day(s)`, `note http serves 200 directly (no redirect); fine behind
+a TLS-terminating router`, `PASS websocket upgrade accepted (101)`, `PASS the terminal's shell protocol (tty) refuses
+an upgrade with no credential (502)`, then `TLS CHECKS GREEN for 2 host(s).`, exit 0. The same through the private
+cluster's NLB for `burritobot-private.agenticburn.com` and `burritobot-private.burritobot.co`: `TLS CHECKS GREEN for 2
+host(s).`, exit 0. So the websocket the KubeCon probe checks on the pass-through path works through the TLS listener
+and the re-encrypt as well, with #770's rule intact on both clusters.
+
+**Left as found.** `front-door-check` reads NotFound in `agent` on both clusters, every Argo CD Application on both
+reads Synced and Healthy (24 on community, 40 on private), `aws elbv2 describe-load-balancers` lists only
+`k8s-agent-console-6d7d3fd8cd` and `k8s-agent-console-8b9a07a948`, and ACM lists the one certificate, ISSUED. Its
+`InUse` still read True a minute after the NLBs were gone, the same ACM lag the 2026-11-05 #638 entry saw; it is
+in use by nothing. No DNS, Secret or presenter login was touched.
+
+**Tests run here.** `bash verify/test_check_tls_shell_probe.sh`: 17 passed, 0 failed. `bash verify/run-e2e-tools.sh
+test_front_door_tls_live_logic.py test_ttyd_ws_auth.py` (the two tier tests the change edits or reads, run alone with
+the pinned tools): `2 checks ran (the 2 tier tests named, no offline suite) in 1m49s`, `ALL E2E TOOLS TIER CHECKS
+GREEN`, exit 0. `python3 verify/test_scope_tests.py`: ALL PASS. The prose gate read decisions.md and PROGRESS.md
+against staging and passed. The scoped offline suite (209 tests, most because they read decisions.md) and the
+scoped tools tier (20 tests) are validation's to run.
+
+**What is still lab-platform's.** `labctl event up ... --front-door-cert=<the ARN>`, the roster clusters' own console
+NLB listeners, and `labctl tls-check attackme.agenticburn.com` and `burritobot-private.agenticburn.com` through
+lab-platform's gateway are lab-platform#130, the live labctl dry run, still open on 2026-11-09 with #286 (the
+presenter's EKS access entries) and #122 (the wildcard move) open beside it; #287 closed on 2026-11-03. labctl runs
+from Tanjiro, where its credentials are, and refuses this host by its placement check, and a run here brings no
+cluster up. Michael's comment on #130 already asks that run for the ARN from `infra/front-door-cert.sh`, the 443
+listener on each roster cluster and the terminal websocket through it, and the ARN is on #344.
+
+**Not yet run on a cluster.** The roster clusters' own listeners once lab-platform#130 builds them: on each,
+`aws elbv2 describe-listeners` on the console Service's NLB showing port 443 TLS with this ARN,
+`check-tls.sh --connect-to <that NLB> attackme.agenticburn.com` (and `burritobot-private.agenticburn.com` on the
+admin cluster), and `labctl tls-check` on the roster names once lab-platform#122 points them at the gateway.
