@@ -215,8 +215,11 @@ check "an argument is a usage error" '[[ "$(start_check --empty)" == rc=2 ]] && 
 echo "== the default hosts and the hints =="
 DEFAULTS="$(cd "$(dirname "${FLEET}")" && env -u WIB_START_DEPLOYMENTS -u WIB_BEACON_VIEW_URL bash -c \
     'source "'"${FLEET}"'" >/dev/null 2>&1; printf "%s|%s" "${WIB_START_DEPLOYMENTS}" "${WIB_BEACON_VIEW_URL}"')"
-check "by default it reads deployments.burritobot.co and deployments-burritobot-private.burritobot.co" \
-  '[[ "${DEFAULTS%%|*}" == "https://deployments.burritobot.co https://deployments-burritobot-private.burritobot.co" ]]'
+check "by default it reads the one page, deployments.burritobot.co, alone (#1220)" \
+  '[[ "${DEFAULTS%%|*}" == "https://deployments.burritobot.co" ]]'
+check "  not the private cluster's own page, which redirects to it since #1220" \
+  '[[ "${DEFAULTS%%|*}" != *deployments-burritobot-private* ]] &&
+   grep -qF "deployments-burritobot-private.burritobot.co" "${REPO}/gitops/ai-layer/components/public-desk/private-desk-redirect.conf"'
 check "and the beacon view beacon-reset checks, beacon.burritobot.co/beacon/view" \
   '[[ "${DEFAULTS#*|}" == "https://beacon.burritobot.co/beacon/view" ]]'
 check "start-check runs no POST and no kubectl: its body names neither" \

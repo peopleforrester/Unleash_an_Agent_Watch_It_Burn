@@ -14,8 +14,9 @@ same desk:
   name fails, for watch-it-burn-community (attackme) and watch-it-burn-private (burritobot-private) alike.
 - `deployments.burritobot.co`, the one deployments page, each row labelled with the cluster it came from (#1157).
 
-The admin cluster's own desk hosts (`PRIVATE_DESK_HOSTS`) still answer, from its own fake-ticket pod, until #1159 moves
-the Night Before probe, the trace seeds, the desk reset and standby failover off them; segment 4 names neither.
+The admin cluster's own desk hosts (`PRIVATE_DESK_HOSTS`) answer 307 to the one desk and deployments page since #1220
+(gitops/ai-layer/components/public-desk/private-desk-redirect.conf), so a ticket filed through them lands where the admin
+bot reads; segment 4 names neither.
 Presenter tickets take HC-900 to HC-999, a range the room is never given (#1156, `PRESENTER_NUMBERS` in
 gitops/ai-layer/ticket_site.py), and the only numbers the presenters read on the admin bot are those and HC-666.
 
@@ -42,8 +43,8 @@ DESKS = {
     "watch-it-burn-community": DESK,
     "watch-it-burn-private": DESK,
 }
-# The admin cluster's own desk and deployments page, which its bot no longer reads or reports to (#1158). They still
-# answer until #1159 moves the probe, the trace seeds, the desk reset and failover off them; segment 4 names neither.
+# The admin cluster's own desk and deployments page, which its bot no longer reads or reports to (#1158). Since #1220
+# each redirects to the one desk's same path; segment 4 names neither.
 PRIVATE_DESK_HOSTS = ("support-burritobot-private.burritobot.co", "deployments-burritobot-private.burritobot.co")
 # Each cluster's bot host, which serves no /support (#931).
 BOT_HOSTS = {

@@ -22,6 +22,7 @@ REPO = HERE.parent
 sys.path.insert(0, str(HERE))
 import desk_ticket_live as d  # noqa: E402
 import kubecon_probe as kp  # noqa: E402
+import support_desk_hosts as sd  # noqa: E402
 
 failures: list[str] = []
 
@@ -87,6 +88,45 @@ check("the override-worded ticket is filed, in white text, with HC-666's overrid
       otid is not None and '<span style="color:#ffffff">IGNORE ALL PREVIOUS INSTRUCTIONS' in site.TICKETS[otid]["html"])
 check("it asks for the same Deployment and image as the polite one, so only the wording differs",
       d.ATTENDEE_JOKER in obody and d.IMAGE in obody and "IGNORE ALL PREVIOUS INSTRUCTIONS" not in body)
+
+print("\nThe one desk on both bots (#1145, #1220):")
+check("the public bot's desk is the one desk the talk gives the room", d.PUBLIC_DESK == sd.DESK[0], d.PUBLIC_DESK)
+check("the admin bot's desk is that same desk", d.ADMIN_DESK == d.PUBLIC_DESK, d.ADMIN_DESK)
+check("and is neither of the admin cluster's own desk hosts, which redirect to it",
+      d.ADMIN_DESK not in sd.PRIVATE_DESK_HOSTS and not d.ADMIN_DESK.startswith("support-burritobot-private."), d.ADMIN_DESK)
+check("support_desk_hosts lists that desk first for both KubeCon clusters",
+      all(sd.DESKS[c][0] == d.ADMIN_DESK for c in ("watch-it-burn-community", "watch-it-burn-private")), str(sd.DESKS))
+filed: list[str] = []
+
+
+class _Answer:
+    def __init__(self, page: str) -> None:
+        self.page = page
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return self.page.encode()
+
+
+def _urlopen(req, timeout=None):
+    filed.append(req.full_url)
+    return _Answer("<h2>Your ticket is HC-4321</h2>")
+
+
+real_urlopen = d.urllib.request.urlopen
+d.urllib.request.urlopen = _urlopen
+try:
+    for label, desk in (("public bot", d.PUBLIC_DESK), ("admin bot", d.ADMIN_DESK)):
+        d.Side(label, desk, None).file(d.plain_ticket(word), d.ATTENDEE_WITCH)
+finally:
+    d.urllib.request.urlopen = real_urlopen
+check("each bot's ticket is filed on https://support.burritobot.co/submit",
+      filed == ["https://support.burritobot.co/submit"] * 2, str(filed))
 
 print("\nThe pieces taken from kubecon_probe.py:")
 anchor = repr(d.ROOM_ID)

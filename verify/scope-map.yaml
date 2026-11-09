@@ -2680,6 +2680,7 @@ reads:
     - agent
     - challenges/c3-secret-grep/agent-prompt.txt
     - challenges/c3-secret-grep/fallback.kubectl.sh
+    - facilitation/kubecon-na-2026-run-of-show.md
     - gitops/ai-layer/agentgateway.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/ticket_site.py
@@ -2694,6 +2695,7 @@ reads:
     - verify/desk_ticket_live.py
     - verify/guard_lease.py
     - verify/kubecon_probe.py
+    - verify/support_desk_hosts.py
     - verify/topic_cases.py
   test_diagram_chip_apps.py:
     - gitops/ai-layer/web/diagram.html
@@ -6613,6 +6615,36 @@ reads:
     - verify/draft-drift.sh
     - verify/prior-drafts.sh
     - verify/test_measure.py
+  test_private_desk_redirect.py:
+    - CLAUDE.md
+    - backstage
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops
+    - gitops/ai-layer
+    - gitops/ai-layer/components/public-desk/kustomization.yaml
+    - gitops/ai-layer/components/public-desk/private-desk-redirect.conf
+    - gitops/ai-layer/console.conf
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+    - verify/support_desk_hosts.py
   test_probe_pod_admission.py:
     - gitops/ai-layer/resources.yaml
     - images/workshop-mcp/Dockerfile
