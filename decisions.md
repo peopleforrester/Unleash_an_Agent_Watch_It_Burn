@@ -46180,3 +46180,28 @@ run reruns each test that reads a verify script it edits after its scoped run, `
 **Cluster state.** origin/staging still pins guard-proxy at be88e1f and both clusters' `agent/guard-proxy` still carry
 `checksum/proxy-py` `a32927a1851b`, so the checks under run 19452's "Not yet run on a cluster" still wait on this
 branch's promotion. This change touches only `verify/`, which no cluster runs, and has no live check of its own.
+
+## 2026-11-09 · #1225 · run 19503 · run 19477's draft failed the tests gate on four tests; one was a fake LLM Guard's listen backlog
+
+**Why run 19477 did not land.** Validation's full `bash verify/run-tests.sh` failed `test_desk_ticket_live.py`,
+`test_public_desk.py`, `test_scope_tests.py` and `test_llm_guard_burst.py`. The first three were staging's own: #1257's
+`964892e5` (run 19472) fixed them on staging three minutes after run 19477's last commit, and each passes here on
+`6d3fa86a`. The gate's log was gone from its check directory, so `test_llm_guard_burst.py`'s failure was not read. It
+passes here on run 19477's own tip, `c77e0bdc`, with the submodule at `a637e68`, and `proxy.py` holds its
+`input_verdict` literal at `be88e1f`, `3c68224` and `a637e68` alike, so the repin did not move it.
+
+**The cause found.** The test's fake LLM Guard is a `ThreadingHTTPServer` with socketserver's listen backlog of 5, and
+its bursts send 12 and 20 calls at once. On this host, under load, calls past the backlog arrived a second late, after
+a SYN retry, and in one of eight parallel runs four were reset. A reset is a status other than 200, which fails the
+test's `{"200": 20}` checks. The one-at-a-time check also needed all 20 calls sent within 0.05 s of each other: one run
+here cleared its 0.95 s bound by 0.04 s. The fake now listens with a backlog of 64, and in its one-at-a-time mode it
+holds every scan until all 20 calls have arrived (a `threading.Barrier`), so the queue check holds for every
+scheduling. Twelve copies run side by side at load average 41 all exited 0.
+
+**Draft reused.** Run 19452's three commits on `origin/agent/1225-19452` cherry-picked cleanly onto `6d3fa86a`, as
+`verify/draft-drift.sh` said (CLEAN, decisions.md appended on both sides). Nothing in them differs from the draft.
+
+**Cluster state.** Read-only: both clusters' `agent/guard-proxy` still carry `checksum/proxy-py` `a32927a1851b`
+(`be88e1f`), as origin/staging pins it. The checks under run 19452's "Not yet run on a cluster" are unchanged and
+still wait on this branch's promotion: criterion 2's `poll_spans.py` read after a blocked `C1_PROMPT` turn, and
+criterion 3's `CONTEXT=watch-it-burn-private python3 verify/one_root_probe.py`.
