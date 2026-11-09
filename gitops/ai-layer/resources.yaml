@@ -1068,7 +1068,7 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: ttyd
-          image: ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-1.7.7@sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf # built from images/web-terminal/
+          image: ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-1.7.7-8@sha256:b81d336c6a71cf98889ab6815269af7b0cb9cb1e7b3a3e0464435dcdcbc77386 # built from images/web-terminal/
           imagePullPolicy: Always # mutable :web-terminal tag; always re-pull so a rebuild lands on pod restart
           ports:
             - { name: ttyd, containerPort: 7681 }
@@ -1386,7 +1386,7 @@ data:
           securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
           containers:
             - name: probe
-              image: ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-1.7.7@sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf
+              image: ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-1.7.7-8@sha256:b81d336c6a71cf98889ab6815269af7b0cb9cb1e7b3a3e0464435dcdcbc77386
               imagePullPolicy: IfNotPresent
               securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
               resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
