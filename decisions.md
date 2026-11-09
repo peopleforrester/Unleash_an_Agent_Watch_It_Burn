@@ -49609,3 +49609,37 @@ on watch-it-burn-community still runs `ghcr.io/kagent-dev/kagent/golang-adk:0.10
 `peopleforrester/watch-it-burn:golang-adk-0.10.1-mcptrace`, so the patched image runs nowhere before promotion and the
 workflow's push. What
 run 19476's entry names under "Not yet run on a cluster" is still owed, in its order.
+
+## 2026-11-09 · #1288 · run 19749 · guard-proxy repinned to f75aa2f, the folded 144-term list, with the chat page's list held equal to it
+
+**The repin.** `gitops/ai-layer/guard-proxy` moves from a7a5a36 (#1267) to f75aa2f, guard-proxy main's head. It
+holds 48cc2ca (guard-proxy-agenticburn#81: the spike's 144-entry folded list for the `/chat` refusal, the reply mask
+and the prompt wall, the prompt masked in a refused turn's spans, and an optional Bedrock check that does nothing
+while `CONDUCT_GUARDRAIL_ID` is unset, as it is here) and f75aa2f itself (#82: the terms masked in an answered turn's
+`chat` span). `checksum/proxy-py` is `f5410e81173a`, sha256 of `proxy.py` at f75aa2f.
+
+**#1280 was already on staging.** The issue waited on #1280's page list; run 19662's draft of it is in staging
+(fdaa5d15, a71c6171), so this change is the repin alone. No earlier draft of #1288 existed (`prior-drafts.sh`: NONE).
+
+**The tests.** `verify/test_guard_proxy_pin_1288.py` is the new floor: the pin is on guard-proxy main at or after
+48cc2ca, the release-notes entry for 48cc2ca says to repin to it or later, the pinned `proxy.py` carries
+`conduct_fold` and `CONDUCT_GUARDRAIL_ID`, its default list has 144 entries, its `conduct_matches` catches the
+release notes' spaced-out and fullwidth spellings (and a7a5a36's misses both), and the annotation is the build's.
+Run on the a7a5a36 gitlink before the commit, it failed seven checks; on f75aa2f it passes. #1267's test stays: its
+floor is older and still holds. `verify/test_chat_coc.py` held the proxy's list as a subset of the page's while the
+wall had its own; it now holds `proxy.PROFANITY` and the Go build's `DefaultProfanity` equal to the page's list,
+entry for entry and in order. The Go build keeps that list ROT13 since 48cc2ca (`var DefaultProfanity =
+rot13(defaultProfanityROT13)`), so the test reads the ROT13 constant. Run here, each once: test_chat_coc.py,
+test_guard_proxy_pin_1288.py, test_guard_proxy_pin_1267.py, _1225, _1048, test_guard_proxy_pin_on_main.sh,
+test_proxy_checksum.py, test_prompt_wall_redaction.py, test_guard_toggle_record.py, test_pantry_shut_record.py and
+test_scope_tests.py, all exit 0. The rest of the 306 offline and 41 tier tests the selector names are left to
+validation.
+
+**Live check.** The change touches `gitops/`. Read on 2026-11-09, changing nothing: on watch-it-burn-community and
+watch-it-burn-private the `agent/guard-proxy` Deployment carries `checksum/proxy-py: 5caafc6044af` (a7a5a36), one
+ready replica, and the `ai-layer` Application is Synced to staging 6eaadbd3. The new build runs nowhere before
+promotion.
+
+Not yet run on a cluster: once Argo CD syncs the promoted staging, `checksum/proxy-py` reads `f5410e81173a` on both
+clusters, and with every guard toggled off, `/chat` refuses "f u c k" and its fullwidth spelling with the
+code-of-conduct reply on each, as guard-proxy's release notes for 48cc2ca say. The toggles are put back as found.
