@@ -50309,3 +50309,80 @@ watch-it-burn-private. No Datadog setting was changed, and the presenter termina
 
 **Not yet run on a cluster.** Nothing. The logs are `/var/lib/hecaton/runs/19920/sandbox-1.log`, `read-2.log` and
 `a2a-watch-it-burn-*/ask0.json`. No test changed, so no suite ran; the prose gate ran on this entry.
+## 2026-11-09 · #1261 · run 19569 · no script or test names the system temp directories, and the Terraform plugin cache has a size and a clear command
+
+**Why.** On netcup the system temp directory is a tmpfs, so what a run or a test leaves there is RAM. On 2026-11-09 it
+held two `wib-tf-plugins-*` directories of about 840 MB each from the IAM render tests, and dispatched runs had left
+more in the dispatcher's private one. Michael's rule: no run and no test works there, and everything is cleaned up
+after it runs unless it is a deliberate, managed cache. `bash verify/prior-drafts.sh 1261 origin/staging` printed NONE.
+
+**The main leak.** `artifact_cache.scratch_dir()`, the scratch the cache tests and `package_cache.py`/`yarn_pins.py`
+use, tried TMPDIR and then the system temp directories in turn. Hecaton's TMPDIR sits inside the worktree, where a
+cache root is refused, so in every run it fell through to the system one. It now tries TMPDIR and then
+`${XDG_CACHE_HOME:-$HOME/.cache}/unleash-watch-it-burn`, the parent `tf_plugin_cache.scratch()` already used, and
+raises when neither is usable.
+
+**What changed.**
+- Both runners set TMPDIR to the checkout's ignored `tmp/` when it is unset, so every test they start inherits it.
+  They run `mkdir` only in that case: `test_e2e_tools_tier.py`'s no-node fixture runs the runner with nothing but its
+  own `bin` on PATH, and an unconditional `mkdir` failed it with `mkdir: command not found`.
+- The 44 shell scripts that call a bare `mktemp` set `TMPDIR="${TMPDIR:-<checkout>/tmp}"` after their `set` line.
+  `fleet.sh`, run directly, makes one `fleet.XXXXXX` scratch directory, exports it as TMPDIR and removes it on its
+  EXIT trap with the failure ledger. Sourced, it leaves the caller's traps alone. Its 23 mktemp calls used to leak
+  kubeconfigs and attendee key CSVs whenever a function failed between the mktemp and its `rm -f`.
+- Missing exit cleanup added: `fleet-drift-audit.sh` (its kubeconfig was never removed), `datadog-pool-check.sh`,
+  `images/villains/build.sh` (the Joker layer directory, which a failed crane push left behind) and
+  `test_datadog_admin_key.sh` (its no-cloud directory before the later trap). Seventeen Python tests that called
+  `tempfile.mkdtemp()` with no removal now register `shutil.rmtree` with `atexit` right after it.
+- Literal paths: the harvest passes read `WIB_SCRATCH` and exit naming `run.sh` when it is unset, and `run.sh` makes
+  that directory with mktemp under TMPDIR and removes it on exit. `grant-collaborator-kubeconfig.sh` writes its
+  kubeconfig under TMPDIR, else the checkout's `tmp/`. The tool-pin live check keeps its state under
+  `${TMPDIR:-<checkout>/tmp}`. Usage lines in `kubecon_probe.py`, `stage_traces.py`, `room_view.py`,
+  `datadog-secret-fields.sh` and the weather-scope research script name `"$TMPDIR/..."`. The fake kubeconfig paths
+  the tests pass to stubbed runners are `/fake/...`. Rules 7 and 8 in AGENTS.md (CLAUDE.md is its symlink) name
+  `"$TMPDIR/<cluster>.kubeconfig"`.
+- `verify/test_no_system_temp_paths.py` (offline, new) scans every tracked script and test (848 files: shell, Python,
+  JavaScript, TypeScript, Dockerfiles, workflows). It fails on a line that names the system temp directories, `-p` to
+  one, a template there, or `${TMPDIR:-` followed by one. It also fails on a bare mktemp with no fallback, a mktemp
+  with no EXIT trap, a file with fewer `rmtree` than `mkdtemp(` calls, a runner without the fallback, or a
+  `scratch_dir()` that could pick a system temp directory. It runs `fleet.sh start-check` with a stub curl to see the
+  scratch directory made and removed. Its EXCEPTIONS list names each remaining line by file and words, with why:
+  paths inside a pod or an image build (`/tmp/burrito-data`, the web-terminal AWS CLI installer, workshop-mcp's hint,
+  the vLLM pod's `/dev/shm`, the agents' commands in fake traces), the checks that assert those words are absent, and
+  `test_stage_switch_night_before.py`'s read of the run-of-show's presenter command, which runs on a presenter laptop.
+  An exception that no longer matches a line fails as stale.
+
+**The Terraform plugin directory.** #1119 (2026-11-08) already replaced the per-process `wib-tf-plugins-*` with one
+named directory in the host artifact cache, `<root>/terraform-plugin-cache`, outside every worktree and reused by every
+run. This run adds what the criterion asks beyond that. The size is stated in `tf_plugin_cache.py`: about 870 MB per
+registry host, the aws provider 798 MB of it, and 1,744,861,827 bytes with both hosts filled on netcup on 2026-11-09.
+`tf_plugin_cache.py size` prints it, and `tf_plugin_cache.py clear` empties it under the lock `run-e2e-tools.sh` holds
+around each terraform test, failing and removing nothing while a run holds that lock. `test_tf_plugin_cache.py` covers
+both verbs and checks that nothing under verify/ makes a `wib-tf-plugins-` directory.
+
+**The two netcup directories.** This run's system temp directory is the dispatcher's private tmpfs (`findmnt /tmp`
+shows `systemd-private-...-hecaton-dispatch.service-.../tmp`), and the run user is not michael, so the two michael-owned
+`wib-tf-plugins-*` directories cannot be seen from here. The removal is escalated as a command on netcup, with a
+comment on #1261 recording it.
+
+**Not changed.** The run-of-show's presenter commands (`--kubeconfig /tmp/kubecon.kubeconfig`) run on a presenter laptop
+and stay as they are. The cluster root's `kubeconfig_command` output in `infra/terraform/aws/cluster/main.tf` is a
+string in a Terraform root, outside the scripts and tests this issue covers. The gitops and backstage manifests name pod paths. Python tests run by hand
+with no TMPDIR use Python's default temp directory and still remove what they make, since tempfile reads only the
+environment. The runners and hecaton both set TMPDIR.
+
+**Tests run.** The 48 changed offline tests, each once, 8 at a time: 47 passed at first and `test_e2e_tools_tier.py`
+failed on the `mkdir` above; after the fix it passed alone. `bash verify/run-e2e-tools.sh
+test_check_inventory_schema_e2e.py test_deployments_witch_line_e2e.py test_recipe_pantry_gate_e2e.py`: 3 checks in
+0m17s, ALL E2E TOOLS TIER CHECKS GREEN, exit 0. `python3 verify/test_tf_plugin_cache.py`: all passed.
+`python3 verify/test_no_system_temp_paths.py`: all passed. Mutants, each reverted: an appended `cp "$work/x" /tmp/x`
+in `ci-base-sha.sh`, the fallback line removed from `build-loopback.sh`, a second `mkdtemp` in `test_dns.py`, and
+fleet.sh's trap without the scratch removal each failed the new test by name. `test_ops_view_live.py`, a live test
+whose only change is an atexit cleanup, was not run. The scoped Test and E2E commands are left to validation.
+
+**Live check.** `fleet.sh` is changed, so at 14:57:37Z `TMPDIR=<run tmp>/live-1261 bash fleet.sh start-check` ran
+(read-only: it reads the deployments pages and the beacon view). It printed `PASS https://deployments.burritobot.co/
+deployments.json lists 0 deploy rows` and `FAIL https://beacon.burritobot.co/beacon/view reads 1 beacon(s)`, exit 1.
+The beacon count was there before and this run did not reset it. Afterwards the TMPDIR it was given held 0 entries,
+and the system temp directory held 6 entries before and 6 after. No cluster was changed and `agent/terminal-auth` was
+not read. The `images/` changes touch only the build scripts' scratch handling; no image was built or pushed.
