@@ -43916,3 +43916,58 @@ Deployment and run
 run 18327's 50 turns, which should print `0 showing the marker reached the model` with `agent_saw_marker` 0 on every
 arm and exit 0. The A2A passthrough still forwards its body unchanged, so a probe that posts A2A straight to
 guard-proxy still sends the marker to the model.
+
+## 2026-11-09 · #1201 · run 19381 · The desk-report-token is on both KubeCon clusters, and /remote-landed refuses a report without it
+
+**What was left.** `verify/prior-drafts.sh 1201 origin/staging` printed `NONE`, and the issue had no comments. The one
+command criterion 1 asks for already exists: #1158 (run 18711, `2c0c6c2f`) added `fleet.sh desk-link`, which keeps the
+community cluster's `agent/desk-report-token` when it has one, else writes a fresh 64-hex-digit token to a mode-600 temp
+file, applies it as `agent/desk-report-token` (key `token`) on watch-it-burn-community and watch-it-burn-private,
+restarts the community fake-ticket, and never prints the token. The private cluster's `desk-relay` mounts that Secret
+in its `agent` namespace, the place #1158 reads it (`desk-relay.yaml`, `DESK_REPORT_TOKEN_FILE`). `instructors up` runs
+the verb after `guardrails-link`. Run 18737 ran it on both clusters on 2026-11-08 at 19:15 UTC, with the output in its
+entry above. So this run changed no code. It ran the check #1157's entry names under "Not yet run on a cluster".
+
+**Before (2026-11-09, 05:08 UTC).** Both clusters had `agent/desk-report-token`, created at 19:15:46Z and 19:15:51Z.
+The SHA-256 of the two decoded tokens matched; neither the token nor its hash is written here. `ai-layer` was Synced and
+Healthy at `6b518555` on both. The community fake-ticket pod `fake-ticket-5546f48b5-lnmlq` was Running, its `site`
+container taking `DESK_CLUSTER=community`, `DESK_REMOTE_CLUSTER=private` and `DESK_REPORT_TOKEN` from the Secret. The
+private relay's `/healthz`, read from the private workshop-mcp pod, answered
+`{"ok": true, "desk": "https://support.burritobot.co", "token": true}`. `https://deployments.burritobot.co/deployments.json`
+read `[]`.
+
+**The check (criteria 2 and 3).** One report body, `{"name": "desk-check-1201-050835", "ok": true, "kind": "ConfigMap",
+"image": "", "requested_by": "Agatha the Gargoyle"}`, was posted five times to `https://support.burritobot.co/remote-landed`
+from this host. The token was piped from the Secret into the Python on stdin, so it touched no file and no command
+line, and any echo of it in an answer would have been masked. It printed:
+
+    no header: HTTP 401 <html> ... <center><h1>401 Authorization Required</h1></center> ... nginx/1.27.5 ...
+    empty header: HTTP 401 <html> ... <center><h1>401 Authorization Required</h1></center> ... nginx/1.27.5 ...
+    wrong token: HTTP 401 {"error": "a remote deploy report needs the desk's X-Desk-Report-Token"}
+    token with one char changed: HTTP 401 {"error": "a remote deploy report needs the desk's X-Desk-Report-Token"}
+    the token: HTTP 200 {"name": "desk-check-1201-050835", "kind": "ConfigMap", "who": "Agatha the Gargoyle",
+      "witch": "Agatha the Gargoyle", "image": "", "ok": true, "detail": "", "at": "05:08:37",
+      "ts": 1794200917.400574, "removed_at": "", "removed_ts": null, "cluster": "private"}
+
+So the console refuses a missing or empty header itself (`desk-remote-report.locations`), and the desk refuses a wrong
+token, even one a single character off, with its own 401. Then `deployments.json` read:
+
+    [{"name": "desk-check-1201-050835", "kind": "ConfigMap", "image": "", "app": "desk-check-1201-050835",
+      "witch": "Agatha the Gargoyle", "at": "05:08:37", "removed_at": "", "cluster": "private"}]
+
+**Left as found.** The row was removed with #1215's loopback-only `POST /desk-forget`, run in the desk's pod
+(`kubectl exec deploy/fake-ticket -c site`) with `{"names": ["desk-check-1201-050835"], "since": 1794200914}`, so only
+a row of that name from this check could go. It answered `{"rows_removed": 1, "tickets_removed": 0, "rows_left": 0,
+"named_left": 0, "tickets_left": 0, "fixed_kept": []}`, and `deployments.json` read `[]` again. No ticket was filed, no
+ConfigMap was created, nothing was restarted (the fake-ticket pod was the same one, 0 restarts), and community
+`ai-layer` still read Synced and Healthy. No Secret was written. `agent/terminal-auth` was not read or written.
+
+**Not run.** `desk-link` was not run again. It would keep the community token and only rewrite the private copy with
+the same value. A fresh token would restart the desk, and the page held nothing to protect, but the link was already
+in place. The relay's own path, the admin bot's `deploy_app` landing on the public page through `desk-relay`, is run
+18737's check, now `verify/one_desk_live.py`. This run did not repeat it. Not yet run on a cluster: none.
+
+**Tests (run 19381).** Prose alone (`decisions.md`, `PROGRESS.md`), so by CLAUDE.md's Dispatched runs point 6 the
+prose gate ran and printed `prose gate: pass, 2 public-prose file(s) read against 6b5185555cba`. The scoped
+`run-tests.sh` is left to hecaton's validation, which runs the tests that read the changed files, and
+`run-e2e-tools.sh` selects no tier test for a prose-only change. No test was written or changed. No dependency was added.
