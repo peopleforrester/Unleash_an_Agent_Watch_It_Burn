@@ -628,6 +628,19 @@ spec:
                 I'm BurritoBot, and I only talk burritos! I can help with the Hex & Cauldron menu, our hours,
                 and our locations. Shall we start your order? First pick a base: Cilantro-Slime Rice,
                 Black-Bog Rice, or Graveyard Greens.
+            # THE CODE-OF-CONDUCT CLASSIFIER (#1279, from the #1267 spike): this cluster's Bedrock guardrail, which the
+            # cluster root creates (aws_bedrock_guardrail.coc: HATE, INSULTS and SEXUAL at MEDIUM, VIOLENCE at LOW,
+            # BLOCK on input, Standard tier) and guard-proxy-reader's Pod Identity may call with ApplyGuardrail and
+            # nothing else. The id is Bedrock's pick, per cluster, so it reaches the pod through the coc-guardrail
+            # ConfigMap that fleet.sh pin_coc_guardrail writes from the root's coc_guardrail output, not through git.
+            # Optional: a cluster applied before #1279 has no ConfigMap and its guard-proxy starts with these unset.
+            # guard-proxy reads them from guard-proxy-agenticburn's classifier change on; a pin before that ignores them.
+            - name: BEDROCK_GUARDRAIL_ID
+              valueFrom: { configMapKeyRef: { name: coc-guardrail, key: id, optional: true } }
+            - name: BEDROCK_GUARDRAIL_VERSION
+              valueFrom: { configMapKeyRef: { name: coc-guardrail, key: version, optional: true } }
+            - name: BEDROCK_GUARDRAIL_REGION
+              valueFrom: { configMapKeyRef: { name: coc-guardrail, key: region, optional: true } }
             - { name: PROXY_FAIL_CLOSED, value: "true" }
             # Cost-counter price tier. The workshop-agent is bound to bedrock-nova (Nova Pro), so this is
             # nova; verify/model_pin_check.py checks the pin answers live in the delivery region (#453).

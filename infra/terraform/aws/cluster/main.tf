@@ -742,6 +742,149 @@ module "tutor_bedrock_pod_identity" {
   }
 }
 
+# --- The /chat code-of-conduct classifier (#1279) ---------------------------------------------------------
+#
+# The spike #1267 (docs/research/2026-11-09-coc-floor/README.md) chose Bedrock Guardrails for the abuse no term list
+# sees on the /chat prompt: hate speech without a slur, insults and threats. guardrail-standard.json in that directory
+# is the measured definition, every filter in detect mode; this is the chosen mix of it, blocking on input. Standard
+# tier, which needs the cross-Region profile, with HATE, INSULTS and SEXUAL at MEDIUM and VIOLENCE at LOW. It flagged
+# none of 1,591 stage texts. MISCONDUCT is left out because it flags the talk's own attacks (25 stage texts at
+# MEDIUM), PROMPT_ATTACK because the injection is the show, and the managed profanity list because the term floor
+# covers it. guard-proxy calls ApplyGuardrail on the prompt alone (source INPUT), so output evaluation is off: the
+# reply is masked by the term floor, and a second Bedrock round trip per turn would add half a second.
+#
+# One per cluster, like the inference profiles: tagged for its cluster, so the grant below can name it by tag
+# while its id is unknown at plan, and torn down with the cluster. A guardrail costs nothing until it is called,
+# and the account quota is 100 guardrails, over the clusters one account holds (50 load balancers per account
+# per region bounds those first, infra/SIZING.md).
+locals {
+  coc_guardrail_profile = "us.guardrail.v1:0"
+  coc_guardrail_message = "Keep it kind."
+  # Filter type -> the strength the spike chose. MEDIUM blocks MEDIUM and HIGH confidence; LOW blocks HIGH only.
+  coc_guardrail_filters = {
+    HATE     = "MEDIUM"
+    INSULTS  = "MEDIUM"
+    SEXUAL   = "MEDIUM"
+    VIOLENCE = "LOW"
+  }
+}
+
+resource "aws_bedrock_guardrail" "coc" {
+  name                      = "${var.name}-coc"
+  description               = "Watch It Burn code-of-conduct classifier for the chat prompt on ${var.name}, issue 1279."
+  blocked_input_messaging   = local.coc_guardrail_message
+  blocked_outputs_messaging = local.coc_guardrail_message
+
+  content_policy_config {
+    tier_config = [{ tier_name = "STANDARD" }]
+    dynamic "filters_config" {
+      for_each = local.coc_guardrail_filters
+      content {
+        type           = filters_config.key
+        input_strength = filters_config.value
+        input_action   = "BLOCK"
+        input_enabled  = true
+        # Required by the API whatever output_enabled says; the same strength, never evaluated.
+        output_strength = filters_config.value
+        output_action   = "NONE"
+        output_enabled  = false
+      }
+    }
+  }
+
+  # The provider takes the profile as an ARN, in the guardrail's own Region; the id alone fails plan with "Invalid
+  # ARN Value".
+  cross_region_config {
+    guardrail_profile_identifier = "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:guardrail-profile/${local.coc_guardrail_profile}"
+  }
+
+  tags = merge(local.fleet_tags, { consumer = "guard-proxy" })
+}
+
+# The numbered version guard-proxy calls. DRAFT changes on every update, so a running guard-proxy pins a version and
+# fleet.sh pin_coc_guardrail hands it the one this apply published. A change to the filters, the profile or the
+# message publishes a new one; a tag change (a new event) does not. skip_destroy keeps the old version until the
+# guardrail itself goes, so the guard-proxy still on it keeps working until the pin moves it; the quota is 20 a
+# guardrail, one per settings change.
+resource "aws_bedrock_guardrail_version" "coc" {
+  guardrail_arn = aws_bedrock_guardrail.coc.guardrail_arn
+  description   = "Published by the cluster root for guard-proxy, issue 1279."
+  skip_destroy  = true
+
+  lifecycle {
+    replace_triggered_by = [
+      aws_bedrock_guardrail.coc.content_policy_config,
+      aws_bedrock_guardrail.coc.cross_region_config,
+      aws_bedrock_guardrail.coc.blocked_input_messaging,
+    ]
+  }
+}
+
+# guard-proxy's one cloud credential: ApplyGuardrail on this cluster's guardrail, and on the cross-Region profile
+# the call routes through, which IAM authorizes as a second resource of the same call (Bedrock user guide,
+# "Permissions for using cross-Region inference with Amazon Bedrock Guardrails"). No model, no other guardrail.
+# guard-proxy is the component the challenges attack, and an attendee with cluster-admin can run a pod as its
+# ServiceAccount; what that reaches is a classifier call, billed per 1,000 characters, and nothing else.
+resource "aws_iam_policy" "guard_proxy_guardrail" {
+  name        = "${var.name}-guard-proxy-guardrail"
+  description = "ApplyGuardrail on the code-of-conduct guardrail of ${var.name}, for guard-proxy."
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid    = "ApplyOwnClusterGuardrail"
+      Effect = "Allow"
+      Action = ["bedrock:ApplyGuardrail"]
+      # Matched by the guardrail's tags, not its ARN: the id is Bedrock's pick, known only after apply, and a
+      # document unknown at plan is one the policy pipeline cannot check (as bedrock_invoke's application profiles).
+      Resource = "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:guardrail/*"
+      Condition = {
+        StringEquals = {
+          "aws:PrincipalTag/eks-cluster-name"           = var.name
+          "aws:PrincipalTag/kubernetes-namespace"       = "agent"
+          "aws:PrincipalTag/kubernetes-service-account" = "guard-proxy-reader"
+          "aws:ResourceTag/project"                     = local.fleet_tags.project
+          "aws:ResourceTag/attendee"                    = var.name
+          "aws:ResourceTag/consumer"                    = "guard-proxy"
+        }
+      }
+      }, {
+      Sid    = "ThroughTheUsGuardrailProfile"
+      Effect = "Allow"
+      Action = ["bedrock:ApplyGuardrail"]
+      # The profile in every Region it routes to. From us-west-2 that is us-east-1, us-east-2 and us-west-2; a
+      # standby in another US Region routes to its own list, so the Region is a wildcard and the profile is not.
+      # A guardrail-profile carries no tags; the profile alone authorizes nothing without the statement above.
+      Resource = "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:guardrail-profile/${local.coc_guardrail_profile}"
+      Condition = {
+        StringEquals = {
+          "aws:PrincipalTag/eks-cluster-name"           = var.name
+          "aws:PrincipalTag/kubernetes-namespace"       = "agent"
+          "aws:PrincipalTag/kubernetes-service-account" = "guard-proxy-reader"
+        }
+      }
+    }]
+  })
+}
+
+module "guard_proxy_pod_identity" {
+  source  = "terraform-aws-modules/eks-pod-identity/aws"
+  version = "~> 1.12.0"
+
+  permissions_boundary_arn = data.aws_iam_policy.permissions_boundary.arn
+
+  # "<cluster>-guard-" is the module's name_prefix, under its 38-char cap as "<cluster>-tutor-" is.
+  name                   = "${var.name}-guard"
+  additional_policy_arns = { coc_guardrail = aws_iam_policy.guard_proxy_guardrail.arn }
+
+  associations = {
+    main = {
+      cluster_name    = module.eks.cluster_name
+      namespace       = "agent"
+      service_account = "guard-proxy-reader"
+    }
+  }
+}
+
 # --- Attendee IAM user ------------------------------------------------------------------------------
 #
 # The student's own AWS identity: one IAM user per cluster, whose access key the fleet driver mints after
@@ -894,6 +1037,20 @@ output "cluster_name" {
 
 output "agent_bedrock_role_arn" {
   value = module.agent_bedrock_pod_identity.iam_role_arn
+}
+
+# The code-of-conduct guardrail guard-proxy calls (#1279). fleet.sh pin_coc_guardrail writes it into the agent
+# namespace's coc-guardrail ConfigMap, which guard-proxy reads as BEDROCK_GUARDRAIL_ID, _VERSION and _REGION.
+output "coc_guardrail" {
+  value = {
+    id      = aws_bedrock_guardrail.coc.guardrail_id
+    version = aws_bedrock_guardrail_version.coc.version
+    region  = var.region
+  }
+}
+
+output "guard_proxy_role_arn" {
+  value = module.guard_proxy_pod_identity.iam_role_arn
 }
 
 output "kubeconfig_command" {
