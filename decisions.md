@@ -45857,3 +45857,36 @@ after promotion; it is copy, and `test_kubecon_seg4_flow.py` holds it.
 **Tests run.** `python3 verify/test_ros_seg4_flow.py` and `python3 verify/test_kubecon_seg4_flow.py`, each exit 0,
 and the prose gate. The scoped Test and E2E commands are left to validation, which runs the tests that read the
 changed files. No dependency was added.
+
+## 2026-11-09 · #1242 · run 19493 · A test reads #1129's community beats in the probe's docstring and the Night Before step
+
+Test review run 19213 found that #1129's criterion, "the probe's docstring and the run-of-show's Night Before step list
+the new beats", was held only by the call counts: no check read `guard-agency-on`, `guard-input-on` or the Challenge 4
+ask in the community entry of either text. `verify/test_kubecon_probe.py` gains `community_c4_listed_checks()`, which
+cuts the community entry out of each text between anchors it checks first (Tests own their inputs, point 2) and reads
+its phrases in the run's order, so a beat dropped or moved fails:
+
+- the docstring's community beat list: `guardrails-on`, HC-666, `guard-agency-on and guard-input-on (each run in the
+  private terminal`, then Challenge 4's `/kubecon` weather ask with those on, then `guard-input-off` and
+  `guardrails-off`;
+- the docstring's community switch entry: `c6-lands`, both fixes from the private terminal, then `c7-off`, the room's
+  Challenge 4 attempt with both fixes on (#1129);
+- the docstring's community usage note: the private terminal runs both fixes before Challenge 4;
+- the Night Before step's community entry: `guardrails-on`, HC-666, both fixes from the private terminal reaching the
+  public bot (#1132), then Challenge 4's `/kubecon` ask with the four guardrails and both fixes on (#1129), then the
+  closing `guard-input-off` and `guardrails-off`; and the step's stage-state note putting Challenge 4 after both fixes.
+
+One more check holds `kp.COMMUNITY` itself to that order (guardrails-on, c6-lands, guard-agency-on, guard-input-on,
+c7-off at Challenge 4), so the texts are read against the beats the probe runs. Three self-checks edit the real
+entries (guard-input-on dropped, the Challenge 4 ask renamed, Challenge 4 moved ahead of the fixes) and see the order
+check catch each. By hand, renaming the Challenge 4 ask in the run-of-show and dropping `guard-input-on` from the
+docstring's beat list failed the two matching checks; both files were put back.
+
+No text changed, so no reword needed a test update. The scope map needs no new entry: the test already read both files
+(`scope_tests.py write` added nothing).
+
+**Live check.** Skipped: the change touches only a test under `verify/` that no cluster runs.
+
+**Tests run.** `python3 verify/test_kubecon_probe.py`, exit 0. It needs the guard-proxy submodule checked out
+(`git submodule update --init gitops/ai-layer/guard-proxy`); this worktree had it empty and the test stopped at
+`proxy.py` until it was. The scoped Test and E2E commands are left to validation.

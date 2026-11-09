@@ -3080,6 +3080,112 @@ def c2_lands_checks() -> None:
 
 c2_lands_checks()
 
+
+# #1242, holding #1129's criterion: the probe's docstring and the run-of-show's Night Before step list the community
+# run's new beats, guard-agency-on and guard-input-on run in the private terminal, then Challenge 4's /kubecon ask, in
+# the order the run plays them. The counts are held above; this reads the beats themselves, in the community entry of
+# each, so dropping one, or moving it out of the run's order, fails here.
+def community_c4_listed_checks() -> None:
+    print("== #1129's community beats listed: guard-agency-on, guard-input-on, then Challenge 4 (#1242) ==")
+    ros_path = REPO / "facilitation/kubecon-na-2026-run-of-show.md"
+    probe_path = REPO / "verify/kubecon_probe.py"
+
+    def between(text: str, start: str, end: str, path: pathlib.Path) -> str:
+        """The text from start to end, whitespace folded; stops naming the literal and the file when either anchor is
+        gone (CLAUDE.md, Tests own their inputs, point 2)."""
+        folded = re.sub(r"\s+", " ", text)
+        for anchor in (start, end):
+            if anchor not in folded:
+                print(f"FAILED: {anchor!r} is not in {path}; this test reads the community run's beats there")
+                sys.exit(1)
+        i = folded.find(start)
+        j = folded.find(end, i + len(start))
+        if j < 0:
+            print(f"FAILED: {end!r} does not follow {start!r} in {path}; this test reads the community entry between them")
+            sys.exit(1)
+        return folded[i:j]
+
+    def out_of_order(entry: str, wanted: list[str]) -> list[str]:
+        """The wanted phrases missing from entry, or found only before the one ahead of them; empty when every one is
+        there in that order."""
+        at, wrong = 0, []
+        for phrase in wanted:
+            k = entry.find(phrase, at)
+            if k < 0:
+                wrong.append(phrase)
+            else:
+                at = k + len(phrase)
+        return wrong
+
+    keys = [b.key for b in kp.COMMUNITY]
+    check("the community run plays guardrails-on, c6-lands, guard-agency-on, guard-input-on, then c7-off, Challenge 4",
+          [k for k in keys if k in ("guardrails-on", "c6-lands", "guard-agency-on", "guard-input-on", "c7-off")]
+          == ["guardrails-on", "c6-lands", "guard-agency-on", "guard-input-on", "c7-off"]
+          and next(b for b in kp.COMMUNITY if b.key == "c7-off").stage == (kp.PLAY, "Challenge 4"), str(keys))
+
+    doc = kp.__doc__
+    beats = between(doc, "community the cluster is the one named", "admin the cluster is the one named", probe_path)
+    wanted = ["guardrails-on", "HC-666", "guard-agency-on and guard-input-on (each run in the private terminal",
+              "Challenge 4's /kubecon weather ask chaining the rogue tool with those on",
+              "guard-input-off", "guardrails-off"]
+    check("the docstring's community beat list names guard-agency-on and guard-input-on from the private terminal, "
+          "then Challenge 4's /kubecon ask with them on, between HC-666 and the closing guard-input-off",
+          not out_of_order(beats, wanted), f"missing or out of order: {out_of_order(beats, wanted)}\n        {beats}")
+
+    switches = between(doc, "community ceo-leak, ceo-friendly", "admin c5-off with every guardrail off", probe_path)
+    wanted = ["guardrails-on", "c6-lands", "guard-agency-on and guard-input-on, run in the private terminal",
+              "c7-off, the room's Challenge 4 attempt, with the four Kubernetes guardrails and both fixes on (#1129)",
+              "guard-input-off and guardrails-off"]
+    check("the docstring's community switch entry runs guard-agency-on and guard-input-on before c7-off, Challenge 4, "
+          "with both fixes on",
+          not out_of_order(switches, wanted), f"missing or out of order: {out_of_order(switches, wanted)}\n        {switches}")
+
+    # The usage note is a shell comment wrapped over lines, so each continuation's "# " is folded out before reading.
+    usage = between(doc, "# the community cluster:", "python3 verify/kubecon_probe.py community", probe_path)
+    usage = usage.replace(" # ", " ")
+    check("the docstring's community usage note has the private terminal run guard-agency-on and guard-input-on "
+          "before Challenge 4", "guard-agency-on and guard-input-on before Challenge 4" in usage, usage)
+
+    ros = ros_path.read_text(encoding="utf-8")
+    nb = between(ros, "## Night Before", "## Rollback on the day", ros_path)
+    step = between(nb, "**Every shown beat works, on the clusters that will be on stage (#503).**",
+                   "- Every prompt it sends carries guard-proxy's probe marker", ros_path)
+    community = between(step, "- Community (segments 1 to 5):", "- Admin: the kube-context", ros_path)
+    wanted = ["`guardrails-on`", "HC-666", "then `guard-agency-on` and `guard-input-on`, each run in the private terminal",
+              "reaching the public bot since #1132",
+              "then Challenge 4's `/kubecon` weather ask sent once to the public bot with the four Kubernetes "
+              "guardrails and both fixes on", "(#1129)", "`guard-input-off` and `guardrails-off`"]
+    check("the Night Before step's community entry lists guard-agency-on and guard-input-on from the private "
+          "terminal, then Challenge 4's /kubecon ask with both fixes on, in the run's order",
+          not out_of_order(community, wanted), f"missing or out of order: {out_of_order(community, wanted)}\n        {community}")
+    check("the Night Before step's stage-state note puts Challenge 4 after guard-agency-on and guard-input-on, "
+          "with the four and both of those on",
+          not out_of_order(step, ["the room's Challenge 3 attempt with the four Kubernetes guardrails on and "
+                                  "`guard-agency-on` and `guard-input-on` still off",
+                                  "Challenge 4 with the four and both of those on"]), step[:600])
+
+    # The checker itself fails when a beat goes or moves: each of these edits of the real entries is caught.
+    mutations = [
+        ("the docstring entry without guard-input-on", beats.replace("guard-agency-on and guard-input-on", "guard-agency-on"),
+         ["guard-agency-on and guard-input-on (each run in the private terminal"]),
+        ("the docstring entry without the Challenge 4 ask", beats.replace("Challenge 4's /kubecon weather ask", "a weather ask"),
+         ["Challenge 4's /kubecon weather ask chaining the rogue tool with those on"]),
+        ("the Night Before entry with Challenge 4 ahead of the fixes",
+         community.replace("then `guard-agency-on` and `guard-input-on`, each run in the private terminal", "")
+         + " then `guard-agency-on` and `guard-input-on`, each run in the private terminal",
+         ["reaching the public bot since #1132"]),
+    ]
+    for label, text, missing in mutations:
+        full = wanted if "Night Before" in label else [
+            "guardrails-on", "HC-666", "guard-agency-on and guard-input-on (each run in the private terminal",
+            "Challenge 4's /kubecon weather ask chaining the rogue tool with those on", "guard-input-off",
+            "guardrails-off"]
+        got = out_of_order(text, full)
+        check(f"the order check catches {label}", bool(got) and all(m in got for m in missing), str(got))
+
+
+community_c4_listed_checks()
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")
