@@ -44102,3 +44102,47 @@ the three changed sentences ("lost-card story", "changes none", "map, not the", 
 first") finds no other test that reads them; the remaining hits are the CEO and C8 rules' own words and a guard-proxy
 answer. Rerun alone: `python3 verify/test_recipe_pantry_gate.py` and `python3 verify/test_recipe_persona.py`, each
 exit 0. The live counts above stand; nothing a cluster runs changed in this run, so no live check was run again.
+
+## 2026-11-09 · #1202 · run 19387 · guard-input-on and guards-off reach the community guard-proxy from the private terminal, since #1042 applied #869's node rule
+
+**What was wrong.** Run 18714 (#1183) found the private terminal's guard-input-on and guards-off could not switch the
+community cluster: the API server's Service proxy to `guard-proxy:8080` timed out, because the nodes' security group
+did not admit the control plane on 8080. #869 put that rule in the cluster root's terraform and #1042 (run 18828)
+applied it to both KubeCon clusters on 2026-11-08 between 23:18Z and 23:42Z, after this issue was filed at 17:01Z. So
+this run changes no code: it checks the fix is in force and records the checks.
+
+**The rule on both clusters.** `aws ec2 describe-security-groups` on the groups tagged
+`kubernetes.io/cluster/<name>=owned` reads, on watch-it-burn-community's node group sg-0b7d2a0cfaed6fecd, TCP 8080 and
+TCP 3000 from sg-04130d5989d5c1ab1, and on watch-it-burn-private's node group sg-011fc555e507cfb40, TCP 8080 and TCP
+3000 from sg-0ca9886f5a9d4f6d3 (the cluster group #869 measured). `verify/test_control_plane_app_ports.py` holds the
+rule in terraform.
+
+**The Service proxy.** As the run's identity, `kubectl --context <c> get --raw
+/api/v1/namespaces/agent/services/guard-proxy:8080/proxy/controls --request-timeout=20s` answered at once on both
+clusters, with every AI guard false.
+
+**The stage-switch run.** `python3 verify/stage_switch_run.py --context watch-it-burn-private --kubeconfig "$KUBECONFIG"
+--profile accen-dev`, log `/var/lib/hecaton/runs/19387/stage_switch.log`, printed `15 lines: 11 PASS, 4 FAIL` and exit
+1:
+
+| Step | private | community |
+|---|---|---|
+| identity, start | PASS | PASS (start) |
+| guardrails-on | PASS | PASS |
+| guard-agency-on | FAIL | FAIL |
+| guard-input-on | PASS | PASS |
+| guard-mcp-on | PASS | PASS |
+| start-state | FAIL | FAIL |
+| as-found | PASS | PASS |
+
+guard-input-on printed "Switched on both clusters: this one and watch-it-burn-community." and its peer call was the
+`--kubeconfig /home/student/.kube/peer --context watch-it-burn-community get --raw
+'.../guard-proxy:8080/proxy/toggle?input_blocklist=on&input_classifier=on'` that timed out in run 18714. guards-off
+printed the same line, with its peer `toggle?output=off&input_blocklist=off&input_classifier=off&budget=off&topic=off`,
+and the as-found row reads every field it turns off back to off on both. The four FAIL lines are all
+`infra.agency_scoped`, which the pinned guard-proxy does not send yet; that waits on #1132, not on this issue.
+
+**Left as found.** Both /controls read after the run as before it: every guard false, except private's `infra.falco`,
+which read true before the run and still does (no stage switch or closing command turns it off).
+
+**Live check.** The issue's own work is a live check, and it ran as above. No file a cluster runs changed.
