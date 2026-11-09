@@ -45749,3 +45749,16 @@ named, no offline suite) in 1m20s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`,
 `/var/lib/hecaton/runs/19479/kyverno-cel.log`; with the old policy put back its two kubearmor cases failed
 (`expected ignored, got fail`). The whole Test and E2E commands were not run; validation runs the tests that read the
 changed files. No dependency was added.
+
+**Run 19505, resuming run 19479 after its tests gate failed.** Two offline tests that read the changed files, and
+that run 19479 had not run, failed at the gate. `verify/test_recipe_block_coverage.py`: its fake clusters' `ON`
+measure had no `kubearmor_unenforced` key, so the new Armed judge read the enforcer coverage as unreadable and
+failed `a healthy cluster passes every check`; both its `OFF` and `ON` dicts now carry `"kubearmor_unenforced": []`.
+`verify/test_verify_harness.py`: `no light-suite test runs kubectl, helm or node (test_kubecon_probe.py)`, because
+the new coverage check compared argv against a list literal opening with the string kubectl, which that test reads
+as a shell-out; the check now compares argv's first item and the next two apart. Each failing test was rerun alone
+and passed, as did `test_kubecon_probe.py`, `test_two_hour_flow_live_checks.py` and `test_desk_ticket_live.py`.
+Then the scoped Test command, `HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)" bash verify/run-tests.sh`:
+`180 tests ran`, scoped to 180 of the 421 offline tests, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `exit=0`, log
+`/var/lib/hecaton/runs/19505/run-tests.log`. The policy change and the cluster checks owed after promotion are as
+above; this resume touched only `verify/` tests that no cluster runs, so it ran no new live check.
