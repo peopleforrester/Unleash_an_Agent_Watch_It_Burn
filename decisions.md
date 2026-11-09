@@ -47983,3 +47983,11 @@ minutes) must be gone. Each check is run again on a copy with one number changed
 validation; the change touches no file a tier test reads.
 
 **Live check.** Skipped: the change touches only `verify/` files no cluster runs and decisions.md.
+
+**Run 19630, after run 19620 failed the tests gate.** `verify/test_deck_shift_slide_citations.py` (#1099) failed:
+it bans a hash of `#/43` or more in any file under `verify/` outside the tests it lists in `SEG4_READERS`, and the new
+test quotes segment 5's ranges, `#/65` to `#/113` and `#/74` to `#/111`, in its docstring and self-checks. Run 19620
+ran only the new test, so it did not see this. The fix lists `verify/test_ros_over_slot_seg5.py` in `SEG4_READERS`,
+the way #1270 listed `test_ros_deck_live.py`. The new test reads segment 5 and its row, so its hashes cite the
+127-slide deck. `python3 verify/test_deck_shift_slide_citations.py` now prints `All #1099 deck-shift
+slide citation checks passed.`, exit 0.
