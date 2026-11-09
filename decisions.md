@@ -43574,3 +43574,84 @@ with no hit among 837 files. `HECATON_BASE_SHA=cdeaedfd python3 verify/scope_tes
 and `test_scope_tests.py`. The rest of the scoped suite is left to validation.
 
 **No live check.** The change is under `verify/`, which no cluster runs, and this entry (#1062).
+## 2026-11-09 · #1172 · run 19288 · LLM Guard holds the cluster cap but not the room's bursts at 1 CPU, so its CPU limit goes to 3
+
+**The spec.** #1172: from slide 50 on, `guard-input-on` sends every room prompt to attackme through LLM Guard's
+`/analyze/prompt` (#1148). Read the scan latency and any prompt refused on timeout during the live pass or a load
+replay, and raise llm-guard's replicas or CPU limit if it queues. `verify/prior-drafts.sh 1172 origin/staging` printed
+NONE and the issue had no comments, so this run started from staging at `a66e5732`.
+
+**What bounds LLM Guard's load: not the 150-a-minute cap.** Read from the guard-proxy running on
+watch-it-burn-community (its `/app/proxy.py`, whose `input_verdict` matches the pinned `gitops/ai-layer/guard-proxy`
+line for line): `_chat_turn` runs the block-list and the classifier first, then `session_rate_limited` and
+`rate_limited`. So a prompt the cluster cap later refuses has already been scanned, and LLM Guard sees the room's own
+rate, bounded only by console nginx's 10 a minute per conversation (`wib_chat_session`). In #644's Run A, 500 phones sent
+1,500 turns in 352 s, about 256 a minute, and guard-proxy refused 1,153 at the cap; with the input guard on, every one of
+them would have been scanned, and each refused phone is told to wait a few seconds and send again. Read from the
+llm-guard pod (`/home/user/app/app/app.py`): each `/analyze/prompt` call gets its own `ThreadPoolExecutor`, so scans run
+side by side and share the CPU, and the 10 s `scan_prompt_timeout` (`asyncio.wait_for`) is a 408 that guard-proxy, with
+`PROXY_FAIL_CLOSED`, turns into a refusal. The API's own rate limit is off (`rate_limit.enabled` defaults to false and
+`llm-guard-scanners` sets none). guard-proxy's own wait on LLM Guard is `PROXY_TIMEOUT` (120 s), so a slow 200 is
+answered, late.
+
+**The load replay (source).** Live on watch-it-burn-community, 2026-11-09 03:42 to 04:03 UTC, from inside the
+guard-proxy pod with its own `LLM_GUARD_URL` and token, the body `input_verdict` sends, each call on its own thread, open
+loop. The tool is `verify/llm_guard_burst.py` (new); the first runs used its draft, the last row the committed tool with
+its default phases. Prompts: a 9-word menu ask, a 17-word ticket ask and a 47-word injection, cycled ("mixed") or
+long alone. Times are client side, in seconds; "past 10" counts 200s that took 10 s or more. Logs:
+`/var/lib/hecaton/runs/19288/load-1.jsonl` to `load-6-tool-1cpu.jsonl`.
+
+| LLM Guard | Load | Sent | 200 / 408 | p50 | p95 | max | past 10 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| live pod, 1 CPU | one every 2 s, mixed | 30 | 30 / 0 | 0.115 | 0.313 | 0.405 | 0 |
+| live pod, 1 CPU | 150 a minute for 120 s, mixed | 300 | 300 / 0 | 0.183 | 0.300 | 0.388 | 0 |
+| live pod, 1 CPU | 150 a minute for 120 s, long | 300 | 300 / 0 | 0.417 | 0.620 | 0.913 | 0 |
+| live pod, 1 CPU | 256 a minute (Run A's rate) for 90 s, mixed | 384 | 384 / 0 | 0.312 | 0.589 | 0.769 | 0 |
+| live pod, 1 CPU | burst of 50, mixed | 50 | 50 / 0 | 5.32 | 8.53 | 8.63 | 0 |
+| live pod, 1 CPU | burst of 50, long | 50 | 49 / 1 | 10.72 | 12.93 | 13.13 | 30 |
+| trial pod, 2 CPU | burst of 50, long | 50 | 50 / 0 | 5.45 | 6.47 | 6.49 | 0 |
+| trial pod, 2 CPU | burst of 100, long | 100 | 100 / 0 | 7.54 | 11.38 | 11.47 | 26 |
+| trial pod, 2 CPU | burst of 100, mixed | 100 | 100 / 0 | 4.78 | 8.08 | 8.28 | 0 |
+| trial pod, 3 CPU | burst of 50, long | 50 | 50 / 0 | 3.45 | 4.27 | 4.27 | 0 |
+| trial pod, 3 CPU | burst of 100, long | 100 | 100 / 0 | 6.37 | 8.27 | 8.29 | 0 |
+| trial pod, 3 CPU | burst of 100, mixed | 100 | 100 / 0 | 3.28 | 5.18 | 5.25 | 0 |
+| live pod, 1 CPU, committed tool | burst of 100, long | 100 | 100 / 0 | 17.52 | 26.42 | 26.73 | 68 |
+| live pod, 1 CPU, committed tool | burst of 100, mixed | 100 | 100 / 0 | 9.83 | 16.32 | 16.73 | 48 |
+
+The committed tool's run also read the cap of long prompts (150, all 200, max 0.69) and a burst of 50 long (all 200,
+max 13.04, 28 past 10), and ended `BURST RED`, exit 1. At the 2 CPU trial the cap of long prompts for 60 s read p50 0.096
+and max 0.176. The live pod's cgroup counted 3,248 throttled periods across the first two sessions (`nr_throttled` 61
+to 3,309). Today's serial times are lower than run 18563's (a short ask 0.10 to 0.11 s against 0.20).
+
+**What it says.** The steady load is not the risk: at the cap, and at Run A's uncapped 256 a minute, every scan came
+back inside 0.92 s at 1 CPU, so #1148's estimate of 73 s of scanner time a minute for long prompts was too high. The
+room's retry is the risk: a burst queues, and at 1 CPU one burst of 50 long prompts drew a 408 (a prompt guard-proxy
+refuses) and 30 answers past 10 s, and a burst of 100 long ones took up to 26.7 s. The trial pods were a copy of the live
+llm-guard pod spec under their own label (`llm-guard-trial-1172`, outside the llm-guard Service, so nothing else reached
+them), with only the CPU limit changed, on the same node, called by pod IP.
+
+**The change.** `gitops/ai-layer/resources.yaml`: llm-guard's CPU limit goes from 1 to 3, with the request left at
+250m, so no cluster's scheduling changes. Replicas were the other lever. Each KubeCon cluster is one t3.2xlarge node, so a
+second pod adds no CPU the limit cannot, costs a second model load and 1 GiB more requested memory, and kube-proxy's
+random spread splits a burst unevenly. 3 rather than 2: at 2 a burst of 100 long prompts still had 26 answers past 10 s,
+at 3 none. Limits on community's node already add to 408% of its CPU, so the 3 is a ceiling used only while a burst
+lasts, about 9 s for 100 long prompts. `verify/injection_config_matrix.py`'s comment that the pod is limited to one CPU
+now says what changed.
+
+**Tests.** `verify/test_llm_guard_burst.py` (offline, new, with its `verify/scope-map.yaml` entry from `scope_tests.py
+write`) runs the tool as a command against a fake LLM Guard on loopback: guard-proxy's body and bearer on every call, the
+body read against the pinned proxy.py's literal; a fast fake reads `BURST GREEN`; a 408 and a 200 past `--timeout` each
+read `BURST RED` with the counts; a fake that scans one at a time makes the slowest call of a burst wait for every scan
+in it; a missing URL and an unknown prompt kind fail by name; the default phases are this entry's. From the manifests it
+holds llm-guard's CPU limit at 3 or more, one replica, one worker, and `scan_prompt_timeout` equal to the tool's default
+`--timeout` of 10. A first draft checked that the last tenth of a burst waited longer than the first; which thread the
+fake served first is the scheduler's choice, so that check failed once and was replaced before commit. It passed, 22
+checks. No dependency was added.
+
+**Live check (run 19288).** The rows above. The trial Deployment was deleted and none of its pods remain; the live
+llm-guard Deployment was not changed (1 replica, limit 1 CPU, Running 1/1), and the input guard stayed off on
+community, as found. Nothing reached a model, so no spend.
+
+**Not yet run on a cluster.** Once hecaton promotes this and Argo CD rolls llm-guard: on each KubeCon cluster,
+`kubectl --context <cluster> -n agent exec -i deploy/guard-proxy -c proxy -- python3 - < verify/llm_guard_burst.py`
+should end `BURST GREEN` with the 3 CPU limit in place. The next run on #1172 runs it.

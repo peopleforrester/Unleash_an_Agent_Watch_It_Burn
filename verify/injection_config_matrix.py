@@ -3,8 +3,9 @@
 """Usage: python3 verify/injection_config_matrix.py
 
 Prints one block per scanner configuration: the verdict, risk score and scan time for each prompt. Run it pinned
-to one core (`OMP_NUM_THREADS=1 taskset -c 0 python3 verify/injection_config_matrix.py`) to approximate the
-llm-guard pod, which is limited to one CPU. Needs uv, and network on a cold host, like
+to one core (`OMP_NUM_THREADS=1 taskset -c 0 python3 verify/injection_config_matrix.py`) to approximate one scan
+in the llm-guard pod, which was limited to one CPU until #1172 raised it to three for the room's bursts
+(verify/llm_guard_burst.py measures those). Needs uv, and network on a cold host, like
 verify/test_injection_classifier.py, which is the gate; this only measures.
 """
 from __future__ import annotations

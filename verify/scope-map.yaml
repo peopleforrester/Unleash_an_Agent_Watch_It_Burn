@@ -5666,6 +5666,10 @@ reads:
     - verify/kubecon_probe.py
     - verify/stage_traces.py
     - verify/topic_cases.py
+  test_llm_guard_burst.py:
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - verify/llm_guard_burst.py
   test_llm_guard_image.py:
     - CLAUDE.md
     - backstage

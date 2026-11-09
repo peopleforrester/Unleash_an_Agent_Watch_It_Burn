@@ -259,7 +259,11 @@ spec:
             - name: AUTH_TOKEN
               valueFrom: { secretKeyRef: { name: llm-guard-auth, key: token } }
           securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
-          resources: { requests: { cpu: 250m, memory: 1Gi }, limits: { cpu: "1", memory: 3Gi } }
+          # 3 CPUs, not 1 (#1172): guard-proxy scans a prompt before its rate limits, so a room told to send again
+          # bursts at LLM Guard uncapped. At 1 CPU a burst of 50 long prompts took up to 13.1 s and one came back
+          # 408 past scan_prompt_timeout, a refusal under fail-closed; at 3 a burst of 100 took at most 8.3 s. The
+          # request stays 250m so no cluster's scheduling changes. verify/test_llm_guard_burst.py holds the floor.
+          resources: { requests: { cpu: 250m, memory: 1Gi }, limits: { cpu: "3", memory: 3Gi } }
           startupProbe: { httpGet: { path: /healthz, port: http }, failureThreshold: 30, periodSeconds: 10 }
           readinessProbe: { httpGet: { path: /healthz, port: http }, initialDelaySeconds: 15, periodSeconds: 10 }
           volumeMounts: [{ name: scanners, mountPath: /home/user/app/config, readOnly: true }]
