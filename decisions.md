@@ -46642,3 +46642,33 @@ and the Night Before step, which the run-of-show already has ("Check each challe
 
 No failure, so no issue is filed. Challenge 2, red on 2026-11-07, passes since #1109 judges each of its calls in its
 own chat.
+## 2026-11-09 · #1241 · run 19489 · A live test holds #1162's served copy: Argo CD's console roll and the Feedback href on attackme
+
+Run 19146's test review found no test for the live half of #1162's criterion: once promoted, the console ConfigMap
+rolls through Argo CD (#252) and the Feedback button on attackme.burritobot.co opens
+`https://feedback.burritobot.co/?source=burritobot`. The offline tests read and run only the committed event.js.
+No earlier draft existed (`verify/prior-drafts.sh 1241 origin/staging` printed NONE, and the issue had no comments).
+
+**The test.** `verify/test_audience_feedback_live.py` (`# SUITE: e2e`, so `run-e2e.sh` runs it; it needs
+COMMUNITY_CONTEXT, which that runner already requires, plus kubectl, node and the internet). On the community cluster
+it holds the `ai-layer` Application Synced and Healthy, the console Deployment's `web` volume on a content-hashed
+`console-src-<hash>` ConfigMap that Argo CD tracks for `ai-layer`, the rollout finished with every console pod on that
+ConfigMap, and its event.js equal to the committed one byte for byte. It then holds the served
+`https://attackme.burritobot.co/event.js` and `/` equal to that ConfigMap's event.js and burritbot.html, cuts the
+served page's own `(function init(){...})();` block, and runs it in node with the served event.js on the host
+attackme.burritobot.co, with no query (a phone from the QR) and with a cluster and user. Both times the Feedback href
+must be the form's URL exactly. A self-check first holds that with no event set the node stub leaves the page's own default,
+so the check can tell the two apart. Last, the form answers 200 and posts a hidden `source=burritobot`. Read-only:
+kubectl get and HTTPS GETs, nothing submitted.
+
+**Live, run on watch-it-burn-community (2026-11-09).** `COMMUNITY_CONTEXT=watch-it-burn-community python3
+verify/test_audience_feedback_live.py`: 21 checks, all PASS, exit 0. The cluster's `ai-layer` was Synced and Healthy
+at staging fd5b3629, the console pod `console-8dd799cc9-4drcc` mounted `console-src-985kgch4t9`, and the served
+event.js and page matched it and git. Mutations, each reverted: the served event.js rewritten to the old Sessionize URL
+in a scratch copy of the test failed the byte check and both Feedback href checks (exit 1); the committed `feedbackUrl`
+given an extra `&x=1` failed the committed-value check and the promoted check (exit 1); COMMUNITY_CONTEXT unset failed
+by name (exit 1).
+
+**Tests run.** The new test, as above. The test is live-only, which neither scoped runner selects, so
+`scope_tests.py write` added no map entry. The scoped Test command is left to hecaton's validation. No dependency was
+added.
