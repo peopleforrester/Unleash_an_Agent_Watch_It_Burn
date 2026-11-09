@@ -31,7 +31,8 @@ What it checks, in this order:
   as found    guard-input-off, the shipped Role, guardrails-off, then both clusters measured again and compared with
               what was read before anything ran.
 
-guard-agency-on and guard-input-on change the private cluster only (#1098), so the stop is checked on the admin bot.
+The stop is checked on the admin bot alone. Since #1132 guard-agency-on and guard-input-on switch the public cluster
+too, and run 18961 (#1127) checked HC-666 stopped on the public bot; its decisions.md entry has what it printed.
 Both clusters' guard lock (verify/guard_lease.py hold_switch) is held throughout, as kubecon_probe.py's admin run
 holds it. Every prompt carries the probe marker, so nothing lands in the feed the room sees. The filed tickets stay in
 each desk's memory, reachable only by their numbers; the desk has no way to remove one, and restarting fake-ticket

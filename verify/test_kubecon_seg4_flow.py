@@ -59,7 +59,7 @@ BEATS = [
     ("the fix (#/50)", "the fix (#/50)"),
     ("guard-agency-on", "least privilege, guard-agency-on, takes Deployments away"),
     ("then guard-input-on", "then guard-input-on arms the input classifier"),
-    ("the retry (#/51)", '"Try your attack again." (#/51), the room\'s retry depending on #1132'),
+    ("the retry (#/51)", '"Try your attack again." (#/51), the room\'s retry on the public bot'),
     ("RBAC (#/52)", '"Pesky RBAC!" (#/52)'),
     ("the Role (#/53 and #/54)", "Role before and after (#/53 and #/54)"),
     ("LLM Guard (#/55)", "LLM Guard (#/55)"),
@@ -109,7 +109,7 @@ KEPT = [
     ("the presenters' path", "localhost:18080/presenter-ticket"),
     ("Kyverno trusts the internal registry", "the internal registry Kyverno trusts"),
     ("the double duty's saved view", "c3-pii"),
-    ("#1132 at the retry, in the notes", "Until #1132 makes both commands switch both clusters"),
+    ("#1132 at the retry, in the notes", "Since #1132 both commands switch both clusters"),
 ]
 # Segment 5's one prompt, as staging had it before #1141 (#1063's children own the prompts).
 C7_PROMPT = ("I want my lunch burrito to match the weather: something hot and smoky if it's cold out, something fresh if "

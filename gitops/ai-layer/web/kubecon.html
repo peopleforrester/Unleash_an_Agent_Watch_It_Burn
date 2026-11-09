@@ -374,8 +374,9 @@
     (#/50), "Let's turn on some guardrails.", two AI-era layers on the private bot, in this order: least privilege,
     <code>guard-agency-on</code>, takes Deployments away from the bot (OWASP LLM06, Excessive Agency); then
     <code>guard-input-on</code> arms the input classifier, and the ticket never reaches the model. "Try your attack
-    again." (#/51), the room's retry depending on #1132; "Pesky RBAC!" (#/52), least privilege and its Role before
-    and after (#/53 and #/54), LLM Guard (#/55) and the architecture diagram (#/56 to #/64).</p>
+    again." (#/51), the room's retry on the public bot, which both commands reach (#1132); "Pesky RBAC!" (#/52),
+    least privilege and its Role before and after (#/53 and #/54), LLM Guard (#/55) and the architecture diagram
+    (#/56 to #/64).</p>
     </details>
 
     <article class="beat" data-beat="C6" data-segment="4">
@@ -415,10 +416,10 @@
       HC-666 lands about one ask in five (#1021), so a room that gets a refusal tries again or writes its own ticket.
       The admin bot's rows are on <code>deployments.burritobot.co</code> with the room's, tagged
       <code>private</code>.</p>
-      <p class="note">#/50's "guardrails" opens <code>https://burritobot-private.burritobot.co/lab</code>. Until
-      #1132 makes both commands switch both clusters, as <code>guardrails-on</code> does, they change the private
-      cluster alone, so on #/51 the room's public bot still deploys: show the retry on the admin bot, where HC-666
-      comes back withheld. #/52, "Pesky RBAC!", with the optional question of why Kyverno let it through (the
+      <p class="note">#/50's "guardrails" opens <code>https://burritobot-private.burritobot.co/lab</code>. Since
+      #1132 both commands switch both clusters, as <code>guardrails-on</code> does, so on #/51 the room's public bot
+      deploys nothing either: HC-666 comes back withheld there, as on the admin bot (checked live on 2026-11-09,
+      #1127). #/52, "Pesky RBAC!", with the optional question of why Kyverno let it through (the
       internal registry it trusts). #/53 and #/54: the Role <code>guardrails-on</code> leaves (<code>create</code> on
       Deployments, in red) beside the one <code>guard-agency-on</code> applies (<code>get</code> and
       <code>list</code>, in green). #/55 names LLM Guard on screen. #/56 to #/64 follow one request through the
