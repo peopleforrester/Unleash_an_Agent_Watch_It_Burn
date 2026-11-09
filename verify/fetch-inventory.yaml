@@ -763,6 +763,12 @@ sites:
     lines: 3
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_audience_feedback_live.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: lab-endpoint
+    target: the public bot's storefront (https://attackme.burritobot.co/ and /event.js) and the talk's feedback form (https://feedback.burritobot.co/?source=burritobot)
   verify/test_audience_path.py:
   - match: .
     lines: 2
