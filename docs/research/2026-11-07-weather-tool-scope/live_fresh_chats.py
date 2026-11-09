@@ -10,7 +10,7 @@ being off:
     . "$HECATON_CLUSTER_ENV"
     python3 verify/guard_lease.py hold --context watch-it-burn-community --profile accen-dev -- \\
         python3 docs/research/2026-11-07-weather-tool-scope/live_fresh_chats.py \\
-        --host attackme.burritobot.co --context watch-it-burn-community --out /tmp/fresh.jsonl \\
+        --host attackme.burritobot.co --context watch-it-burn-community --out "$TMPDIR/fresh.jsonl" \\
         --arm memory=30 --arm earlier=8
 
 THIS SPENDS REAL MONEY: about $0.008 a turn on Nova Pro, under guard-proxy's own cost cap.

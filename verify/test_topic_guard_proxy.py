@@ -17,6 +17,7 @@ python against this proxy. No cluster, no model.
 from __future__ import annotations
 
 import importlib.util
+import atexit
 import json
 import logging
 import os
@@ -24,6 +25,7 @@ import pathlib
 import subprocess
 import sys
 import tempfile
+import shutil
 import threading
 import urllib.error
 import urllib.request
@@ -196,6 +198,7 @@ def heredoc(name: str) -> str:
 
 
 work = pathlib.Path(tempfile.mkdtemp(prefix="topic-guard-"))
+atexit.register(shutil.rmtree, work, ignore_errors=True)
 (work / "bin").mkdir()
 for name in (".guardlib", "guard-topic-on", "guard-topic-off"):
     (work / name).write_text(heredoc(name))

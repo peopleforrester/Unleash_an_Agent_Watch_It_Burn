@@ -8,6 +8,7 @@
 # call. verify/no-cloud.sh is the guard run-tests.sh puts round every test; this checks it holds, on the same
 # no_cloud_run the runner calls, and that the runner calls it.
 set -uo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FLEET="${HERE}/../infra/terraform/fleet/fleet.sh"
 T="$(mktemp -d -t offline-no-cloud.XXXX)"; trap 'rm -rf "${T}"' EXIT

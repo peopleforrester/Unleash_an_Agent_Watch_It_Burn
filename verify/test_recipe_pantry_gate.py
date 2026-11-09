@@ -22,6 +22,7 @@ verify/test_recipe_pantry_gate_e2e.py runs the same calls over the real MCP tran
 """
 from __future__ import annotations
 
+import atexit
 import asyncio
 import base64
 import importlib.util
@@ -30,6 +31,7 @@ import pathlib
 import shlex
 import sys
 import tempfile
+import shutil
 import types
 
 import yaml
@@ -74,6 +76,7 @@ if SIGNATURE not in CARD:
 
 # A copy outside any "legacy" folder, so a command can reach it without naming the card.
 WORK = pathlib.Path(tempfile.mkdtemp(prefix="pantry-gate-"))
+atexit.register(shutil.rmtree, WORK, ignore_errors=True)
 (WORK / "notes.txt").write_text(CARD, encoding="utf-8")
 (WORK / "marketing.json").write_text(json.dumps({"q4_campaign": "Operation Midnight Munchies"}), encoding="utf-8")
 LEGACY = WORK / "config/legacy"

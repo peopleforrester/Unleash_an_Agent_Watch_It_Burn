@@ -22,6 +22,7 @@ Needs uv and the network to fetch mcp, and node. A missing tool or a failed fetc
 from __future__ import annotations
 
 import importlib.util
+import atexit
 import json
 import os
 import pathlib
@@ -141,6 +142,7 @@ for t in threading.enumerate():
 
 print("== a deploy_app tools/call over the real MCP transport takes the witch name from its request ==")
 data = tempfile.mkdtemp(prefix="deployments-witch-line-")
+atexit.register(shutil.rmtree, data, ignore_errors=True)
 # The two libraries images/workshop-mcp pins, at its versions: deploy_app reads a manifest with yaml.
 r = subprocess.run([*package_cache.run_cmd("mcp"), "python", "-I", "-c",
                     PROBE, str(AI), DESK,

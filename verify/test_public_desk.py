@@ -24,6 +24,7 @@ verify/test_bootstrap_chart_render.py builds the component with the pinned Helm 
 from __future__ import annotations
 
 import importlib.util
+import atexit
 import json
 import os
 import pathlib
@@ -31,6 +32,7 @@ import re
 import socket
 import sys
 import tempfile
+import shutil
 import threading
 import time
 import types
@@ -165,6 +167,7 @@ local.Handler.log_message = lambda self, *a: local_seen.append(self.path)
 LOCAL = serve(local.Server(("127.0.0.1", 0), local.Handler))
 
 tmp = pathlib.Path(tempfile.mkdtemp(prefix="desk-relay-1158-"))
+atexit.register(shutil.rmtree, tmp, ignore_errors=True)
 token_file = tmp / "token"
 relay = load("desk_relay_1158", COMPONENT / "desk_relay.py", {"DESK_REPORT_TOKEN_FILE": str(token_file)})
 os.environ["DESK_REPORT_TOKEN_FILE"] = str(token_file)

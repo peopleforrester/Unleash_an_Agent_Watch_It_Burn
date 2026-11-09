@@ -18,6 +18,7 @@
 #
 # Never prints a key. Only the last 6 characters, so two rows can be told apart.
 set -uo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 REGION="${AWS_REGION:-us-west-2}"
 PROFILE="${AWS_PROFILE:-accen-dev}"
 SITE="${DD_SITE:-datadoghq.com}"
@@ -29,6 +30,7 @@ if [[ ${#clusters[@]} -eq 0 ]]; then
 fi
 
 fail=0
+K=""; trap 'rm -f "${K}"' EXIT
 for c in "${clusters[@]}"; do
     K=$(mktemp)
     aws eks update-kubeconfig --kubeconfig "$K" --name "$c" --region "$REGION" --profile "$PROFILE" >/dev/null 2>&1

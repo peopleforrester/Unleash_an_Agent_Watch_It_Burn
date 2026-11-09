@@ -6006,6 +6006,12 @@ main() {
 
 # Sourced by verify/test_fleet_teardown_hooks.sh to exercise the functions with command shims.
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    trap 'rm -f "${FAIL_FILE}"' EXIT
+    # Every mktemp below (kubeconfigs, renders, attendee key CSVs) lands in one scratch directory of this run's own,
+    # under TMPDIR or the checkout's ignored tmp/, never the system's temp directory, which on netcup is RAM, and the
+    # directory goes when fleet.sh exits, success or failure (#1261). Sourced, fleet.sh leaves the caller's traps alone.
+    mkdir -p "${TMPDIR:-${REPO_ROOT}/tmp}"
+    FLEET_SCRATCH="$(mktemp -d "${TMPDIR:-${REPO_ROOT}/tmp}/fleet.XXXXXX")"
+    export TMPDIR="${FLEET_SCRATCH}"
+    trap 'rm -f "${FAIL_FILE}"; rm -rf "${FLEET_SCRATCH}"' EXIT
     main "$@"
 fi

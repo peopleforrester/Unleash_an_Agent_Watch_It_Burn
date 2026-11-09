@@ -17,6 +17,7 @@
 # Argo Synced+Healthy count, whether BurritoBot's pod is Ready, and the last trace the instructor Datadog
 # org saw from it (verify/last_trace.py). `fleet.sh serve-actions` posts it to the provisioning app.
 set -uo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "${HERE}/.." && pwd)"
 FLEET="${REPO}/infra/terraform/fleet/fleet.sh"

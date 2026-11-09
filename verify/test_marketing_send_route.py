@@ -15,6 +15,7 @@ test_check_inventory_ingredient.py loads it. No cluster, no model: the live repl
 from __future__ import annotations
 
 import importlib.util
+import atexit
 import pathlib
 import shlex
 import shutil
@@ -59,6 +60,7 @@ spec = importlib.util.spec_from_file_location("workshop_mcp_send_route", AI / "w
 server = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(server)
 server._DATA = tempfile.mkdtemp(prefix="send-route-")
+atexit.register(shutil.rmtree, server._DATA, ignore_errors=True)
 POSTS = pathlib.Path(server._DATA) / "marketing_posts.log"
 
 
@@ -133,6 +135,7 @@ curl = shutil.which("curl")
 if curl is None:
     sys.exit("FAILED: no curl on PATH; this test runs the prompt's curl form against a local file:// URL")
 work = pathlib.Path(tempfile.mkdtemp(prefix="send-route-curl-"))
+atexit.register(shutil.rmtree, work, ignore_errors=True)
 body = work / "marketing.json"
 body.write_text('{"q4_campaign": "x"}', encoding="utf-8")
 form = server.MARKETING_SEND.replace("/tmp/burrito-data/marketing.json", str(body))

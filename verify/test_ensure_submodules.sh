@@ -4,6 +4,7 @@
 # Since #1122 the checkout comes from a bare mirror in the host artifact cache (verify/git_mirror.py, which
 # test_git_mirror.py holds case by case); here the cache root is a scratch directory outside every worktree.
 set -euo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK="$(mktemp -d)"
 CACHE="$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import artifact_cache; print(artifact_cache.scratch_dir("ensure-submodules-test-"))' "${HERE}")"

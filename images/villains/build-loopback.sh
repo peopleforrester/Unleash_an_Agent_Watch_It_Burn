@@ -15,6 +15,7 @@
 # the pinned digest or the build stops before build.sh runs, and the wrapper sends JOKER_BASE there. Where the base
 # was read from is not part of a Joker's digest, so the build is byte for byte the one built on ghcr.io's copy.
 set -euo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 addr="${1:-}"
 [[ "${addr}" =~ ^127\.0\.0\.1:[0-9]+$ ]] || { echo "build-loopback.sh: give a loopback registry, 127.0.0.1:<port>; got '${addr}'" >&2; exit 1; }

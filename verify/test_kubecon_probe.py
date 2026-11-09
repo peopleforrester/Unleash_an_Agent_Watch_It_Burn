@@ -520,7 +520,7 @@ check("the gateway log parses to the tools it forwarded, in order, tools/list le
       kp.parse_gateway_tool_calls(GW_LOG) == ["get_weather", "read_internal_config"],
       str(kp.parse_gateway_tool_calls(GW_LOG)))
 gw_argv: list[list[str]] = []
-gw = kp.KubeconCluster("h", "ctx-admin", None, "/tmp/admin.kubeconfig", 5, runner=lambda argv, **kw: (
+gw = kp.KubeconCluster("h", "ctx-admin", None, "/fake/admin.kubeconfig", 5, runner=lambda argv, **kw: (
     gw_argv.append(argv), subprocess.CompletedProcess(argv, 0, stdout=GW_LOG, stderr=""))[1])
 got_gw = gw.gateway_tool_calls_since(dt.datetime(2026, 11, 6, 1, 18, 0, tzinfo=dt.timezone.utc))
 check("the gateway log is agentgateway-c7's, on the named context, from AUDIT_SKEW_S before the ask",
@@ -893,7 +893,7 @@ def runner(argv, **kw):
     return subprocess.CompletedProcess(argv, 0, stdout="{}", stderr="")
 
 
-c = kp.KubeconCluster(host, "ctx-admin", "accen-dev", "/tmp/admin.kubeconfig", 5, runner=runner)
+c = kp.KubeconCluster(host, "ctx-admin", "accen-dev", "/fake/admin.kubeconfig", 5, runner=runner)
 c.kubectl_rc("get", "pods")
 c.run_c3_fallback()
 kp._c2(kp.Probe(c, 0))
@@ -901,7 +901,7 @@ check("the C2 beat hands kubectl the C2 manifest on stdin",
       calls[2][0][3:] == kp.C2_CHECK and stdins[2] is not None and json.loads(stdins[2]) == kp.C2_MANIFEST)
 check("kubectl carries --context", calls[0][0][0] == "kubectl" and calls[0][0][1:3] == ["--context", "ctx-admin"])
 check("kubectl gets KUBECONFIG and AWS_PROFILE per command",
-      calls[0][1].get("KUBECONFIG") == "/tmp/admin.kubeconfig" and calls[0][1].get("AWS_PROFILE") == "accen-dev")
+      calls[0][1].get("KUBECONFIG") == "/fake/admin.kubeconfig" and calls[0][1].get("AWS_PROFILE") == "accen-dev")
 check("the C3 fallback gets CONTEXT", calls[1][1].get("CONTEXT") == "ctx-admin")
 try:
     kp.KubeconCluster(host, None, None, None, 5, runner=runner).kubectl_rc("get", "pods")
@@ -919,7 +919,7 @@ def logs_runner(argv, **kw):
     return subprocess.CompletedProcess(argv, 0, stdout=audit_log(READ_ROOM, DEPLOY_ROOM), stderr="")
 
 
-lc = kp.KubeconCluster("attackme.burritobot.co", "ctx-community", None, "/tmp/community.kubeconfig", 5,
+lc = kp.KubeconCluster("attackme.burritobot.co", "ctx-community", None, "/fake/community.kubeconfig", 5,
                        runner=logs_runner)
 got = lc.tool_calls_since(dt.datetime(2026, 11, 3, 18, 0, 0, tzinfo=dt.timezone.utc))
 check("the log is workshop-mcp's shim container, on the named context, from AUDIT_SKEW_S before the ask",

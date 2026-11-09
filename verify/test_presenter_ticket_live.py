@@ -112,7 +112,7 @@ class Bot(kp.KubeconCluster):
     desk, and the audit log it leaves. `mode` picks how it answers."""
 
     def __init__(self, mode: str = "reads", identity: str = ptl.BOT) -> None:
-        super().__init__(ptl.BOT, "ctx-community", "accen-dev", "/tmp/kc", 5, runner=DeskRunner())
+        super().__init__(ptl.BOT, "ctx-community", "accen-dev", "/fake/kc", 5, runner=DeskRunner())
         self.mode, self.identity, self.audit, self.asked = mode, identity, [], []
 
     def identity_host(self):
@@ -291,7 +291,7 @@ with tempfile.TemporaryDirectory() as tmp:
     os.environ["PATH"] = f"{tmp}{os.pathsep}{path}"
     try:
         os.environ["FAKE_PORT"] = str(server.server_address[1])
-        c = kp.KubeconCluster(ptl.BOT, "ctx-community", "accen-dev", "/tmp/kc", 5)
+        c = kp.KubeconCluster(ptl.BOT, "ctx-community", "accen-dev", "/fake/kc", 5)
         with ptl.port_forward(c, wait=10) as base:
             with urllib.request.urlopen(f"{base}/healthz", timeout=5) as r:
                 health = json.load(r)

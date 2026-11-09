@@ -6,6 +6,7 @@
 # reply tells the two apart; a 200 from /chat does not.
 # Usage: verify/c1-exfil-block.sh <host> <kube-context> [aws-profile]
 set -euo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 HOST="${1:?usage: $0 <host> <kube-context> [aws-profile]}"; CTX="${2:?}"; PROFILE="${3:-accen-dev}"
 URL="https://${HOST}.agenticburn.com"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -23,8 +23,9 @@
 #
 # lab_nopoller MUST be 0: a non-zero count means the focus-stealing terminal poller is back.
 set -uo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 c="$1"
-K=$(mktemp); AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig "$K" --name "$c" --region us-west-2 >/dev/null 2>&1
+K=$(mktemp); trap 'rm -f "$K"' EXIT; AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig "$K" --name "$c" --region us-west-2 >/dev/null 2>&1
 export KUBECONFIG=$K AWS_PROFILE=accen-dev
 kubectl config current-context 2>/dev/null | grep -q "$c" || { echo "$c CTX-MISMATCH"; exit 1; }
 f=""

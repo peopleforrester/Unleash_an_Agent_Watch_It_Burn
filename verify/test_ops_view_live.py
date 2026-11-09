@@ -7,6 +7,7 @@
 # `fleet.sh ops --json` the way a presenter does, so the token is resolved the normal way (railway login, the
 # secret store, or WIB_ADMIN_TOKEN) and the account and region are fleet.sh's explicit defaults, WIB_DEFAULT_ACCOUNT
 # and WIB_REGION. Every source is required: one that cannot be read is a failure with its reason printed.
+import atexit
 import json
 import os
 import pathlib
@@ -23,6 +24,7 @@ if shutil.which("aws") is None:
     sys.exit(1)
 
 page = pathlib.Path(tempfile.mkdtemp()) / "ops-view.html"
+atexit.register(shutil.rmtree, page.parent, ignore_errors=True)
 r = subprocess.run(["bash", str(FLEET), "ops", "--json"], capture_output=True, text=True, timeout=300,
                    env={**os.environ, "WIB_OPS_HTML": str(page)})
 if r.returncode == 1 and not r.stdout.strip():

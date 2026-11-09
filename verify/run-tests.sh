@@ -15,6 +15,10 @@
 # it, which is the same failure as a suite that runs nothing.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Scratch goes under TMPDIR, else the checkout's ignored tmp/, never the system's temp directory, which on netcup
+# is a tmpfs, so what a test leaves there is RAM (#1261). Every mktemp and Python tempfile below inherits it.
+export TMPDIR="${TMPDIR:-$(cd "${SCRIPT_DIR}/.." && pwd)/tmp}"
+mkdir -p "${TMPDIR}"
 
 bash "${SCRIPT_DIR}/ensure-submodules.sh"
 

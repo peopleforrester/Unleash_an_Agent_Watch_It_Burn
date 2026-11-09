@@ -15,11 +15,13 @@ from __future__ import annotations
 
 import http.server
 import importlib.util
+import atexit
 import json
 import pathlib
 import socket
 import sys
 import tempfile
+import shutil
 import threading
 import time
 import types
@@ -185,6 +187,7 @@ check("the reader posts to the desk's /cluster-read on TICKET_SITE_URL",
 
 # The pod's mounted ServiceAccount, as the kubelet writes it, and the stand-in API server in place of the real one.
 sa = pathlib.Path(tempfile.mkdtemp(prefix="room-reader-sa-"))
+atexit.register(shutil.rmtree, sa, ignore_errors=True)
 (sa / "token").write_text(TOKEN + "\n")
 (sa / "namespace").write_text("agent")
 mcp._SA, mcp._API, mcp._ctx = str(sa), API_URL, lambda: None   # plain HTTP here; the pod's TLS is _ctx's

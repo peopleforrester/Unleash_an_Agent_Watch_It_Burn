@@ -22,6 +22,7 @@
 # Nothing here falls back. No GITHUB_ENV, no origin, no staging there, or no common ancestor exits 1, naming which;
 # so does a commit in staging with no GH_TOKEN, no GITHUB_REPOSITORY, or an Actions API read that fails.
 set -euo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 
 [[ -n "${GITHUB_ENV:-}" ]] || { printf 'ci-base-sha: GITHUB_ENV is not set; nothing to write the base to\n' >&2; exit 1; }
 

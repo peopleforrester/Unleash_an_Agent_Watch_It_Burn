@@ -4,6 +4,7 @@
 #
 # Usage: verify/test_reset_bot.sh      (no cloud access)
 set -uo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FLEET="${HERE}/../infra/terraform/fleet/fleet.sh"
 ROS="${HERE}/../facilitation/kubecon-na-2026-run-of-show.md"

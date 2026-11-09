@@ -28,12 +28,14 @@ claim cut, so a check that could never fail shows up here.
 """
 from __future__ import annotations
 
+import atexit
 import os
 import pathlib
 import re
 import subprocess
 import sys
 import tempfile
+import shutil
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 ROS_REL = "facilitation/kubecon-na-2026-run-of-show.md"
@@ -143,6 +145,7 @@ check("the paragraph carries no em-dash", EM_DASH not in para_text, para_text)
 check("the paragraph carries no en-dash", EN_DASH not in para_text, para_text)
 
 tmp = pathlib.Path(tempfile.mkdtemp())
+atexit.register(shutil.rmtree, tmp, ignore_errors=True)
 repo = tmp / "r"
 env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
 env.update(HOME=str(tmp), GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL="/dev/null", GIT_AUTHOR_NAME="t",

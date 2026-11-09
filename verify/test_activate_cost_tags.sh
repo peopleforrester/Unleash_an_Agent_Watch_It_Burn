@@ -5,6 +5,7 @@
 # Usage: verify/test_activate_cost_tags.sh      (no cloud access; aws is a shim)
 # shellcheck disable=SC2016,SC2034  # check() evals its single-quoted condition; rc, from and help are read there
 set -uo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT="${HERE}/../teardown/activate-cost-tags.sh"
 REPORT="${HERE}/../teardown/cost-report.sh"

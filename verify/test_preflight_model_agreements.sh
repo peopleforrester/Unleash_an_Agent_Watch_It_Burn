@@ -14,6 +14,7 @@
 #
 # Usage: verify/test_preflight_model_agreements.sh      (no cloud access)
 set -uo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="${HERE}/../infra/terraform/fleet"
 REAL_TF="${HERE}/../infra/terraform/aws/cluster/main.tf"

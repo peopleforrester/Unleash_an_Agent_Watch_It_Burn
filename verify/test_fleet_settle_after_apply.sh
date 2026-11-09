@@ -10,6 +10,7 @@
 # What is run is fleet.sh's own `up <name>` with the bootstrap off; only the terraform under it is a shim, which
 # logs every call's arguments one per line and fails an apply or a settle when told to.
 set -uo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FLEET="${HERE}/../infra/terraform/fleet/fleet.sh"
 T="$(mktemp -d -t fleet-settle.XXXX)"; trap 'rm -rf "${T}"' EXIT

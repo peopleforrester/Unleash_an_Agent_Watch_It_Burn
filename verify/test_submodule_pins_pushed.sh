@@ -5,6 +5,7 @@
 # Usage: verify/test_submodule_pins_pushed.sh      (no network; the fixture remote is a local bare repo)
 # shellcheck disable=SC2016,SC2034  # check() evals its single-quoted condition; rc and local_sha are read there
 set -uo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CHECK="${HERE}/submodule-pins-pushed.sh"
 T="$(mktemp -d)"; trap 'rm -rf "${T}"' EXIT

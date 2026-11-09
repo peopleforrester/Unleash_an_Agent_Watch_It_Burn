@@ -13,13 +13,14 @@
 # demo cluster. Those student clusters are retired (#295): a presenter claims a pool cluster by email, so the
 # attendee pool is the only class that dual-ships, and the verifier asks fleet.sh's is_attendee_name.
 set -uo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IDENT="${HERE}/../infra/datadog-cluster-identity.sh"
 ORGS="${HERE}/../verify/datadog-orgs.sh"
 FLEET="${HERE}/../infra/terraform/fleet/fleet.sh"
 fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
-NC="$(mktemp -d)"
+NC="$(mktemp -d)"; trap 'rm -rf "${NC}"' EXIT
 # Offline means offline (#859): aws, kubectl, eksctl, terraform and helm are stubs that log the call and fail,
 # even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
 # shellcheck source=SCRIPTDIR/no-cloud.sh

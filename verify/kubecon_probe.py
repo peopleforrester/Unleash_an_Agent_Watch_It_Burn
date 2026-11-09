@@ -8,12 +8,12 @@
     # kubeconfig
     python3 verify/kubecon_probe.py community attackme.burritobot.co \\
         --context <community-context> --switch-context <private-context> \\
-        --kubeconfig /tmp/kubecon.kubeconfig --profile accen-dev
+        --kubeconfig "$TMPDIR/kubecon.kubeconfig" --profile accen-dev
 
     # the private cluster: needs its kube-context, flips the AI guards and, through its terminal's guardrails-on,
     # the four Kubernetes guardrails on BOTH KubeCon clusters (#774); ends with guards-off and guardrails-off
     python3 verify/kubecon_probe.py admin burritobot-private.burritobot.co \\
-        --context <admin-context> --kubeconfig /tmp/kubecon.kubeconfig --profile accen-dev
+        --context <admin-context> --kubeconfig "$TMPDIR/kubecon.kubeconfig" --profile accen-dev
 
 The beats, in the order facilitation/kubecon-na-2026-run-of-show.md shows them. The stage numbers the
 challenges Challenge 1 to 4 (#687); the beat keys keep the internal ids: Challenge 1 is C5, Challenge 2 (the

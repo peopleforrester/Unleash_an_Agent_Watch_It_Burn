@@ -392,7 +392,7 @@ INSTALL = re.compile(r'\buv\s+run\b|"uv",\s*"run"|"--with",|\bpip3?\s+install\b|
                      r'|\byarn\s+(?:add|install)\b|\bpnpm\b')
 MUST_CATCH = [
     'subprocess.run([str(venv / "bin" / "pip"), "install", "--quiet", f"{spec[\'package\']}=={spec[\'version\']}"],',
-    'python3 -m venv /tmp/qr && /tmp/qr/bin/pip install segno==1.6.6',
+    'python3 -m venv "$TMPDIR/qr" && $TMPDIR/qr/bin/pip install segno==1.6.6',
     '[sys.executable, "-m", "pip", "install", "checkov==3.3.30"]',
     'uv run --with checkov==3.3.30 checkov', 'uvx checkov', 'npm ci', 'npx foo', 'yarn install',
 ]

@@ -179,7 +179,7 @@ class DeskRunner:
 
 
 runner = DeskRunner()
-desk = kp.KubeconCluster(kp.COMMUNITY_HOSTS[0], "ctx-community", "accen-dev", "/tmp/kc", 5, runner=runner)
+desk = kp.KubeconCluster(kp.COMMUNITY_HOSTS[0], "ctx-community", "accen-dev", "/fake/kc", 5, runner=runner)
 since, _, _ = stock()
 slept: list[float] = []
 
@@ -291,9 +291,9 @@ check("an admin run with its desk set asks the row off that desk, not its own cl
       admin.forgets == [] and [n for n, _ in peer.forgets] == [[kp.ROOM_JOKER]], f"{admin.forgets} {peer.forgets}")
 
 lease = types.SimpleNamespace(contexts=["ctx-community", "ctx-private"])
-pd = kp.peer_desk(lease, "ctx-private", "accen-dev", "/tmp/kc", 30)
+pd = kp.peer_desk(lease, "ctx-private", "accen-dev", "/fake/kc", 30)
 check("peer_desk is the other context the guardrails switch's lock was taken on, on the one desk's host",
-      pd is not None and pd.context == "ctx-community" and pd.host in kp.COMMUNITY_HOSTS and pd.kubeconfig == "/tmp/kc"
+      pd is not None and pd.context == "ctx-community" and pd.host in kp.COMMUNITY_HOSTS and pd.kubeconfig == "/fake/kc"
       and pd.profile == "accen-dev", str(pd and vars(pd)))
 check("and None when the cluster is not linked (the lock was taken on it alone) or the lease names no contexts",
       kp.peer_desk(types.SimpleNamespace(contexts=["ctx-private"]), "ctx-private", None, None, 30) is None
@@ -312,12 +312,12 @@ kp.guard_lease.hold_switch = fake_switch
 kp.Probe.run = lambda self, beats, final=None: seen.update(desk=self.desk) or []
 kp.KubeconCluster.get_json = lambda self, path: None
 try:
-    rc = kp.main(["admin", "burritobot-private.burritobot.co", "--context", "ctx-private", "--kubeconfig", "/tmp/kc"])
+    rc = kp.main(["admin", "burritobot-private.burritobot.co", "--context", "ctx-private", "--kubeconfig", "/fake/kc"])
 finally:
     kp.guard_lease.hold_switch, kp.Probe.run, kp.KubeconCluster.get_json = real
 check("the admin probe's main hands its beats the guardrails peer as the desk",
       rc == 0 and seen.get("desk") is not None and seen["desk"].context == "ctx-community"
-      and seen["desk"].kubeconfig == "/tmp/kc", str(seen))
+      and seen["desk"].kubeconfig == "/fake/kc", str(seen))
 
 
 print("== verify/one_desk_live.py, #1158's desk check, cleans up on every path out ==")

@@ -1,11 +1,12 @@
 # ABOUTME: Second harvest pass for the perishable cluster-local evidence: Kyverno PolicyReports, Falco and
 # ABOUTME: KubeArmor alerts, Kubernetes events and pod health. All of it dies with the clusters at teardown.
 from __future__ import annotations
-import os, json, os, subprocess, pathlib, concurrent.futures, re
+import os, json, os, subprocess, pathlib, concurrent.futures, re, sys
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 OUT = REPO / ".harvest" / os.environ.get("WIB_EVENT", "devopsdays-portland")
-SCRATCH = pathlib.Path("/tmp/wib-harvest")
+SCRATCH = pathlib.Path(os.environ.get("WIB_SCRATCH") or sys.exit(
+    "WIB_SCRATCH is not set: run scripts/harvest/run.sh, which makes the scratch directory and removes it (#1261)"))
 ACCOUNTS = ["accen-dev", "aws1-student31", "aws1-student32", "aws1-student33", "aws1-student34"]
 REGION = "us-west-2"
 

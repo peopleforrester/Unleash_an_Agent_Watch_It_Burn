@@ -17,6 +17,7 @@ test seems to be left out. Exit 1 names each miss.
 """
 from __future__ import annotations
 
+import atexit
 import ctypes
 import os
 import pathlib
@@ -24,6 +25,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import shutil
 import threading
 import time
 
@@ -127,6 +129,7 @@ def main(argv: list[str]) -> int:
     watch = Watch(watched_dirs(tree))
     misses: dict[str, list[str]] = {}
     tmp = pathlib.Path(tempfile.mkdtemp(prefix="scope-audit-"))
+    atexit.register(shutil.rmtree, tmp, ignore_errors=True)
     stubs = ["aws", "eksctl"] if suite == "tools" else []
     base_env = {k: v for k, v in os.environ.items() if k != "HECATON_BASE_SHA"}
     start = time.time()

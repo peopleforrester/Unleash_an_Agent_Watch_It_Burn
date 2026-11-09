@@ -148,6 +148,37 @@ with tpc.scratch("tf-plugin-cache-test-") as td:
           and r.stderr.startswith("TERRAFORM PROVIDER CACHE UNUSABLE: ") and r.stderr.count("\n") == 1,
           r.stdout + r.stderr)
 
+    print("== the plugin cache is one named directory, with its size stated and a command that clears it (#1261) ==")
+    sized = {"PATH": os.environ["PATH"], "WIB_ARTIFACT_CACHE": str(out / "sized")}
+    pc = tpc.ensure(sized)
+    (pc / "registry.terraform.io/hashicorp/x/1.0.0/linux_amd64").mkdir(parents=True)
+    (pc / "registry.terraform.io/hashicorp/x/1.0.0/linux_amd64/terraform-provider-x").write_bytes(b"p" * 1000)
+    (pc / "stray").write_bytes(b"s" * 24)
+    (pc / "link").symlink_to(pc / "stray")
+    r = subprocess.run([sys.executable, str(HERE / "tf_plugin_cache.py"), "size"], capture_output=True, text=True,
+                       env=sized)
+    check("`size` prints the cache and the bytes its files hold, a symlink counted as itself",
+          r.returncode == 0 and r.stdout == f"{pc}: {1024 + len(str(pc / 'stray'))} bytes\n", r.stdout + r.stderr)
+    import fcntl
+    with open(f"{pc}.lock", "a") as held:
+        fcntl.flock(held, fcntl.LOCK_EX)
+        r = subprocess.run([sys.executable, str(HERE / "tf_plugin_cache.py"), "clear"], capture_output=True,
+                           text=True, env=sized)
+    check("`clear` while a run holds the lock fails, naming it, and removes nothing",
+          r.returncode == 1 and f"{pc}.lock is held" in r.stderr and (pc / "stray").exists()
+          and (pc / "registry.terraform.io").is_dir(), r.stdout + r.stderr)
+    r = subprocess.run([sys.executable, str(HERE / "tf_plugin_cache.py"), "clear"], capture_output=True, text=True,
+                       env=sized)
+    check("`clear` empties the cache and keeps the directory, the bytes freed printed",
+          r.returncode == 0 and pc.is_dir() and not any(pc.iterdir())
+          and r.stdout == f"{pc}: cleared, {1024 + len(str(pc / 'stray'))} bytes freed\n", r.stdout + r.stderr)
+    check("the module states the cache's measured size and names both commands",
+          "1,744,861,827 bytes on netcup" in (HERE / "tf_plugin_cache.py").read_text()
+          and "tf_plugin_cache.py size" in (HERE / "tf_plugin_cache.py").read_text()
+          and "tf_plugin_cache.py clear" in (HERE / "tf_plugin_cache.py").read_text())
+    check("nothing under verify/ makes a wib-tf-plugins-* directory any more",
+          not [p.name for p in HERE.glob("*.py") if 'prefix="wib-tf' + '-plugins' in p.read_text()])
+
     print("== a cold fill looks up and fetches each locked zip once, through the artifact cache ==")
     root = out / "artifacts"
     a, b = locks(out / "locks", a=LOCK_A, b=LOCK_B)

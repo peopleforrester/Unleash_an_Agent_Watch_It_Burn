@@ -2,6 +2,7 @@
 # ABOUTME: One-command roster-cluster setup: bootstrap an already-provisioned community or admin cluster
 # ABOUTME: with the profile its role gets, and arm it. The role, profile and account come from fleet.sh.
 set -euo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "${SCRIPT_DIR}/.." && pwd)"

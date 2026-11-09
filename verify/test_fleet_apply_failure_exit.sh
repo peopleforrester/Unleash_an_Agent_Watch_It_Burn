@@ -11,6 +11,7 @@
 # Unlike test_fleet_exit_codes.sh, nothing in the build itself is stubbed here: run_pool, up_one and the
 # failure ledger are fleet.sh's own, and only the terraform binary underneath them fails.
 set -uo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FLEET="${HERE}/../infra/terraform/fleet/fleet.sh"
 T="$(mktemp -d -t fleet-apply-fail.XXXX)"; trap 'rm -rf "${T}"' EXIT

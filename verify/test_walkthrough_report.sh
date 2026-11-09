@@ -4,6 +4,7 @@
 #
 # Usage: verify/test_walkthrough_report.sh      (no cloud access; curl, aws and kubectl are shims)
 set -uo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 T="$(mktemp -d)"; trap 'rm -rf "${T}"' EXIT
 SHIM="${T}/bin"; mkdir -p "${SHIM}" "${T}/states"

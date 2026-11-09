@@ -4,6 +4,7 @@
 #
 # Usage: verify/test_admin_actions.sh      (no cloud access; kubectl, aws and curl are shims)
 set -uo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FLEET="${HERE}/../infra/terraform/fleet/fleet.sh"
 T="$(mktemp -d)"; trap 'rm -rf "${T}"' EXIT

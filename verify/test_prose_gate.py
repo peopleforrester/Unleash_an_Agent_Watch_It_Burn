@@ -7,11 +7,13 @@ files it reads, the base it reads them at, the "grew over the whole change" rule
 """
 from __future__ import annotations
 
+import atexit
 import os
 import pathlib
 import subprocess
 import sys
 import tempfile
+import shutil
 
 HERE = pathlib.Path(__file__).resolve().parent
 SCRIPT = HERE / "prose_gate.py"
@@ -29,6 +31,7 @@ def check(name: str, cond: bool, detail: str = "") -> None:
 
 
 tmp = pathlib.Path(tempfile.mkdtemp())
+atexit.register(shutil.rmtree, tmp, ignore_errors=True)
 repo = tmp / "r"
 env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
 env.update(HOME=str(tmp), GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL="/dev/null", GIT_AUTHOR_NAME="t",

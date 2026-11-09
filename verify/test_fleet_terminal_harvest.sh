@@ -5,6 +5,7 @@
 #
 # Usage: verify/test_fleet_terminal_harvest.sh      (no cloud access; aws, kubectl, curl, labctl and the harvester are shims)
 set -uo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FLEET="${HERE}/../infra/terraform/fleet/fleet.sh"
 T="$(mktemp -d)"; trap 'rm -rf "${T}"' EXIT
