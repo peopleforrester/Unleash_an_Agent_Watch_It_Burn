@@ -42625,3 +42625,15 @@ afterwards, both clusters were at the start state, and there was no probe Deploy
 
 **Not yet run on a cluster.** Nothing this issue needs: both full runs above ran the merged beats from this branch,
 and the clusters take nothing from this change: the probe is a script the presenters run against them.
+
+## 2026-11-09 · #1129 · run 19131 · Run 18915's draft carried onto staging, with its three slide-hash citations reworded
+
+Run 18915's four commits (branch `agent/1129-18872`) did not land: the `tests` gate failed on
+`verify/test_deck_shift_slide_citations.py` (#1099), which holds that no file under `facilitation/` or `verify/` cites
+a hash of 43 or more outside segments 4 and 5 and their named readers. The draft cited the fixes slide by its hash in
+three places outside them: the run-of-show's Night Before step, a comment in `verify/kubecon_probe.py` and a check name
+in `verify/test_kubecon_probe.py`. This run cherry-picked the four commits onto staging 1c7f7b49 (two edits in place
+and a decisions.md append, as `verify/draft-drift.sh` named) and reworded those three to say "as segment 4 runs them",
+which is where the run-of-show's segments table places that slide. Nothing else in the draft changed. Both deck-shift
+checks that failed now pass. No live check: the change is a comment, a check name and a run-of-show line, and run
+18915's two full probe runs above stand for the beats.

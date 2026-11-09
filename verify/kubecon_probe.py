@@ -1948,7 +1948,7 @@ COMMUNITY: list[Beat] = [
     Beat("armed", "3", "Armed here too: RBAC scoped, Kyverno Deny, KubeArmor Block, egress locked", _armed),
     Beat("c6-lands", "4", f"Challenge 3: {ROOM_TICKET_ID} lands {ROOM_JOKER} with Kyverno on (a trusted registry)",
          _c6(judge_joker_lands), calls=1, stage=(PLAY, "Challenge 3")),
-    # Segment 4's two fixes, as the stage runs them on #/50 (#1129): each in the private cluster's terminal, which
+    # Segment 4's two fixes, as the stage runs them in segment 4 (#1129): each in the private cluster's terminal, which
     # switches this cluster too since #1132, and each read back here, so the room's Challenge 4 attempt meets them.
     Beat("guard-agency-on", "4", f"guard-agency-on (private terminal): {ROOM_JOKER} Forbidden here by RBAC",
          _terminal_guard("guard-agency-on", _agency_here), switch="guard-agency-on"),

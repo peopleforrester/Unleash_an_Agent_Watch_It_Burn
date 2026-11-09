@@ -2231,7 +2231,7 @@ is merely slow rather than rebuilding:
     guardrails on both clusters; then Challenge 3's HC-666 ask landing
     `joker-agatha-the-banshee` with Kyverno at Deny, since its image is the internal
     registry's (the probe deletes it again); then `guard-agency-on` and
-    `guard-input-on`, each run in the private terminal as `#/50` runs them and
+    `guard-input-on`, each run in the private terminal as segment 4 runs them and
     reaching the public bot since #1132, and each read back on the community
     cluster (the Joker's dry run as `workshop-mcp` Forbidden, both input stages
     on); then Challenge 4's `/kubecon` weather ask sent once to the public bot with

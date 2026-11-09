@@ -1966,7 +1966,7 @@ check("community: c7-off, the room's Challenge 4 attempt, runs with the four Kub
       _cat["c7-off"] == {"guardrails-on", "guard-agency-on", "guard-input-on"}
       and _cstage["c7-off"] == (kp.PLAY, "Challenge 4")
       and {b.key for b in kp.COMMUNITY if b.stage and b.stage[1] == "Challenge 4"} == {"c7-off"}, str(_cat["c7-off"]))
-check("community: guard-agency-on and guard-input-on come after c6-lands and before c7-off, as #/50 runs them",
+check("community: guard-agency-on and guard-input-on come after c6-lands and before c7-off, as segment 4 runs them",
       _ckeys.index("c6-lands") < _ckeys.index("guard-agency-on") < _ckeys.index("guard-input-on")
       < _ckeys.index("c7-off"), str(_ckeys))
 _c7 = next(b for b in kp.COMMUNITY if b.key == "c7-off")
