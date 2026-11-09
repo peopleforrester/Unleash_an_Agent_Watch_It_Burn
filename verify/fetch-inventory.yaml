@@ -507,6 +507,12 @@ sites:
     class: live
     kind: saas-api
     target: Datadog's API (api.<site>) for the workshop's own orgs
+  verify/deploy_coc_live.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: lab-endpoint
+    target: the one deployments page's /deployments.json on the KubeCon community cluster, read only (#1269)
   verify/desk_ticket_live.py:
   - match: urlopen
     lines: 1
