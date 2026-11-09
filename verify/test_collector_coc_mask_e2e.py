@@ -12,8 +12,10 @@ attendee run the same list, so it runs once for both, and burn's, with transform
 Three spans go in, shaped as guard-proxy's chat span, kagent's model call and kagent's tool call:
 
   - the chat span's prompt (gen_ai.input.messages) and a gen_ai.input.messages span-event attribute carry
-    coc_mask_cases.term_cases(), each spelling of a term the RE2 form reads; they come out masked, as Python's re
-    masks them, and session.id, which is not conversation, holding a term comes out whole;
+    coc_mask_cases.term_cases(), each spelling of a term the RE2 form reads, one per line, JSON-encoded as guard-proxy
+    writes it (\n and \uXXXX escapes right before a term); the model call's prompt carries them as kagent writes it
+    (UTF-8). All come out masked, as Python's re masks them, and session.id, which is not conversation, holding a
+    term comes out whole;
   - the model call's reply (gen_ai.output.messages) carries HC-666's ticket, its injection included, and comes out
     unchanged, as does the tool call's result: read_support_ticket's reply on gcp.vertex.agent.tool_response and its
     gen_ai.tool.call.result copy;
@@ -71,8 +73,9 @@ def kv(key: str, value: str) -> dict:
     return {"key": key, "value": {"stringValue": value}}
 
 
-def messages(role: str, text: str) -> str:
-    return json.dumps([{"role": role, "parts": [{"type": "text", "content": text}]}])
+def messages(role: str, text: str, ascii_only: bool = True) -> str:
+    """guard-proxy's envelope: json.dumps escapes every non-ASCII character (ascii_only); kagent's Go keeps UTF-8."""
+    return json.dumps([{"role": role, "parts": [{"type": "text", "content": text}]}], ensure_ascii=ascii_only)
 
 
 CASES = term_cases()
@@ -98,6 +101,7 @@ SPANS = {
          "name": "generate_content us.amazon.nova-pro-v1:0", "kind": 3,
          "startTimeUnixNano": "1730000000100000000", "endTimeUnixNano": "1730000000900000000",
          "attributes": [kv("gen_ai.operation.name", "generate_content"),
+                        kv("gen_ai.input.messages", messages("user", PROMPT, ascii_only=False)),
                         kv("gen_ai.output.messages", messages("assistant", TICKET))]},
         {"traceId": TRACE, "spanId": "aee19b7ec3c1b173", "parentSpanId": "aee19b7ec3c1b172",
          "name": "execute_tool read_support_ticket", "kind": 1,
@@ -198,6 +202,9 @@ for profile in ("instructor", "burn"):
     event = attrs(next(iter(got.get("chat", {}).get("events", [])), {}))
     check(f"{profile}: the span event's messages come out masked",
           event.get("gen_ai.input.messages") == messages("user", PROMPT_MASKED), str(event))
+    check(f"{profile}: the model call's prompt, JSON in UTF-8 as kagent writes it, comes out masked",
+          model.get("gen_ai.input.messages") == messages("user", PROMPT_MASKED, ascii_only=False),
+          str(model.get("gen_ai.input.messages")))
     check(f"{profile}: the model's reply carrying HC-666's ticket is unchanged",
           model.get("gen_ai.output.messages") == messages("assistant", TICKET), str(model.get("gen_ai.output.messages")))
     check(f"{profile}: the processors before the mask still ran (gen_ai.provider.name stamped)",

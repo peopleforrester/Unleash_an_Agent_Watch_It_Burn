@@ -79,10 +79,21 @@ def portable_pattern(terms: list[str] | None = None) -> str:
     and a replacement keeps them ("$1[redacted]$3"; "$$1[redacted]$$3" in a collector config). An edge is consumed,
     so two terms one separator apart need the replacement applied twice. RE2 is what OTTL's replace_all_patterns
     (the collector) and CEL's matches() (a ValidatingAdmissionPolicy) run; neither can fold the text first, so
-    zero-width characters, look-alike letters and accents get past this form."""
+    zero-width characters, look-alike letters and accents get past this form.
+
+    The collector reads JSON (#1277): gen_ai.input.messages and its kin are JSON strings, so a newline before a term is
+    the two characters `\\n`, and guard-proxy's json.dumps writes every non-ASCII character as `\\uXXXX`. A leading
+    edge therefore also takes `\\n`, `\\r`, `\\t` or a `\\uXXXX` escape (a curly quote or an emoji before the term),
+    and a non-ASCII letter of a term also matches as its escape. None of these occurs in text that is not
+    JSON-encoded, so the form still agrees with the folded floor there."""
     terms = corpus.terms("proposed") if terms is None else terms
     alts = "|".join(_term(t) for t in sorted(terms, key=len, reverse=True))
-    return r"(?i)(^|[^a-z0-9])((?:" + alts + r")s?)($|[^a-z0-9])"
+    for ch in sorted({c for c in alts if not c.isascii()}):
+        if alts.count(ch) != alts.count(f"[{ch}]"):
+            raise ValueError(f"U+{ord(ch):04X} sits in a class with other letters; its JSON escape needs that class split")
+        alts = alts.replace(f"[{ch}]", f"(?:{ch}|\\\\u{ord(ch):04x})")
+    hexd = "[0-9a-f]" * 4  # not {4}: no brace reaches the collector's Helm-templated config
+    return r"(?i)(^|[^a-z0-9]|\\[nrt]|\\u" + hexd + r")((?:" + alts + r")s?)($|[^a-z0-9])"
 
 
 def portable_mask(text: str, pattern: re.Pattern, with_: str = "[redacted]") -> str:
