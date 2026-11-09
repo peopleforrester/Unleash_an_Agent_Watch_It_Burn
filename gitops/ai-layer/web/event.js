@@ -5,9 +5,9 @@
 // the 2-hour workshop: the storefront's Feedback button then keeps its built-in /quick form on
 // feedback.burritobot.co and carries the student's cluster and user, as #364 and #383 require.
 //
-// When feedbackUrl is set, the button goes there VERBATIM. No cluster or user is appended, because the
-// destination is a third party (the conference's session survey), not our feedback app, and an
-// attendee's email has no business in someone else's query string.
+// When feedbackUrl is set, the button goes there VERBATIM. No cluster or user is appended: a talk's room
+// has no cluster or user of its own, the event's form is told apart by its own ?source=, and an
+// attendee's email belongs in the form's optional email box, typed by them, not in a query string.
 //
 // Fresh clusters pick this up at provision. The console ConfigMap carries a content hash, so Argo CD
 // rolls the console pod on a change; no manual pod delete (#252).
@@ -21,9 +21,10 @@ window.WIB_EVENT = {
   // The community cluster: the wide-open bot the room attacks in segment 2.
   // burritobot.co is the displayed domain (#651); attackme.agenticburn.com stays served as its twin.
   publicUrl: "https://attackme.burritobot.co/",
-  // The session survey, recorded as the answer to question 147 (BurritoBot repo #80). Rating there is
-  // mobile-only and opens near the session, so a person confirms it shows this talk once it does.
-  feedbackUrl: "https://kubecon-cloudnativecon-north-america-2026.sessionize.com/session/1249553",
+  // The talk's own short form on our feedback app (EVENT_ID kubecon-na-2026, feedback-agenticburn 44060ab;
+  // Michael 2026-11-08, #1162). source=burritobot tells the storefront's responses from the deck QR's
+  // source=deck. Its thanks page sends people on to rate session 1249553 on Sessionize.
+  feedbackUrl: "https://feedback.burritobot.co/?source=burritobot",
   // Hide the storefront's Terminal button on publicUrl's host (#645). The room attacks from phones and
   // the presenters keep their terminal on the private bot. Set false for the 2-hour workshop.
   hideTerminalOnPublic: true,
