@@ -36,11 +36,13 @@ def declared(gid: str) -> dict:
 
 # Each span proxy.py opens: the variable its attributes are set on, its name and kind, and the group that is its
 # contract. _sp is self._server_span, read back in _send and _stamp; _root_span is trace.get_current_span() inside
-# the /chat handler, which runs under do_POST's server span, so it is that span too.
+# the /chat handler, which runs under do_POST's server span, so it is that span too. root is the same read in
+# _refuse_for_conduct, which the /chat handler calls (guard-proxy 48cc2ca, #1288).
 SPANS = {
     "server_span": ("span.witb.guard_proxy.http", r'f"POST \{self\.path\}"', "SERVER"),
     "_sp": ("span.witb.guard_proxy.http", None, None),
     "_root_span": ("span.witb.guard_proxy.http", None, None),
+    "root": ("span.witb.guard_proxy.http", None, None),
     "san_span": ("span.witb.guard_proxy.sanitize", r'"sanitize"', "INTERNAL"),
     "client_span": ("span.witb.guard_proxy.egress", r'"agent\.forward"', "CLIENT"),
     "chat_span": ("span.witb.guard_proxy.chat", r'"chat"', "INTERNAL"),
@@ -49,6 +51,16 @@ SPANS = {
 print("== proxy.py's span variables are the ones this test maps to groups ==")
 calls = re.findall(r'\b([A-Za-z_]\w*)\.set_attribute\("([^"]+)"', PROXY)
 check("proxy.py sets span attributes", bool(calls))
+# A loop over mapped span variables sets each attribute on every span it names: 48cc2ca's _refuse_for_conduct runs
+# `for span in (root, chat_span):`. Each such call is counted once per span in the tuple. A loop variable is only
+# expanded when every name in its tuple is mapped, and a loop name bound to two different tuples is left unmapped.
+loops: dict[str, set[tuple[str, ...]]] = {}
+for var, members in re.findall(r'\bfor ([A-Za-z_]\w*) in \(([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)+)\s*,?\):', PROXY):
+    loops.setdefault(var, set()).add(tuple(m.strip() for m in members.split(",")))
+over = {v: t.pop() for v, t in loops.items() if len(t) == 1 and v not in SPANS and set(next(iter(t))) <= set(SPANS)}
+calls = [(m, key) for v, key in calls for m in over.get(v, (v,))]
+check("_refuse_for_conduct's loop sets its attributes on root and chat_span",
+      over.get("span") == ("root", "chat_span") and "root = trace.get_current_span()" in PROXY, str(over))
 unmapped = sorted({v for v, _ in calls} - set(SPANS))
 check("every span variable proxy.py sets a literal attribute on is mapped to a group", not unmapped, str(unmapped))
 check("_sp is the server span, read back from self._server_span",
