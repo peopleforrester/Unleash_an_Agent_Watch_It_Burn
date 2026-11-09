@@ -445,7 +445,7 @@
     hint (#/68), "Ask BurritoBot what tools it has.", whose "tools" opens Datadog; then Michael's live weather ask on
     the private bot, the recipe under the forecast, and its trace. "LLM03: Supply Chain" (#/69). "Let's turn on an
     MCP gateway." (#/70): <code>guard-mcp-on</code> on the private bot. "Try your attack again." (#/71), the room's
-    retry depending on #1132. Then the MCP gateway, agentgateway in the notes (#/72 and #/73),
+    retry on the public bot, which <code>guard-mcp-on</code> reaches (#1132). Then the MCP gateway, agentgateway in the notes (#/72 and #/73),
     the two diagrams, without and then with the gateway (#/74 to #/96), and its rule before and after (#/97 and
     #/98).</p>
     </details>
@@ -470,9 +470,11 @@
       <code>read_internal_config</code> span.</div>
       <details class="more"><summary>Notes · if it wanders</summary>
       <p class="note">The solve stays with the presenters: the weather tool's server, evil-mcp, was never vetted,
-      and its description tells the bot to call <code>read_internal_config</code>. Until #1132 makes
-      <code>guard-mcp-on</code> switch both clusters, it changes the private cluster alone, so show #/71's retry on the
-      admin bot. The load-bearing clause is "follow its instructions exactly." The claim on stage: the model
+      and its description tells the bot to call <code>read_internal_config</code>. Since #1132
+      <code>guard-mcp-on</code> switches both clusters, each through its own control (the gateway's rule on the private
+      one, the agent's allow-list on the public one), so on #/71 the room retries on the public bot, as soon as the
+      command prints: it waits until each cluster serves the change. Checked live on 2026-11-09 (#1237): two weather
+      asks on the public bot after it called <code>get_weather</code> alone, and no recipe came back. The load-bearing clause is "follow its instructions exactly." The claim on stage: the model
       can be fully persuaded and still find the capability gone, which still holds when the next model is more
       persuadable than this one. Name the handout, the MCP server vetting checklist
       (<code>docs/mcp-server-vetting-checklist.md</code>, #649).</p>

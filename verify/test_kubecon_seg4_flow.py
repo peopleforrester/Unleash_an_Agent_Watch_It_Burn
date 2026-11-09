@@ -77,7 +77,7 @@ BEATS5 = [
     ("the attack and its trace", "Michael's live weather ask on the private bot"),
     ("LLM03 (#/69)", '"LLM03: Supply Chain" (#/69)'),
     ("guard-mcp-on (#/70)", "(#/70): guard-mcp-on"),
-    ("the retry (#/71)", '"Try your attack again." (#/71), the room\'s retry depending on #1132'),
+    ("the retry (#/71)", '"Try your attack again." (#/71), the room\'s retry on the public bot, which guard-mcp-on reaches'),
     ("the gateway (#/72 and #/73)", "agentgateway in the notes (#/72 and #/73)"),
     ("the diagrams (#/74 to #/96)", "without and then with the gateway (#/74 to #/96)"),
     ("the rule (#/97 and #/98)", "its rule before and after (#/97 and #/98)"),
@@ -231,7 +231,8 @@ def problems(page: str, ros: str) -> dict[str, list[str]]:
         f"{label}: {p!r}" for label, p in KEPT if p not in seg]
     out["segment 5 drops \"The setup\" and names #1132 at #/71's retry"] = (
         (["The setup"] if "The setup" in seg5 else [])
-        + ([] if "Until #1132 makes guard-mcp-on switch both clusters" in seg5 else ["no #1132 in the C7 notes"]))
+        + ([] if "so on #/71 the room retries on the public bot" in seg5
+           and "Since #1132 guard-mcp-on switches both clusters" in seg5 else ["no #1132 in the C7 notes"]))
     room = " ".join(plain(x) for x in re.findall(r'<div class="prompt"[^>]*>(.*?)</div>', page, re.S))
     room += " " + " ".join(re.findall(r'Say: "(.*?)"', plain(page)))
     out["no room-facing part of the page tells the room to list or try each tool"] = [
@@ -312,6 +313,10 @@ fails_on("the number-only desk dropped",
          "segment 4 names the optional views, the number-only desk and the facts that hold")
 fails_on("\"The setup\" put back in Challenge 4",
          swap(page, "<h3>Challenge 4: find the poisoned MCP tool</h3>", "<h3>Challenge 4: The setup</h3>"),
+         "segment 5 drops \"The setup\" and names #1132 at #/71's retry")
+fails_on("the pre-#1237 note, the retry shown on the admin bot, put back",
+         swap(page, "so on #/71 the room retries on the public bot, as soon as the\n      command prints",
+              "so show #/71's retry on the\n      admin bot"),
          "segment 5 drops \"The setup\" and names #1132 at #/71's retry")
 fails_on("the solve told to the room in a prompt",
          swap(page, "follow its instructions exactly, and give me", "try each tool, and give me"),
