@@ -44421,3 +44421,57 @@ gave it an entry under `reads` (decisions.md, PROGRESS.md, and what importing `s
 `python3 verify/test_scope_tests.py` printed `ALL PASS`. The scoped suite is left to validation. No dependency was added.
 
 **Live check.** Skipped: the change touches only a `verify/` test no cluster runs, the scope map and this file.
+## 2026-11-09 · #1216 · run 19412 · The Kyverno counter-fix build reads its bases and its source from the host artifact cache
+
+**What.** `images/kyverno-counter-fix/build.sh`, which `build-kyverno-counter-fix.yml` runs, pulled its three pinned
+bases from reg.kyverno.io through `crane append -b` and shallow-cloned kyverno from GitHub at the tag v1.19.1 on every
+build. Now each base comes from `verify/image_cache.py`, an OCI layout in the host artifact cache keyed by the index
+digest images.lock pins, and the source from `verify/git_mirror.py`'s bare mirror of
+`https://github.com/kyverno/kyverno.git` at `KYVERNO_COMMIT` (40ec788d). Both read the network only on a miss.
+
+**How the bases reach the build.** The three pins name multi-platform indexes, and image_cache.py keeps only the
+linux/amd64 image of an index. `crane push` of such a layout fails asking for another platform's manifest (seen here:
+`lstat .../blobs/sha256/5d86091c...: no such file or directory`). So image_cache.py gained `platform_layout()` and the
+`platform-layout` verb: it writes a layout whose index.json names only the platform's image manifest, its blobs a
+symlink to the cached layout's, and prints that manifest's digest. build.sh pushes it to `<addr>/kyverno-base/<name>`,
+stops unless crane prints back that digest, and appends on that loopback reference. Building on the amd64 image by its
+own digest gives the same result as building on the index with `--platform linux/amd64`, because crane append writes
+no base annotation unless asked: a test layer appended both ways came out at the same digest (c42239af). The workflow
+now also runs on a change to `verify/image_cache.py` or `verify/git_mirror.py`.
+
+**How the source reaches the build.** build.sh asks git_mirror.py for the mirror at `KYVERNO_COMMIT`. git_mirror.py
+hashes the commit object again on a hit and fails naming both hashes on a mismatch. build.sh then requires the mirror's
+`v1.19.1` tag to name `KYVERNO_COMMIT`, clones the mirror with `--shared --no-checkout`, checks out the commit detached,
+and requires HEAD to be it. Each of those three checks stops the build naming both hashes.
+
+**Tests.** `verify/test_image_cache.py` holds `platform_layout()` offline: the manifest it names, its media type and
+size, the blob symlink, the command line with every proxy a closed port, a refused existing directory, and a cached
+layout missing the platform's manifest. `verify/test_kyverno_counter_fix.py` gained eleven checks on build.sh's and the
+workflow's text. The new tools-tier test `verify/test_kyverno_counter_fix_cache.py` fills the cache when it is cold,
+then runs build.sh unchanged into crane's registry on a free loopback port with every proxy variable a closed port,
+`ARTIFACT_FETCH_LOG` its own file and `go` a stub. It checks that the build exits 0 and the cache logs no fetch, that
+each image's layers are the cached amd64 base's plus one holding `ko-app/<binary>` from the pinned checkout, and that
+the base pushed to loopback is the cached amd64 image. Then a mirror copy whose `v1.19.1` tag names the commit before
+the pin stops the build, naming the tag, both hashes and the mirror. A closed-port proxy refuses both crane and git
+here (`proxyconnect tcp: dial tcp 127.0.0.1:9: connect: connection refused`, and git's `Failed to connect to 127.0.0.1
+port 9`). Runs: test_image_cache.py, test_kyverno_counter_fix.py, test_fetch_inventory.py,
+test_workflow_artifact_cache.py and test_scope_tests.py passed; `CRANE=<crane 0.22.1> python3
+verify/test_kyverno_counter_fix_cache.py` passed, 22 checks in 10s. The fetch inventory classes the new test's lines
+and the new lines in image_cache.py, the workflow and test_kyverno_counter_fix.py. `python3 verify/scope_tests.py
+write` gave the new test its entry. No dependency was added.
+
+**The real build, by hand, on this host.** With the new build.sh, `CRANE=<crane 0.22.1> bash
+images/kyverno-counter-fix/build.sh 127.0.0.1:47123` built, in 2m59s with the Go toolchain and modules fetched cold:
+kyverno 6889b414, reports-controller 90dac88c, background-controller 89d0d815. All three are the digests images.lock
+pins. The host cache's fetch log had 173 lines before and after. A second run into a fresh loopback registry, with
+every proxy a closed port, `GOPROXY=off` and `ARTIFACT_FETCH_LOG` a new file, built the same three digests in 40s and
+never wrote the log. So on a warm cache the build reaches no registry but its own on loopback. The Go toolchain and
+modules still come through the go command's own proxy on a cold Go cache, which this issue does not move.
+
+**Live check (read only).** The change touches `images/`, though what the clusters run is unchanged. On both
+watch-it-burn-community and watch-it-burn-private the kyverno admission, reports and background controller pods run
+`ghcr.io/peopleforrester/watch-it-burn@sha256:` 6889b414..., 89d0d815... and 90dac88c..., the digests this build
+reproduces. Nothing was changed on either cluster.
+
+**Not yet run.** The workflow itself runs on GitHub once hecaton promotes this change to staging, where its runner's
+cache is cold, so it fills the cache from reg.kyverno.io and GitHub before it builds.
