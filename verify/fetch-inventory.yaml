@@ -182,7 +182,7 @@ sites:
   - match: .
     lines: 5
     class: none
-    why: build instructions a person reads and runs by hand (its buildah from and apt-get lines among them); no workflow or test runs them from here
+    why: build instructions a person reads and runs by hand (the base buildah pulls and the apt-get line among them); no workflow or test runs them from here
   images/watch-it-burn-backstage/packages/backend/Dockerfile:
   - match: ^FROM
     lines: 1
