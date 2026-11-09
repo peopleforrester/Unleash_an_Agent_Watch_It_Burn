@@ -2,7 +2,7 @@
 # ABOUTME: Behavioural test for `fleet.sh beacon-reset` (#1226): it POSTs /beacon/reset to a local fake beacon with the
 # ABOUTME: admin token in X-Admin-Token, passes only when the view then reads zero, and never prints the token.
 #
-# Usage: verify/test_fleet_beacon_reset.sh      (offline: the beacon is a fake on 127.0.0.1, railway is a stub)
+# Usage: verify/test_fleet_beacon_reset.sh      (offline: the beacon is a fake on 127.0.0.1, railway and aws are stubs)
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FLEET="${HERE}/../infra/terraform/fleet/fleet.sh"
@@ -85,6 +85,27 @@ FAKE="http://127.0.0.1:$(cat "${T}/port")"
 mkdir -p "${T}/bin" "${T}/home"
 printf '#!/bin/sh\nexit 1\n' >"${T}/bin/railway"; chmod +x "${T}/bin/railway"
 
+# The Secrets Manager copy (#1239) is a fake aws ahead of the no-cloud stub: it writes its profile and every argument
+# to ${T}/aws-calls, and answers get-secret-value with ${T}/secret as SecretString when that file exists. Without it,
+# it answers as the CLI does for a secret that is not there: an error on stderr, carrying a marker the log must not
+# show, and exit 254. curl is a shim that writes its arguments to ${T}/curl-calls and runs the host's curl, so each
+# case can check the token was on no command line.
+cat >"${T}/bin/aws" <<EOF
+#!/bin/sh
+printf 'AWS_PROFILE=%s %s\n' "\${AWS_PROFILE:-}" "\$*" >>"${T}/aws-calls"
+case "\$*" in
+  "secretsmanager get-secret-value "*)
+    if [ -f "${T}/secret" ]; then cat "${T}/secret"; echo; exit 0; fi
+    echo "AWS-STDERR-MARKER ResourceNotFoundException: Secrets Manager can't find the specified secret." >&2
+    exit 254 ;;
+esac
+echo "fake aws: unexpected call" >&2; exit 1
+EOF
+REAL_CURL="$(command -v curl)"
+printf '#!/bin/sh\nprintf "%%s\\n" "$*" >>"%s"\nexec "%s" "$@"\n' "${T}/curl-calls" "${REAL_CURL}" >"${T}/bin/curl"
+chmod +x "${T}/bin/aws" "${T}/bin/curl"
+: >"${T}/aws-calls"; : >"${T}/curl-calls"
+
 # Run the real entry point, `fleet.sh beacon-reset`, against the fake: $1 the beacon count before, $2 the mode, the
 # rest the verb's arguments. Prints rc=<n>; stdout and stderr go to ${T}/log. TOK is the WIB_ADMIN_TOKEN the verb gets;
 # without it the verb gets none, whatever the caller's environment exports.
@@ -93,7 +114,7 @@ reset() {   # $1 seed count, $2 mode, then args
     [[ -n "${TOK:-}" ]] && tok=("WIB_ADMIN_TOKEN=${TOK}")
     printf '%s' "${seed}" >"${T}/seed"; echo ok >"${T}/mode"
     curl -fsS -o /dev/null "${FAKE}/seed" || echo "  (could not seed the fake)"
-    echo "${mode}" >"${T}/mode"; : >"${T}/requests"
+    echo "${mode}" >"${T}/mode"; : >"${T}/requests"; : >"${T}/aws-calls"; : >"${T}/curl-calls"
     ( cd "$(dirname "${FLEET}")" && env -u WIB_ADMIN_TOKEN "${tok[@]}" HOME="${HOME_DIR:-${T}/home}" PATH="${T}/bin:${PATH}" \
         WIB_PROVISIONING_URL="${PROV_URL:-${FAKE}}" WIB_BEACON_VIEW_URL="${FAKE}/beacon/view" \
         bash "${FLEET}" beacon-reset "$@" >"${T}/log" 2>&1; echo "rc=$?" )
@@ -133,11 +154,40 @@ check "with no token anywhere it fails" '[[ "$(reset 4 ok)" == rc=1 ]]'
 check "  naming WIB_ADMIN_TOKEN, a Railway login and the secrets env file" \
   'grep -q "cannot resolve the provisioning admin token" "${T}/log" && grep -q "WIB_ADMIN_TOKEN" "${T}/log" &&
    grep -q "railway login" "${T}/log" && grep -qF "~/secrets/projects/watch-it-burn-provisioning.env" "${T}/log"'
+check "  and the Secrets Manager secret, its account and region" \
+  'grep -qF "Secrets Manager secret watch-it-burn/provisioning-admin-token in accen-dev us-west-2" "${T}/log"'
 check "  and posts nothing" '! grep -q "^POST" "${T}/requests"'
+check "  and shows none of aws's error text" '! grep -q "AWS-STDERR-MARKER" "${T}/log"'
 mkdir -p "${T}/home2/secrets/projects"; printf 'ADMIN_TOKEN="%s"\n' "${TOKEN}" >"${T}/home2/secrets/projects/watch-it-burn-provisioning.env"
 check "a token from the secrets env file passes" \
   '[[ "$(HOME_DIR="${T}/home2" reset 3 ok)" == rc=0 ]] &&
    grep -qxF "POST /beacon/reset ${TOKEN}" "${T}/requests" && no_token'
+
+echo "== the Secrets Manager copy, a dispatched run's route (#1239) =="
+printf '%s' "${TOKEN}" >"${T}/secret"
+check "a token from the secret, as a plain string, passes" \
+  '[[ "$(reset 321 ok)" == rc=0 ]] && grep -qxF "POST /beacon/reset ${TOKEN}" "${T}/requests" &&
+   grep -q "beacon-reset: done; the beacon view reads zero" "${T}/log"'
+check "  read in the default account and the secrets region, the token's secret by name, its SecretString as text" \
+  'grep -qxF "AWS_PROFILE=accen-dev secretsmanager get-secret-value --secret-id watch-it-burn/provisioning-admin-token --region us-west-2 --query SecretString --output text" "${T}/aws-calls"'
+check "  with the token in no output" 'no_token'
+check "  and on no command line, aws's or curl's" '! grep -qF "${TOKEN}" "${T}/aws-calls" && [[ -s "${T}/curl-calls" ]] && ! grep -qF "${TOKEN}" "${T}/curl-calls"'
+printf '{"ADMIN_TOKEN": "%s"}' "${TOKEN}" >"${T}/secret"
+check "a token from the secret, as JSON with an ADMIN_TOKEN key, passes" \
+  '[[ "$(reset 5 ok)" == rc=0 ]] && grep -qxF "POST /beacon/reset ${TOKEN}" "${T}/requests" && no_token &&
+   ! grep -qF "${TOKEN}" "${T}/aws-calls" && ! grep -qF "${TOKEN}" "${T}/curl-calls"'
+printf '{"other": "x"}' >"${T}/secret"
+check "a JSON secret with no ADMIN_TOKEN key fails as no token, posting nothing" \
+  '[[ "$(reset 5 ok)" == rc=1 ]] && grep -q "cannot resolve the provisioning admin token" "${T}/log" && ! grep -q "^POST" "${T}/requests"'
+printf '%s-stale' "${TOKEN}" >"${T}/secret"
+check "a stale copy in the secret is refused (403) and named" \
+  '[[ "$(reset 5 ok)" == rc=1 ]] && grep -q "refused the reset (403)" "${T}/log" &&
+   grep -qF "watch-it-burn/provisioning-admin-token" "${T}/log" && ! grep -qF "${TOKEN}" "${T}/log"'
+check "the secrets env file comes before the secret: aws is not called" \
+  '[[ "$(HOME_DIR="${T}/home2" reset 3 ok)" == rc=0 ]] && grep -qxF "POST /beacon/reset ${TOKEN}" "${T}/requests" && [[ ! -s "${T}/aws-calls" ]]'
+check "an exported WIB_ADMIN_TOKEN comes before the secret: aws is not called" \
+  '[[ "$(TOK="${TOKEN}" reset 3 ok)" == rc=0 ]] && [[ ! -s "${T}/aws-calls" ]]'
+rm -f "${T}/secret"
 
 echo "== wiring =="
 check "fleet.sh dispatches beacon-reset" 'grep -qF "        beacon-reset) cmd_beacon_reset \"\$@\" ;;" "${FLEET}"'

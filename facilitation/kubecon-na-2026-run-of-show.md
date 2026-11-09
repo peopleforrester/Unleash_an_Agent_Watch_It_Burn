@@ -133,8 +133,10 @@ zeroes the shared beacon count (`beacon.burritobot.co/beacon/view`, the same cou
 as `agenticburn.com/beacon/view`) and must end `the beacon view reads zero`. It needs
 the provisioning app's admin token, which it finds itself, in this order: an
 exported `WIB_ADMIN_TOKEN`, the `ADMIN_TOKEN` variable of the
-`watch-it-burn-provisioning` app on a host logged in to Railway (`railway login`), or
-`ADMIN_TOKEN` in `~/secrets/projects/watch-it-burn-provisioning.env`. It never prints
+`watch-it-burn-provisioning` app on a host logged in to Railway (`railway login`),
+`ADMIN_TOKEN` in `~/secrets/projects/watch-it-burn-provisioning.env`, or the Secrets
+Manager secret `watch-it-burn/provisioning-admin-token` in accen-dev us-west-2, the
+route a dispatched run has (#1239). It never prints
 the token, and the token goes in no file here. `start-check` is the start-state
 check for both: it reads each deployments page and the beacon view, posts nothing,
 and must pass, ending `every deployments page lists no deploy and the beacon view
@@ -2640,9 +2642,10 @@ is merely slow rather than rebuilding:
   app's admin token and finds it itself: an exported `WIB_ADMIN_TOKEN`, else the
   `ADMIN_TOKEN` variable of the `watch-it-burn-provisioning` app on a host logged in
   to Railway (`railway login`), else `ADMIN_TOKEN` in
-  `~/secrets/projects/watch-it-burn-provisioning.env`. It never prints the token;
-  never write the token here or in any other file in the repo. With none of the three
-  it fails and names them. `start-check` reads every deployments page and the beacon
+  `~/secrets/projects/watch-it-burn-provisioning.env`, else the Secrets Manager secret
+  `watch-it-burn/provisioning-admin-token` in accen-dev us-west-2 (#1239). It never
+  prints the token; never write the token here or in any other file in the repo. With
+  none of the four it fails and names them. `start-check` reads every deployments page and the beacon
   view, changes nothing, and must pass: it ends `every deployments page lists no
   deploy and the beacon view reads zero` and exits 0. A FAIL names the page or count
   still holding something and the reset that clears it; run that reset, then

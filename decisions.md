@@ -45728,3 +45728,61 @@ own-app checks, "goes there VERBATIM" reworded failed the verbatim check, and `&
 existing `feedbackUrl` check. `python3 verify/test_scope_tests.py` exit 0; the test reads no new file, so the map
 is unchanged. The scoped Test and E2E commands are left to hecaton's validation. No live check: the change touches
 only a test under `verify/` and decisions.md, which no cluster runs. No dependency was added.
+
+## 2026-11-09 · #1239 · run 19488 · resolve_admin_token reads a Secrets Manager copy of the provisioning admin token
+
+**Why.** Runs 18800, 19104 and 19305 each ran `./fleet.sh beacon-reset` and it failed on the admin token: a dispatched
+run has no Railway login, no secrets env file and no exported `WIB_ADMIN_TOKEN`. `prior-drafts.sh 1239 origin/staging`
+printed NONE, so nothing was ported.
+
+**Change.** `resolve_admin_token` in `infra/terraform/fleet/fleet.sh` has a fourth source: the Secrets Manager secret
+`watch-it-burn/provisioning-admin-token` (`WIB_ADMIN_TOKEN_SECRET` names another) in `WIB_DEFAULT_ACCOUNT` (accen-dev)
+and `WIB_SECRETS_REGION` (us-west-2). It is read the way `datadog_keys_for` reads `watch-it-burn/datadog`, with
+`AWS_PROFILE` and `--region` given on the command and `--query SecretString --output text`. The secret holds the token
+as a plain string, or as JSON with an `ADMIN_TOKEN` key. The token comes back on aws's stdout into a variable, so it is
+on no command line, and aws's stderr is dropped, so no error text reaches the log. It is the last source: the Railway
+service holds the real token and this copy can go stale. A stale copy shows up as beacon-reset's 403, which now names
+the secret. The no-token messages of `beacon-reset`, `ops` and `serve-actions` name the secret. The run-of-show's two
+descriptions of where beacon-reset finds the token name the fourth source.
+
+**Tests.** `verify/test_fleet_beacon_reset.sh` stubs `aws` with a fake that answers `get-secret-value` from a file and
+logs its profile and arguments, and stubs `curl` with a shim that logs its arguments and runs the real one. New checks:
+a plain or JSON secret resets the count; the read uses accen-dev, us-west-2 and the secret's name; the token appears
+in no output and in neither aws's nor curl's arguments; a JSON secret with no `ADMIN_TOKEN` key counts as no token and
+posts nothing; a stale copy fails as a 403 that names the secret; the env file and `WIB_ADMIN_TOKEN` both come first,
+with aws not called; with no secret the failure names it, and aws's error text stays out of the log. With the fleet.sh
+change reverted, 6 of the 36 checks fail. `verify/test_ops_view.py` adds a fake aws that answers ResourceNotFound, so
+its no-token case reaches no AWS account. Without it that case called the no-cloud stub and the test failed. Its check
+now also holds that the message names the secret. Run alone: `bash verify/test_fleet_beacon_reset.sh` 36 passed, 0
+failed; `python3 verify/test_ops_view.py` exit 0; `bash verify/test_admin_actions.sh` 68 passed;
+`bash verify/test_fleet_start_check.sh` 26 passed. The scoped Test and E2E commands are left to hecaton's validation.
+
+**Live, from this run's host, accen-dev session sourced.** At 11:33:58Z, before the secret existed, `./fleet.sh
+beacon-reset` exited 1 and posted nothing:
+
+```
+beacon-reset: FAIL cannot resolve the provisioning admin token; the beacon count was not reset. It comes from
+  an exported WIB_ADMIN_TOKEN, or the Railway variables of watch-it-burn-provisioning on a host logged in
+  to Railway (railway login), or ADMIN_TOKEN in ~/secrets/projects/watch-it-burn-provisioning.env, or the
+  Secrets Manager secret watch-it-burn/provisioning-admin-token in accen-dev us-west-2
+```
+
+To test the route through the run's real aws wrapper, the run created a probe secret,
+`watch-it-burn/provisioning-admin-token-probe-19488`, holding a random token that is not the app's. The value went in
+from a mode-600 temp file (`file://`), never as an argument. At 11:34:14Z `WIB_ADMIN_TOKEN_SECRET=<probe> ./fleet.sh
+beacon-reset` exited 1:
+
+```
+beacon-reset: FAIL https://watch-it-burn-provisioning-production.up.railway.app/beacon/reset refused the reset (403): the admin token resolved is not the provisioning
+  app's ADMIN_TOKEN. Check WIB_ADMIN_TOKEN, the secrets env file, or the Secrets Manager secret
+  watch-it-burn/provisioning-admin-token-probe-19488, against its Railway variables
+```
+
+So the session read the secret, the JSON form was parsed, and the token reached the app in `X-Admin-Token`, which
+refused it. The probe secret was then deleted with `--force-delete-without-recovery`, and `list-secrets` in us-west-2
+again lists only `watch-it-burn/datadog`. No cluster was read or changed, and the `agent/terminal-auth` Secret was not
+touched. At 11:33Z https://beacon.burritobot.co/beacon/view read `data-count="1"`.
+
+**Not yet run.** The secret has to be filled once with the provisioning service's real `ADMIN_TOKEN`. That needs a
+host signed in to Railway, so the run escalated it. Then `./fleet.sh beacon-reset` from a run must end `beacon-reset:
+done; the beacon view reads zero`, which is the issue's third criterion. No dependency was added.

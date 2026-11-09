@@ -311,8 +311,16 @@ readonly WIB_PROVISIONING_RW_SERVICE="watch-it-burn-provisioning"
 # only runs when someone remembers to set two variables is not automated, it is documented.
 #
 # Order: an explicit env var wins (for a one-off or a different environment), then the token is read
-# from the live Railway service, then from the local secret store. Cached for the run so a fleet
-# provision makes one Railway call rather than one per cluster.
+# from the live Railway service, then from the local secret store, then from Secrets Manager. Cached for
+# the run so a fleet provision makes one Railway call rather than one per cluster.
+#
+# The Secrets Manager copy (#1239) is the route a dispatched run has: its host has no Railway login and no
+# secret store, but it has the default account's AWS session, which reads watch-it-burn/datadog the same
+# way (datadog_keys_for). The secret holds the token as a plain string, or as JSON with an ADMIN_TOKEN key.
+# It comes last because the Railway service is the token's source of truth and the copy can go stale; a
+# stale copy is a 403 that beacon-reset names. The token arrives on aws's stdout and goes on no command
+# line; aws's stderr is dropped so no error text reaches the log.
+WIB_ADMIN_TOKEN_SECRET="${WIB_ADMIN_TOKEN_SECRET:-watch-it-burn/provisioning-admin-token}"
 WIB_ADMIN_TOKEN_CACHE=""
 resolve_admin_token() {
     [[ -n "${WIB_ADMIN_TOKEN:-}" ]] && { printf '%s' "${WIB_ADMIN_TOKEN}"; return 0; }
@@ -328,6 +336,20 @@ resolve_admin_token() {
     # Fallback for a machine with no Railway login: the same value kept in the private secret store.
     if [[ -z "${tok}" && -r "${HOME}/secrets/projects/watch-it-burn-provisioning.env" ]]; then
         tok="$(sed -n 's/^ADMIN_TOKEN=//p' "${HOME}/secrets/projects/watch-it-burn-provisioning.env" | tr -d '"'"'"'[:space:]' | head -1)"
+    fi
+    # Fallback for a host with neither, a dispatched run's: the copy in Secrets Manager, in the default account.
+    if [[ -z "${tok}" ]] && command -v aws >/dev/null 2>&1; then
+        local raw=""
+        raw="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value \
+                --secret-id "${WIB_ADMIN_TOKEN_SECRET}" --region "${WIB_SECRETS_REGION}" \
+                --query SecretString --output text 2>/dev/null)" || raw=""
+        if [[ "${raw}" == "{"* ]]; then
+            tok="$(jq -r '.ADMIN_TOKEN // empty' <<<"${raw}" 2>/dev/null)" || tok=""
+        else
+            tok="${raw}"
+        fi
+        tok="$(tr -d '[:space:]' <<<"${tok}")"
+        [[ "${tok}" == "None" ]] && tok=""
     fi
     [[ -n "${tok}" ]] || return 1
     WIB_ADMIN_TOKEN_CACHE="${tok}"
@@ -5454,7 +5476,8 @@ cmd_beacon_reset() {
     if ! tok="$(resolve_admin_token)" || [[ -z "${tok}" ]]; then
         log "beacon-reset: FAIL cannot resolve the provisioning admin token; the beacon count was not reset. It comes from"
         log "  an exported WIB_ADMIN_TOKEN, or the Railway variables of ${WIB_PROVISIONING_RW_SERVICE} on a host logged in"
-        log "  to Railway (railway login), or ADMIN_TOKEN in ~/secrets/projects/watch-it-burn-provisioning.env"
+        log "  to Railway (railway login), or ADMIN_TOKEN in ~/secrets/projects/watch-it-burn-provisioning.env, or the"
+        log "  Secrets Manager secret ${WIB_ADMIN_TOKEN_SECRET} in ${WIB_DEFAULT_ACCOUNT} ${WIB_SECRETS_REGION}"
         return 1
     fi
     out="$(printf 'X-Admin-Token: %s\n' "${tok}" \
@@ -5464,7 +5487,8 @@ cmd_beacon_reset() {
         200) ;;
         000) log "beacon-reset: FAIL could not reach ${url}; the beacon count was not reset"; return 1 ;;
         403) log "beacon-reset: FAIL ${url} refused the reset (403): the admin token resolved is not the provisioning"
-             log "  app's ADMIN_TOKEN. Check WIB_ADMIN_TOKEN, or the secrets env file, against its Railway variables"
+             log "  app's ADMIN_TOKEN. Check WIB_ADMIN_TOKEN, the secrets env file, or the Secrets Manager secret"
+             log "  ${WIB_ADMIN_TOKEN_SECRET}, against its Railway variables"
              return 1 ;;
         *) log "beacon-reset: FAIL ${url} answered ${code}, not 200; the beacon count was not reset"; return 1 ;;
     esac
@@ -5633,7 +5657,7 @@ cmd_serve_actions() {
     local t; for t in curl python3 aws kubectl; do
         command -v "${t}" >/dev/null 2>&1 || { log "missing tool: ${t}"; exit 1; }
     done
-    WIB_ADMIN_TOKEN="$(resolve_admin_token)" || { log "cannot resolve the provisioning admin token (railway login, or export WIB_ADMIN_TOKEN)"; exit 1; }
+    WIB_ADMIN_TOKEN="$(resolve_admin_token)" || { log "cannot resolve the provisioning admin token (railway login, export WIB_ADMIN_TOKEN, or the Secrets Manager secret ${WIB_ADMIN_TOKEN_SECRET})"; exit 1; }
     log "serve-actions: ${WIB_PROVISIONING_URL%/}/admin/actions every ${ACTIONS_POLL}s, health every ${ACTIONS_HEALTH_EVERY}s"
     local last_health=0 health_pid="" now body actions a queue_ok
     while :; do
@@ -5877,7 +5901,7 @@ print(sum(1 for x in p if isinstance(x, str) and "[[wib-probe]]" not in x and x.
 cmd_ops() {
     local tok hosts="${LOG_DIR}/ops-hosts.tsv"
     tok="$(resolve_admin_token)" \
-        || { log "ops: cannot resolve the provisioning admin token (railway login, or export WIB_ADMIN_TOKEN)"; exit 1; }
+        || { log "ops: cannot resolve the provisioning admin token (railway login, export WIB_ADMIN_TOKEN, or the Secrets Manager secret ${WIB_ADMIN_TOKEN_SECRET})"; exit 1; }
     mkdir -p "${LOG_DIR}"
     cmd_hosts >"${hosts}"
     WIB_ADMIN_TOKEN="${tok}" exec python3 "${INFRA_DIR}/ops-view/ops_view.py" \
