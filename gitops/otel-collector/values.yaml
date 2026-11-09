@@ -498,7 +498,8 @@ config:
     # which now sit under the root, and Datadog prices those once transform/llmobs_model names their system id (#784).
     # A self-heal retry forwards again inside the same turn, so its invocation lands under the same root. An A2A
     # message that did not come through guard-proxy names a parent that is not there and shows as its own root, as
-    # every kagent turn did before this. verify/test_trace_shape_e2e.py runs both copies through the collector.
+    # every kagent turn did before this; transform/llmobs_root_service below files that root under burritobot (#1163).
+    # verify/test_trace_shape_e2e.py runs both copies through the collector.
     transform/llmobs_one_root:
       error_mode: ignore
       trace_statements:
@@ -568,6 +569,44 @@ config:
           - 'IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$") and kind == SPAN_KIND_SERVER and attributes["gen_ai.operation.name"] == nil'
           - 'not Any(Keys(attributes), (_, k) => HasPrefix(k, "gen_ai."))'
           - 'IsMatch(resource.attributes["service.name"], "^(burritobot-gateway|agentgateway)$")'
+    # One ml_app, burritobot (#1163). Datadog sets a trace's ml_app from its root span's service.name
+    # (docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation, read 2026-11-09: "automatically set to
+    # the value of your OpenTelemetry root span's service attribute"; no attribute overrides it). A turn that came
+    # through guard-proxy has the guard's span as its root, so it files under burritobot. An A2A message sent to
+    # agentgateway or kagent directly has no guard span: kagent's invocation names a parent that is not there, Datadog
+    # takes it as the root, and the turn files under burritobot-agent. Whitney's sandbox org had 140 such traces from
+    # 2026-11-01 to 2026-11-08, all on ml_app burritobot-agent: 139 rooted at invocation, one at kagent's POST server
+    # span, from research scripts and dispatched runs that post message/send to agentgateway past guard-proxy
+    # (docs/research/2026-11-08-ask-user/a2a_asks.py over a port-forward, sessions rec74-, r18448-, a2a-). Run 18497 saw
+    # one in check 4 of verify/test_datadog_sandbox_live.py.
+    #
+    # So in this copy, and only here, the kagent spans that can be a root go out under service burritobot: invocation,
+    # a kagent server span the filter above let through, and any kagent span with no parent at all. service.name is a
+    # resource attribute shared by every span of the batch, so the three steps move those spans to a resource of their
+    # own first: transform/llmobs_root_mark names the service on the span, groupbyattrs/llmobs_root moves that
+    # attribute up to a new resource holding the rest of kagent's resource and those spans alone, and
+    # transform/llmobs_root_service makes it the resource's service.name. kagent's other rows (invoke_agent,
+    # generate_content, execute_tool) keep burritobot-agent, so the brief's service:burritobot-agent still names kagent's
+    # model calls. In a guard turn the invocation row reads service burritobot under the guard's root and its ml_app
+    # does not change. They run after filter/llmobs_one_root, whose rules match kagent by its own service name.
+    # APM's copy and Tempo keep burritobot-agent on every kagent span. verify/test_llmobs_one_ml_app.py holds the rules
+    # and verify/test_trace_shape_e2e.py sends a turn that skipped guard-proxy through the real collector.
+    transform/llmobs_root_mark:
+      error_mode: ignore
+      trace_statements:
+        - context: span
+          statements:
+            - 'set(attributes["witb.llmobs.root_service"], "burritobot") where IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$") and (name == "invocation" or kind == SPAN_KIND_SERVER or IsRootSpan())'
+    groupbyattrs/llmobs_root:
+      keys:
+        - witb.llmobs.root_service
+    transform/llmobs_root_service:
+      error_mode: ignore
+      trace_statements:
+        - context: resource
+          statements:
+            - 'set(attributes["service.name"], attributes["witb.llmobs.root_service"]) where attributes["witb.llmobs.root_service"] != nil'
+            - 'delete_key(attributes, "witb.llmobs.root_service")'
     # The lab-marker contract (#150), applied before anything is exported. The route is public, so the collector
     # does not trust the page: anything not named lab.* is dropped, span events are dropped, the resource is
     # reset to burritobot-lab, and only the attributes gitops/ai-layer/web/lab-events.js documents survive.
@@ -716,6 +755,9 @@ config:
           - transform/llmobs_one_root
           - transform/llmobs_model # #784: the model calls name the system id Datadog prices, not the profile ARN
           - filter/llmobs_one_root
+          - transform/llmobs_root_mark # #1163: the kagent spans that can be a root, under service burritobot,
+          - groupbyattrs/llmobs_root # so a turn that skipped guard-proxy files under ml_app burritobot too
+          - transform/llmobs_root_service
         exporters:
           - debug
       # Lab progress markers (#150). Defined here with their processors, exporting to debug only, so a cluster

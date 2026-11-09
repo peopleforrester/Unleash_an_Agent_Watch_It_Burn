@@ -5236,6 +5236,24 @@ reads:
     - verify/fixtures/llmobs-chat-judge/chat-098fcb00.json
     - verify/llmobs_chat_judge.py
     - verify/test_llmobs_chat_judge_live.py
+  test_llmobs_one_ml_app.py:
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/otel-collector
+    - gitops/otel-collector/values.yaml
+    - gitops/workshop-agent/agent.yaml
+    - infra/datadog-fleet/dashboard.yaml
+    - infra/datadog-fleet/fleet_monitors.py
+    - infra/datadog-fleet/leaderboard.yaml
+    - infra/datadog-fleet/monitors.yaml
+    - verify/collector_render.py
+    - verify/test_datadog_sandbox_live.py
+    - verify/test_datadog_service_map.py
+    - verify/test_service_naming.py
   test_local_inference.py:
     - CLAUDE.md
     - backstage

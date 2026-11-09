@@ -41839,3 +41839,70 @@ seed line classed `loopback`, the other two `none`. `python3 verify/test_fetch_i
 `FAIL: --context is empty` line in the same gate output comes from `test_burritobot_cluster_live_logic.py`, which
 passes and prints that line on purpose (see the #1008 entry of run 18789). `fleet.sh` and the test are unchanged, so
 the live check stands as run 18800 recorded it: the live reset to zero is still owed on a host holding the admin token.
+## 2026-11-09 · #1163 · run 18937 · A turn that skipped guard-proxy filed under ml_app burritobot-agent; the Agent Observability copy now sends kagent's possible roots as service burritobot
+
+**Where ml_app burritobot-agent came from.** Read from Whitney's sandbox org with the read pair in
+`watch-it-burn/datadog` (GETs only). `sum:ml_obs.trace{env:burritobot-kubecon-na-26} by {ml_app,service}` over 7 days
+read 3585 traces as `ml_app:burritobot,service:burritobot` and 140 as `ml_app:burritobot-agent,service:burritobot-agent`
+(5 of those in the last 24 hours, none in the last 60 minutes at 2026-11-09 ~00:50 UTC). The LLM Observability spans API
+with `filter[ml_app]=burritobot-agent` over 14 days gave 492 spans in those 140 traces, from 2026-11-01 to 2026-11-08
+02:29 UTC, 139 on burritobot-public and 1 on burritobot-private. The root of each (`parent_id` `undefined`) is kagent's
+own span: 139 are `invocation` (span kind agent, `span.kind:internal`, service burritobot-agent) and 1 is kagent's
+`POST` server span (workflow, `url.path:/`, 2026-11-01). The sessions are `r1094-`, `p1094-`, `r18448-`, `rec72-`,
+`rec74-`, `a2a-` and three bare task ids. APM shows how they were sent: for `rec74-6e02f88b`, `r18448-bc47a655` and
+`a2a-9c922a07` the whole APM trace is `burritobot-gateway POST` then kagent's `POST`, `invocation`,
+`invoke_agent workshop_agent` and its model and tool calls, with no burritobot (guard-proxy) span at all. Those are A2A
+`message/send` calls sent to agentgateway's :3000 past guard-proxy, the way
+`docs/research/2026-11-08-ask-user/a2a_asks.py` (over a port-forward to `svc/agentgateway`) and dispatched runs' own
+scripts send them. `verify/beat-02.sh`, `verify/beat-cost.sh` and the C3 fallback go through guard-proxy and are not
+among them.
+Two `r1094-` traces had a guard `POST` but no guard turn span (`POST /chat` or `sanitize`), so kagent's invocation was
+still the copy's root.
+
+So the setting is Datadog's own rule and the span is kagent's `invocation`. Datadog sets a trace's ml_app from its root
+span's service (docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation, read 2026-11-09:
+"automatically set to the value of your OpenTelemetry root span's `service` attribute", and the page names no attribute
+that overrides it, as question 868 found on 2026-10-28). `transform/llmobs_one_root` hangs `invocation` from the guard's
+turn span by a computed id (#783); when there is no guard span that parent is not in the trace, Datadog takes
+`invocation` as the root, and its resource `service.name`, `burritobot-agent` (`transform/kagent_service_name`, #634),
+becomes the ml_app. The collector's own comment on `transform/llmobs_one_root` already said such a message "shows as its
+own root". The kagent spans of a guard turn read `ml_app:burritobot` with `service:burritobot-agent`, which is what
+shows ml_app is the root's and not each span's.
+
+**The change.** `gitops/otel-collector/values.yaml` ends `traces/llmobs`, the Agent Observability copy only, with three
+processors after `filter/llmobs_one_root`. `transform/llmobs_root_mark` sets `witb.llmobs.root_service` to `burritobot`
+on each kagent span that can be the copy's root: `invocation`, a kagent server span the filter let through, and any
+kagent span with no parent. `service.name` is a resource attribute shared by the whole batch, so
+`groupbyattrs/llmobs_root` (otelcol-contrib v0.160.0's groupbyattrs processor, already in the pinned image) lifts that
+attribute to a resource of its own holding the rest of kagent's resource and those spans alone, and
+`transform/llmobs_root_service` makes it the resource's `service.name` and deletes it. A turn that skipped guard-proxy
+then has a root of service `burritobot`, so it files under `ml_app:burritobot`. In a guard turn the invocation row reads
+service burritobot under the guard's root, and the ml_app is the guard's as before. kagent's other rows
+(`invoke_agent`, `generate_content`, `execute_tool`) keep `burritobot-agent` in the copy, so the brief's
+`service:burritobot-agent` warning still names kagent's model calls, and APM and Tempo keep `burritobot-agent` on every
+kagent span. Making the direct callers go through guard-proxy instead was not chosen: they are research scripts and
+runs' own scripts, a new one can be written any day, and a port-forward to the gateway skips any NetworkPolicy.
+
+**Tests.** `verify/test_llmobs_one_ml_app.py` (new, offline) reads each profile's rendered collector config with and
+without `datadog-secret` and holds the three steps, their order after the filter, the mark's rule, the lifted key, the
+resource rename and that APM's pipeline runs none of them; twelve broken configs each fail its judge. It passed (exit 0).
+`verify/test_trace_shape_e2e.py` (tools tier) now also sends a `message/send` that reached agentgateway with no guard
+span and a kagent turn with no parent, and checks that every root of every copied trace is service burritobot (six
+traces per profile), that each of the two has one root, kagent's, sent as burritobot, that kagent's other rows keep
+burritobot-agent, that APM keeps burritobot-agent, and that the invocation of the two guard turns is burritobot. Run
+alone with the pinned otelcol-contrib v0.160.0 (taken from the host's artifact cache by its lock SHA-256): exit 0, 264
+checks PASS on the three profiles. Run on staging's `values.yaml` with the new test: exit 1, the 15 new checks FAIL (five
+per profile) and every older check passes, so the test pins the change. `verify/scope-map.yaml` has the new test's entry
+from `python3 verify/scope_tests.py write`.
+
+**Live check (run 18937, read-only, before the change is on the clusters).** `verify/test_datadog_sandbox_live.py`
+with the default 60-minute lookback, at 2026-11-09 ~01:00 UTC: exit 0, all five checks PASS, check 4 included
+(`ml_obs.trace reports under env:burritobot-kubecon-na-26 as ml_app burritobot`, `no other ml_app reports`). It passes
+now only because no message skipped guard-proxy in that hour; the 7-day read above is the failure. No cluster or
+Datadog setting was changed.
+
+**Not yet run on a cluster.** Once Argo CD syncs this change to watch-it-burn-community and watch-it-burn-private: send
+one A2A `message/send` to agentgateway's :3000 past guard-proxy on each (`a2a_asks.py` over a port-forward to
+`svc/agentgateway`, as its header says, with a count of 1) and one `/chat` through guard-proxy, wait a few minutes, then run `verify/test_datadog_sandbox_live.py`; check 4 must read only
+`ml_app:burritobot`, and `ml_app:burritobot-agent` must have no new trace after the sync time. That is criterion 3 of
+#1163, owed to the next run on the issue.
