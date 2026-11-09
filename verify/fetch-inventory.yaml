@@ -394,7 +394,7 @@ sites:
     lines: 1
     class: pinned
     kind: terraform-provider
-    pin: 'the infra/ .terraform.lock.hcl files, whose providers tf_plugin_cache.py serves from the artifact cache''s mirror (#883, #1119)'
+    pin: 'the infra/ .terraform.lock.hcl files, whose providers tf_plugin_cache.py serves from the artifact cache''s mirror (#883, #1119); the cluster root''s module versions in its main.tf, whose install tf_module_cache.py keeps in the artifact cache and seeds each later render from, with the network closed (#1246)'
     cached: true
   - match: .
     lines: 1

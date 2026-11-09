@@ -8,7 +8,10 @@ The EKS module itself is left out: planning it calls EKS, EC2 and SSM, and its o
 (cluster encryption on a KMS key) are known only after apply in any case.
 
 Needs terraform on PATH (or TERRAFORM). Providers come from the host artifact cache's mirror (tf_plugin_cache.py,
-#1119), filled on first use, which needs network to registry.terraform.io only while the cache is cold."""
+#1119), filled on first use, which needs network to registry.terraform.io only while the cache is cold. The cluster
+root's modules come from the same cache (tf_module_cache.py, #1246): the first render installs them from the registry
+and GitHub and keeps a copy, and each later one is seeded from it and inits with the network closed (CLOSED_NETWORK), so
+a render on a warm host reaches no network at all."""
 from __future__ import annotations
 
 import http.server
@@ -25,6 +28,7 @@ import urllib.parse
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "verify"))
+import tf_module_cache  # noqa: E402
 import tf_plugin_cache  # noqa: E402
 
 CLUSTER = REPO / "infra/terraform/aws/cluster"
@@ -127,6 +131,16 @@ _ENV: list[dict[str, str]] = []
 # that waited on a registry download with no bound held the whole E2E tier for 15 minutes (#572).
 TERRAFORM_TIMEOUT = 600
 PLUGIN_START_TIMEOUT = "timeout while waiting for plugin to start"  # terraform's words when a provider misses its minute
+# What an init seeded from the module cache runs with: every HTTP(S) request through a proxy on a port that refuses it,
+# and git's GitHub URLs rewritten to it, so a seeded init that still tried to install a module fails, naming the module,
+# where a quiet download would hide that the cache was not used. Providers come from the mirror on disk.
+_REFUSED = "http://127.0.0.1:9"
+CLOSED_NETWORK = {"HTTPS_PROXY": _REFUSED, "HTTP_PROXY": _REFUSED, "https_proxy": _REFUSED, "http_proxy": _REFUSED,
+                  "NO_PROXY": "", "no_proxy": "", "CHECKPOINT_DISABLE": "1", "GIT_CONFIG_COUNT": "1",
+                  "GIT_CONFIG_KEY_0": f"url.{_REFUSED}/.insteadOf", "GIT_CONFIG_VALUE_0": "https://github.com/"}
+# How the last render() got its modules: "kept" (seeded from the cache), "installed" (from the network, then kept) or
+# "none" (the root calls no module). test_iam_policy_structural.py reads it.
+MODULES_FROM: list[str] = []
 
 
 def _terraform_env() -> dict[str, str]:
@@ -161,11 +175,18 @@ def render(root: str, edit=None) -> dict:
             if root == "cluster":
                 # The associations name the EKS module's cluster; with the module out of the plan, name it directly.
                 text = text.replace("module.eks.cluster_name", "var.name")
-            (work / "main.tf").write_text(edit(text) if edit else text, encoding="utf-8")
+            text = edit(text) if edit else text
+            (work / "main.tf").write_text(text, encoding="utf-8")
+            try:
+                seeded = tf_module_cache.seed(work, text)
+            except tf_module_cache.ModuleCacheError as e:
+                raise SystemExit(f"FAIL: the module cache cannot seed the {root} render: {e}")
             env = _terraform_env()
+
             def run_once(*a):
                 try:
-                    return subprocess.run([tf, f"-chdir={work}", *a], capture_output=True, text=True, env=env,
+                    return subprocess.run([tf, f"-chdir={work}", *a], capture_output=True, text=True,
+                                          env={**env, **CLOSED_NETWORK} if seeded and a[0] == "init" else env,
                                           timeout=TERRAFORM_TIMEOUT)
                 except subprocess.TimeoutExpired:
                     raise SystemExit(f"FAIL: terraform {a[0]} of {root} did not finish within {TERRAFORM_TIMEOUT}s")
@@ -186,7 +207,16 @@ def render(root: str, edit=None) -> dict:
             # documents, it does not apply them.
             r = run("init", "-input=false", "-no-color")
             if r.returncode:
-                raise SystemExit(f"FAIL: terraform init of {root} failed:\n{r.stderr or r.stdout}")
+                how = (" (seeded from the module cache, with the network closed: the kept modules no longer satisfy "
+                       "main.tf's calls)" if seeded else "")
+                raise SystemExit(f"FAIL: terraform init of {root} failed{how}:\n{r.stderr or r.stdout}")
+            if seeded:
+                MODULES_FROM[:] = ["kept"]
+            else:
+                try:
+                    MODULES_FROM[:] = ["installed" if tf_module_cache.store(work, text) else "none"]
+                except tf_module_cache.ModuleCacheError as e:
+                    raise SystemExit(f"FAIL: the module cache cannot keep the {root} render's modules: {e}")
             # event has no default in any root (#494, #507, #205), nor the cluster root's hostname (#602) or
             # role (#636).
             args = ["plan", "-input=false", "-no-color", "-refresh=false", "-out=render.tfplan", "-var", "profile=render",
