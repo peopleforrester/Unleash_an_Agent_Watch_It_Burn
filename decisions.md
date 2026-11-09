@@ -44146,3 +44146,25 @@ and the as-found row reads every field it turns off back to off on both. The fou
 which read true before the run and still does (no stage switch or closing command turns it off).
 
 **Live check.** The issue's own work is a live check, and it ran as above. No file a cluster runs changed.
+## 2026-11-09 · #1198 · run 19379 · A test holds the poisoned weather server to one copy, gitops/ai-layer/server.py, the one the clusters run
+
+#1193 removed the stale `challenges/03-bad-mcp-excessive-agency/evil-mcp-shim/` copy, and one of its criteria was that
+only one copy of the poisoned server's code exists and that it is the one the clusters run. Test review run 18673 found
+no test held that, so a copy could come back with every test passing. `verify/test_poisoned_server_one_copy.py` now does.
+
+It checks four things. First, the clusters run `gitops/ai-layer/server.py`: the `ai-layer` Application sources
+`gitops/ai-layer`, the kustomization builds `evil-mcp-src` from `server.py` alone, and the `evil-mcp-shim` Deployment
+mounts that ConfigMap at `/app` and runs `python /app/server.py`. Second, the server's four markers are in that file:
+the `read_internal_config` and `apply_optimization` definitions, `FastMCP("evil-mcp-shim"`, and the read of
+`FAKE_MCP_SENTINEL`. A reworded marker fails by name instead of leaving a sweep that matches nothing. Third, no other
+tracked text file carries any marker as code, and no tracked path has a part named `evil-mcp-shim`. A tool name in a
+quoted test string (verify/test_trace_walkthrough_view.py has one) and a manifest's `name: FAKE_MCP_SENTINEL` env entry
+are not code and do not match. Fourth, the sweep runs on a scratch repo first and must name a copy at the old path and
+a copy inlined in a ConfigMap, and leave out the test string and the env entry.
+
+Run: `python3 verify/test_poisoned_server_one_copy.py` passed, 18 checks. With the old copy restored from 5d9b836d^
+and added with `git add -N`, it failed on the marker sweep (all four markers named in the copy) and on the path check,
+exit 1, and the copy was then removed. `python3 verify/scope_tests.py write` put the test under `always`, since it reads
+the tree through `git ls-files`. The rest of the scoped suite is left to validation.
+
+No live check: the change touches only `verify/` files no cluster runs and this record.

@@ -159,6 +159,7 @@ always:
   test_pantry_header_pin.py: it runs git cat-file, ls-tree, which reads the tree or history as a whole
   test_pantry_shut_record.py: 'verify/test_pantry_header_pin.py: it runs git cat-file, ls-tree, which reads the tree or history as a whole'
   test_platform_version_pins.py: 'line 165 builds a path under the repo root from a value it finds at run time; verify/test_observability.py: line 41 builds a path under the repo root from a value it finds at run time'
+  test_poisoned_server_one_copy.py: it runs git ls-files, which reads the tree or history as a whole
   test_prose_gate.py: 'verify/prose_gate.py: it runs git diff, ls-files, show, which reads the tree or history as a whole'
   test_replay_prompts.py: it runs git ls-files, which reads the tree or history as a whole; line 537 builds a path under the repo root from a value it finds at run time
   test_ros_deployments_removed_row.py: 'verify/prose_gate.py: it runs git diff, ls-files, show, which reads the tree or history as a whole'
