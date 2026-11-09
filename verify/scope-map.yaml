@@ -161,6 +161,7 @@ always:
   test_platform_version_pins.py: 'line 165 builds a path under the repo root from a value it finds at run time; verify/test_observability.py: line 41 builds a path under the repo root from a value it finds at run time'
   test_prose_gate.py: 'verify/prose_gate.py: it runs git diff, ls-files, show, which reads the tree or history as a whole'
   test_replay_prompts.py: it runs git ls-files, which reads the tree or history as a whole; line 537 builds a path under the repo root from a value it finds at run time
+  test_ros_deployments_removed_row.py: 'verify/prose_gate.py: it runs git diff, ls-files, show, which reads the tree or history as a whole'
   test_round_names_retired.py: it runs git ls-files, which reads the tree or history as a whole; line 85 builds a path under the repo root from a value it finds at run time
   test_scope_tests.py: it holds this map current with every test and what each reads, so every change runs it
   test_spec_copies.py: line 67 builds a path under the repo root from a value it finds at run time
