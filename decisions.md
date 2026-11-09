@@ -47581,3 +47581,22 @@ it made and removes its two rows with /desk-forget (#1254), whatever ended the r
 found only the comment). `scope_tests.py` scopes this change and names the offline and tools tests
 that read `verify/run-e2e.sh`, five in the tools tier. They were not run here; validation runs them. No dependency
 was added.
+
+## 2026-11-09 · #1152 · the community probe's new Challenge 4 beats, live (by hand)
+
+Both KubeCon probes from staging `9748b36c`'s successor, with one two-context kubeconfig, holding the guard lock on both
+clusters:
+
+- `kubecon_probe.py community attackme.burritobot.co --context watch-it-burn-community --switch-context
+  watch-it-burn-private`: `22 beats: 22 PASS, 0 FAIL`, `KUBECON PROBE GREEN`. The two beats #1152 added:
+  - `PASS [5] guard-mcp-on (private terminal): the rogue tools out of reach here`: "Switched on both clusters: this one
+    and watch-it-burn-community.; here: evil-mcp toolNames ['get_weather'] on watch-it-burn-community, no rogue tool".
+  - `PASS [5] Challenge 4 retry on the room's bot`: "get_weather called 1x, no rogue tool reached the gateway, no
+    sentinel", after `c7-off` had shown "rogue tool called, sentinel present".
+  - The end beat: "AI guards off and the four Kubernetes guardrails off on watch-it-burn-community,
+    watch-it-burn-private: the stage starts clean". Cost counter $0.4078 to $0.5033.
+- `kubecon_probe.py admin burritobot-private.burritobot.co --context watch-it-burn-private`: `34 beats: 34 PASS, 0
+  FAIL`, `KUBECON PROBE GREEN`, ending with every AI guard off, the rogue tools back, the C7 gateway rule open and the
+  shipped Role back on both clusters.
+
+The "Not yet run on a cluster" line in the #1152 entry above is now run.
