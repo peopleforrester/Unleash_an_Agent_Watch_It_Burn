@@ -358,9 +358,21 @@ def _coc_letter(ch: str) -> str:
     return "[" + alts + (r"\*" if ch in "aeiou" else "") + "]"
 
 
+def _coc_run(ch: str, after: str) -> str:
+    # One letter: one character of its class, then a run of only the letter and its digit stand-ins, less any the next
+    # letter's class holds, so the match takes time linear in the text (#1300; floor.py's _run says why).
+    own = ch + _COC_LEET.get(ch, "")
+    again = "".join(c for c in own if (c == ch or c.isdigit()) and c not in after + _COC_LEET.get(after, ""))
+    if not again:
+        return _coc_letter(ch)
+    if again == own and ch not in "aeiou":
+        return _coc_letter(ch) + "+"
+    return _coc_letter(ch) + "[" + re.escape(again) + "]*"
+
+
 def _coc_term(term: str) -> str:
     words = _coc_fold(term)[0].split()
-    joined = (_COC_SEP + "+").join("".join(_coc_letter(c) + "+" for c in w) for w in words)
+    joined = (_COC_SEP + "+").join("".join(_coc_run(c, w[i + 1:i + 2]) for i, c in enumerate(w)) for w in words)
     if len(words) == 1 and len(words[0]) >= 3:
         return f"(?:{joined}|{_COC_SEP.join(_coc_letter(c) for c in words[0])})"
     return f"(?:{joined})"
