@@ -13,7 +13,8 @@ deploy_app, the ticket desk or, once guard-proxy runs the floor, /chat.
 1. Each case of verify/coc_linear_cases.py (a run of each repeated leetspeak pair, and each term up to two neighbouring
    letters that share a character, then a run of what they share) is timed at 1,000 and 4,000 characters on each copy.
    At 4,000 characters each must take under 50 ms, and four times the text at most eight times as long, which linear
-   time meets and time in the square of the length does not (coc_linear_cases.within() says how it is timed).
+   time meets and time in the square of the length does not (coc_linear_cases.within() says how it is timed). Each
+   time is the thread's CPU time, which the host's load does not add to (best_ms() says why, #1307).
 2. The check catches the pattern as it was before #1300: built the old way, a run of `$` fails it.
 3. The cases reach every place the old form went quadratic: every pair of neighbouring letters in the term list whose
    classes share a character has a case.
@@ -51,14 +52,19 @@ def check(what: str, ok: bool) -> None:
 
 
 def best_ms(fn, texts: tuple[str, ...], runs: int) -> list[float]:
-    """The fastest of `runs` timings of fn on each text, in ms. The texts take turns, so a burst of load on the host
-    falls on both lengths rather than on one."""
+    """The fastest of `runs` timings of fn on each text, in ms of this thread's CPU time. The texts take turns.
+
+    CPU time, not the wall clock (#1307): at a load average of 20 to 34, the wall clock failed every copy in three runs
+    of three. A 1,000-character case takes about 2 ms and mostly runs between two of the scheduler's preemptions; a
+    4,000-character one takes about 20 ms and is preempted, so the wall clock adds the time it waited to the long text
+    alone, and linear cases read 10 to 20 times their short cost. The thread's CPU time counts only the time the
+    match ran, which the host's load does not add to."""
     best = [float("inf")] * len(texts)
     for _ in range(runs):
         for i, text in enumerate(texts):
-            t0 = time.perf_counter()
+            t0 = time.thread_time()
             fn(text)
-            best[i] = min(best[i], time.perf_counter() - t0)
+            best[i] = min(best[i], time.thread_time() - t0)
     return [b * 1000 for b in best]
 
 
