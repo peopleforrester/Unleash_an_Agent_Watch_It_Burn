@@ -9,9 +9,12 @@
 # Each binary's archive comes from the host artifact cache by its pinned sha256 (verify/artifact_cache.py, #1117):
 # WIB_ARTIFACT_CACHE in CI (verify/ci-artifact-cache.sh, #1123), else the per-user default. A hit is hashed again
 # before use and a miss is fetched once and checked before it is kept, so a second install on the host downloads none.
+#
+# Each Python tool is the environment of verify/python.lock that tools.yaml names (#1185): verify/package_cache.py serves
+# its wheels from the same cache by their SHA-256 and pip installs them into a fresh venv with --no-index,
+# --only-binary=:all: and --require-hashes, so nothing reads PyPI and a wheel that changed fails the install.
 import hashlib
 import io
-import os
 import subprocess
 import sys
 import tarfile
@@ -23,6 +26,7 @@ import yaml
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent.parent.parent / "verify"))
 import artifact_cache  # noqa: E402
+import package_cache  # noqa: E402
 
 
 def fetch(url: str, sha256: str) -> bytes:
@@ -53,6 +57,29 @@ def extract(data: bytes, url: str, member: str, dest: Path) -> None:
     dest.chmod(0o755)
 
 
+def python_tool(name: str, spec: dict, root: Path, bindir: Path) -> None:
+    """name's lock environment, installed hash-checked into root/venvs/name, its command linked into bindir. The
+    version tools.yaml pins is the lock's, or nothing is installed: check-plan.py holds the tool to tools.yaml."""
+    env = spec["env"]
+    try:
+        locked = package_cache.pinned(env, name)
+    except package_cache.PackageCacheError as e:
+        sys.exit(f"PACKAGE CACHE FAILED for {name}: {e}")
+    if locked != str(spec["version"]):
+        sys.exit(f"{name}: tools.yaml pins {spec['version']} and verify/python.lock's {env} environment pins {locked}")
+    venv = root / "venvs" / name
+    print(f"{name} {spec['version']}: the {env} environment of verify/python.lock, hash-checked, into {venv}")
+    subprocess.run([sys.executable, "-m", "venv", "--clear", str(venv)], check=True)
+    try:
+        package_cache.install(env, str(venv / "bin" / "python"), pip=True)
+    except (package_cache.PackageCacheError, artifact_cache.ArtifactCacheError) as e:
+        sys.exit(f"PACKAGE CACHE FAILED for {name}: {e}")
+    link = bindir / spec["command"]
+    if link.is_symlink() or link.exists():
+        link.unlink()
+    link.symlink_to(venv / "bin" / spec["command"])
+
+
 def main() -> None:
     if len(sys.argv) != 2:
         sys.exit("usage: install-tools.py <install-dir>")
@@ -67,15 +94,7 @@ def main() -> None:
         extract(fetch(spec["url"], spec["sha256"]), spec["url"], spec["member"], dest)
 
     for name, spec in tools["python"].items():
-        venv = root / "venvs" / name
-        print(f"{name} {spec['version']}: pip install {spec['package']}=={spec['version']} into {venv}")
-        subprocess.run([sys.executable, "-m", "venv", "--clear", str(venv)], check=True)
-        subprocess.run([str(venv / "bin" / "pip"), "install", "--quiet", f"{spec['package']}=={spec['version']}"],
-                       check=True)
-        link = bindir / spec["command"]
-        if link.is_symlink() or link.exists():
-            link.unlink()
-        link.symlink_to(venv / "bin" / spec["command"])
+        python_tool(name, spec, root, bindir)
 
     print(f"\ninstalled into {bindir}; run the checks with PATH=\"{bindir}:$PATH\"")
 

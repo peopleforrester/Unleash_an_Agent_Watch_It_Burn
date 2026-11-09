@@ -88,6 +88,11 @@ ENVS: dict[str, Env] = {
     "llm-guard": Env("3.12", ("torch==2.14.0+cpu", "llm-guard[onnxruntime]==0.3.16"),
                      ("https://download.pytorch.org/whl/cpu",),
                      why="the llm-guard image's scanner, with the CPU torch build (images/llm-guard)"),
+    # infra/policy/plan/install-tools.py's two Python tools, on plan-policy.yml's Python (#1185). Each pin is the one
+    # infra/policy/plan/tools.yaml names, and install-tools.py refuses a tools.yaml that disagrees with the lock.
+    "checkov": Env("3.13", ("checkov==3.3.30",), why="infra/policy/plan/install-tools.py's Checkov (#1185)"),
+    "moto": Env("3.13", ("moto[server]==5.2.4",),
+                why="infra/policy/plan/install-tools.py's moto_server, the AWS mock plan-fleet.py plans against (#1185)"),
 }
 
 
@@ -427,8 +432,8 @@ def compile_env(name: str, spec: Env, work: pathlib.Path, ienv: Mapping[str, str
 
 def render(lock: Mapping[str, list[Wheel]], envs: Mapping[str, Env] = ENVS) -> str:
     head = [
-        "# ABOUTME: Every Python package verify/, scripts/ and the CI jobs install, by environment: the one wheel each",
-        "# ABOUTME: installs, by SHA-256 and URL. verify/package_cache.py serves them from the host artifact cache (#1121).",
+        "# ABOUTME: Every Python package verify/, scripts/, infra/ and the CI jobs install, by environment: the one wheel",
+        "# ABOUTME: each installs, by SHA-256 and URL. verify/package_cache.py serves them from the host artifact cache.",
         "#",
         "# Written by `python3 verify/package_cache.py write`, which resolves each environment in its ENVS with",
         f"# `uv pip compile --format pylock.toml` for its Python on {PLATFORM} and keeps the wheel that Python",

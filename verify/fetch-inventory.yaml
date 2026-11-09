@@ -1237,9 +1237,9 @@ sites:
     why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
   verify/test_package_cache.py:
   - match: .
-    lines: 14
+    lines: 16
     class: none
-    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text, and the install lines the scan's pattern is held against (#1185); nothing leaves the host
   verify/test_package_cache_e2e.py:
   - match: .
     lines: 8
