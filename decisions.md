@@ -44173,3 +44173,10 @@ Every literal the cases edit on is checked first and named when missing. `verify
 `scope_tests.py write`.
 
 **Live check.** Skipped: the change is a test under `verify/` that no cluster runs.
+
+**Run 19445, after run 19394's tests gate failed.** Two tree-wide citation scans failed on the new file, which run
+19394 did not run. `verify/test_deck_shift_slide_citations.py` fails any hash `#/43` or more outside segment 4, the
+seed step and its listed readers, and the new test has to name `#/48` and `#/68`, so it joins `SEG4_READERS` beside
+`test_stage_trace_slides.py`, which reads the same two slides. `verify/test_guardrail_slide_citations.py` fails the
+2026-11-06 deck's phrase "four slides", which the new test's docstring used for its table; it now says "one row per
+link". Run alone, both scans and `test_stage_seed_links.py` pass, and `scope_tests.py write` leaves the map as it was.
