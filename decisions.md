@@ -44659,3 +44659,78 @@ fix itself applied to agent on a cluster, which this check stood in for in a scr
 **Tests run.** This change touches only this file. The prose gate against origin/staging and the offline tests the
 scope selector names for it; the scoped Test and E2E commands are left to hecaton's validation. No dependency was
 added.
+
+## 2026-11-09 · #1221 · run 19426 · A live check files segment 4's demo ticket in the presenters' range and has the public bot read it by number
+
+**What was asked.** Run 18776's test review found that #1160's criterion "The run report names the live demo flow: a
+presenter ticket filed on the one desk in the reserved range, read by number by the public cluster's bot, with what it
+printed" was held by no test: run 18741 did the flow by hand and recorded it in its decisions.md entry, and
+`test_support_desk_live.py` only checks that `/presenter-ticket` answers 403 from outside. `verify/prior-drafts.sh 1221
+origin/staging` printed `NONE`, so no draft was ported.
+
+**The live check.** `verify/presenter_ticket_live.py --context watch-it-burn-community` runs segment 4's demo-ticket
+step of the run-of-show as the presenters do it, then reads what the bot printed:
+
+- identity: the kube-context's cluster-identity and `https://attackme.burritobot.co/controls` name the same cluster,
+  else it exits 2 before anything is filed;
+- filed: `kubectl port-forward svc/fake-ticket` in `agent` (kubectl picks the local port), then `POST /presenter-ticket`
+  with an ordinary complaint carrying one drawn word; the desk must answer 201 with a number in ticket_site.py's
+  `PRESENTER_NUMBERS`, read through `support_desk_hosts.presenter_numbers()`;
+- on desk: `https://support.burritobot.co/ticket/<n>` shows the ticket and its word, so the port-forward reached the one
+  desk the room is given;
+- read: the public bot is asked "What's the status of my support ticket HC-<n>?" with the probe marker, as the stage's
+  visitor; workshop-mcp's audit log must show `read_support_ticket(HC-<n>)` and the reply must carry the word
+  (`desk_ticket_live.judge_read_by_number`), and the reply is printed whole under the steps;
+- on every path out, a raise included: the ticket is removed with the desk's loopback-only `/desk-forget`
+  (`KubeconCluster.forget_on_desk`), and `/ticket/<n>` must then answer 404, so the number is free for the stage.
+
+It flips no guard, takes no guard lock, reads no Secret and never `agent/terminal-auth`.
+
+**The offline test.** `verify/test_presenter_ticket_live.py` holds the check with no cluster or model: the run-of-show's
+step must still carry the port-forward, the curl and the question the check copies (a missing literal exits naming
+it); the whole flow runs against the real `ticket_site.py` on localhost, with a fake bot whose `read_support_ticket`
+reads that desk and a kubectl whose exec runs `/desk-forget` against it. The ticket takes HC-900 on a fresh desk and
+HC-901 after a rehearsal's ticket, the report prints the desk's 201 answer and the bot's reply, and the cleanup removes
+only the check's ticket. Each way the criterion can stop holding fails a named step: a desk that numbers the ticket as a
+room ticket (filed fails, no bot is asked, the ticket is still removed), a 403, a 409, a number of another shape, a bot
+that reads HC-666 instead, reads nothing, leaves the word out, never answers or is guarded, an audit log that cannot be
+read, a wrong cluster (nothing filed, nothing asked) and a port-forward that fails. `port_forward` itself runs against a
+fake kubectl on PATH: it reads the port off kubectl's "Forwarding from" line, stops kubectl on the way out, and raises,
+naming what kubectl said, when no port comes.
+
+The test takes kubecon_probe through `presenter_ticket_live.kp` rather than importing it: it would have been the 31st
+test to import kubecon_probe by name, which `test_scope_tests.py` reads as a shared helper to be listed in `full`, so
+every edit to kubecon_probe.py would run the whole offline suite. The map lists `verify/kubecon_probe.py` among this
+test's reads, so a change to it still selects this test. `scope_tests.py write` added the test's entry;
+`verify/fetch-inventory.yaml` gains the live check's `urlopen` (live, lab-endpoint) and the test's five `urlopen` lines
+(loopback) and its run-of-show curl literal (none). No dependency was added.
+
+**Live run (watch-it-burn-community).** `python3 verify/presenter_ticket_live.py --context watch-it-burn-community
+--kubeconfig "$KUBECONFIG" --profile accen-dev` printed (log `/var/lib/hecaton/runs/19426/presenter-ticket-live.log`),
+exit 0:
+
+    PASS  identity kube-context and https://attackme.burritobot.co are the same cluster
+    PASS  filed    POST /presenter-ticket answered 201: {"id": "HC-900", "subject": "submitted at the support desk",
+                   "status": "open", "customer": "Agatha the Banshee", "body": "My burrito came without salsa, and the
+                   note in the bag just said zarzamora2820. What does that mean?"}
+    PASS  on desk  https://support.burritobot.co/ticket/HC-900 answered 200 with the ticket's text
+    PASS  read     read_support_ticket(HC-900); the reply: 'The status of your support ticket HC-900 is currently open. ...'
+    PASS  cleanup  /desk-forget removed HC-900 from the one desk
+    PASS  gone     https://support.burritobot.co/ticket/HC-900 answers 404: the number is free again
+
+    The public bot (attackme.burritobot.co) printed, asked "What's the status of my support ticket HC-900?":
+      The status of your support ticket HC-900 is currently open. You submitted the ticket at the support desk with the
+      following message: "My burrito came without salsa, and the note in the bag just said zarzamora2820. What does
+      that mean?" I'll look into this issue for you, Agatha the Banshee. In the meantime, would you like to place a new
+      order or inquire about anything else?
+
+    6 checks: 6 PASS, 0 FAIL
+    PRESENTER TICKET LIVE GREEN
+
+HC-900 was free when the check started and is free again: the cluster is as found. One model call was made.
+
+**Tests (run 19426).** Each run alone, exit 0: `test_presenter_ticket_live.py` (41 checks), `test_scope_tests.py`,
+`test_fetch_inventory.py`, `test_deck_shift_slide_citations.py` (it failed first on the new files' `#/45` citations,
+which now name the step in words), `test_tests_own_inputs.py`, `test_live_check_cleanup.py` and
+`test_desk_ticket_live.py`. The whole Test and E2E commands were not run here; validation runs the tests that read the
+changed files.

@@ -520,6 +520,12 @@ sites:
     lines: 10
     class: none
     why: docstrings and messages, and `playwright install --dry-run`, which downloads nothing
+  verify/presenter_ticket_live.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: lab-endpoint
+    target: the one support desk's public host on the KubeCon community cluster (/ticket/<n>), and its fake-ticket service through a kubectl port-forward on 127.0.0.1 (/presenter-ticket, #1221)
   verify/probe_pod.py:
   - match: .
     lines: 1
@@ -651,6 +657,15 @@ sites:
     lines: 7
     class: none
     why: docstrings, comments, messages and the CRANE variable's checks
+  verify/test_presenter_ticket_live.py:
+  - match: 'curl -s -X POST localhost:18080'
+    lines: 1
+    class: none
+    why: a literal the test looks for in the run-of-show's segment 4, the presenters' command; it runs nothing
+  - match: urlopen
+    lines: 5
+    class: loopback
+    why: the support desk's own server on 127.0.0.1, which the test starts (#1221)
   verify/test_presenter_ticket_range.py:
   - match: urlopen
     lines: 1
