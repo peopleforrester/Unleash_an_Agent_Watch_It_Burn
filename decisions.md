@@ -45992,3 +45992,11 @@ such ConfigMap. Nothing on either cluster was changed, and nothing there changes
 did not move.
 
 **Not yet run on a cluster.** Nothing: the images the clusters run are byte for byte the same.
+
+**Run 19502 (#1126), after run 18886 failed the tests gate.** The gate's `bash verify/run-tests.sh` failed on
+test_fetch_inventory.py: the setgid check added one more `crane --insecure digest` call on the test's own loopback
+registry, so verify/test_joker_build_digest.py's first fetch-inventory entry claimed 6 lines where
+verify/fetch-inventory.yaml said 5. The entry now reads 6 lines, class loopback, the same registry the test starts.
+Run 18886 ran the tests that read build.sh and missed this one, which reads every test's call sites. Tests run here:
+test_fetch_inventory.py, `fetch_inventory.py check`, test_scope_tests.py and test_joker_build_digest.py (31 PASS, on
+the branch as rebased onto staging), all green. No live check: the inventory is read by no cluster.
