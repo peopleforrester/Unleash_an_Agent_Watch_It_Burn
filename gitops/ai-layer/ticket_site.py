@@ -410,6 +410,10 @@ def forget_request(d) -> tuple[list[str], float, list[str]]:
 # the component sets it, and the page shows a row's cluster only when it has one, so the 2-hour workshop's page reads
 # as it did.
 REMOTE_PATH = "/remote-landed"
+# The other cluster's cluster reads (#1209): the private cluster's reader (#1050) posts what that cluster still runs
+# through its desk-relay, with the same token, and the read is applied to DESK_REMOTE_CLUSTER's rows alone, as an
+# in-cluster /cluster-read is to DESK_CLUSTER's. With no token configured it is the desk's plain 404, as /remote-landed.
+REMOTE_READ_PATH = "/remote-cluster-read"
 REMOTE_TOKEN_HEADER = "X-Desk-Report-Token"
 REMOTE_TOKEN = os.environ.get("DESK_REPORT_TOKEN", "").strip()
 LOCAL_CLUSTER = os.environ.get("DESK_CLUSTER", "").strip()[:63]
@@ -509,19 +513,22 @@ def parse_cluster_read(d) -> tuple[float, bool, dict[str, set[str]]]:
     return float(taken_at), ok, {k: {n[:63] for n in v} for k, v in kinds.items()}
 
 
-def record_cluster_read(d) -> dict:
-    """Apply one cluster read report to the landed rows; the names it marked removed, newest row first."""
+def record_cluster_read(d, cluster: str | None = None) -> dict:
+    """Apply one cluster read report to the landed rows of one cluster, this one (None) or the one named; the names it
+    marked removed, newest row first."""
     taken_at, ok, kinds = parse_cluster_read(d)
     marked: list[str] = []
     if not ok:
         return {"applied": False, "marked": marked}
     removed_at = time.strftime("%H:%M:%S", time.localtime(taken_at))
-    # The read is this cluster's (it comes in-cluster only), so it covers this cluster's own rows alone: on the public
-    # desk a row the private cluster reported (#1157, #1158) names a workload this read never lists, and is not marked.
+    # A read covers one cluster's rows alone. An in-cluster /cluster-read is this cluster's, so on the public desk it never
+    # marks a row the private cluster reported (#1157, #1158), whose workload it never lists; a read that came through
+    # /remote-cluster-read with the token is the private cluster's (#1209), and marks only the rows labelled with it.
+    own = LOCAL_CLUSTER if cluster is None else str(cluster)[:63]
     with _lock:
         for r in LANDINGS:
             if (r["ok"] and not r.get("removed_at") and r.get("kind") in kinds and r["ts"] < taken_at
-                    and r.get("cluster", LOCAL_CLUSTER) == LOCAL_CLUSTER and r["name"] not in kinds[r["kind"]]):
+                    and r.get("cluster", LOCAL_CLUSTER) == own and r["name"] not in kinds[r["kind"]]):
                 r["removed_at"], r["removed_ts"] = removed_at, taken_at
                 marked.append(r["name"])
     return {"applied": True, "marked": marked}
@@ -869,13 +876,20 @@ class Handler(BaseHTTPRequestHandler):
                                        str(d.get("image") or ""), str(d.get("requested_by") or ""),
                                        str(d.get("kind") or ""), cluster))
 
+    def _cluster_read(self, raw: bytes, cluster: str | None) -> None:
+        """One cluster read, applied to this cluster's rows (None) or the named cluster's."""
+        try:
+            self._send(200, record_cluster_read(json.loads(raw or b"{}"), cluster))
+        except (ValueError, TypeError) as e:   # BadReport is a ValueError, as a JSON decode error is
+            self._send(400, {"error": str(e) if isinstance(e, BadReport) else "the report must be JSON"})
+
     def do_POST(self) -> None:  # noqa: N802
         url = urllib.parse.urlsplit(self.path)
         if DEPLOYMENTS_HOST.match((self.headers.get("Host") or "").lower()):
             self._send(404, {"error": "not found"})   # the deployments page takes no tickets and no reports
             return
         # A cluster read lists every name of each kind, so it may be longer than a ticket.
-        raw = self._read(MAX_READ_BODY if url.path == "/cluster-read" else MAX_BODY * 3)
+        raw = self._read(MAX_READ_BODY if url.path in ("/cluster-read", REMOTE_READ_PATH) else MAX_BODY * 3)
         if raw is None:
             return
         if url.path == "/submit":
@@ -952,10 +966,16 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, forget_on_desk(names, since, tickets))
         elif url.path == "/cluster-read":
             # In-cluster only, as /landed is: the console refuses it from outside (console.conf). #1050's reader posts here.
-            try:
-                self._send(200, record_cluster_read(json.loads(raw or b"{}")))
-            except (ValueError, TypeError) as e:   # BadReport is a ValueError, as a JSON decode error is
-                self._send(400, {"error": str(e) if isinstance(e, BadReport) else "the report must be JSON"})
+            self._cluster_read(raw, None)
+        elif url.path == REMOTE_READ_PATH:
+            # The other cluster's read (#1209): applied only with the configured token, and to DESK_REMOTE_CLUSTER's rows.
+            allowed = remote_report_allowed(self.headers.get(REMOTE_TOKEN_HEADER))
+            if allowed is None:
+                self._send(404, {"error": "not found"})   # no token configured: the desk takes no remote reads
+            elif not allowed:
+                self._send(401, {"error": f"a remote cluster read needs the desk's {REMOTE_TOKEN_HEADER}"})
+            else:
+                self._cluster_read(raw, REMOTE_CLUSTER)
         else:
             self._send(404, {"error": "not found"})
 

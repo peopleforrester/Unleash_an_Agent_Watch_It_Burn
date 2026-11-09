@@ -8,15 +8,17 @@ cluster's workshop-mcp reaches them through this pod and no other way:
 
     GET  /ticket?id=<number>   -> GET  <DESK_PUBLIC_URL>/ticket?id=<number>, the desk's answer as it is
     POST /landed               -> POST <DESK_PUBLIC_URL>/remote-landed with X-Desk-Report-Token, the answer as it is
-    POST /cluster-read         -> POST <DESK_LOCAL_URL>/cluster-read, this cluster's own desk, as before
+    POST /cluster-read         -> POST <DESK_PUBLIC_URL>/remote-cluster-read with X-Desk-Report-Token, the answer as it is
     GET  /healthz              -> this relay's own state
     anything else              -> 404
 
 So read_support_ticket still reads one ticket by its number and no list (#1077): the relay passes no other desk path,
 and the desk's /ticket answers only the one id it is given. deploy_app's report lands on the public deployments page
 under "private", the label the public desk gives a report that came with its token (#1157). The private cluster's
-reader (#1050) keeps posting what this cluster runs to its own desk, since the public desk takes cluster reads only
-from inside the community cluster.
+reader (#1050) posts what this cluster still runs to the same desk, with the same token (#1209), and the public desk
+applies that read to the rows labelled private alone, so a deploy Kyverno's remove-untrusted-room-workloads deletes here
+shows greyed on deployments.burritobot.co, and a read from here never greys a community row. This cluster's own desk
+gets no deploy report from this cluster's bot, so it needs no read either, and the relay reaches no in-cluster desk.
 
 Why a pod of its own and not an egress allow on workshop-mcp: support.burritobot.co, beacon.burritobot.co and the
 registry share one router address (153.52.255.114, measured 2026-11-08), and a NetworkPolicy cannot name a host, so
@@ -24,9 +26,9 @@ any allow that reached the desk from workshop-mcp would also reach Challenge 1's
 in. This pod builds every URL itself from DESK_PUBLIC_URL, and its label is on the Kyverno egressLabels list, so the
 agent cannot mint a pod that borrows its egress (policies/kyverno/restrict-agent-spawned-workloads.yaml).
 
-The token is read from DESK_REPORT_TOKEN_FILE on each report, so the desk-report-token Secret can be written after
-this pod starts (fleet.sh desk-link) and needs no restart. With no token, a report is refused here with a 503 naming
-the Secret, and nothing is sent.
+The token is read from DESK_REPORT_TOKEN_FILE on each report and each read, so the desk-report-token Secret can be
+written after this pod starts (fleet.sh desk-link) and needs no restart. With no token, a report or a read is refused
+here with a 503 naming the Secret, and nothing is sent.
 """
 from __future__ import annotations
 
@@ -39,7 +41,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 TOKEN_HEADER = "X-Desk-Report-Token"   # the public desk's header (#1157, ticket_site.REMOTE_TOKEN_HEADER)
 MAX_REPORT = 4 * 1024                  # the public console's client_max_body_size for /remote-landed
-MAX_READ = 512 * 1024                  # the desk's MAX_READ_BODY for /cluster-read
+MAX_READ = 512 * 1024                  # the desk's MAX_READ_BODY, and the public console's limit for /remote-cluster-read
 MAX_ID = 40                            # the desk keeps a ticket id to 40 characters
 TIMEOUT = 5
 
@@ -75,7 +77,6 @@ def forward(method: str, url: str, body: bytes | None = None, headers: dict | No
 
 class Handler(BaseHTTPRequestHandler):
     public = ""
-    local = ""
 
     def log_message(self, fmt: str, *args) -> None:  # one line per request, without the query (a ticket number)
         print(f"desk-relay: {self.command} {urllib.parse.urlsplit(self.path).path} -> {args[1] if len(args) > 1 else ''}",
@@ -114,32 +115,30 @@ class Handler(BaseHTTPRequestHandler):
         self._send(*forward("GET", f"{self.public}/ticket?{urllib.parse.urlencode({'id': tid})}"))
 
     def do_POST(self) -> None:  # noqa: N802
+        # Each POST this relay takes, and where it sends it on the public desk with the token: a deploy report, and a
+        # cluster read (#1209), each at the size the public console takes.
+        routes = {"/landed": ("/remote-landed", MAX_REPORT), "/cluster-read": ("/remote-cluster-read", MAX_READ)}
         path = urllib.parse.urlsplit(self.path).path
-        if path == "/landed":
-            raw = self._body(MAX_REPORT)
-            if raw is None:
-                return
-            token = report_token()
-            if not token:
-                self._json(503, {"error": "no desk report token: write the agent/desk-report-token Secret "
-                                          "(fleet.sh desk-link)"})
-                return
-            self._send(*forward("POST", f"{self.public}/remote-landed", raw, {TOKEN_HEADER: token}))
-        elif path == "/cluster-read":
-            raw = self._body(MAX_READ)
-            if raw is None:
-                return
-            self._send(*forward("POST", f"{self.local}/cluster-read", raw))
-        else:
+        if path not in routes:
             self._json(404, {"error": "not found: this relay reports a deploy and a cluster read, nothing else"})
+            return
+        upstream, limit = routes[path]
+        raw = self._body(limit)
+        if raw is None:
+            return
+        token = report_token()
+        if not token:
+            self._json(503, {"error": "no desk report token: write the agent/desk-report-token Secret "
+                                      "(fleet.sh desk-link)"})
+            return
+        self._send(*forward("POST", f"{self.public}{upstream}", raw, {TOKEN_HEADER: token}))
 
 
 def main() -> None:
     Handler.public = _base("DESK_PUBLIC_URL")
-    Handler.local = _base("DESK_LOCAL_URL")
     # Not DESK_RELAY_*: Kubernetes injects DESK_RELAY_PORT=tcp://... for the Service named desk-relay.
     port = int(os.environ.get("RELAY_LISTEN_PORT", "8080"))
-    print(f"desk-relay: tickets and deploy reports go to {Handler.public}, cluster reads to {Handler.local}", flush=True)
+    print(f"desk-relay: tickets, deploy reports and cluster reads go to {Handler.public}", flush=True)
     ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
 
 

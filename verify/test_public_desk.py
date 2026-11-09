@@ -4,7 +4,8 @@
 
 On kubecon-private the ai-layer adds the public-desk component: a desk-relay pod, and workshop-mcp's TICKET_SITE_URL
 pointed at it. The relay passes GET /ticket?id=<number> to support.burritobot.co, POST /landed to its /remote-landed
-with the desk-report-token Secret's token (#1157), POST /cluster-read to the cluster's own desk, and nothing else.
+with the desk-report-token Secret's token (#1157), POST /cluster-read to its /remote-cluster-read with the same token
+(#1209), and nothing else.
 
 Four parts, with no cluster and no network:
   1. every profile's ai-layer as the chart writes it (bootstrap_chart.py, no Helm), and workshop-mcp's TICKET_SITE_URL
@@ -16,7 +17,8 @@ Four parts, with no cluster and no network:
      number, and the report lands under "private";
   3. read by number only (#1077): no MCP tool lists tickets, and every desk path but /ticket?id= is refused at the
      relay without reaching the public desk;
-  4. the public desk's cluster reads cover its own rows only, so the community reader never greys a private row.
+  4. each cluster's reads cover its own rows only: the community reader never greys a private row, and the private
+     reader's reads, through the relay, grey the private rows Kyverno removed and never a community row (#1209).
 verify/test_bootstrap_chart_render.py builds the component with the pinned Helm and kustomize.
 """
 from __future__ import annotations
@@ -129,8 +131,9 @@ relay_env = {e["name"]: e.get("value") for c in pod.get("containers", []) for e 
 check("the relay's Service is desk-relay on 8080, the name TICKET_SITE_URL gives",
       relay_svc.get("metadata", {}).get("name") == "desk-relay" and RELAY_URL.endswith(":8080")
       and [p.get("port") for p in relay_svc["spec"]["ports"]] == [8080])
-check("the relay's public desk is support.burritobot.co over https, its own desk the fake-ticket Service",
-      relay_env.get("DESK_PUBLIC_URL") == f"https://{SUPPORT}" and relay_env.get("DESK_LOCAL_URL") == IN_CLUSTER_DESK)
+check("the relay's one desk is support.burritobot.co over https; it names no in-cluster desk (#1209)",
+      relay_env.get("DESK_PUBLIC_URL") == f"https://{SUPPORT}" and "DESK_LOCAL_URL" not in relay_env
+      and not [v for v in relay_env.values() if v and "svc.cluster.local" in v], str(relay_env))
 check("the relay holds no cluster token", pod.get("automountServiceAccountToken") is False)
 check("it mounts desk-report-token, optional, where DESK_REPORT_TOKEN_FILE reads",
       {"secretName": "desk-report-token", "optional": True} in [v.get("secret") for v in pod.get("volumes", [])]
@@ -139,11 +142,10 @@ egress = (relay_np.get("spec") or {}).get("egress") or []
 check("its NetworkPolicy selects the relay alone, by the label egressLabels refuses the agent",
       relay_np.get("spec", {}).get("podSelector") == {"matchLabels": {"app.kubernetes.io/name": "desk-relay"}}
       and "'desk-relay'" in (REPO / "policies/kyverno/restrict-agent-spawned-workloads.yaml").read_text(encoding="utf-8"))
-check("and lets it out on TCP 443, DNS and the in-namespace desk on 8080, nothing else",
+check("and lets it out on TCP 443 and DNS, nothing else: no in-namespace desk since its reads go public (#1209)",
       egress == [{"ports": [{"protocol": "TCP", "port": 443}]},
                  {"to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "kube-system"}}}],
-                  "ports": [{"protocol": "UDP", "port": 53}, {"protocol": "TCP", "port": 53}]},
-                 {"to": [{"podSelector": {}}], "ports": [{"protocol": "TCP", "port": 8080}]}], str(egress))
+                  "ports": [{"protocol": "UDP", "port": 53}, {"protocol": "TCP", "port": 53}]}], str(egress))
 mcp_np = [d for d in relay_docs if d["kind"] == "NetworkPolicy"
           and (d["spec"].get("podSelector") or {}) != {"matchLabels": {"app.kubernetes.io/name": "desk-relay"}}]
 check("the component opens no egress for workshop-mcp or any other pod", not mcp_np, str(mcp_np))
@@ -164,7 +166,8 @@ tmp = pathlib.Path(tempfile.mkdtemp(prefix="desk-relay-1158-"))
 token_file = tmp / "token"
 relay = load("desk_relay_1158", COMPONENT / "desk_relay.py", {"DESK_REPORT_TOKEN_FILE": str(token_file)})
 os.environ["DESK_REPORT_TOKEN_FILE"] = str(token_file)
-relay.Handler.public, relay.Handler.local = PUBLIC, LOCAL
+relay.Handler.public = PUBLIC
+check("the relay holds one desk URL, the public one", not hasattr(relay.Handler, "local"))
 relay.Handler.log_message = lambda *a: None
 RELAY = serve(relay.ThreadingHTTPServer(("127.0.0.1", 0), relay.Handler))
 
@@ -255,11 +258,6 @@ token_file.write_text(TOKEN, encoding="utf-8")
 code, _ = http("POST", f"{RELAY}/landed", b"x" * (4 * 1024 + 1), {"Content-Type": "application/json"})
 check(f"a report over the public console's 4k is refused at the relay ({code})", code == 413)
 
-read = {"taken_at": time.time(), "ok": True, "kinds": {"Deployment": []}}
-code, body = http("POST", f"{RELAY}/cluster-read", json.dumps(read).encode(), {"Content-Type": "application/json"})
-check(f"a cluster read goes to the private cluster's own desk, as before ({code})",
-      code == 200 and "/cluster-read" in local_seen and "/cluster-read" not in public_seen, body[:200])
-
 print("== read by number only (#1077) ==")
 tools = re.findall(r"^@mcp\.tool\(.*?^def (\w+)\(", (AI / "workshop-mcp-server.py").read_text(encoding="utf-8"),
                    re.S | re.M)
@@ -273,7 +271,7 @@ for path in ("/", "/wall", "/wall.json", "/me", "/mine", "/deployments", "/deplo
              "/ticket?id=" + "9" * 41, "/healthz/../wall.json", "/presenter-ticket"):
     code, _ = http("GET", f"{RELAY}{path}")
     check(f"GET {path} at the relay is refused ({code})", code in (400, 404))
-for path in ("/submit", "/presenter-ticket", "/remote-landed", "/ticket"):
+for path in ("/submit", "/presenter-ticket", "/remote-landed", "/remote-cluster-read", "/ticket"):
     code, _ = http("POST", f"{RELAY}{path}", b"{}", {"Content-Type": "application/json"})
     check(f"POST {path} at the relay is refused ({code})", code == 404)
 check("none of them reached the public desk", len(public_seen) == before, str(public_seen[before:]))
@@ -281,16 +279,55 @@ code, body = http("GET", f"{RELAY}/healthz")
 check("the relay's /healthz names its desk and whether it holds a token, never the token",
       code == 200 and json.loads(body) == {"ok": True, "desk": PUBLIC, "token": True} and TOKEN not in body)
 
-print("== the public desk's cluster reads cover its own rows only ==")
+print("== each cluster's reads cover its own rows only, the private one's through the relay (#1209) ==")
+
+
+def removed_names() -> set[str]:
+    return {r["name"] for r in public.LANDINGS if r["removed_at"]}
+
+
 public.record_landing("community-app", True, "", IMAGE, "Hazel the Witch", "Deployment")
 mine = [r for r in public.LANDINGS if r["name"] == "community-app"]
 check("a row the community cluster's bot landed is labelled community", bool(mine) and mine[0]["cluster"] == "community")
+check("the private rows so far are relay-landed alone", {r["name"] for r in public.LANDINGS if r["cluster"] == "private"}
+      == {"relay-landed"}, str([(r["name"], r["cluster"]) for r in public.LANDINGS]))
+read_kept = {"taken_at": time.time() + 1, "ok": True, "kinds": {"Deployment": ["relay-landed"]}}
+token_file.write_text("", encoding="utf-8")
+before, local_before = len(public_seen), len(local_seen)
+code, body = http("POST", f"{RELAY}/cluster-read", json.dumps(read_kept).encode(), {"Content-Type": "application/json"})
+check(f"with no token, the relay answers a cluster read 503, naming the Secret, and sends nothing ({code})",
+      code == 503 and "desk-report-token" in body and len(public_seen) == before, body[:200])
+token_file.write_text("a-wrong-token", encoding="utf-8")
+code, body = http("POST", f"{RELAY}/cluster-read", json.dumps(read_kept).encode(), {"Content-Type": "application/json"})
+check(f"with a token the public desk does not hold, its 401 comes back and no row is marked ({code})",
+      code == 401 and removed_names() == set(), body[:200])
+token_file.write_text(TOKEN + "\n", encoding="utf-8")
+code, body = http("POST", f"{RELAY}/cluster-read", json.dumps(read_kept).encode(), {"Content-Type": "application/json"})
+check(f"with the token, a private read that still lists relay-landed reaches the public desk and marks nothing ({code})",
+      code == 200 and json.loads(body) == {"applied": True, "marked": []}, body[:200])
+check("it reached the public desk on /remote-cluster-read, and no in-cluster desk",
+      public_seen[before:].count("/remote-cluster-read") == 2 and "/cluster-read" not in public_seen
+      and len(local_seen) == local_before, f"{public_seen[before:]} {local_seen[local_before:]}")
+code, _ = http("POST", f"{RELAY}/cluster-read", b"x" * (512 * 1024 + 1), {"Content-Type": "application/json"})
+check(f"a read over the public console's 512k is refused at the relay ({code})", code == 413)
+
+# Kyverno's remove-untrusted-room-workloads deletes relay-landed on the private cluster: the private reader's next read,
+# the real read_room_workloads' report posted by the real post_cluster_read, no longer lists it.
+said = mcp.post_cluster_read({"taken_at": time.time() + 1, "ok": True,
+                              "kinds": {"Deployment": [], "Pod": ["workshop-mcp-0"]}})
+check(f"workshop-mcp's reader, pointed at the relay, posts its read ({said})", said == "cluster reads posted to the desk")
+rows = json.loads(http("GET", f"{PUBLIC}/deployments.json", headers={"Host": DEPLOYMENTS})[1])
+greyed = {r["name"]: r["cluster"] for r in rows if r["removed_at"]}
+check("the private row Kyverno removed shows greyed on the public deployments page",
+      greyed == {"relay-landed": "private"}, str(greyed))
+check("and the private read never marks the community row", not [r for r in rows if r["cluster"] == "community"
+                                                                    and r["removed_at"]], str(rows))
+mcp._report("relay-landed-2", True, "", IMAGE, "Agatha the Banshee", "Deployment")
+check("a second private deploy lands on the public page", len(landed_rows("relay-landed-2")) == 1)
 result = public.record_cluster_read({"taken_at": time.time() + 1, "ok": True, "kinds": {"Deployment": []}})
 check(f"a community read that lists no Deployment marks the community row removed {result['marked']}",
-      "community-app" in result["marked"])
-check("and leaves the private cluster's row as it was, since that read never covered it",
-      "relay-landed" not in result["marked"]
-      and all(not r["removed_at"] for r in public.LANDINGS if r["cluster"] == "private"))
+      result["marked"] == ["community-app"])
+check("and never a private row, since that read never covered one", "relay-landed-2" not in removed_names())
 local.record_landing("attendee-app", True, "", IMAGE, "Hazel the Witch", "Deployment")
 result = local.record_cluster_read({"taken_at": time.time() + 1, "ok": True, "kinds": {"Deployment": []}})
 check(f"a desk with no cluster label (the 2-hour workshop's) still marks its own rows {result['marked']}",
@@ -399,4 +436,4 @@ if failures:
         print(f"  - {f}")
     sys.exit(1)
 print("Only kubecon-private's bot uses the public desk, through a relay that reads one ticket by its number and sends the "
-      "deploy report with the desk's token; every other profile keeps its own desk.")
+      "deploy report and the cluster read with the desk's token; every other profile keeps its own desk.")
