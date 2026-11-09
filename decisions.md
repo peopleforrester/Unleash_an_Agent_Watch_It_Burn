@@ -48913,3 +48913,28 @@ a broken copy without it fails. It printed `SEGMENT 3 TIMING GREEN`. `verify/sco
 test reads no new file.
 
 **No live check.** The change is the run-of-show's prose and an offline test; nothing a cluster runs reads them.
+
+## 2026-11-09 · #1040 · run 19708 · question 1146: the rehearsal did not happen yet; segment 3's times and cut wait on a timed run
+
+**Question 1146.** Which way did the segment 3 rehearsal settle the extra time, and what did each beat take?
+**Answer:** The rehearsal did not happen yet. **Decided by** hecaton's research under Michael's standing rules, not
+by Michael.
+
+**What the research found.** The one recording of Michael and Whitney together on 2026-11-09 (Drive, "BurritoBot
+Talk Run of Show and Slide Review", uploaded 15:32 UTC) is a slide and run-of-show review, not a timed run: it has no
+stopwatch reading or beat time, and no cut or segment named to give up a minute. On Challenge 2 Michael asks whether
+turning the guardrails on and trying the attack again reads as repeated; no change was settled. rounds-agenticburn#167,
+filed after that review, puts the whole talk at about 45 minutes estimated against its 30 and leaves timing to Michael
+and Whitney. The calendar slot hecaton placed for #1040 overlapped another item on his day, and no mail or issue
+records segment 3 times.
+
+**What it changes.** Hecaton's calendar comment treated the rehearsal as done once its slot ended (hecaton#483); this
+answer overrides that for #1040. Criteria 2 to 4 (the timed run, the choice, and writing both into the run-of-show)
+stay open and wait on Michael and Whitney rehearsing. Run 19702's re-read of the budget against deck `4dd5bbb0`
+stands, but its wording that the 2026-11-09 rehearsal timed that deck was wrong: the Timing paragraph now calls
+`4dd5bbb0` the deck as it stood that day and says the session was a review, and run 19702's entry above is corrected
+by this one. Nothing else in the run-of-show moves: the Rehearsal column, the segments table's segment 3 row and the
+Run-through record's Segment 3 row stay empty for the timed run.
+
+**Test.** `python3 verify/test_seg3_timing.py`, once; the prose gate. No live check: the change is prose that no
+cluster runs.
