@@ -45685,3 +45685,25 @@ and asserts the length is within `DRAIN_MAX`; the body past `DRAIN_MAX` is still
 verify/test_public_desk.py` exit 0 (the 4k and 512k refusals both read 413), `python3 verify/test_scope_tests.py` exit
 0. The scoped Test and E2E commands are left to hecaton's validation. No live check: the change touches only tests
 under `verify/`, its map and decisions.md, which no cluster runs. No dependency was added.
+
+## 2026-11-09 · #1238 · run 19485 · A test holds the start-state block's order: desk-reset, then beacon-reset, then start-check
+
+The run-of-show change #1238 asks for was already on staging: #1228's `dea451dd` put `./fleet.sh beacon-reset` and
+`./fleet.sh start-check` after `./fleet.sh desk-reset` in the run-through record's start-state block and in the Night
+Before, with the sentence that `start-check` is the start-state check for the deployments pages and the beacon count,
+as `wall-check --empty` is for the wall. No test held that order, so the run-of-show is unchanged here and the work
+is the test. `prior-drafts.sh 1238 origin/staging` printed NONE.
+
+`verify/test_fleet_wall_reset.sh` already read this block for its first three lines, so the checks went there. It
+now takes the fenced bash block in the run-through record that runs `./fleet.sh wall-reset` and holds its lines whole
+and in order: `reset-bot watch-it-burn-community watch-it-burn-private`, `wall-reset`, `wall-check --empty`,
+`desk-reset`, `beacon-reset`, `start-check`. A mismatch prints the diff. A second check holds the two start-state
+sentences, and a third holds the Night Before's order, `wall-check --empty` before `desk-reset` before `beacon-reset`
+before `start-check`. The test already read the run-of-show, so its scope-map entry is unchanged.
+
+**Tests run.** `bash verify/test_fleet_wall_reset.sh`: 38 passed, 0 failed. On a scratch edit of the run-of-show,
+each restored after: swapping the block's last two lines failed the block check alone, with the diff; swapping the
+Night Before's `beacon-reset` and `start-check` failed its check alone; deleting the block's `start-check` line failed
+the block check alone. `python3 verify/test_scope_tests.py`: ALL PASS. The prose gate: pass. The scoped Test and E2E
+commands are left to hecaton's validation. No live check: the change touches only a test under `verify/` that no
+cluster runs, and decisions.md. No dependency was added.
