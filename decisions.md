@@ -47745,3 +47745,17 @@ in its row 5 (`curl -s https://burritobot-private.burritobot.co/kubecon | grep -
 `python3 verify/test_scope_tests.py` passed, and the prose gate passed. `python3 verify/scope_tests.py write` added
 the new test's entry. The whole Test and E2E commands were not run and are left to validation. No dependency was
 added.
+## 2026-11-09 · #1270 · run 19607 · The live deck test's fetch is in verify/fetch-inventory.yaml
+
+Run 19592's change failed the `tests` gate on `verify/test_fetch_inventory.py` alone: the new
+`verify/test_ros_deck_live.py` fetches `https://rounds.agenticburn.com/attendee.html` with `urllib.request.urlopen`, and
+no entry in `verify/fetch-inventory.yaml` claimed that line (#1116). The inventory now classes it `live`, kind
+`public-web`, with the deck as its target. Nothing else in run 19592's change moved.
+
+**No live check.** The change is the inventory under `verify/`, which no cluster runs; run 19592's entry above holds
+the live deck read and the `/kubecon` check still owed after promotion.
+
+**Tests run.** `python3 verify/test_fetch_inventory.py` failed as the gate said, then passed with the entry. On the
+current staging base, `test_ros_seg4_flow.py`, `test_kubecon_seg4_flow.py`, `test_deck_shift_slide_citations.py`,
+`test_ros_deck_live.py` and `test_scope_tests.py` passed once each. The whole Test and E2E commands are left to
+validation.

@@ -1538,6 +1538,12 @@ sites:
     lines: 2
     class: loopback
     why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_ros_deck_live.py:
+  - match: urllib\.request\.urlopen
+    lines: 1
+    class: live
+    kind: public-web
+    target: the deck rounds-agenticburn serves, https://rounds.agenticburn.com/attendee.html (#1270)
   verify/test_run_shell_failure.py:
   - match: .
     lines: 4
