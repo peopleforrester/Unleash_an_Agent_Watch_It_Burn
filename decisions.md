@@ -49035,3 +49035,34 @@ terminal login was not read or touched. Both chat hosts served staging's `burrit
 **Not yet run on a cluster.** The page serving this rule: after promotion, `curl -s https://attackme.burritobot.co/ |
 sha256sum` equal to git's `gitops/ai-layer/web/burritbot.html`. The probe log is
 `tmp/hecaton/scr/probe-community.log`, scratch the run's end removes.
+
+## 2026-11-09 · #1294 · run 19718 · Run 19701's tests gate: #1289's copy scan called #1269's floor block an unknown copy; the scan now knows it as a Builder
+
+**What failed.** Hecaton's `tests` gate on run 19701 failed one test, `verify/test_coc_pattern_copies.py`, with 4
+checks. It was not this issue's change: the same 4 checks fail on staging's `e55c1bb6` without run 19701's commit (a
+detached worktree of that commit, run alone), and no later staging commit touches the files involved.
+
+**The cause.** #1269 (`a9172f5b`, 20:57) put the code-of-conduct floor into `gitops/ai-layer/workshop-mcp-server.py` and
+`gitops/ai-layer/ticket_site.py` as a Python block between two anchor comments, which builds the pattern from the
+floor's terms with the floor's separator class `[\s._*\-]`. `verify/test_deploy_coc.py` holds what that block compiles
+to `floor.proposed_pattern()`. #1289 (`e55c1bb6`, 20:58) added a scan that reports any piece of the pattern under
+`gitops/` outside the two copies it names. Each passed on its own branch, the race #1289's own entry describes, and
+together the scan reported the separator on line 335 of `ticket_site.py` and line 713 of `workshop-mcp-server.py`. The
+other three failing checks build a case on the committed tree and require the scan to report nothing else, so they
+failed on the same two lines.
+
+**The fix.** `verify/coc_pattern_copies.py` gains a second kind of place, a Builder: a file and the two anchors its
+block sits between, and the test that holds the block to the floor (`test_deploy_coc`). A piece of the pattern inside
+a Builder's block is known; `write` leaves the block alone, since Python builds it from the terms; an anchor missing,
+doubled or out of order is named. `HOLDERS` now includes `test_deploy_coc`, whose map entry already reads the floor's
+three files and both Python files. `verify/test_coc_pattern_copies.py` adds, per Builder: a separator written after
+the block's end is still reported with its line, a reworded start anchor is named, and a change to the file selects
+`test_deploy_coc` and this test.
+
+**Tests.** `python3 verify/test_coc_pattern_copies.py`, `test_deploy_coc.py` and `test_scope_tests.py` pass, once each,
+and `python3 verify/coc_pattern_copies.py` exits 0 naming two copies and two builders. On this base,
+`test_kubecon_probe.py` and `test_storefront_thinking_e2e.py` (run 19701's change) pass again. `scope_tests.py write`
+changed nothing and `check` reads 0 problems. No dependency was added.
+
+**Live check.** Skipped: the change touches only `verify/` and `decisions.md`, which no cluster runs. Run 19701's live
+probe and its "Not yet run on a cluster" line above stand.

@@ -6,7 +6,8 @@ PyYAML. No cluster, no network.
 
 1. Each Site in verify/coc_pattern_copies.py finds exactly one copy, each decodes to floor.portable_pattern(), and no
    piece of the pattern (floor's separator class or a leetspeak class, in any escaping) sits anywhere else under
-   gitops/: a copy in a new file fails here until it gets a Site.
+   gitops/ outside them and the Builders' blocks: a copy in a new file fails here until it gets a Site. Each Builder's
+   block is found by its two anchors (#1269's floor in workshop-mcp-server.py and ticket_site.py, #1294's run 19718).
 2. The scan finds the pattern however it is escaped, and the check catches what turned staging red on 2026-11-09: a
    copy written before #1277 gave the pattern its JSON-escape edges is stale, and `write` repairs it and touches
    nothing else in the file. A copy in a file no Site names is reported, and so is a Site whose anchor is reworded.
@@ -49,8 +50,9 @@ files = cpc.gitops_files()
 copies, problems = cpc.scan(files)
 for p in problems:
     print(f"        {p}")
-check(f"each of the {len(cpc.SITES)} Sites finds one copy, and no piece of the pattern sits outside them among the "
-      f"{len(files)} files under gitops/", not problems and len(copies) == len(cpc.SITES))
+check(f"each of the {len(cpc.SITES)} Sites finds one copy, each of the {len(cpc.BUILDERS)} Builders its block, and no "
+      f"piece of the pattern sits outside them among the {len(files)} files under gitops/",
+      not problems and len(copies) == len(cpc.SITES))
 for c in copies:
     check(f"{c.site.path}: {c.site.what} decodes to floor.portable_pattern() ({len(c.decoded)} of {len(PATTERN)} "
           "characters)", c.decoded == PATTERN)
@@ -91,6 +93,20 @@ _, probs = cpc.scan(dict(files, **{site.path: files[site.path].replace(site.anch
 check(f"a reworded anchor in {site.path} is named as that ({probs[:1]})",
       any(repr(site.anchor) in p and "no longer holds" in p for p in probs))
 
+# #1294's run 19718: #1269's floor block reached staging a minute before this scan, which then called the block's
+# separator an unknown copy. A Builder names it; a piece moved out of the block is still reported, and so is a
+# reworded anchor.
+for b in cpc.BUILDERS:
+    text = files[b.path]
+    end = text.index(b.end)
+    moved = text[:end] + text[end:].replace("\n", "\nSEP = r\"" + cpc.floor._SEP + "\"\n", 1)
+    _, probs = cpc.scan(dict(files, **{b.path: moved}))
+    check(f"{b.path}: a piece written after the block's end is reported with its line ({probs[:1]})",
+          len(probs) == 1 and probs[0].startswith(f"{b.path}:"))
+    _, probs = cpc.scan(dict(files, **{b.path: text.replace(b.start, "# --- the floor ")}))
+    check(f"{b.path}: a reworded start anchor is named as that ({probs[:1]})",
+          any(repr(b.start) in p and "once each" in p for p in probs))
+
 print("== 3. a change to the floor selects every test that holds a copy, through verify/scope-map.yaml ==")
 # The map as committed, read the way verify/scope_tests.py's select() reads it: a test runs for a changed path when it
 # is an always test or an entry of its reads covers the path. (Importing scope_tests would make this an always test,
@@ -121,6 +137,10 @@ for site in cpc.SITES:
     for t in site.tests:
         check(f"a change to {site.path} selects {t} and this test, which hold its copy to the floor",
               selects(t, site.path) and selects("test_coc_pattern_copies", site.path))
+for b in cpc.BUILDERS:
+    for t in b.tests:
+        check(f"a change to {b.path} selects {t}, which holds its block to the floor, and this test",
+              selects(t, b.path) and selects("test_coc_pattern_copies", b.path))
 
 print()
 if failures:

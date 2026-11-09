@@ -16,6 +16,12 @@ separator class and its leetspeak classes, in any escaping) in every file there,
 inside a copy a Site knows. A new copy therefore fails verify/test_coc_pattern_copies.py until it gets a Site here,
 and from then on that test holds it to the floor. On 2026-11-09 #1278 copied the pattern into the admission policy
 and #1277 changed it 17 minutes later; each run passed on its own branch and staging went red (#1289).
+
+A Builder is the other kind of place: a Python file that builds the floor's pattern itself, from the same terms,
+inside a block between two anchor comments (#1269's deploy_app refusal and the desk's mask). Its pieces inside that
+block are known, `write` leaves it alone, and the test it names (test_deploy_coc) holds the compiled pattern to
+floor.proposed_pattern(). #1269 added the block a minute before #1289's scan landed, each on its own branch, and the
+scan called the block's separator an unknown copy (#1294's run 19718).
 """
 from __future__ import annotations
 
@@ -71,12 +77,30 @@ SITES = (
          re.compile(re.escape(_OTTL[0]) + r'(?P<w>[^"\n]+)' + re.escape(_OTTL[1]) + "$", re.M),
          coc_mask_cases.encode, coc_mask_cases.decode, ("test_collector_coc_mask",)),
 )
+@dataclasses.dataclass(frozen=True)
+class Builder:
+    """A Python file that builds the pattern from the floor's terms between `start` and `end`, two comment lines each
+    there once. The block is not a copy to rewrite; `tests` holds what it compiles to the floor."""
+    path: str
+    what: str
+    start: str
+    end: str
+    tests: tuple[str, ...]
+
+
+_BLOCK = ("# --- the code-of-conduct floor (#1269, part of #1267) ", "# --- end of the code-of-conduct floor ")
+BUILDERS = (
+    Builder("gitops/ai-layer/workshop-mcp-server.py", "deploy_app's code-of-conduct refusal (#1269)", *_BLOCK,
+            ("test_deploy_coc",)),
+    Builder("gitops/ai-layer/ticket_site.py", "the desk's code-of-conduct mask on record_landing (#1269)", *_BLOCK,
+            ("test_deploy_coc",)),
+)
 # What the floor is built from: a change to any of these changes the pattern, so it has to select every test that
 # holds a copy (verify/scope-map.yaml), and it then fails on its own branch rather than on staging.
 FLOOR_SOURCES = ("docs/research/2026-11-09-coc-floor/floor.py", "docs/research/2026-11-09-coc-floor/corpus.py",
                  "docs/research/2026-11-09-coc-floor/terms-proposed.rot13")
 # By stem: a test named in full here would read to verify/scope_tests.py as a helper this one runs.
-HOLDERS = ("test_coc_pattern_copies",) + tuple(t for s in SITES for t in s.tests)
+HOLDERS = ("test_coc_pattern_copies",) + tuple(dict.fromkeys(t for s in SITES + BUILDERS for t in s.tests))
 
 
 def pattern() -> str:
@@ -120,11 +144,33 @@ def gitops_files() -> dict[str, str]:
     return {rel: p.read_bytes().decode("utf-8", errors="replace") for rel, p in gitops_paths().items()}
 
 
-def scan(files: dict[str, str], sites: tuple[Site, ...] = SITES) -> tuple[list[Copy], list[str]]:
-    """Each copy the sites find, and each problem: a site's file or anchor or copy missing, a site holding more than
-    one copy, and a piece of the pattern outside every copy (a copy no Site knows)."""
-    copies: list[Copy] = []
+def builder_spans(files: dict[str, str], builders: tuple[Builder, ...] = BUILDERS) -> tuple[dict[str, tuple[int, int]],
+                                                                                          list[str]]:
+    """Each builder's block as (start, end) in its file, by path, and each problem: the file missing, or an anchor
+    there other than once or out of order."""
+    spans: dict[str, tuple[int, int]] = {}
     problems: list[str] = []
+    for b in builders:
+        text = files.get(b.path)
+        if text is None:
+            problems.append(f"{b.path}: missing, and it is where {b.what} builds the pattern")
+            continue
+        counts = {a: text.count(a) for a in (b.start, b.end)}
+        if any(n != 1 for n in counts.values()) or text.index(b.start) > text.index(b.end):
+            problems.append(f"{b.path}: the block {b.what} sits in is found by {b.start!r} then {b.end!r}, once each; "
+                            f"the file holds them {counts[b.start]} and {counts[b.end]} times")
+            continue
+        spans[b.path] = (text.index(b.start), text.index(b.end))
+    return spans, problems
+
+
+def scan(files: dict[str, str], sites: tuple[Site, ...] = SITES,
+         builders: tuple[Builder, ...] = BUILDERS) -> tuple[list[Copy], list[str]]:
+    """Each copy the sites find, and each problem: a site's file or anchor or copy missing, a site holding more than
+    one copy, a builder's block not found, and a piece of the pattern outside every copy and every builder's block (a
+    copy no Site knows)."""
+    copies: list[Copy] = []
+    blocks, problems = builder_spans(files, builders)
     for site in sites:
         text = files.get(site.path)
         if text is None:
@@ -139,12 +185,14 @@ def scan(files: dict[str, str], sites: tuple[Site, ...] = SITES) -> tuple[list[C
                             f"the Site's pattern is {site.where.pattern[:80]!r}...")
         copies += found
     for path, text in sorted(files.items()):
-        spans = sorted((c.start, c.end) for c in copies if c.site.path == path)
+        spans = sorted([(c.start, c.end) for c in copies if c.site.path == path]
+                       + ([blocks[path]] if path in blocks else []))
         for m in FINGERPRINT.finditer(text):
             if not any(s <= m.start() and m.end() <= e for s, e in spans):
                 line = text.count("\n", 0, m.start()) + 1
                 problems.append(f"{path}:{line}: a piece of the code-of-conduct pattern ({m.group(0)}) outside every "
-                                f"copy verify/coc_pattern_copies.py knows; add a Site for it there")
+                                f"copy and builder verify/coc_pattern_copies.py knows; add a Site or a Builder for it "
+                                f"there")
                 break
     return copies, problems
 
@@ -190,6 +238,8 @@ def main(argv: list[str]) -> int:
     problems += stale(copies)
     for c in copies:
         print(f"{c.site.path}: {c.site.what}, {len(c.decoded)} characters")
+    for b in BUILDERS:
+        print(f"{b.path}: {b.what}, built in Python and held to the floor by {', '.join(b.tests)}")
     for p in problems:
         print(f"PROBLEM {p}")
     if problems:
