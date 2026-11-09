@@ -7,8 +7,9 @@
 A registry on 127.0.0.1 (yarn_pins.Registry) serves two native-style fixture packages, each with an `os` and `cpu`
 field: wib-native for this host's platform and wib-elsewhere for aix on ppc64. A project lists both as
 optionalDependencies, as the Backstage app's dependencies list @esbuild/linux-x64 and its siblings, so yarn.lock gives
-both a `conditions:` line. The project carries the app's yarn-plugins/conditional-checksums.cjs, named by YARN_PLUGINS
-as run-e2e.sh names it, and a lock made by yarn_pins.record(), the path `yarn_pins.py write` takes.
+both a `conditions:` line. The project carries the app's yarn-plugins/conditional-checksums.cjs, registered by the
+`plugins` entry of the app's own .yarnrc.yml (#1245), so each install below is a plain `yarn install` with no
+YARN_PLUGINS, and a lock made by yarn_pins.record(), the path `yarn_pins.py write` takes.
 
   - the premise: yarn.lock records no checksum for either conditional package, and without the plugin a cached zip
     whose bytes changed installs with no error;
@@ -35,6 +36,8 @@ import subprocess
 import sys
 import tarfile
 import zipfile
+
+import yaml
 
 VERIFY = pathlib.Path(__file__).resolve().parent
 REPO = VERIFY.parent
@@ -70,6 +73,8 @@ release = BACKSTAGE / ".yarn/releases"
 yarn_release = sorted(release.glob("yarn-4.*.cjs"))
 check(f"the Backstage app commits a yarn 4 release ({[p.name for p in yarn_release]})", len(yarn_release) == 1)
 check(f"the app commits the plugin ({yp.PLUGIN_REL})", PLUGIN.is_file())
+APP_PLUGINS = (yaml.safe_load((BACKSTAGE / ".yarnrc.yml").read_text(encoding="utf-8")) or {}).get("plugins")
+check(f"the app's .yarnrc.yml registers it under plugins ({APP_PLUGINS})", APP_PLUGINS == [{"path": yp.PLUGIN_REL}])
 SCRATCH = artifact_cache.scratch_dir("wib-yarn-pins-e2e-")
 if failures:
     finish()
@@ -101,12 +106,14 @@ TAR_ELSEWHERE = "/wib-elsewhere/-/wib-elsewhere-1.0.0.tgz"
 GLOBAL = SCRATCH / "yarn-global"
 
 
-def project(name: str, reg: yp.Registry, lockfile: str, lock_rows: dict | None) -> pathlib.Path:
+def project(name: str, reg: yp.Registry, lockfile: str, lock_rows: dict | None, plugin: bool = True) -> pathlib.Path:
+    """A scratch project whose .yarnrc.yml carries the app's own `plugins` entry, or none when plugin is False."""
     d = SCRATCH / name
     (d / "yarn-plugins").mkdir(parents=True)
     (d / "package.json").write_text('{"name":"wib-pins-user","private":true,'
                                     '"optionalDependencies":{"wib-native":"1.0.0","wib-elsewhere":"1.0.0"}}')
-    (d / ".yarnrc.yml").write_text(yp.yarnrc(reg.url))
+    rc = yp.yarnrc(reg.url) + (yaml.safe_dump({"plugins": APP_PLUGINS}) if plugin else "")
+    (d / ".yarnrc.yml").write_text(rc)
     (d / "yarn.lock").write_text(lockfile)
     shutil.copy2(PLUGIN, d / yp.PLUGIN_REL)
     if lock_rows is not None:
@@ -114,10 +121,9 @@ def project(name: str, reg: yp.Registry, lockfile: str, lock_rows: dict | None) 
     return d
 
 
-def yarn(d: pathlib.Path, *args: str, plugin: bool = True, global_folder: pathlib.Path = GLOBAL):
+def yarn(d: pathlib.Path, *args: str, global_folder: pathlib.Path = GLOBAL):
+    """A plain `yarn install`: yarn_env() drops every YARN_* of the caller's, YARN_PLUGINS included."""
     env = yp.yarn_env(global_folder)
-    if plugin:
-        env["YARN_PLUGINS"] = str(d / yp.PLUGIN_REL)
     r = subprocess.run(["node", str(YARN), "install", *args], cwd=d, capture_output=True, text=True, env=env,
                        timeout=300)
     return r, r.stdout + r.stderr
@@ -178,8 +184,8 @@ with yp.Registry(packages(42)) as reg:
             out_zip.writestr(i, d.replace(b"42", b"43"))
     tampered = ZIP.read_bytes()
     reg.requests.clear()
-    bare = project("tampered-no-plugin", reg, lockfile, rows)
-    r, out = yarn(bare, "--immutable", plugin=False)
+    bare = project("tampered-no-plugin", reg, lockfile, rows, plugin=False)
+    r, out = yarn(bare, "--immutable")
     check(f"the premise: without the plugin, yarn 4 installs it with no error (exit {r.returncode})",
           r.returncode == 0 and installed(bare) == "module.exports = 43;\n", out[-800:])
     bad = project("tampered", reg, lockfile, rows)

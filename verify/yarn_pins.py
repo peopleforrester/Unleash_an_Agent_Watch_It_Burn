@@ -9,8 +9,8 @@ those as unstable: their cache zip is never hashed, and no checksum is written f
 or checksumBehavior say (run 18530). The app's yarn-plugins/conditional-checksums.cjs closes that: after the fetch step
 and before the link step it hashes each enabled conditional package's cache zip, in the cache's own
 `<cacheKey>/<sha512>` form, against yarn-plugins/conditional-checksums.lock, and fails the install with YN0018 on a
-mismatch or a package with no line. YARN_PLUGINS names it to each install (run-e2e.sh, the Dockerfile, the README's
-build step).
+mismatch or a package with no line. The app's .yarnrc.yml lists it under `plugins`, so every yarn the app runs loads
+it: run-e2e.sh, the Dockerfile, the README's build step and a plain `yarn install` alike (#1245).
 
 `write` records that lock, one line per conditional locator in yarn.lock, every platform's included:
   1. each package's version document is read from registry.npmjs.org and its tarball downloaded and checked against

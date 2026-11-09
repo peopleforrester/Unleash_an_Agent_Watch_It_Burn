@@ -206,8 +206,9 @@ run_one "backstage-footprint.sh (SAMPLES=1)" \
 # home are in the host artifact cache, outside every worktree, with a checksum mismatch thrown (package_cache.py
 # node-env, #1121): a warm host installs with no package download, and a cached zip whose bytes changed fails the
 # install with YN0018 instead of being fetched again. Yarn 4 hashes no platform-conditional package (the native
-# binaries such as @esbuild/linux-x64), so YARN_PLUGINS loads the app's conditional-checksums plugin, which fails the
-# install with YN0018 before the link step when one of those zips differs from yarn-plugins/conditional-checksums.lock.
+# binaries such as @esbuild/linux-x64), so the app's .yarnrc.yml loads its conditional-checksums plugin, which fails the
+# install with YN0018 before the link step when one of those zips differs from yarn-plugins/conditional-checksums.lock
+# (#1245).
 # corepack checks the yarn it downloads against package.json's packageManager hash but reuses one already in
 # COREPACK_HOME unhashed, so yarn_pins.py corepack-check hashes that one first (#1167).
 backstage_e2e() {
@@ -216,7 +217,6 @@ backstage_e2e() {
     ( cd "${BACKSTAGE_DIR}" && unset CI \
         && while IFS='=' read -r k v; do export "${k}=${v}"; done <<<"${node_env}" \
         && python3 "${SCRIPT_DIR}/yarn_pins.py" corepack-check "${PWD}" \
-        && export YARN_PLUGINS="${PWD}/yarn-plugins/conditional-checksums.cjs" \
         && corepack yarn install --immutable \
         && corepack yarn playwright install chromium \
         && corepack yarn test:e2e )
