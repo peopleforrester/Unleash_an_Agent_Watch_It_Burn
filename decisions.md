@@ -43333,3 +43333,54 @@ both run `prose_gate.py`, which runs git; the test takes under a second.
 checks passed.`, and `python3 verify/test_scope_tests.py` printed `ALL PASS`. The full Test and E2E commands are left to
 hecaton's validation. No live cluster check: the change touches only a test under `verify/` that no cluster runs, the
 scope map and decisions.md. No dependency was added.
+## 2026-11-09 · #1043 · run 19259 · #979's provenance finding is a command and two tests: both KubeCon clusters read as built from aws/cluster in AWS, so both are imported and neither is registered
+
+**Context.** #979 asked for each KubeCon cluster to be imported into a cluster-root state if it was built from
+`infra/terraform/aws/cluster`, or registered in `infra/terraform/drift/known-unmanaged.yaml` if not. Run 17958 read
+the clusters' tags and role names, judged both built from the root, and imported both. That judgment was prose only
+(docs/floor.md and #979's entries above), and test review run 18079 found no test that fails when it stops holding.
+`bash verify/prior-drafts.sh 1043 origin/staging` printed NONE and the issue had no comments, so there was no
+earlier draft.
+
+**Decision: make the finding a command, and test the command.** `import-state.py provenance <profile> <name>` reads
+in AWS the seven marks the root leaves on a cluster it builds: the three fixed values of main.tf's
+`local.fleet_tags` (`project=watch-it-burn`, `Purpose=attendee-cluster`, `ManagedBy=terraform`) and
+`attendee=<name>` on the cluster, a cluster role named `<name>-cluster-*` (the EKS module's prefix), one node group
+named `default-*` (the root's one `eks_managed_node_groups` key), and a VPC tagged `Purpose=lab-shared-vpc` (the
+network root's tag). Every mark held means built, and the choice is import; any missing means not built, and the
+choice is register. It then reads whether the register covers the cluster, with drift-report.py's own
+`load_register` and `match_register`, so the two scripts cannot disagree on what the register covers, and exits 0
+when the register agrees with the choice and 2 when it does not. `cluster` asks the same question before it plans
+and refuses a cluster the root did not build, so the import path itself follows from the verdict. The verb needs
+PyYAML for the register; `cluster` does not read the register and needs nothing new.
+
+**What it read live, 2026-11-09 near 03:05Z, with this run's session.** Both `provenance accen-dev
+watch-it-burn-community` and `provenance accen-dev watch-it-burn-private` exited 0, every mark `held`:
+`watch-it-burn-community-cluster-54c5a01d18b5a86f0f4df30a15` and `default-6eefb129f568d91814a3ca6ecf` for
+community, `watch-it-burn-private-cluster-48f52af8e76bc504483b643a57` and `default-e40c409ac4adcaac42a983adaa` for
+private, both in `vpc-0607c27ee51fb233c Purpose=lab-shared-vpc`, then `verdict: built from
+infra/terraform/aws/cluster`, `choice: import`, `register: no entry covers it`, `follows: yes`. Private now carries
+`role=admin`, which #979's entry found missing; its tag is no mark, since a cluster built before #636 has none.
+Those answers are recorded in `verify/fixtures/import-state/kubecon-clusters.json` (describe-cluster trimmed to the
+fields read). Every call was a read: describe-cluster, list-nodegroups, describe-vpcs, get-caller-identity.
+
+**Tests.** `verify/test_cluster_provenance.py` (offline, 87 checks) answers `aws` from that recording. It fails
+when the marks stop matching the two main.tf files (the tag marks must equal every fixed value in `fleet_tags`),
+when either cluster stops reading as built or its choice is not import or the real register covers it, when any
+of 16 ways of taking one mark away (each tag dropped or changed, a console-made role, no, a hand-named or two
+default node groups, a VPC without the tag or another VPC) still reads as built, does not choose register, exits
+anything but 2 unregistered, or allows `cluster` to reach a plan, when a built cluster the register
+covers is not exit 2 or an unbuilt one it covers is not exit 0, when a lab-platform cluster is not registered by
+the real register's tag entry, and when docs/floor.md stops saying the two were built from the root or stops
+importing them. Three mutations were tried by hand and each failed it: a register entry `watch-it-burn-*` (4
+failures), the VPC mark always held (9), and floor.md's sentence reworded (1).
+`verify/test_cluster_provenance_live.py` (`# SUITE: e2e`) runs the command for each community and admin row of
+roster.tsv in fleet.sh's WIB_DEFAULT_ACCOUNT and WIB_REGION, where roster.tsv says every roster cluster lives, and
+passed here: exit 0, 13 checks. `verify/test_fleet_import_state.py`'s fake world gains the four tags and the lab
+VPC's answer, since `cluster` now reads them. docs/floor.md's "Rebuilding a lost state" names the command.
+
+**Suites.** Run alone, each once: `test_cluster_provenance.py`, `test_fleet_import_state.py`,
+`test_drift_floor.py` and `test_scope_tests.py`, all exit 0, after `python3 verify/scope_tests.py write` added the
+new test's map entry and the paths `import-state.py` now reads. The scoped `run-tests.sh` and `run-e2e-tools.sh`
+are left to validation, as the run's governance asks. The live check above is the only cluster-account step; it
+changed nothing.
