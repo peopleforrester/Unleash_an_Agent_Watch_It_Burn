@@ -7,7 +7,7 @@ shows, its session `wib-stage-<key>-<stamp>` and the spans shown, and two bullet
 filtered Agent Observability link, and from the Datadog home page link. This test reads that step and holds it to
 verify/stage_traces.py, which seeds the traces and reads them back:
 
-  - four rows, the four slides in deck order, each with its link's words and its challenge's attack seed;
+  - one row per link, in deck order, each with its link's words and its challenge's attack seed;
   - each row's session is stage_traces.session_id(seed, "<stamp>");
   - each row's spans are the seed's SEEDS must spans, in SEEDS' order, and none of its must_not;
   - the filtered link is stage_traces' presenters tab URL, word for word (ml_app and the admin cluster);
