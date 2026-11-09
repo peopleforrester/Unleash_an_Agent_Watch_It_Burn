@@ -108,9 +108,9 @@ print("== the live check against fake clusters ==")
 BLOCK_ALERT = json.dumps({"PolicyName": live.POLICY, "Action": "Block", "Operation": "File", "Resource": PATH,
                           "Result": "Permission denied", "PodName": "workshop-mcp-x"})
 OFF = {"rbac_scoped": False, "kyverno_actions": ["Audit"], "breakout_actions": ["Audit"], "kubearmor_action": None,
-       "networkpolicy": False}
+       "networkpolicy": False, "kubearmor_unenforced": []}
 ON = {"rbac_scoped": True, "kyverno_actions": ["Deny"], "breakout_actions": ["Deny"], "kubearmor_action": "Block",
-      "networkpolicy": True}
+      "networkpolicy": True, "kubearmor_unenforced": []}
 FALLBACK_OK = "BLOCKED (prevention): ...\nDETECTED (KubeArmor alert): {...}\n"
 T0 = dt.datetime(2026, 11, 6, 5, 0, tzinfo=dt.timezone.utc)
 

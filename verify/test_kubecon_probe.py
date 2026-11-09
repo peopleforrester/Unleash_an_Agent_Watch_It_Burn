@@ -303,7 +303,7 @@ class _CoverageKubectl:
 cov = _CoverageKubectl()
 check("the cluster reads the enforcer pods in kubearmor by kubearmor-app=kubearmor and names the node without one",
       kp.KubeconCluster(host, "ctx-admin", None, None, 5, runner=cov).kubearmor_unenforced() == ["b"]
-      and all(c[:3] == ["kubectl", "--context", "ctx-admin"] for c in cov.calls), str(cov.calls))
+      and all(c[0] == "kubectl" and c[1:3] == ["--context", "ctx-admin"] for c in cov.calls), str(cov.calls))
 check("an unreadable enforcer pod list reads as None, which the Armed beat fails",
       kp.KubeconCluster(host, "ctx-admin", None, None, 5, runner=_CoverageKubectl(1)).kubearmor_unenforced() is None)
 check("the probe reads the Role as guard-proxy's RBAC badge does",
