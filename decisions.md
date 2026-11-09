@@ -47882,3 +47882,23 @@ in rounds-agenticburn, so it is filed there as a follow-up in the run report.
 guard-proxy instances, along with the community and workshop cases, each failure, the grant and the prose.
 `verify/test_finale_cap.py`'s fake kubectl now answers the Argo CD lookup. Both pass. The whole Test and E2E
 commands were not run, and validation runs the other tests that read the changed files. No dependency was added.
+## 2026-11-09 · #1271 · run 19609 · The fetch inventory lists the finale's new call sites, the cause of run 19593's tests gate failure
+
+**Cause.** Run 19593's change failed validation on `verify/test_fetch_inventory.py` alone. The branch had been
+rebased onto a staging that now holds #1251 (ee73f8ce), which extends the fetch inventory to `images/`. That check
+then read two things the change had left out of `verify/fetch-inventory.yaml`. First, `images/web-terminal/entrypoint.sh`'s
+`localhost:8080` entry claimed 5 lines, and the file now has 4: `finale-cap-on` and `cost-watch` each had one exec into
+guard-proxy, and `_gpc` replaces both with one. Second, `verify/test_finale_cap_peer.py`'s five `urlopen` calls had
+no entry.
+
+**Fix.** The entrypoint's entry says 4 lines. The new test has an entry classed `loopback`, the class
+`verify/test_finale_cap.py` carries, because each call goes to a guard-proxy the test starts on 127.0.0.1. No code
+changed.
+
+**Tests.** `verify/test_fetch_inventory.py` passed, and so did `verify/test_finale_cap_peer.py` and
+`verify/test_finale_cap.py` on the rebased tree. The gate output's "--context is empty" line comes from
+`verify/test_burritobot_cluster_live.py`, which was not among the failures. The whole Test and E2E commands are left to
+validation.
+
+**No live check.** Only `verify/fetch-inventory.yaml` and this entry changed, and no cluster runs either. Run 19593's
+live run of the finale stands.
