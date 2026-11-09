@@ -44589,3 +44589,32 @@ reproduces. Nothing was changed on either cluster.
 
 **Not yet run.** The workflow itself runs on GitHub once hecaton promotes this change to staging, where its runner's
 cache is cold, so it fills the cache from reg.kyverno.io and GitHub before it builds.
+
+## 2026-11-09 · #1168 · run 19425 · The fourth netcup save holds Challenge 2's Tron, Infinite Mario and Tetris and Kyverno's three counter-fix builds; images.lock dates all six
+
+**What the save did.** The save run 19260 escalated ran as michael on netcup on 2026-11-09, as custodian escalation
+911, from a clone of staging (`/tmp/wib-1168-save.QcawxO/repo`) with an empty Docker config, and logged to
+`~/repos/private/image-archive/save-Unleash_an_Agent_Watch_It_Burn-2026-11-09.log`, which this run read through
+sources. A first attempt in that log exited 126, since `mirror-images.sh` is committed 100644 and was run directly;
+the test it ran next exited 1 on six undated rows. The custodian then ran the script through bash. That save ended
+"83 images, 0 failed; 0 rows ... still need a source", exit 0. It SAVED six rows: Tron (`610c7c0e`), Infinite Mario
+(`146c00f5`) and Tetris (`2ffffd2f`), which this issue names, and Kyverno's admission, reports and background
+counter-fix builds (`6889b414`, `90dac88c`, `89d0d815`), which #1015 added on 2026-11-08 after the third save. It
+found every other row already saved (HAVE). `python3 verify/test_images_saved.py`, run next in that clone, printed
+"All 80 images images.lock owes a copy of are saved", exit 0, and the log ends with that clone's `git diff
+images.lock`, which dates the same six rows 2026-11-09.
+
+**The archive.** `manifest.tsv` now has 90 lines: the 84 of the first three saves and six dated 2026-11-09, one for
+each row above at its locked digest. `repo-ls` shows each of the six tarballs those lines name, among them
+`docker.io_iamassif731_tron-lightcycle-game/sha256-610c7c0e....tar.gz`, the only copy of the Tron image.
+
+**The dates.** As runs 17350, 17393 and 17809 did, this run copied 2026-11-09 onto each of the six rows. The clone's
+images.lock was blob `d8d24cd8`, the same as this run's base, so these are the rows the test passed on. The Kyverno
+rows are dated here too, since the same save wrote them and the test reads every row: leaving them `-` would fail it
+on staging. The images.lock header now names the fourth save. Judged with `verify/images_saved.py`'s `lock_rows`,
+`owes_save` and `manifest_lines` against the real manifest, all 80 rows that owe a copy are dated and have a manifest
+line at their current digest whose date matches. `python3 verify/test_images_lock.py` passed. This run cannot hash the
+tarballs, since sources returns a file as text; the netcup test above did that hashing.
+
+**Live check.** None: this change touches only images.lock's saved column and comments and decisions.md, and no
+cluster reads the saved column.
