@@ -569,6 +569,16 @@ sites:
     lines: 1
     class: none
     why: the CRANE variable's path
+  verify/scope-map.yaml:
+  - match: .
+    lines: 1
+    class: none
+    why: sister_tree.py's bound says in words that its git calls clone the sister repo; the map runs nothing (#1078)
+  verify/scope_tests.py:
+  - match: .
+    lines: 1
+    class: none
+    why: a comment on sister_tree.py's empty bound, which names its clone of another repo; nothing is fetched (#1078)
   verify/sign-images.sh:
   - match: curl -sS
     lines: 2
@@ -1318,9 +1328,9 @@ sites:
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   verify/test_scope_tests.py:
   - match: .
-    lines: 1
+    lines: 3
     class: none
-    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text, two of them on sister_tree.py's git clone call (#1078); nothing leaves the host
   verify/test_service_hosts_live.py:
   - match: urlopen
     lines: 1
