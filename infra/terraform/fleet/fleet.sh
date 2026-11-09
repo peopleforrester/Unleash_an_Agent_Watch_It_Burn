@@ -789,7 +789,7 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
                       The token comes as for ingest and ops: WIB_ADMIN_TOKEN, a Railway login, or the secrets env
                       file. It is never printed.
     start-check       Read the room's start state (#1144, #1227): every deployments page's /deployments.json
-                      (WIB_START_DEPLOYMENTS: deployments.burritobot.co and deployments-burritobot-private) lists
+                      (WIB_START_DEPLOYMENTS: deployments.burritobot.co, the one page since #1220) lists
                       no row, and the beacon view (WIB_BEACON_VIEW_URL) reads 0. Read-only, GETs alone; fails
                       naming each read and the rows or beacons it held. Run it after desk-reset and beacon-reset.
     terminal-password <name...>
@@ -5492,9 +5492,11 @@ cmd_beacon_reset() {
 # changes nothing, so it can run any number of times. It fails while a page lists a row, removed rows included, since
 # the page shows them greyed, or while the count is above zero, naming each read and what it held, and while a read
 # cannot be made. WIB_START_DEPLOYMENTS lists the hosts, split on spaces, the public desk's page first: that is the page
-# the deck links and desk-reset clears; after it, the private cluster's own page, while that is still served.
+# the deck links and desk-reset clears. By default it is the only one: since #1220 the private cluster's own page,
+# deployments-burritobot-private, answers 307 to it (components/public-desk/private-desk-redirect.conf), so it holds no
+# rows of its own to read. A host after the first is another desk's page, read the same way.
 # WIB_BEACON_VIEW_URL points the beacon read elsewhere.
-WIB_START_DEPLOYMENTS="${WIB_START_DEPLOYMENTS:-https://deployments.burritobot.co https://deployments-burritobot-private.burritobot.co}"
+WIB_START_DEPLOYMENTS="${WIB_START_DEPLOYMENTS:-https://deployments.burritobot.co}"
 cmd_start_check() {
     [[ $# -eq 0 ]] || { log "usage: start-check"; return 2; }
     local base url out code body n view count rc=0 held=() public=""

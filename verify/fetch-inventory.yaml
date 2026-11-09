@@ -980,6 +980,10 @@ sites:
     class: none
     why: a regex over the desk's source
   verify/test_desk_ticket_live.py:
+  - match: _urlopen|real_urlopen
+    lines: 3
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   - match: urlopen
     lines: 4
     class: loopback
