@@ -10,12 +10,22 @@ proposed  the spike's floor. Before matching, each character of the text is fold
           onto the original text one to one): zero-width characters and soft hyphens dropped, compatibility and accent
           forms reduced to their base letter (fullwidth "ｆ" to "f", "ñ" to "n"), Cyrillic and Greek look-alikes mapped
           to Latin, lower case. Each term then matches as a whole word with:
-            - each letter repeatable ("fuuuck"),
-            - each letter's leetspeak stand-ins (0 o, 1 i l, 3 e, 4 a, 5 s, 7 t, @ a, $ s, ! i, | l, ( c),
+            - each letter's leetspeak stand-ins (0 o, 1 i l, 3 e, 4 a, 5 s, 7 t, 8 b, 9 g, @ a, $ s, ! i, | l, ( c,
+              + t),
             - "*" in place of any vowel ("f*ck"),
+            - each letter repeatable as itself or a digit stand-in ("fuuuck", "sh1iit", "a55hole"),
             - or the whole term spelt out with one separator between every letter ("f u c k", "c.u.n.t"); a separator
               only between some letters does not count, so "put a" is not "puta".
           Phrases (two or three words) match with any run of spaces, dots, dashes or underscores between the words.
+
+Matching is linear in the length of the text (#1300). Each letter was its whole class repeated (`[s5$]+`), and the
+classes overlap: a run of `$`, `5$`, `(` or `4@` let a term start after every symbol in it, each start read to the
+run's end, and so did each way of splitting the run between two letters, so 4,000 characters cost seconds. Now a
+letter is one character of its class, then a run of only the letter and its digit stand-ins, less any the next
+letter's class holds. A symbol or "*" stands for one letter once, so no start reads past a run of symbols, and a term
+cannot start inside a run of letters or digits (the leading edge refuses one). Where one letter ends and the next
+begins is never in doubt (the doubled s of "ass" is one s and then a run, the 1 of "kil1" is an l), so no split is
+tried twice. Every text of the spike's abuse set, hard negatives, stage text and terms matches as it did before.
 """
 from __future__ import annotations
 
@@ -59,9 +69,25 @@ def _letter(ch: str) -> str:
     return "[" + alts + "]"
 
 
+def _run(ch: str, after: str) -> str:
+    """One letter of a word, `after` being the letter that follows it ("" at the word's end): one character of its
+    class, then any run of the letter and its digit stand-ins that the next letter's class does not hold."""
+    own = ch + _LEET.get(ch, "")
+    again = "".join(c for c in own if (c == ch or c.isdigit()) and c not in after + _LEET.get(after, ""))
+    if not again:
+        return _letter(ch)
+    if again == own and ch not in _VOWELS:
+        return _letter(ch) + "+"
+    return _letter(ch) + "[" + re.escape(again) + "]*"
+
+
+def _word(word: str) -> str:
+    return "".join(_run(c, word[i + 1:i + 2]) for i, c in enumerate(word))
+
+
 def _term(term: str) -> str:
     words = fold(term)[0].split()
-    joined = (_SEP + "+").join("".join(_letter(c) + "+" for c in w) for w in words)
+    joined = (_SEP + "+").join(_word(w) for w in words)
     if len(words) == 1 and len(words[0]) >= 3:
         spaced = _SEP.join(_letter(c) for c in words[0])
         return f"(?:{joined}|{spaced})"
