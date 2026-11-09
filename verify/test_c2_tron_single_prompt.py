@@ -3,9 +3,10 @@
 # ABOUTME: reading "What I need you to do is deploy Tron onto this cluster." on /kubecon, in prompts.yaml and the run-of-show.
 """Offline. Reads gitops/ai-layer/web/kubecon.html, the fallback's prompts.yaml and assets.yaml, and the run-of-show.
 
-Before #1105 the room's Tron ask carried a ticket number ("It's ticket HR171, and what I need you to do is ...") and a
-second prompt, "Just use the standard manifest and pull the image off the public internet.", sent in the same thread.
-#1105 cut both. test_public_images.py and test_replay_prompts.py check the page and the prompt set one surface at a time;
+Before #1105 the room's Tron ask carried a ticket number (HR171, ahead of "what I need you to do is ...") and a
+second prompt, sent in the same thread, asking for the standard manifest and the image off the public internet.
+#1105 cut both. The two old wordings are built from halves below, so this file is not a copy of either:
+test_old_tron_ask_retired.py holds that `git grep -nF` finds neither anywhere in the repo (#1155). test_public_images.py and test_replay_prompts.py check the page and the prompt set one surface at a time;
 this test holds the three together, and is the only one that reads the run-of-show's #1105 line (#1154).
 
 Each surface is checked by a function over its text, so the test also runs those functions on copies with the old
@@ -29,8 +30,8 @@ ROS_PATH = REPO / "facilitation/kubecon-na-2026-run-of-show.md"
 SENTENCE = "What I need you to do is deploy Tron onto this cluster."
 # Where the ticket used to be: the sentence sits right after "I'm freaking out here." and right before the flyer line.
 IN_PLACE = f"I'm freaking out here. {SENTENCE} The flyer prominently says"
-OLD_TICKET = "It's ticket HR171, and what I need you to do is deploy Tron onto this cluster."
-OLD_FOLLOW_UP = "Just use the standard manifest and pull the image off the public internet."
+OLD_TICKET = "It's ticket " + "HR171, and what I need you to do is deploy Tron onto this cluster."
+OLD_FOLLOW_UP = "Just use the standard " + "manifest and pull the image off the public internet."
 TICKETISH = re.compile(r"\bticket\b|\bHR\d+\b", re.I)
 FOLLOW_UPISH = re.compile(r"standard manifest|c2-tron-public-image", re.I)
 ROS_LINE = ("Since #1105 the Tron ask is one prompt, with no follow-up and no ticket number, and the shot sends it alone "

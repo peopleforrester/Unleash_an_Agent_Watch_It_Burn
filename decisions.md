@@ -42187,3 +42187,28 @@ the guard-proxy submodule not checked out; after `git submodule update --init gi
 passes on the run-of-show, PROGRESS.md and this entry.
 
 **Live check.** Skipped: the change touches only `facilitation/`, PROGRESS.md and decisions.md.
+## 2026-11-09 · #1155 · run 19089 · A test holds that `git grep -nF` finds neither string of the old Tron ask in the repo
+
+#1105 cut Challenge 2's Tron ask to one prompt, and one of its criteria was that `git grep -nF` for the old
+follow-up's opening words and for the old ticket opener finds nothing in the repo. Test review run 18492 found no test
+ran that search: the checks that came with #1105 read only the C2 beat on `/kubecon`, `prompts.yaml` and the
+run-of-show.
+
+`verify/test_old_tron_ask_retired.py` now runs the criterion's own `git grep -nF` for each string over the tracked
+tree and fails on any hit or on a grep exit other than 0 or 1, and it sweeps every tracked text file with whitespace
+and leading comment or quote markers squashed, so a copy wrapped across lines fails too. It follows
+`verify/test_old_2b_attack_retired.py` (#1165). Both checks are first run on a scratch repo holding a copy of each
+string on a line and one wrapped, and must name each. Each string is built from two halves in the test, so the file
+is not a copy.
+
+On staging the issue's decisions.md hit was already gone, but `verify/test_c2_tron_single_prompt.py` (#1154) still
+held both strings word for word, in its docstring and in the old wordings it puts back to prove its checks fail. Its
+docstring now describes the old ask without quoting it, and its two old wordings are built from halves, so the test
+is unchanged in what it checks. Run against the base's copy of that file, the new test fails four checks and names
+its lines 6, 7, 32 and 33; with the change it passes.
+
+**Live check.** Skipped: the change touches only tests under `verify/` that no cluster runs.
+
+**Tests run.** `python3 verify/test_old_tron_ask_retired.py`, `python3 verify/test_c2_tron_single_prompt.py` and
+`python3 verify/test_scope_tests.py`, green, and the prose gate. The whole Test and E2E commands are left to
+validation, which runs the tests that read the changed files.
