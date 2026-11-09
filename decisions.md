@@ -49769,3 +49769,69 @@ past `verify-image-signatures`, and the heavy gate can go green on its next run.
 
 **Live check.** Two read-only reads above (the Deployments' images on both clusters, and the server-side dry run on
 watch-it-burn-private). No cluster was changed. The only file changed is this entry.
+
+## 2026-11-09 · #1300 · run 19752 · the code-of-conduct pattern matches in time linear in the text, in floor.py and every copy
+
+**The cause.** Each letter of a term was its whole class repeated (`[s5$]+`). A symbol stand-in is neither a letter nor
+a digit, so after every symbol in a run of `$`, `5$`, `(` or `4@` a term could start, and each start read to the run's
+end. A run two neighbouring letters can both take (the doubled s of a term, the 1 that is both i and l, the `*` that
+is a vowel and a separator) was also split every way there is. Both cost time in the square of the run's length.
+Timed on this branch's base 6eaadbd3 with floor.py's proposed pattern: 4,000 characters of `$` took 2,443 ms, of `(`
+2,255 ms, of `5$` 1,074 ms.
+
+**The change.** `floor._run()` now builds each letter as one character of its class, then a run of only the letter and its
+digit stand-ins, less any the next letter's class holds. A symbol or `*` stands for one letter once, so no start
+reads past a run of symbols. A term cannot start inside a run of letters or digits, since the leading edge refuses
+one. Where one letter ends and the next begins is never in doubt, so no split is tried twice. A letter with no
+symbol stand-in and no `*` keeps its old form (`[f]+`, `[b8]+`). The same rule is in the port block of
+`workshop-mcp-server.py` and `ticket_site.py` (`_coc_run`) and in the chat page's `cocRun`. The page is a copy of the
+pattern that coc_pattern_copies.py does not list, because it builds the pattern at load from its own tables. The
+admission policy's and the collector's copies were regenerated with `python3 verify/coc_pattern_copies.py write`
+(16,148 to 17,989 characters).
+
+**What it loses.** Nothing the spike's texts show. On all 3,265 texts (the 155 abuse texts, the 60 hard negatives,
+every stage text corpus.stage_texts() reads, and the 144 terms), floor.py's spans and the portable form's mask are
+the same before and after, compared text by text. Forms the new rule no longer matches are ones with a symbol or `*`
+repeated inside a letter, or a symbol after the letter's own repeats (ROT13, as the spike keeps terms: "fu!!g",
+"n$$$ubyr", "s**px"; the old form matched each, the new one none). None of them is in the abuse set. The page and floor.py still agree on every text test_chat_coc_e2e asks both about, and the page
+catches 111 of 155.
+
+**Measured on this host** (Python 3.13, load near 10 on 16 cores), slowest of the 123 cases at 4,000 characters, best
+of 3: floor.py with folding 15.9 ms, workshop-mcp-server.py's coc_spans() 13.8 ms, ticket_site.py's 16.8 ms, the
+portable pattern (the policy's and the collector's copy, in Python's `re`) 22.0 ms, the chat page in node 24 9.7 ms.
+4,000 characters of `$` cost under twice what 4,000 spaces do (12.0 against 7.5 ms, pattern alone). The work left
+is the 144 terms tried after each symbol or separator.
+Built the old way, a run of `$` took 169 ms at 1,000 characters and 2,541 ms at 4,000 in Python, and 104 ms and
+1,898 ms in node. A sweep of 15,720 inputs (each term's prefix at each letter, then a run of each pair from that
+letter's class, the next one's and the separators, with and without a letter after) found none above 36 ms at 4,000
+characters. The case with the highest growth there, `shem` then `*4` (15.6 times, best of 2 while another test
+ran), measured linear (1.1, 2.3, 4.3, 8.6, 15.7 ms from
+1,000 to 16,000) when timed again alone.
+
+**Tests.** New: `verify/test_coc_pattern_linear.py` (offline) times each case of the new helper
+`verify/coc_linear_cases.py` at 1,000 and 4,000 characters on floor.py, both ports (run from their own block) and
+each copy coc_pattern_copies.py finds. Each must be under 50 ms at 4,000 and at most 8 times its 1,000-character cost.
+A case outside a bound is timed again, best of 9, before it fails. The cases are the 72 runs of each repeated pair of
+one letter's class or the separators, and 51 runs where two neighbouring letters of a term share a character, from
+the first term with them. The test also holds that the pre-#1300 form fails the check, and that every neighbouring
+pair whose classes share a character has a case. `verify/test_chat_coc_e2e.py` gained the same timing for the page
+in node. Run once each: test_coc_pattern_linear all PASS (its first run failed only the two YAML copies, still the old
+pattern before `write`); test_chat_coc_e2e all PASS with the system node v24.22.0. The scope map gained the new
+test's entry and the helper on test_chat_coc_e2e's, by `python3 verify/scope_tests.py write`, and `check` reports 0
+problems. The other tests that read these files are left to validation.
+
+**Live check**, on watch-it-burn-community and watch-it-burn-private, changing nothing:
+- `kubectl apply --dry-run=server -f gitops/namespaces/code-of-conduct-names.yaml`: both API servers accept the new
+  policy and its binding. The deployed `variables.floor` is still the old 16,148-character pattern.
+- In the workshop-mcp pod's `shim` container (Python 3.12.14, CPU limit 500m), the port block of the deployed
+  `/app/server.py` and of this branch's file, each run on its own. Deployed: 4,000 characters of `5$` took 2,612 ms
+  (community) and 3,497 ms (private), of `$` 5,979 and 6,534 ms. This change, best of 5 in CPU time, at 1,000, 2,000,
+  4,000 and 8,000 characters: `$` 7, 13, 26, 50 ms (community) and 8, 14, 27, 61 ms (private), `5$` 4, 8, 15, 31 ms
+  and 6, 8, 17, 34 ms. Wall time at 8,000 characters is up to twice that, because the 500m limit throttles a burst
+  over 50 ms of CPU in a 100 ms period.
+- `python3 verify/deploy_coc_live.py --context <ctx> --source gitops/ai-layer/workshop-mcp-server.py` on both: 3 of 3
+  PASS, deploy_app refuses the deploy with the new port and nothing is created.
+
+Not yet run on a cluster: `python3 verify/deploy_coc_live.py --context <ctx>` without `--source` once Argo CD has
+synced this change, and the reading of `variables.floor` on both clusters as 17,989 characters equal to
+`floor.portable_pattern()`.
