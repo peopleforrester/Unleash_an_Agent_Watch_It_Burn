@@ -48397,3 +48397,20 @@ the escalated act signs them. Until then the branch must not reach staging: the 
 change to YAML or images.lock, so a red copy on staging would hold the promotion to main red.
 
 **Live check.** None needed: the change is under `verify/` and decisions.md, which no cluster runs.
+
+## 2026-11-09 · #1282 · run 19673 · the signature tier test passes on staging: the four digests now carry their .sig tags
+
+**What this run found.** Runs 19646 and 19658 landed `verify/test_wib_digests_signed.py` on staging at `a035e02b`,
+red on four unsigned digests: the three Kyverno counter-fix builds (`6889b414`, `89d0d815`, `90dac88c`) and
+`llm-guard-model-zeroshot` (`c01ca964`). This run started from that commit and ran the test once with
+`python3 verify/test_wib_digests_signed.py`. It read 13 digests (13 in images.lock, 10 in manifests) and printed PASS
+for each of them, the four included, ending "Every pinned watch-it-burn digest is served with its sha256-<digest>.sig
+tag, anonymously." So the escalated signing act has been done since run 19658, and the criterion's "passes on staging
+today" now holds. `python3 verify/test_wib_pins.py`, the offline test that the check fails on an unsigned or unserved
+digest, passed as well. This run changed no code: the base already meets the criterion.
+
+**What was not checked.** The test checks that each `.sig` tag exists, as the issue asks. It does not verify each
+signature against `policies/cosign/watch-it-burn.pub`; cosign is not in `verify/e2e-tools.lock` and not on this
+host's PATH. The cluster's Kyverno verifyImages rule on watch-it-burn-private does that check at Pod admission.
+
+**Live check.** None needed: this entry is the only change, and no cluster runs decisions.md.
