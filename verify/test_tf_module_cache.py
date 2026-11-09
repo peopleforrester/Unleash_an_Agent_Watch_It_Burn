@@ -84,9 +84,9 @@ try:
     check("a module block the key cannot read fails rather than being left out of it", msg is not None, msg)
     real = (REPO / "infra/terraform/aws/cluster/main.tf").read_text(encoding="utf-8")
     names = [n for n, _, _ in mc.calls(real)]
-    check("the cluster root's six module calls are all read", names == sorted(
+    check("the cluster root's seven module calls are all read", names == sorted(
         ["eks", "ebs_csi_pod_identity", "aws_lb_controller_pod_identity", "eso_pod_identity",
-         "agent_bedrock_pod_identity", "tutor_bedrock_pod_identity"]), names)
+         "agent_bedrock_pod_identity", "tutor_bedrock_pod_identity", "guard_proxy_pod_identity"]), names)
 
     print("a miss, then a kept copy")
     first = base / "first"

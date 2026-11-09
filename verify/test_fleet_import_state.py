@@ -100,6 +100,9 @@ PLANNED = [
        cluster_name=NAME, namespace="kube-system", service_account="ebs-csi-controller-sa"),
     rc("aws_iam_policy.bedrock_invoke", "aws_iam_policy", name=f"{NAME}-bedrock-invoke"),
     rc('aws_bedrock_inference_profile.agent["nova"]', "aws_bedrock_inference_profile", name=f"{NAME}-nova"),
+    # The code-of-conduct guardrail (#1279); the version's guardrail_arn is unknown in a plan against an empty state.
+    rc("aws_bedrock_guardrail.coc", "aws_bedrock_guardrail", name=f"{NAME}-coc"),
+    rc("aws_bedrock_guardrail_version.coc", "aws_bedrock_guardrail_version", skip_destroy=True),
     rc("aws_iam_user.attendee", "aws_iam_user", name="wib-t1"),
     rc("aws_iam_user_policy.attendee_eks", "aws_iam_user_policy", name="eks-own-cluster", user="wib-t1"),
     rc("aws_eks_access_entry.attendee", "aws_eks_access_entry", cluster_name=NAME, type="STANDARD"),
@@ -143,6 +146,9 @@ EXPECTED = {
     'module.ebs_csi_pod_identity.aws_eks_pod_identity_association.this["main"]': f"{NAME},a-ebs",
     "aws_iam_policy.bedrock_invoke": f"arn:aws:iam::{ACCOUNT}:policy/{NAME}-bedrock-invoke",
     'aws_bedrock_inference_profile.agent["nova"]': "ip-nova",
+    "aws_bedrock_guardrail.coc": "gr-t1,DRAFT",
+    # The newest numbered version, read as a number: 10 after 9, not "9" after "10".
+    "aws_bedrock_guardrail_version.coc": f"arn:aws:bedrock:us-west-2:{ACCOUNT}:guardrail/gr-t1,10",
     "aws_iam_user.attendee": "wib-t1",
     "aws_iam_user_policy.attendee_eks": "wib-t1:eks-own-cluster",
     "aws_eks_access_entry.attendee": f"{NAME}:arn:aws:iam::{ACCOUNT}:user/wib-t1",
@@ -237,6 +243,13 @@ def world(node_sgs: int = 1, ng_subnets=("subnet-a",)) -> dict:
         "bedrock list-inference-profiles --type-equals APPLICATION": {"inferenceProfileSummaries": [
             {"inferenceProfileName": f"{NAME}-nova", "inferenceProfileId": "ip-nova"},
             {"inferenceProfileName": "watch-it-burn-other-nova", "inferenceProfileId": "ip-other"}]},
+        "bedrock list-guardrails": {"guardrails": [
+            {"name": f"{NAME}-coc", "id": "gr-t1", "arn": f"arn:aws:bedrock:us-west-2:{ACCOUNT}:guardrail/gr-t1",
+             "version": "DRAFT"},
+            {"name": "watch-it-burn-other-coc", "id": "gr-o", "arn": f"arn:aws:bedrock:us-west-2:{ACCOUNT}:guardrail/gr-o",
+             "version": "DRAFT"}]},
+        "bedrock list-guardrails --guardrail-identifier gr-t1": {"guardrails": [
+            {"version": v, "id": "gr-t1"} for v in ("DRAFT", "2", "10", "9")]},
         "iam get-user --user-name wib-t1": {"User": {"Arn": att}},
         "iam get-user-policy --user-name wib-t1 --policy-name eks-own-cluster": {},
     }
@@ -387,6 +400,17 @@ check("an update in the last plan names the attributes it changes",
       mod.changed(upd) == "module.eks.aws_iam_role.this[0] (update: force_detach_policies)", mod.changed(upd))
 check("a replace names the attribute that forces it",
       mod.changed(rep) == "aws_bedrock_inference_profile.tutor (delete/create: description)", mod.changed(rep))
+
+print("A cluster built before its code-of-conduct guardrail (#1279), as the KubeCon clusters were:")
+GR = {"aws_bedrock_guardrail.coc", "aws_bedrock_guardrail_version.coc"}
+w = world()
+w["bedrock list-guardrails"] = {"guardrails": [g for g in w["bedrock list-guardrails"]["guardrails"] if g["id"] != "gr-t1"]}
+code, fake, imports, _ = case(w, [r for r in NOOP if r["address"] not in GR]
+                              + [dict(r, change={"actions": ["create"], "after": {}}) for r in PLANNED if r["address"] in GR])
+check("neither the guardrail nor its version is imported", not (GR & set(imports)), f"{sorted(GR & set(imports))}")
+check("the rest is imported as before", imports == {k: v for k, v in EXPECTED.items() if k not in GR},
+      f"wrong: {sorted(set(imports.items()) ^ {(k, v) for k, v in EXPECTED.items() if k not in GR})[:4]}")
+check("the rebuild exits 2: the next apply creates the guardrail", code == 2, f"exit {code}")
 
 print("The same world, its plan clean but for the null_resource:")
 code, *_ = case(world(), NOOP + [r for r in PENDING if r["type"] == "null_resource"])

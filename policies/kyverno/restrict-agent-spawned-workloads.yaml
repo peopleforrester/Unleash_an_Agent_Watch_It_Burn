@@ -97,7 +97,7 @@ spec:
   variables:
     # The ServiceAccounts with an EKS Pod Identity association in namespace `agent`.
     - name: modelIdentities
-      expression: "['agent-sa', 'agentgateway', 'web-terminal']"
+      expression: "['agent-sa', 'agentgateway', 'guard-proxy-reader', 'web-terminal']"
     # Every label a NetworkPolicy in namespace `agent` selects pods on, with the values it matches: console for
     # platform-console-egress, weather-feed for agent-allow-weather-feed-egress (#642), desk-relay for
     # agent-allow-desk-relay-egress on the private KubeCon cluster (#1158), the other three for chat-path-ingress (a peer
@@ -120,7 +120,8 @@ spec:
         !(object.spec.?serviceAccount.orValue('') in variables.modelIdentities)
       message: >-
         A workload the agent creates may not run as a ServiceAccount that holds Bedrock credentials
-        (agent-sa, agentgateway, web-terminal). That pod could call the model directly, around guard-proxy.
+        (agent-sa, agentgateway, guard-proxy-reader, web-terminal). That pod could call the model directly, around
+        guard-proxy, or the guardrail guard-proxy checks a prompt with (#1279).
     - expression: >-
         !variables.egressLabels.exists(k, k in variables.labels && variables.labels[k] in variables.egressLabels[k])
       message: >-

@@ -49,6 +49,10 @@ CLUSTER_TARGETS = [
     "module.agent_bedrock_pod_identity", "module.tutor_bedrock_pod_identity",
     "aws_iam_policy.bedrock_invoke", "aws_iam_policy.tutor_bedrock_invoke",
     "aws_iam_user.attendee", "aws_iam_user_policy.attendee_eks",
+    # guard-proxy's ApplyGuardrail grant (#1279), and the guardrail it names by tag, planned so a setting the provider
+    # refuses fails the render rather than the next apply.
+    "module.guard_proxy_pod_identity", "aws_iam_policy.guard_proxy_guardrail",
+    "aws_bedrock_guardrail.coc", "aws_bedrock_guardrail_version.coc",
 ]
 
 

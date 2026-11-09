@@ -49,7 +49,7 @@ for root in ("boundary", "cluster", "audit"):
     check(f"{root}: has documents to check", len(ext["documents"]) > 0)
     if root == "cluster":
         check("cluster: every role it creates, and the attendee user, is in the plan, and all carry the boundary",
-              len(ext["roles"]) == 6 and all(r["permissions_boundary"].endswith(f":policy/{p.BOUNDARY_NAME}") for r in ext["roles"])
+              len(ext["roles"]) == 7 and all(r["permissions_boundary"].endswith(f":policy/{p.BOUNDARY_NAME}") for r in ext["roles"])
               and "aws_iam_user.attendee" in {r["address"] for r in ext["roles"]}, ext["roles"])
         check("cluster: the attendee user's inline policy is a document the checks read (#549)",
               any(d["address"] == "aws_iam_user_policy.attendee_eks" and d["kind"] == "identity" for d in ext["documents"]),

@@ -51,7 +51,7 @@ reads back for the new policy, so the next drift report does not list the fresh 
 tagging the policy with a stale event (#507).
 
 Roles that carry it: the EKS cluster role, the node role, and the EBS CSI, Load Balancer Controller, ESO,
-agent Bedrock and tutor Bedrock Pod Identity roles (`infra/terraform/aws/cluster/main.tf`). So does the one IAM
+agent Bedrock, tutor Bedrock and guard-proxy guardrail Pod Identity roles (`infra/terraform/aws/cluster/main.tf`). So does the one IAM
 user each cluster creates, the attendee's (`aws_iam_user.attendee`, #549), whose inline policy reaches only its
 own cluster.
 
@@ -103,10 +103,12 @@ example) cannot be checked, so the run fails and lists it. Plan against an appli
    namespace on its own cluster; the agent cannot CreateRole or CreateCluster; no bounded role can make
    S3 public, create an unbounded role, strip the boundary, or touch org policies; the attendee user can
    describe its own cluster and list its region's, and cannot describe another cluster, mint itself a key or
-   create an access entry.
+   create an access entry; guard-proxy can call `bedrock:ApplyGuardrail` on its own cluster's code-of-conduct
+   guardrail and the US guardrail profile, from its own ServiceAccount only, and cannot reach another cluster's
+   guardrail, a model or the guardrail's settings (#1279); and the boundary does not refuse that call.
 
-Both Bedrock grants are held to the Pod Identity session tags (`aws:PrincipalTag/eks-cluster-name`,
-`aws:PrincipalTag/kubernetes-namespace`, and the tutor's ServiceAccount too). EKS Pod Identity sets
+The Bedrock grants are held to the Pod Identity session tags (`aws:PrincipalTag/eks-cluster-name`,
+`aws:PrincipalTag/kubernetes-namespace`, and the tutor's and guard-proxy's ServiceAccounts too). EKS Pod Identity sets
 those tags on every session it issues.
 
 ## On every PR
