@@ -1832,6 +1832,11 @@ sites:
     lines: 1
     class: none
     why: comments, docstrings or messages that name the command; none runs it
+  verify/test_wib_pins.py:
+  - match: .
+    lines: 1
+    class: none
+    why: a shell fixture string whose FROM line the test parses for its digest pin; nothing is built or pulled
   verify/test_workflow_artifact_cache.py:
   - match: .
     lines: 16
