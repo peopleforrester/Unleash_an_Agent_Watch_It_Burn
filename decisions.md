@@ -44401,3 +44401,23 @@ registry.burritobot.co, removed by remove-untrusted-room-workloads once guardrai
 watch-it-burn-private, reads greyed, "removed at", under private on deployments.burritobot.co, while a community row
 stays as it was; then the cluster is left as found and the row removed with `/desk-forget`. The issue's third
 criterion waits on that check.
+## 2026-11-09 · #1212 · run 19410 · A test holds #1140's record of the owed trace check and the seed off `/kubecon`
+
+**What.** Test review run 18731 found that no test held one criterion of #1140: its record names, as owed live,
+Whitney opening each of the four attack traces from its slide's link and confirming it shows what the slide says, and
+names the seeds with no `/kubecon` beat. `verify/test_1140_trace_check_owed.py` now does. It reads the paragraph
+"**The traces Whitney can open now.**" of the "## 2026-11-08 · #1140 · run 18722" entry and checks that it names each
+attack seed in backticks with stamp `202611081721`, that one sentence starts "Whitney opening each of the" with the
+count word of the attack seeds and says the check is owed live, and that the seeds named after "The seed with no
+`/kubecon` beat is" are exactly `OFF_PAGE_SEEDS`. It also checks PROGRESS.md's #1140 bullet says Whitney's check is
+owed live. The attack seeds (each `SEEDS` key ending `-attack`) and `OFF_PAGE_SEEDS` are read from
+`verify/stage_traces.py`, not copied, so a seed added there without the record naming it fails this test. Each anchor
+exits naming the literal and the file when it is gone, and each check is run once more on a copy with what it reads
+struck: each attack key, the stamp, "owed live", Whitney's name, the count word, `c3-pii`, an extra off-page seed, the
+lead phrase, the entry heading, the paragraph label and a doubled PROGRESS bullet.
+
+Run: `python3 verify/test_1140_trace_check_owed.py` passed, 29 checks, exit 0. `python3 verify/scope_tests.py write`
+gave it an entry under `reads` (decisions.md, PROGRESS.md, and what importing `stage_traces.py` reads), and
+`python3 verify/test_scope_tests.py` printed `ALL PASS`. The scoped suite is left to validation. No dependency was added.
+
+**Live check.** Skipped: the change touches only a `verify/` test no cluster runs, the scope map and this file.
