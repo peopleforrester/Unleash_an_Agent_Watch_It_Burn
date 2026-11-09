@@ -49824,3 +49824,27 @@ Log: `$TMPDIR/live.log`, scratch that the run's end removes.
 
 **Tests.** `python3 verify/test_coc_floor_probes_live_checks.py` (115 PASS) and `python3 verify/test_scope_tests.py`
 (ALL PASS), once each, and the live test once, as above.
+## 2026-11-09 · #1293 · run 19762 · the floor-on probe test holds the guard lock, and the tests gate's failure
+
+**Why run 19733 did not land.** Hecaton's tests gate failed on `verify/test_guard_lease.py`: "the live checks that
+switch guardrails or policies are exactly the ones this test names", having found `verify/test_coc_floor_probes_live.py`.
+That check counts a live file naming `GUARDS_OFF_BEAT` as one that runs the probe's guardrail switches, and the new test
+names it to require the admin run's final beat. The finding is right: the test runs both probes, which switch guards
+and guardrails on both clusters, and its start and end reads held no lock, so another run's probe could flip a guard
+between them and the probes.
+
+**The fix.** The test now runs its whole check under `guard_lease.run_held(PRIVATE_CONTEXT, ..., with_peer=True)`: the
+lock on the private cluster and on the cluster its guardrails-peer Secret names, from before the start read until after
+the end read. Each probe inherits `WIB_GUARD_LEASE` and joins that hold, so no other run gets in between and the probes
+do not wait on their own caller. `test_guard_lease.py` lists it in SWITCHERS as taking the lock `with_peer=True`, and
+its check that a file running the terminal's switch holds both clusters passes on it. A busy lock fails the test
+naming the holder, having read nothing.
+
+**Live, 2026-11-09, no model call.** Under `run_held("watch-it-burn-private", ..., with_peer=True)` a child process ran
+`guard_lease.hold_switch("watch-it-burn-private", ...)` as the probe's main does: it read both contexts held and joined
+both leases (`nested [True, True]`), exit 0; the hold's own check passed, and `guard_lease.py show` then read the lock
+free on both clusters. The full live test was not run again: the change is the lock around it, which this checks, and
+run 19733's run of it stands, with its follow-up on the admin probe's Challenge 4 miss.
+
+**Tests.** `python3 verify/test_guard_lease.py` (all guard lock checks passed), `python3
+verify/test_coc_floor_probes_live_checks.py` (passed) and `python3 verify/test_scope_tests.py` (ALL PASS), once each.
