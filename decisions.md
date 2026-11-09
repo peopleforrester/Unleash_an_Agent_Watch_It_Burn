@@ -45240,3 +45240,47 @@ which spends Bedrock money; the issue asks for the cleanup and its offline test,
 
 **Follow-up seen.** `verify/test_deployments_removed_live.py`'s docstring still says the desk has no way to drop a row
 and cites desk_ticket_live.py on its tickets; both are out of date since #1215 and this change.
+
+## 2026-11-09 · #1211 · run 19457 · The 18:03 guardrails-off hang in run 18722's seed was #1134's Forbidden watch on the peer, fixed by the switch's Role
+
+**What #1211 asks.** Run 18722's third `verify/stage_traces.py seed` (stamp `202611081757`) failed its closing
+guards-off beat: `kubectl ... exec deploy/web-terminal -c ttyd -- bash /home/student/guardrails-off` on
+watch-it-burn-private timed out after 300 s, though both clusters read back at the start state. The issue asked
+whether #1158's Argo CD sync at 18:03 was involved. `verify/prior-drafts.sh 1211 origin/staging` printed NONE.
+
+**The cause, from the process itself.** Run 18785 (#1134) listed the private terminal pod's processes at
+2026-11-08T22:08:51Z (its `stream.jsonl` on hecaton's host). Among them were PID 1908, `bash /home/student/guardrails-off`,
+with an elapsed time of 04:05:46, and its child PID 2015, `kubectl --kubeconfig /home/student/.kube/peer --context
+watch-it-burn-community delete --ignore-not-found -f /home/student/challenges/c1-network-policy.yaml`, at 04:05:43.
+22:08:51 less 4:05:46 is 18:03:05 UTC: that bash is the guardrails-off run 18722's seed started, still waiting four
+hours later. Its parent is PID 0 because the seed's 300 s timeout killed the local `kubectl exec` only, not the
+command in the pod. So the hang is the one run 18785 diagnosed and #1134 fixed: the peer identity
+`guardrails-switch:guardrails-switch` could delete NetworkPolicies in `agent` but not list or watch them, and when a
+policy still held the AWS network policy controller's `networking.k8s.aws/resources` finalizer, the wait in `kubectl
+delete` retried a Forbidden list without end. Egress is the last of the four guardrails `_guardrails` switches and
+the peer is switched after this cluster, so by then every change had landed, the policy itself went once the
+controller cleared its finalizer, and only kubectl's wait was left. That is why both clusters read at the start state
+afterwards. Whether a run hangs depends on how fast the controller clears the finalizer, which is why the two earlier
+seeds that day returned.
+
+**#1158 is not involved.** `agent-allow-desk-relay-egress` is on the private cluster alone, and
+`c1-network-policy.yaml` does not name it (its six policies are `agent-egress-allowlist`, `agent-allow-dns`,
+`agent-allow-otel-egress`, `agent-allow-kagent-egress`, `agent-allow-intra-namespace` and
+`agent-allow-weather-feed-egress`). The hung delete was on the community cluster. The 18:03 sync was at the same
+minute by chance.
+
+**Fixed, inside the platform, not the seed script.** `gitops/guardrails-switch/guardrails-switch.yaml` grants `list`
+and `watch` beside `delete` on both kinds since `2ade7e74` (#1134). Run 18805 (#1159) ran the seeds and both probes
+green after it synced, and run 19409 (#1208) ran `guardrails-on` and `guardrails-off` from the private terminal with
+the finalizer on every egress policy: rc 0 in 6.3 s and 6.7 s. `verify/test_guardrails_switch.py` replays
+`guardrails-off`'s peer deletes as the list and watch requests real kubectl makes, and fails if the grant loses them.
+This run changes no code.
+
+**Live check, read only, 2026-11-09 07:28 UTC.** On both clusters the `guardrails-switch` Application read `Synced`
+at `f526bf22`, this run's base, and `kubectl auth can-i` as
+`system:serviceaccount:guardrails-switch:guardrails-switch` in `agent` printed `yes` for list, watch and delete on
+`networkpolicies` and `kubearmorpolicies.security.kubearmor.com`. The private terminal pod, restarted 1h43m before,
+ran ttyd, the two entrypoints, jupyter-lab and nothing else: no `guardrails-off` or `kubectl` left over (process names
+and PIDs only were read; the presenter terminal login was not read or touched). Nothing was changed on either cluster.
+
+**Tests run.** None: the change is this entry alone. The ai-isms prose gate was run on it.
