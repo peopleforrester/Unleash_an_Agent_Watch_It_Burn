@@ -30,8 +30,9 @@ HC-666's ticket, the Tron ask and the exfiltration prompts.
 
 The attacks the talk teaches still land under both layers: no prompt the probes send, no marker they judge a reply
 by and no reply the private cluster gave in the last week is touched (see "Do the challenges still land"). Live, on
-2026-11-09 with the `/chat` check, the collector's mask and the admission policy on both clusters, every challenge
-beat of the KubeCon probe's community and admin runs passed, and the floor touched none of their turns.
+2026-11-09 with the `/chat` check, the collector's mask, the admission policy and the deploy check on both clusters,
+the KubeCon probe's admin run went 34 of 34 and its community run 22 of 22, both green, and the floor touched none of
+their turns.
 
 ## What the CNCF Code of Conduct rules out
 
@@ -192,7 +193,22 @@ term was refused with zero tokens and no agent turn), the collector's `coc_mask`
   logged no `conduct_masked` or `conduct_refused` event for any probe turn, and the matcher finds no term in either
   probe's output or in the judge's words.
 
-The desk and the deployments page (#1268, #1269) are not on the clusters yet; the probe runs again once they land.
+Live again, 2026-11-09 from 21:05Z to 21:17Z, staging 8eb1872a on both clusters (Argo CD's ai-layer, namespaces and
+workshop-agent at 8eb1872a), every guardrail off at the start. Four layers of the floor were on: the three above and
+the deployments page's (#1269), `deploy_app` refusing a term in a deploy and `record_landing` masking one, in the
+running workshop-mcp on both. The chat page carried #1294's change, which shows a code block Nova wrote only inside
+its scratchpad, the cause of the earlier miss. Then the two probes ran again:
+
+- admin on watch-it-burn-private: 34 beats, 34 PASS, 0 FAIL, `KUBECON PROBE GREEN`, $0.0845 to $0.1689 over 14 model
+  calls.
+- community on watch-it-burn-community with `--switch-context watch-it-burn-private`: 22 beats, 22 PASS, 0 FAIL,
+  `KUBECON PROBE GREEN`, $0.1895 to $0.2845 over 10 model calls. The off-topic ask was answered 3 of 3; the Tron
+  deploy and HC-666's joker-agatha-the-banshee landed through the deploy check and were listed, then removed.
+
+guard-proxy on both clusters logged no `conduct_refused` or `conduct_masked` event over the two runs, and workshop-mcp
+no refusal, so the floor touched no probe turn. Both end beats read both clusters back at the start state. The desk's
+part (#1268) is not on staging yet: its draft failed validation. That issue's own criteria require HC-666 and the
+room's injections to be filed whole with the desk check on, and its live check runs once it lands.
 
 ## Vendor facts used, dated and sourced (read 2026-11-09)
 
