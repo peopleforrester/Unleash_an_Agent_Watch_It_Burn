@@ -47468,5 +47468,6 @@ new node.
 **Tests.** `python3 verify/test_kubearmor_node_replacement_checks.py` passed, and failed with the live test's hand-put
 judge disabled (three cases) and with its one-pod judge loosened to at least one (the two-pod case).
 `python3 verify/test_scope_tests.py` and `python3 verify/test_verify_harness.py` passed. The whole Test and E2E
-commands were not run; validation runs the tests that read the changed files. No tools-tier test reads them. No
-dependency was added.
+commands were not run; validation runs the tests that read the changed files. `scope_tests.py select tools` names three
+tier tests that read the whole tree (`test_iam_policy_structural.py`, `test_image_version_tags.py`,
+`test_kyverno_counter_fix_cache.py`), left to validation. No dependency was added.
