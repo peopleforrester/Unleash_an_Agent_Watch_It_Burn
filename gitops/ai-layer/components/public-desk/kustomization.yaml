@@ -14,6 +14,10 @@
 #                    deployments-burritobot-private, this cluster's own desk hosts, answer 307 to the one desk and
 #                    deployments page, so nobody files a ticket here that the admin bot cannot read. The file says why
 #                    a redirect and not a removed host; verify/test_private_desk_redirect.py holds it.
+#                    It also gains chat-deployments-relay.set (#1256), the one line console.conf's /deployments.json
+#                    location includes, so the admin chat page's "see your deployments" check reads the visitor's
+#                    private rows on the one deployments page through the relay; verify/test_private_chat_deployments.py
+#                    holds it.
 # Nothing here writes the desk-report-token Secret: fleet.sh desk-link writes the same token on both KubeCon clusters.
 # verify/test_public_desk.py holds it, and verify/test_bootstrap_chart_render.py builds it.
 apiVersion: kustomize.config.k8s.io/v1alpha1
@@ -28,6 +32,7 @@ configMapGenerator:
     behavior: merge
     files:
       - private-desk-redirect.conf
+      - chat-deployments-relay.set
 patches:
   - target:
       kind: Deployment

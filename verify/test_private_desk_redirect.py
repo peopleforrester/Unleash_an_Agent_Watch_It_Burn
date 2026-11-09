@@ -195,8 +195,11 @@ for host in ("burritobot-private.burritobot.co", "burritobot-private.agenticburn
 
 print("== the component, and each profile's console-conf ==")
 gen = [g for g in COMP.get("configMapGenerator") or [] if g.get("name") == "console-conf"]
-check("the public-desk component merges the file alone into console-conf",
-      gen == [{"name": "console-conf", "behavior": "merge", "files": [FILE_NAME]}], str(gen))
+# Beside it, the one set line the chat page's /deployments.json location includes (#1256,
+# verify/test_private_chat_deployments.py holds that one).
+check("the public-desk component merges the file into console-conf, beside chat-deployments-relay.set alone",
+      gen == [{"name": "console-conf", "behavior": "merge", "files": [FILE_NAME, "chat-deployments-relay.set"]}],
+      str(gen))
 check("its name is one nginx's include /etc/nginx/conf.d/*.conf reads", fnmatch.fnmatchcase(FILE_NAME, "*.conf"))
 inc = re.findall(r"^\s*include\s+/etc/nginx/conf\.d/(\S+);", CONF, re.M)
 check("and not one console.conf's desk-remote-reports include reads", bool(inc) and
