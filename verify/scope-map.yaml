@@ -1664,6 +1664,7 @@ reads:
     - images/llm-guard
     - verify/artifact-cache.sh
     - verify/artifact_cache.py
+    - verify/coc_linear_cases.py
     - verify/ensure-submodules.sh
     - verify/git_mirror.py
     - verify/run-e2e-tools.sh
@@ -2085,6 +2086,31 @@ reads:
     - verify/coc_mask_cases.py
     - verify/coc_pattern_copies.py
     - verify/scope-map.yaml
+    - verify/topic_cases.py
+  test_coc_pattern_linear.py:
+    - challenges/PROMPT-CATALOG.md
+    - docs/research/2026-11-09-coc-floor
+    - docs/research/2026-11-09-coc-floor/abuse-set.rot13.tsv
+    - docs/research/2026-11-09-coc-floor/corpus.py
+    - docs/research/2026-11-09-coc-floor/floor.py
+    - docs/research/2026-11-09-coc-floor/hard-negatives.txt
+    - docs/research/2026-11-09-coc-floor/pull_turns.py
+    - docs/research/2026-11-09-coc-floor/terms-proposed.rot13
+    - facilitation/kubecon-na-2026/fallback/prompts.yaml
+    - gitops
+    - gitops/**
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/server.py
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/namespaces/code-of-conduct-names.yaml
+    - gitops/otel-collector/values.yaml
+    - gitops/workshop-agent/agent.yaml
+    - verify/coc_linear_cases.py
+    - verify/coc_mask_cases.py
+    - verify/coc_pattern_copies.py
     - verify/topic_cases.py
   test_collector_act2_redaction.py:
     - gitops
