@@ -42392,3 +42392,51 @@ run, so feedback-agenticburn confirms that row under `kubecon-na-2026` with sour
 **Not yet run on a cluster.** After promotion: `curl -s https://attackme.burritobot.co/event.js | grep feedbackUrl`
 reads the form's URL, and `verify/test_audience_page_e2e.py`'s check holds for the served copy; the Feedback button
 on attackme.burritobot.co opens the form on a phone (the phone check's "Feedback opens" column and its submit table).
+
+## 2026-11-09 · #1166 · run 19135 · A test holds #647's post-talk purge: the comment on #647 and an empty --verify of its window
+
+**What #1166 asks.** Test review run 18541 found no test for #647's criterion: after the talk on 2026-11-12, the
+burritobot-public data (APM spans and Agent Observability spans, the scrub check's own `wib-pii-scrub-check` spans
+included) is purged from Whitney's Datadog org, and the result is posted on #647. The tests only counted the spans.
+No earlier draft existed (`verify/prior-drafts.sh 1166 origin/staging` printed NONE, and the issue had no comments).
+
+**The test.** `verify/test_dd_purge_public_live.py` (`# SUITE: e2e`, run by `run-e2e.sh`) holds the criterion on
+GitHub and in the org. It reads #647's comments through `verify/gh_comments.py` and fails unless one by hecaton or
+Michael passes `verify/purge_647.py`'s `comment_verdict`: it names `verify/dd_purge_public.py`, pastes the `--apply`
+run's "Sent N deletion requests for M traces." line and the `--verify` run's "Window ... org ..." and "Purged: ..."
+lines for a window from 2026-10-28 (the first build day) to no earlier than 2026-11-12T21:20Z (the talk's end:
+13:50 MST and 30 minutes, conference-knowledge `kubecon-na-2026`), names `wib-pii-scrub-check`, and quotes the APM
+line with whether those spans go to retention or to Datadog support. It checks the comment's org is the one
+`watch-it-burn/datadog` names, then runs `dd_purge_public.py --verify` over that window, and again with `--service
+wib-pii-scrub-check`, with the read pair only, and fails unless each prints the Purged line, 0 Agent Observability
+spans and 0 APM spans. APM has no delete API, so the APM half holds once retention expires those spans or Datadog
+support removes them; until then the test names the count left. With no comment yet it still runs `--verify` over
+2026-10-28 to now, so its output shows what is left.
+
+- **Why it is not in the tools tier.** It is red until the purge after the talk, which is the criterion not holding
+  yet. In the tools tier it would hold every promotion gate that selects it red until then. `run-e2e.sh` is run by
+  hand, so a run of it before 2026-11-13 shows this one failure, named by the test as owed after the talk.
+- **The run-of-show.** The Teardown purge step now says to paste the `Sent`, `Window`, `APM` and `Purged:` lines into
+  the #647 comment, to name `wib-pii-scrub-check`, and that the live test reads the comment (#1166).
+
+**The live run, today.** With the run's session sourced, `python3 verify/test_dd_purge_public_live.py` printed 6 FAIL
+and exit 1, as it should before the talk: no comment on #647 quotes an `--apply` line; over 2026-10-28T00:00:00Z to
+2026-11-09T01:50:55Z in org `5a6c3583-157d-11f0-845c-2241f983918a`, 25862 Agent Observability spans in 3398 traces and
+98732 APM spans are under the cluster's tag; under `wib-pii-scrub-check`, 0 Agent Observability spans (the Purged
+line) and 8 APM spans. Nothing was deleted or written: `--verify` sends GETs and one APM count.
+
+**Tests.** `verify/test_purge_647_record.py` (offline, 41 checks) holds both verdicts to the lines
+`dd_purge_public.py` really prints, by running its `main` against a fake org: a comment pasting them passes, and
+each of nine cuts (no script, no `--apply` line, a window that starts late, ends before the talk ended or has no zone,
+no Purged line, no `wib-pii-scrub-check`, no APM line, no word on retention or support) is refused. `verify_verdict`
+passes a run with nothing left, alone and under `--service`, and fails a run with APM spans left, one with the check's
+span left, and one read under the wrong query. It also checks the live test uses both verdicts and runs both
+`--verify` passes, carries `# SUITE: e2e` and no tools-tier marker, and that the run-of-show's step asks for the lines
+the verdict reads. `verify/test_collector_pii_scrub.py` still passes on the reworded step. `python3
+verify/scope_tests.py write` added the new test's entry. No dependency was added. This change touches only `verify/`,
+`decisions.md` and the run-of-show, none of which a cluster runs, so it has no live check of its own beyond the read
+above.
+
+**Not yet run.** The purge and the green run of this test, on or after 2026-11-13: the run-of-show's Teardown step,
+then the #647 comment, then `python3 verify/test_dd_purge_public_live.py` until it exits 0; its APM checks go green
+only when retention or Datadog support has removed the 98732 APM spans.

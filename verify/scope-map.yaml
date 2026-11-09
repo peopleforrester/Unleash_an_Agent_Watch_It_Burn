@@ -6481,6 +6481,14 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
+  test_purge_647_record.py:
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - infra/datadog-fleet/dashboard.yaml
+    - infra/datadog-fleet/fleet_monitors.py
+    - infra/datadog-fleet/leaderboard.yaml
+    - infra/datadog-fleet/monitors.yaml
+    - verify/dd_purge_public.py
+    - verify/test_dd_purge_public_live.py
   test_readme_current.py:
     - README.md
   test_recipe_block_coverage.py:

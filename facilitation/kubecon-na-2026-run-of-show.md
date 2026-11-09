@@ -2669,7 +2669,11 @@ hosts at peak, down to 1 within three hours).
   left; a second `--apply` sends only what is left. APM spans under
   `kube_cluster_name:burritobot-public` have no delete API (the script prints their
   count), so ask Datadog support to remove them or let retention expire them. Then
-  post on #647 what was deleted and what is left to retention.
+  post on #647 what was deleted and what is left to retention, pasting the `--apply`
+  run's `Sent` line and the `--verify` run's `Window`, `APM` and `Purged:` lines, and
+  naming `wib-pii-scrub-check`. `verify/test_dd_purge_public_live.py` reads that
+  comment, runs `--verify` on its window and on `--service wib-pii-scrub-check`, and
+  stays red until no Agent Observability or APM span is left (#1166).
 - Record the real spend once the fleet is down, with `teardown/delivery-cost.py
   --start <first build day> --end <day after the last teardown> --event kubecon-na-2026`
   and a `--profile` for each fleet account, saved as `cost/measured/kubecon-na-2026.txt`
