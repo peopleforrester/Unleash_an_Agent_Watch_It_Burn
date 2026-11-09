@@ -4553,6 +4553,7 @@ reads:
     - verify/artifact-cache.sh
     - verify/artifact_cache.py
     - verify/iam_plan_render.py
+    - verify/tf_module_cache.py
     - verify/tf_plugin_cache.py
   test_iam_plan_render_plugin_start.py:
     - VERSIONS.lock
@@ -4565,6 +4566,7 @@ reads:
     - verify/artifact-cache.sh
     - verify/artifact_cache.py
     - verify/iam_plan_render.py
+    - verify/tf_module_cache.py
     - verify/tf_plugin_cache.py
   test_iam_policy_pipeline.py:
     - infra
@@ -8306,6 +8308,11 @@ reads:
     - verify/charts.lock
     - verify/charts_lock.py
     - verify/tf_plugin_cache.py
+  test_tf_module_cache.py:
+    - infra/terraform/aws/cluster/main.tf
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/tf_module_cache.py
   test_ticket_persona.py:
     - gitops/ai-layer/ticket_site.py
     - gitops/workshop-agent/agent.yaml

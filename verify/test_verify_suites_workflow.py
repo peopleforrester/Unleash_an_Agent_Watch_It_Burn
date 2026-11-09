@@ -23,14 +23,24 @@ agent/** push the group carries the run id and `cancel-in-progress` is false, so
 pushes to one agent branch, rather than matching their text, and GitHub's refusal of `queue: max` beside
 `cancel-in-progress: true` in one block is checked on every block.
 
+#1195: a commit already in staging is scoped by its newest first-parent ancestor whose verify-suites run on staging
+finished success, not by github.event.before (#1189), since a newer staging push cancels the run before it (#1113)
+and a cancelled push's changes then fell in no run's scope. The base step reads the runs with gh and the job's
+token, so the workflow and the e2e job carry actions: read and the step gets GH_TOKEN.
+
 The checker runs first on copies of the workflow, each broken one way, so a check that stopped matching reads as that
-and not as a pass. verify/ci-base-sha.sh is then run in throwaway repositories: an agent branch gets the merge base,
-a commit already in staging gets no HECATON_BASE_SHA (so #1018's runners run whole), and a missing GITHUB_ENV or an
-unrelated history fails.
+and not as a pass. verify/ci-base-sha.sh is then run in throwaway repositories, with a stub gh on PATH that answers
+the Actions API from a file the test writes: an agent branch gets the merge base and never calls gh; a staging tip
+whose push before it was cancelled gets the last green first-parent ancestor, and the cancelled push's file is in the
+diff from that base; a green run that is the commit itself, a second parent, another branch, another event or a
+force-pushed commit is never the base; no green ancestor leaves HECATON_BASE_SHA unset (so #1018's runners run
+whole); and a missing GITHUB_ENV, GH_TOKEN or GITHUB_REPOSITORY, a failed or malformed API answer, an unrelated
+history or an unreachable origin fails.
 """
 from __future__ import annotations
 
 import copy
+import json
 import os
 import re
 import subprocess
@@ -47,10 +57,11 @@ LABELS = ["self-hosted", "Linux", "X64", "tanjiro"]
 BRANCHES = {"agent/**", "staging"}
 SUITES = {"offline": "bash verify/run-tests.sh", "e2e-tools": "bash verify/run-e2e-tools.sh"}
 BASE_STEP = "bash verify/ci-base-sha.sh"
-# The tip before the push, which scopes a push to staging (#1189).
-BASE_ENV = {"PUSH_BEFORE": "${{ github.event.before }}"}
 GH_TOKEN = "${{ github.token }}"
-E2E_PERMISSIONS = {"contents": "read", "issues": "read"}
+# The job's token, which the base step reads staging's green runs with (#1195).
+BASE_ENV = {"GH_TOKEN": GH_TOKEN}
+WORKFLOW_PERMISSIONS = {"contents": "read", "actions": "read"}
+E2E_PERMISSIONS = {"contents": "read", "issues": "read", "actions": "read"}
 CHROMIUM_STEP = 'python3 verify/ci_chromium_libs.py "$RUNNER_TEMP/chromium-libs"'
 STAGING_REF = "refs/heads/staging"
 AGENT_REF = "refs/heads/agent/1113-1"
@@ -179,8 +190,9 @@ def problems(doc: dict, text: str) -> list[str]:
             found.append(f"line {n} names pull_request outside a comment: {line.strip()}")
     if re.search(r"\bsecrets\.", text):
         found.append("the workflow reads a secret; a public repo's self-hosted job holds none")
-    if doc.get("permissions") != {"contents": "read"}:
-        found.append(f"permissions are {doc.get('permissions')!r}, not contents: read")
+    if doc.get("permissions") != WORKFLOW_PERMISSIONS:
+        found.append(f"permissions are {doc.get('permissions')!r}, not {WORKFLOW_PERMISSIONS}: the offline job's base "
+                     "step reads staging's runs with actions: read (#1195)")
     found += concurrency_problems(doc)
     # GitHub rejects the whole workflow when one block pairs queue: max with cancel-in-progress true.
     blocks = [("the workflow", doc.get("concurrency"))] + [
@@ -260,7 +272,8 @@ def problems(doc: dict, text: str) -> list[str]:
                     if key in s and not (key == "env" and s["run"].strip() == BASE_STEP):
                         found.append(f"{name}: the step `{s['run'].strip()}` has `{key}`")
             if str(s.get("run", "")).strip() == BASE_STEP and (s.get("env") or {}) != BASE_ENV:
-                found.append(f"{name}: the step `{BASE_STEP}` does not get env {BASE_ENV} (#1189)")
+                found.append(f"{name}: the step `{BASE_STEP}` does not get env {BASE_ENV}, so it cannot read "
+                             "staging's green runs (#1195)")
             uses = str(s.get("uses") or "")
             if uses and not re.fullmatch(r"[\w.-]+/[\w.-]+@[0-9a-f]{40}", uses):
                 found.append(f"{name}: `{uses}` is not pinned to a commit SHA")
@@ -322,8 +335,14 @@ cases = {
         {"steps": [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() != BASE_STEP]}),
     "an action on a tag": lambda d: d["jobs"]["offline"]["steps"][0].update({"uses": "actions/checkout@v7"}),
     "no GH_TOKEN on the e2e job": lambda d: d["jobs"]["e2e-tools"].pop("env"),
-    "no PUSH_BEFORE on the offline job's base step (#1189)": lambda d: next(
+    "no GH_TOKEN on the offline job's base step (#1195)": lambda d: next(
         st for st in d["jobs"]["offline"]["steps"] if str(st.get("run", "")).strip() == BASE_STEP).pop("env"),
+    "PUSH_BEFORE back on the e2e job's base step (#1195)": lambda d: next(
+        st for st in d["jobs"]["e2e-tools"]["steps"] if str(st.get("run", "")).strip() == BASE_STEP)["env"].update(
+        {"PUSH_BEFORE": "${{ github.event.before }}"}),
+    "the workflow without actions: read (#1195)": lambda d: d["permissions"].pop("actions"),
+    "actions: write on the workflow": lambda d: d["permissions"].update({"actions": "write"}),
+    "the e2e job without actions: read (#1195)": lambda d: d["jobs"]["e2e-tools"]["permissions"].pop("actions"),
     "an empty GH_TOKEN on the e2e job": lambda d: d["jobs"]["e2e-tools"]["env"].update({"GH_TOKEN": ""}),
     "the e2e job without issues: read": lambda d: d["jobs"]["e2e-tools"]["permissions"].pop("issues"),
     "issues: write on the e2e job": lambda d: d["jobs"]["e2e-tools"]["permissions"].update({"issues": "write"}),
@@ -376,15 +395,39 @@ def commit(cwd: Path, name: str) -> str:
     return git(cwd, "rev-parse", "HEAD")
 
 
-def base_sha(cwd: Path, env_file: Path | None, before: str | None = None) -> tuple[int, str, str]:
-    env = {k: v for k, v in os.environ.items() if k not in ("GITHUB_ENV", "PUSH_BEFORE")}
-    if before is not None:
-        env["PUSH_BEFORE"] = before
-    env.update({"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1"})
+def base_sha(cwd: Path, env_file: Path | None, runs: object | None = None, *, token: bool = True,
+             repo: bool = True, gh_fails: bool = False) -> tuple[int, str, str]:
+    """Runs ci-base-sha.sh in `cwd` with a stub gh first on PATH that logs its arguments to GH_LOG and prints `runs`
+    as JSON (or exits 1 when `gh_fails`). Returns the exit code, the output and what the script wrote to `env_file`."""
+    stub = cwd.parent / "stub"
+    stub.mkdir(exist_ok=True)
+    (stub / "gh").write_text('#!/usr/bin/env bash\nprintf "%s\\n" "$*" >>"$GH_LOG"\n'
+                             '[[ -z "${GH_STUB_FAIL:-}" ]] || exit 1\ncat "$GH_STUB_RUNS"\n')
+    (stub / "gh").chmod(0o755)
+    (stub / "runs.json").write_text(runs if isinstance(runs, str) else json.dumps(runs or {"workflow_runs": []}))
+    log = stub / "gh.log"
+    log.write_text("")
+    drop = ("GITHUB_ENV", "PUSH_BEFORE", "GH_TOKEN", "GITHUB_TOKEN", "GITHUB_REPOSITORY", "GH_STUB_FAIL")
+    env = {k: v for k, v in os.environ.items() if k not in drop}
+    env.update({"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "PATH": f"{stub}:{env.get('PATH', '')}",
+                "GH_LOG": str(log), "GH_STUB_RUNS": str(stub / "runs.json")})
+    if token:
+        env["GH_TOKEN"] = "stub-token"
+    if repo:
+        env["GITHUB_REPOSITORY"] = "owner/repo"
+    if gh_fails:
+        env["GH_STUB_FAIL"] = "1"
     if env_file is not None:
         env["GITHUB_ENV"] = str(env_file)
     r = subprocess.run(["bash", str(BASE_SCRIPT)], cwd=cwd, env=env, capture_output=True, text=True)
+    base_sha.gh_calls = log.read_text().splitlines()
     return r.returncode, r.stdout + r.stderr, env_file.read_text() if env_file and env_file.exists() else ""
+
+
+def run(sha: str, conclusion: str | None = "success", branch: str = "staging", event: str = "push") -> dict:
+    """One workflow run as the Actions API lists it."""
+    return {"head_sha": sha, "head_branch": branch, "event": event,
+            "status": "completed" if conclusion else "in_progress", "conclusion": conclusion}
 
 
 with tempfile.TemporaryDirectory() as tmp:
@@ -396,48 +439,90 @@ with tempfile.TemporaryDirectory() as tmp:
     fork = commit(work, "a")
     git(work, "push", "-q", "origin", "staging")
     git(work, "checkout", "-q", "-b", "agent/1020-1")
-    commit(work, "b")
+    second = commit(work, "b")
     commit(work, "c")
-    # Staging moves on after the branch was cut, so the merge base is neither tip.
+    # Staging moves on after the branch was cut: s2 is a push whose run the next push cancelled (#1113), s3 merges the
+    # agent branch, so its second parent is an ancestor but not a first-parent one, and s4 is the tip being run.
     git(work, "checkout", "-q", "staging")
-    commit(work, "d")
+    s2 = commit(work, "cancelled-push.txt")
+    git(work, "merge", "-q", "--no-ff", "-m", "s3", "agent/1020-1")
+    s3 = git(work, "rev-parse", "HEAD")
+    s4 = commit(work, "s4")
     git(work, "push", "-q", "origin", "staging")
-    git(work, "reset", "-q", "--hard", fork)
-    git(work, "checkout", "-q", "agent/1020-1")
+    # A commit that was on staging until a force push, so no ancestor of s4.
+    git(work, "checkout", "-q", "-b", "gone", s2)
+    gone = commit(work, "gone")
+    git(work, "checkout", "-q", "staging")
+    git(work, "branch", "-q", "-f", "agent/1020-2", fork)
+    git(work, "checkout", "-q", "agent/1020-2")
+    agent_tip = commit(work, "e")
 
-    rc, out, env = base_sha(work, t / "env1")
+    rc, out, env = base_sha(work, t / "env1", token=False, repo=False)
     check("an agent branch gets HECATON_BASE_SHA, the merge base with origin/staging",
           rc == 0 and env == f"HECATON_BASE_SHA={fork}\n", f"exit {rc}, wrote {env!r}: {out}")
+    check("an agent branch past staging never calls gh", base_sha.gh_calls == [], f"gh got {base_sha.gh_calls}")
 
-    git(work, "checkout", "-q", "--detach", "origin/staging")
-    rc, out, env = base_sha(work, t / "env2")
-    check("a commit already in staging with no PUSH_BEFORE leaves HECATON_BASE_SHA unset, so the suites run whole",
-          rc == 0 and env == "" and "left unset" in out, f"exit {rc}, wrote {env!r}: {out}")
-
-    # A push to staging (#1189): the tip before the push scopes it.
-    d_tip = git(work, "rev-parse", "HEAD")
-    rc, out, env = base_sha(work, t / "env5", fork)
-    check("a push to staging gets HECATON_BASE_SHA, the tip before the push (#1189)",
+    git(work, "checkout", "-q", "--detach", s4)
+    # The answer as the API might give it, newest first: s4 still running, s3 failed, s2 cancelled, and green runs
+    # that must never be the base (another branch, another event, a second parent, a force-pushed commit), then s1.
+    noise = [run(s4, None), run(s3, "failure"), run(s3, "success", branch="agent/1020-1"),
+             run(s2, "cancelled"), run(s2, "success", event="workflow_dispatch"), run(gone), run(second),
+             run(agent_tip, branch="agent/1020-2")]
+    rc, out, env = base_sha(work, t / "env2", {"workflow_runs": noise + [run(fork)]})
+    check("a staging tip after a cancelled run gets the newest green first-parent ancestor, s1 (#1195)",
           rc == 0 and env == f"HECATON_BASE_SHA={fork}\n", f"exit {rc}, wrote {env!r}: {out}")
-    for label, before in (("all zeros, a new branch", "0" * 40), ("the commit itself", d_tip),
-                          ("not in the history", "1" * 40), ("not an ancestor, a force push", git(work, "rev-parse", "agent/1020-1"))):
-        rc, out, env = base_sha(work, t / f"env-{label[:3]}", before)
-        check(f"a PUSH_BEFORE that is {label} leaves HECATON_BASE_SHA unset", rc == 0 and env == "" and "left unset" in out,
+    scope = git(work, "diff", "--name-only", env.strip().partition("=")[2] or s4, s4).split()
+    check("the cancelled run's change is in the next run's scope (#1195)", "cancelled-push.txt" in scope,
+          f"the diff from {env.strip()!r} to the tip names {scope}; the push before the tip would give "
+          f"{git(work, 'diff', '--name-only', s3, s4).split()}")
+    calls = base_sha.gh_calls
+    check("the base step reads this workflow's green staging push runs from the Actions API",
+          len(calls) == 1 and calls[0].startswith("api repos/owner/repo/actions/workflows/verify-suites.yml/runs?")
+          and all(q in calls[0] for q in ("branch=staging", "event=push", "status=success")), f"gh got {calls}")
+
+    rc, out, env = base_sha(work, t / "env3", {"workflow_runs": [run(s4)] + noise + [run(fork)]})
+    check("a green run on the commit itself (a rerun) is not its own base",
+          rc == 0 and env == f"HECATON_BASE_SHA={fork}\n", f"exit {rc}, wrote {env!r}: {out}")
+    rc, out, env = base_sha(work, t / "env4", {"workflow_runs": [run(s3)] + noise + [run(fork)]})
+    check("the newest green first-parent ancestor wins over an older one",
+          rc == 0 and env == f"HECATON_BASE_SHA={s3}\n", f"exit {rc}, wrote {env!r}: {out}")
+    for label, runs in (("no green first-parent ancestor", {"workflow_runs": noise}),
+                        ("no runs at all", {"workflow_runs": []})):
+        rc, out, env = base_sha(work, t / f"env-{label[:5]}", runs)
+        check(f"a staging tip with {label} leaves HECATON_BASE_SHA unset, so the suites run whole",
+              rc == 0 and env == "" and "left unset" in out, f"exit {rc}, wrote {env!r}: {out}")
+    for label, kw, word in (("no GH_TOKEN", {"token": False}, "GH_TOKEN"),
+                            ("no GITHUB_REPOSITORY", {"repo": False}, "GITHUB_REPOSITORY"),
+                            ("a gh api call that fails", {"gh_fails": True}, "gh api"),
+                            ("an API answer with no workflow_runs", {"runs": "{}"}, "workflow_runs")):
+        rc, out, env = base_sha(work, t / f"env-{word[:6]}", **{"runs": {"workflow_runs": [run(fork)]}, **kw})
+        check(f"a staging tip with {label} fails, naming it", rc == 1 and env == "" and word in out,
               f"exit {rc}, wrote {env!r}: {out}")
 
-    git(work, "checkout", "-q", "agent/1020-1")
+    git(work, "checkout", "-q", "agent/1020-2")
     rc, out, _ = base_sha(work, None)
     check("no GITHUB_ENV fails, naming it", rc == 1 and "GITHUB_ENV" in out, f"exit {rc}: {out}")
 
     git(work, "checkout", "-q", "--orphan", "agent/unrelated")
-    commit(work, "e")
-    rc, out, env = base_sha(work, t / "env3")
+    commit(work, "f")
+    rc, out, env = base_sha(work, t / "env5")
     check("a history with nothing in common with staging fails", rc == 1 and env == "", f"exit {rc}: {out}")
 
     git(work, "remote", "set-url", "origin", str(t / "missing.git"))
-    git(work, "checkout", "-q", "agent/1020-1")
-    rc, out, env = base_sha(work, t / "env4")
+    git(work, "checkout", "-q", "agent/1020-2")
+    rc, out, env = base_sha(work, t / "env6")
     check("an origin that cannot be fetched fails", rc == 1 and env == "", f"exit {rc}: {out}")
+
+    # A staging that is one root commit has no ancestor to scope by.
+    origin2, work2 = t / "origin2.git", t / "work2"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "staging", str(origin2)], check=True)
+    subprocess.run(["git", "init", "-q", "-b", "staging", str(work2)], check=True)
+    git(work2, "remote", "add", "origin", str(origin2))
+    root = commit(work2, "root")
+    git(work2, "push", "-q", "origin", "staging")
+    rc, out, env = base_sha(work2, t / "env7", {"workflow_runs": [run(root)]})
+    check("a staging that is one root commit leaves HECATON_BASE_SHA unset",
+          rc == 0 and env == "" and "left unset" in out, f"exit {rc}, wrote {env!r}: {out}")
 
 if failures:
     print(f"\n{len(failures)} check(s) failed", file=sys.stderr)

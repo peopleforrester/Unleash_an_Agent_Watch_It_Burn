@@ -9,7 +9,9 @@
 #
 # Each job computes HECATON_BASE_SHA, the merge base of the pushed commit and origin/staging, with
 # verify/ci-base-sha.sh, so the runners scoped by #1018 run only what the push touched. A push to staging scopes by
-# the tip before the push, github.event.before (#1189); a new branch or a force push leaves it unset and runs everything.
+# the newest first-parent ancestor whose run of this workflow on staging finished success (#1195), so the changes of a
+# run the next push cancelled (#1113) fall in the next run's scope; with no such ancestor it is unset and runs
+# everything. The step reads those runs with gh and the job's own token, which is why every job has actions: read.
 #
 # The workspace persists between jobs on a self-hosted runner, so checkout does not clean it; the step after it
 # removes every untracked and ignored file, verify/.tools included, whose binaries fetch-e2e-tools.sh extracts again
@@ -37,6 +39,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}${{ github.ref != 'refs/heads/staging' && format('-run-{0}', github.run_id) || '' }}
@@ -89,9 +92,9 @@ jobs:
           "$RUNNER_TEMP/venv/bin/python" verify/package_cache.py install pyyaml --python "$RUNNER_TEMP/venv/bin/python"
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
 
-      - name: HECATON_BASE_SHA, the merge base with origin/staging, or the tip before this push
+      - name: HECATON_BASE_SHA, the merge base with origin/staging, or the newest green staging ancestor
         env:
-          PUSH_BEFORE: ${{ github.event.before }}
+          GH_TOKEN: ${{ github.token }}
         run: bash verify/ci-base-sha.sh
 
       - name: bash verify/run-tests.sh
@@ -105,10 +108,13 @@ jobs:
     # The tier's cause-comment tests read issues through verify/gh_comments.py, which needs gh with a token and never
     # reads anonymously (#863). Tanjiro has gh (hecaton deploy/tanjiro/tools.sh) and no login for the runner user, so
     # the job hands gh this run's own token, with read access to issues added to contents: read (#1047). The token
-    # expires with the job, and gh reads the other public repo's issue (guard-proxy-agenticburn#63) with it too.
+    # expires with the job, and gh reads the other public repo's issue (guard-proxy-agenticburn#63) with it too. A
+    # job's permissions replace the workflow's, so actions: read, which the base step reads staging's runs with
+    # (#1195), is named here again.
     permissions:
       contents: read
       issues: read
+      actions: read
     env:
       GH_TOKEN: ${{ github.token }}
     concurrency:
@@ -154,9 +160,9 @@ jobs:
           node-version: '26'
           package-manager-cache: false
 
-      - name: HECATON_BASE_SHA, the merge base with origin/staging, or the tip before this push
+      - name: HECATON_BASE_SHA, the merge base with origin/staging, or the newest green staging ancestor
         env:
-          PUSH_BEFORE: ${{ github.event.before }}
+          GH_TOKEN: ${{ github.token }}
         run: bash verify/ci-base-sha.sh
 
       # Playwright's Chromium needs shared libraries and fonts that Tanjiro's Debian lacks (libnspr4.so first, #1047),

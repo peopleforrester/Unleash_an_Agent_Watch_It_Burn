@@ -92,6 +92,11 @@ def break_rules(tf):
 
 msgs = p.structural(p.extract(iam_plan_render.render("cluster", edit=break_rules)))
 print("    " + "\n    ".join(msgs))
+# The first cluster render above installed the modules, or took them from the host cache; either way they are kept, so
+# this one, whose edits leave every module's source and version alone, inits from the kept copy with the network closed
+# (tf_module_cache.py, #1246: a GitHub clone that timed out after 300 s failed this test on staging cdeaedfd).
+check("the second cluster render took its modules from the host cache, with the network closed (#1246)",
+      iam_plan_render.MODULES_FROM == ["kept"], iam_plan_render.MODULES_FROM)
 check("an Allow without a Condition fails, naming the address and the statement index",
       "aws_iam_policy.bedrock_invoke: Statement[0] is an Allow with no Condition [allow-without-condition]" in msgs)
 check("a role without the boundary fails",
