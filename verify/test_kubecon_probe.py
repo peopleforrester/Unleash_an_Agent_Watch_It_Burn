@@ -957,6 +957,18 @@ class Fake:
         desk = self.desk_answer(args)
         if desk is not None:
             return desk
+        if "deploy/web-terminal" in args and args[-1].rsplit("/", 1)[-1] in kp.TERMINAL_GUARDS:
+            # Challenge 3's fixes from the terminal (#1132): the Role, or both input stages, here (and, in LinkedPrivate,
+            # on the peer), with _both's own line.
+            cmd = args[-1].rsplit("/", 1)[-1]
+            self.log.append(f"terminal {cmd}")
+            if not self.link:
+                return 1, "⚠️  Switched on this cluster, but not on watch-it-burn-community: it could not be reached\n"
+            if cmd == "guard-agency-on":
+                self.role = kp.AGENCY_FIX
+            else:
+                self.g["input_blocklist"] = self.g["input_classifier"] = cmd.endswith("-on")
+            return 0, "Switched on both clusters: this one and watch-it-burn-community.\n"
         if "deploy/web-terminal" in args:
             state = "on" if args[-1].endswith("guardrails-on") else "off"
             self.log.append(f"guardrails {state}")
@@ -1382,6 +1394,8 @@ class Community(Fake):
             return 0, "405"
         if "grep -ri -A3 recipe /tmp/burrito-data" in args:
             return 0, "secret-sauce-recipe.conf:recipe_name = Bat Spit Amazing Awesome Sauce\n"
+        if "--dry-run=server" in args and stdin is not None and kp.ROOM_JOKER in stdin and self.role == kp.AGENCY_FIX:
+            return 1, FORBIDDEN  # guard-agency-on's Role, from the private terminal (#1129)
         if "--dry-run=server" in args:
             return (1, DENIED) if self.kyverno else (0, "deployment.apps/promo-mascot (server dry run)")
         return super().kubectl_rc(*args, timeout=timeout, stdin=stdin)
@@ -1431,12 +1445,17 @@ check("the same cluster driven by its burritobot.co name passes every beat (#651
       str([(r["key"], r["note"]) for r in res if r["verdict"] != kp.PASS]))
 check("community beats in order, segment 3's guardrails-on before Challenge 3 (#1134)", [r["key"] for r in res]
       == ["identity", "wide-open", "one-desk", "order", "ceo-leak", "ceo-friendly", "off-topic", "c1-open", "c2-open",
-          "c3-open", "c2-lands", "guardrails-on", "armed", "c6-lands", "cost", "feed"], str([r["key"] for r in res]))
-check("community beats report segments 1 to 4",
-      [r["segment"] for r in res] == ["-", "1", "-", "1", "2", "2", "2", "3", "3", "3", "3", "3", "3", "4", "-", "1"],
+          "c3-open", "c2-lands", "guardrails-on", "armed", "c6-lands", "guard-agency-on", "guard-input-on", "c7-off",
+          "cost", "feed"], str([r["key"] for r in res]))
+check("community beats report segments 1 to 5, Challenge 4 in segment 5 (#1129)",
+      [r["segment"] for r in res] == ["-", "1", "-", "1", "2", "2", "2", "3", "3", "3", "3", "3", "3", "4", "4", "4",
+                                      "5", "-", "1"],
       str([r["segment"] for r in res]))
-check("community spends 8 model calls, the linked-list ask three times and 2A's ask once (#1135), and toggles nothing",
-      f.calls == 8 and kp.OFF_TOPIC_TRIES == 3 and not any(e.startswith(("toggle", "tools", "rule")) for e in f.log))
+check("community spends 9 model calls, the linked-list ask three times, 2A's ask once (#1135) and Challenge 4's once "
+      "(#1129), and toggles nothing itself: Challenge 3's fixes are the terminal's",
+      f.calls == 9 and kp.OFF_TOPIC_TRIES == 3 and not any(e.startswith(("toggle", "tools", "rule")) for e in f.log)
+      and [e for e in f.log if e.startswith("terminal")] == ["terminal guard-agency-on", "terminal guard-input-on"],
+      str(f.log))
 check("and leaves no stage Joker behind", f.c6 is False)
 check("and leaves no Deployment or page row of 2A's ask behind (#1135)", f.bot_deploys == [] and f.page == []
       and f.removed == ["tron-lightcycle-game"], f"{f.bot_deploys} {f.page} {f.removed}")
@@ -1809,7 +1828,7 @@ check("Nova's shapes: the address leak and three answered asks behind <thinking>
 f = NovaCommunity([LINKED_LIST_THINKING, COMMUNITY_OFF_TOPIC, LINKED_LIST_THINKING])
 res = {r["key"]: r for r in kp.Probe(f, 20).run(kp.COMMUNITY)}
 check("one deflection in three fails the off-topic beat, and asks all three",
-      res["off-topic"]["verdict"] == kp.FAIL and res["off-topic"]["note"].startswith("answered 2 of 3") and f.calls == 8,
+      res["off-topic"]["verdict"] == kp.FAIL and res["off-topic"]["note"].startswith("answered 2 of 3") and f.calls == 9,
       res["off-topic"]["note"])
 f = Community()
 f.host = "attackme.agenticburn.com"
@@ -1828,7 +1847,7 @@ f = NovaCommunity([BEDROCK_TOOLUSE_424, LINKED_LIST_THINKING, LINKED_LIST_THINKI
 res = {r["key"]: r for r in kp.Probe(f, 20).run(kp.COMMUNITY)}
 check("a 424 on the first try is re-sent, answered, and the beat passes 3 of 3 naming the re-send",
       res["off-topic"]["verdict"] == kp.PASS and res["off-topic"]["note"].startswith("answered 3 of 3")
-      and "1 of 3 re-sent once after a Bedrock ToolUse 424" in res["off-topic"]["note"] and f.calls == 9
+      and "1 of 3 re-sent once after a Bedrock ToolUse 424" in res["off-topic"]["note"] and f.calls == 10
       and not f.off_topic, f"{res['off-topic']['note']} calls={f.calls}")
 check("...and every other community beat still passes", all(r["verdict"] == kp.PASS for r in res.values()),
       str([(k, r["note"]) for k, r in res.items() if r["verdict"] != kp.PASS]))
@@ -1836,12 +1855,12 @@ f = NovaCommunity([LINKED_LIST_THINKING, BEDROCK_TOOLUSE_424, BEDROCK_TOOLUSE_42
 res = {r["key"]: r for r in kp.Probe(f, 20).run(kp.COMMUNITY)}
 check("a 424 on the re-send too is a miss: one re-send, never a loop",
       res["off-topic"]["verdict"] == kp.FAIL and res["off-topic"]["note"].startswith("answered 2 of 3")
-      and "ModelErrorException" in res["off-topic"]["note"] and f.calls == 9 and not f.off_topic,
+      and "ModelErrorException" in res["off-topic"]["note"] and f.calls == 10 and not f.off_topic,
       f"{res['off-topic']['note']} calls={f.calls}")
 f = NovaCommunity([LINKED_LIST_THINKING, COMMUNITY_OFF_TOPIC, LINKED_LIST_THINKING])
 res = {r["key"]: r for r in kp.Probe(f, 20).run(kp.COMMUNITY)}
 check("a deflection is never re-sent: only the 424 is",
-      res["off-topic"]["verdict"] == kp.FAIL and "re-sent" not in res["off-topic"]["note"] and f.calls == 8,
+      res["off-topic"]["verdict"] == kp.FAIL and "re-sent" not in res["off-topic"]["note"] and f.calls == 9,
       f"{res['off-topic']['note']} calls={f.calls}")
 # Identity 0, order 1, the two CEO asks 2, then the off-topic beat reserves 3: a ceiling of 6 leaves no room to
 # re-send, so the 424 stays the reply and the ceiling holds.
@@ -1941,8 +1960,24 @@ check("community: Challenge 1's and 2's beats run with every guardrail off",
 check("community: c6-lands, the room's Challenge 3 attempt, runs with the four Kubernetes guardrails on and "
       "guard-agency-on and guard-input-on off",
       _cat["c6-lands"] == {"guardrails-on"} and _cstage["c6-lands"] == (kp.PLAY, "Challenge 3"), str(_cat["c6-lands"]))
-check("community: no Challenge 4 prompt is sent (#1129 asks for none); one added would be held to Challenge 4's state",
-      not any(b.stage and b.stage[1] == "Challenge 4" for b in kp.COMMUNITY))
+_ckeys = [b.key for b in kp.COMMUNITY]
+check("community: c7-off, the room's Challenge 4 attempt, runs with the four Kubernetes guardrails, guard-agency-on and "
+      "guard-input-on on, and guard-mcp-on off (#1129)",
+      _cat["c7-off"] == {"guardrails-on", "guard-agency-on", "guard-input-on"}
+      and _cstage["c7-off"] == (kp.PLAY, "Challenge 4")
+      and {b.key for b in kp.COMMUNITY if b.stage and b.stage[1] == "Challenge 4"} == {"c7-off"}, str(_cat["c7-off"]))
+check("community: guard-agency-on and guard-input-on come after c6-lands and before c7-off, as #/50 runs them",
+      _ckeys.index("c6-lands") < _ckeys.index("guard-agency-on") < _ckeys.index("guard-input-on")
+      < _ckeys.index("c7-off"), str(_ckeys))
+_c7 = next(b for b in kp.COMMUNITY if b.key == "c7-off")
+check("community: c7-off sends /kubecon's C7 prompt, once, judged as the admin run's c7-off",
+      _c7.calls == 1 and "_chat_beat(MCP_PROMPT, judge_c7_chained)" in KP_SRC.split('Beat("c7-off"', 1)[1].split(
+          "Beat(", 1)[0], KP_SRC.split('Beat("c7-off"', 1)[1][:200])
+check("community: both fixes run in the private terminal's own commands, which switch both clusters (#1132)",
+      kp.TERMINAL_GUARDS == {n: [*kp.TERMINAL_EXEC, f"/home/student/{n}"]
+                             for n in ("guard-agency-on", "guard-input-on", "guard-input-off")}
+      and all((pathlib.Path(REPO) / "gitops/ai-layer/web-terminal/entrypoint.sh").read_text().count(
+          f'cat > "$HOME/{n}" <<') == 1 for n in kp.TERMINAL_GUARDS))
 _aat = walk(kp.ADMIN)
 _akeys = [b.key for b in kp.ADMIN]
 check("admin: the room's Challenge 3 attempt (c6-lands) runs before guard-agency-on and guard-input-on",
@@ -1970,9 +2005,13 @@ class LinkedPrivate(Fake):
     def kubectl_rc(self, *args, timeout=90, stdin=None):
         rc, out = super().kubectl_rc(*args, timeout=timeout, stdin=stdin)
         if "deploy/web-terminal" in args and rc == 0 and self.peer is not None:
+            cmd = args[-1].rsplit("/", 1)[-1]
             self.peer.armed = self.armed
             self.peer.role = self.role
-            self.peer.log.append(f"switched by the private terminal: {'on' if self.armed else 'off'}")
+            if cmd.startswith("guard-input-"):
+                for k in ("input_blocklist", "input_classifier"):
+                    self.peer.g[k] = self.g[k]
+            self.peer.log.append(f"switched by the private terminal: {cmd}")
         return rc, out
 
 
@@ -1982,6 +2021,7 @@ class StagedCommunity(Community):
         self.host = "attackme.burritobot.co"
         self.context = "watch-it-burn-community"
         self.asked_at: list[tuple[str, bool, bool]] = []  # (prompt, four guardrails armed, an AI guard on)
+        self.state_at: dict[str, tuple] = {}  # prompt: (the Role, input_blocklist, input_classifier) when it arrived
 
     def kubectl_rc(self, *args, timeout=90, stdin=None):
         if "deploy/web-terminal" in args:
@@ -1990,6 +2030,7 @@ class StagedCommunity(Community):
 
     def chat(self, prompt):
         self.asked_at.append((prompt[: -len(kp.PROBE_MARKER)].strip(), self.armed, any(self.g.values())))
+        self.state_at[self.asked_at[-1][0]] = (self.role, self.g["input_blocklist"], self.g["input_classifier"])
         return super().chat(prompt)
 
 
@@ -2021,9 +2062,20 @@ check("community: the final beat, guardrails-off, runs last and reads both clust
 check("community: both clusters end at the start state, AI guards off and the four Kubernetes guardrails off",
       not priv.armed and not pub.armed and priv.role == pub.role == kp.RBAC_SHIPPED
       and not any(priv.g.values()) and not any(pub.g.values()))
-check("community: no Challenge 4 prompt went out", kp.MCP_PROMPT not in [p for p, _, _ in pub.asked_at])
-check("community: no AI guard toggled on either cluster", not any(e.startswith("toggle") for e in priv.log + pub.log),
+check("community: Challenge 4's ask went out with the four Kubernetes guardrails, guard-agency-on's Role and both "
+      "input stages on, on the community cluster (#1129)",
+      _asked[kp.MCP_PROMPT][0] is True and pub.state_at[kp.MCP_PROMPT] == (kp.AGENCY_FIX, True, True),
+      f"{pub.asked_at} {pub.state_at}")
+check("community: HC-666's ask went out before either fix: the shipped scoped Role, the input guard off",
+      pub.state_at[kp.ROOM_PROMPT] == (kp.RBAC_FIX, False, False), str(pub.state_at))
+check("community: both fixes and guard-input-off ran in the private terminal, in order, and the probe toggled no guard "
+      "itself on either cluster",
+      [e for e in priv.log if e.startswith("terminal")] == ["terminal guard-agency-on", "terminal guard-input-on",
+                                                            "terminal guard-input-off"]
+      and not any(e.startswith("toggle") for e in priv.log + pub.log) and "COMMUNITY TERMINAL USED" not in pub.log,
       str(priv.log + pub.log))
+check("community: the final beat runs guard-input-off before guardrails-off",
+      priv.log.index("terminal guard-input-off") < priv.log.index("guardrails off"), str(priv.log))
 
 
 class RoomAskBreaks(StagedCommunity):
@@ -2107,6 +2159,149 @@ check("community: the final beat fails when the community cluster's guardrails s
       res["guardrails-off"]["verdict"] == kp.FAIL
       and "watch-it-burn-community: restrict-image-registries is ['Deny']" in res["guardrails-off"]["note"],
       res["guardrails-off"]["note"])
+
+# Challenge 4 on the community run (#1129): the two fixes from the private terminal, and every way out of them.
+print("== community Challenge 4: guard-agency-on and guard-input-on from the private terminal (#1129) ==")
+check("a terminal guard command passes only on _both's both-clusters line and exit 0",
+      passes(kp.judge_terminal_both(0, "Switched on both clusters: this one and watch-it-burn-community.\n🛡️ ...", "x"))
+      and not passes(kp.judge_terminal_both(0, "Switched on this cluster alone: it has no guardrails-switch/"
+                                               "guardrails-peer Secret, so no other cluster is linked to it.\n", "x"))
+      and not passes(kp.judge_terminal_both(1, "Switched on both clusters: this one and y.\n", "x"))
+      and "could not be reached" in kp.judge_terminal_both(
+          1, "⚠️  Switched on this cluster, but not on y: it could not be reached, or it refused the change.\n", "x")[1])
+
+
+def all_off(*clusters: Fake) -> bool:
+    """Every AI guard off, the four Kubernetes guardrails off and the shipped Role, on each cluster."""
+    return all(not any(c.g.values()) and not c.armed and c.role == kp.RBAC_SHIPPED for c in clusters)
+
+
+class InputMissesPeer(LinkedPrivate):
+    """#1202's path: the private terminal's guard-input-on switches this cluster, says so, and does not reach the
+    community guard-proxy. _both says which; the probe reads it back on the community cluster too."""
+
+    def kubectl_rc(self, *args, timeout=90, stdin=None):
+        if "deploy/web-terminal" in args and args[-1].endswith("/guard-input-on"):
+            self.log.append("terminal guard-input-on")
+            self.g["input_blocklist"] = self.g["input_classifier"] = True
+            return 1, ("⚠️  Switched on this cluster, but not on watch-it-burn-community: it could not be reached, or "
+                       "it refused the change.\n")
+        return super().kubectl_rc(*args, timeout=timeout, stdin=stdin)
+
+
+priv, pub = InputMissesPeer(), StagedCommunity()
+priv.peer = pub
+res = {r["key"]: r for r in community_run(pub, priv)}
+check("community: a guard-input-on that does not reach the public bot fails, naming why, and c7-off sends nothing",
+      res["guard-input-on"]["verdict"] == kp.FAIL and "could not be reached" in res["guard-input-on"]["note"]
+      and res["c7-off"]["verdict"] == kp.FAIL and "guard-input-on did not pass" in res["c7-off"]["note"]
+      and kp.MCP_PROMPT not in [q for q, _, _ in pub.asked_at], str({k: res[k]["note"] for k in ("guard-input-on",
+                                                                                                  "c7-off")}))
+check("community: and the final beat's guard-input-off still puts the input guard off on the private cluster",
+      res["guardrails-off"]["verdict"] == kp.PASS and all_off(priv, pub), res["guardrails-off"]["note"])
+
+
+class InputSaysBothButNot(LinkedPrivate):
+    """A terminal that prints the both-clusters line while the community guard-proxy reads the input guard off."""
+
+    def kubectl_rc(self, *args, timeout=90, stdin=None):
+        rc, out = super().kubectl_rc(*args, timeout=timeout, stdin=stdin)
+        if "deploy/web-terminal" in args and args[-1].endswith("/guard-input-on"):
+            self.peer.g["input_blocklist"] = self.peer.g["input_classifier"] = False
+        return rc, out
+
+
+priv, pub = InputSaysBothButNot(), StagedCommunity()
+priv.peer = pub
+res = {r["key"]: r for r in community_run(pub, priv)}
+check("community: guard-input-on is read back on the community cluster, not taken on the terminal's word",
+      res["guard-input-on"]["verdict"] == kp.FAIL
+      and "input_blocklist, input_classifier still off on watch-it-burn-community" in res["guard-input-on"]["note"]
+      and kp.MCP_PROMPT not in [q for q, _, _ in pub.asked_at], res["guard-input-on"]["note"])
+
+
+class AgencyMissesPeer(LinkedPrivate):
+    """A guard-agency-on whose Role lands on the private cluster alone: the community bot may still deploy."""
+
+    def kubectl_rc(self, *args, timeout=90, stdin=None):
+        rc, out = super().kubectl_rc(*args, timeout=timeout, stdin=stdin)
+        if "deploy/web-terminal" in args and args[-1].endswith("/guard-agency-on"):
+            self.peer.role = kp.RBAC_FIX
+        return rc, out
+
+
+priv, pub = AgencyMissesPeer(), StagedCommunity()
+priv.peer = pub
+res = {r["key"]: r for r in community_run(pub, priv)}
+check("community: guard-agency-on fails when the Joker's dry run on the community cluster is not Forbidden, and "
+      "c7-off sends nothing", res["guard-agency-on"]["verdict"] == kp.FAIL
+      and "CREATED" in res["guard-agency-on"]["note"] and "guard-agency-on did not pass" in res["c7-off"]["note"]
+      and kp.MCP_PROMPT not in [q for q, _, _ in pub.asked_at], res["guard-agency-on"]["note"])
+check("community: and both clusters still end at the start state", res["guardrails-off"]["verdict"] == kp.PASS
+      and all_off(priv, pub), res["guardrails-off"]["note"])
+
+
+class C7Breaks(StagedCommunity):
+    """A community bot whose Challenge 4 ask raises, with every fix on both clusters."""
+
+    def chat(self, prompt):
+        if prompt.startswith(kp.MCP_PROMPT):
+            raise ConnectionResetError("connection reset by peer")
+        return super().chat(prompt)
+
+
+priv, pub = LinkedPrivate(), C7Breaks()
+priv.peer = pub
+res = {r["key"]: r for r in community_run(pub, priv)}
+check("community: a Challenge 4 ask that raises with both fixes on both clusters is a FAIL, and the final beat puts "
+      "both clusters back: input guard off, the shipped Role, the four Kubernetes guardrails off",
+      res["c7-off"]["verdict"] == kp.FAIL and "connection reset" in res["c7-off"]["note"]
+      and res["guardrails-off"]["verdict"] == kp.PASS and all_off(priv, pub), res["guardrails-off"]["note"])
+
+priv, pub = pair()
+# 8 calls reach c6-lands; c7-off's one would pass the ceiling, after both fixes are on.
+res = {r["key"]: r for r in community_run(pub, priv, max_calls=8)}
+check("community: the call ceiling stops c7-off after both fixes, and the final beat still turns them off on both",
+      res["guard-input-on"]["verdict"] == kp.PASS and "--max-calls" in res["c7-off"]["note"]
+      and pub.calls == 8 and res["guardrails-off"]["verdict"] == kp.PASS and all_off(priv, pub),
+      str(res["c7-off"]))
+
+
+class InputOffFails(LinkedPrivate):
+    """The final beat's guard-input-off cannot reach the community guard-proxy: the input guard stays on there."""
+
+    def kubectl_rc(self, *args, timeout=90, stdin=None):
+        if "deploy/web-terminal" in args and args[-1].endswith("/guard-input-off"):
+            self.log.append("terminal guard-input-off")
+            self.g["input_blocklist"] = self.g["input_classifier"] = False
+            return 1, ("⚠️  Switched on this cluster, but not on watch-it-burn-community: it could not be reached, or "
+                       "it refused the change.\n")
+        return super().kubectl_rc(*args, timeout=timeout, stdin=stdin)
+
+
+priv, pub = InputOffFails(), StagedCommunity()
+priv.peer = pub
+res = {r["key"]: r for r in community_run(pub, priv)}
+check("community: a guard-input-off that fails fails the final beat, guardrails-off still runs, and the read-back names "
+      "the input guard left on the community cluster",
+      res["guardrails-off"]["verdict"] == kp.FAIL and "guard-input-off exited 1" in res["guardrails-off"]["note"]
+      and "watch-it-burn-community: input_blocklist on" in res["guardrails-off"]["note"]
+      and priv.log.count("guardrails off") == 1 and not pub.armed, res["guardrails-off"]["note"])
+
+
+class InputOffRaises(LinkedPrivate):
+    def kubectl_rc(self, *args, timeout=90, stdin=None):
+        if "deploy/web-terminal" in args and args[-1].endswith("/guard-input-off"):
+            raise subprocess.TimeoutExpired(list(args), timeout)
+        return super().kubectl_rc(*args, timeout=timeout, stdin=stdin)
+
+
+priv, pub = InputOffRaises(), StagedCommunity()
+priv.peer = pub
+res = {r["key"]: r for r in community_run(pub, priv)}
+check("community: a guard-input-off that times out still lets guardrails-off run, and the final beat fails naming both",
+      res["guardrails-off"]["verdict"] == kp.FAIL and "guard-input-off could not run" in res["guardrails-off"]["note"]
+      and priv.log.count("guardrails off") == 1 and not pub.armed and not priv.armed, res["guardrails-off"]["note"])
 
 # The admin run: the community cluster is its peer, read back at the start state by guards-off.
 priv, pub = pair()
@@ -2217,7 +2412,8 @@ check("the public cluster is community on both domains (#651)",
 check("community pointed at the burritobot.co admin host exits 2",
       kp.main(["community", "burritobot-private.burritobot.co", "--context", "x"]) == 2)
 src = (REPO / "verify/kubecon_probe.py").read_text()
-check("--max-calls defaults to 21, 20 plus c2-lands' one call (#1135)", '"--max-calls", type=int, default=21' in src)
+check("--max-calls defaults to 22, 20 plus c2-lands' one call (#1135) and the community c7-off's one (#1129)",
+      '"--max-calls", type=int, default=22' in src)
 check("the probe never mutates kube config", "use-context" not in src and "set-context" not in src)
 
 print("== the Night Before list runs it ==")
@@ -2229,8 +2425,8 @@ check("Night Before runs the probe on the community cluster, with its kube-conte
 check("Night Before runs the probe on the private cluster the presenters share",
       "kubecon_probe.py admin burritobot-private.burritobot.co" in nb and "whitney-admin" not in nb)
 check("Night Before says it must end KUBECON PROBE GREEN", "KUBECON PROBE GREEN" in nb)
-check("Night Before counts the community run's 8 model calls and the admin run's 14, under the default of 21",
-      "(default 21): a community run makes 8 model calls, an admin run 14" in nb)
+check("Night Before counts the community run's 9 model calls and the admin run's 14, under the default of 22",
+      "(default 22): a community run makes 9 model calls, an admin run 14" in nb)
 check("Night Before runs no guard-rbac-on: Challenge 1's retry comes after guardrails-on, probe and seed alike (#855)",
       "guard-rbac-on" not in nb and "C5 asked again and out of reach" in nb
       and "`c1-fixed`, is the CEO ask sent again after\n  `guardrails-on`" in nb)
@@ -2860,13 +3056,17 @@ def c2_lands_checks() -> None:
     src = (REPO / "verify/kubecon_probe.py").read_text(encoding="utf-8")
     default = int(re.search(r'"--max-calls", type=int, default=(\d+)', src).group(1))
     check("the new beat makes one model call, its one prompt", BEAT.calls == 1, str(BEAT.calls))
-    check("the default rose from 20 by exactly c2-lands' calls", default == 20 + BEAT.calls, str(default))
-    check("community is 8 calls and admin 14, both under the default", (community, admin) == (8, 14)
+    c7 = next(b for b in kp.COMMUNITY if b.key == "c7-off")
+    check("the default rose from 20 by exactly c2-lands' calls and the community c7-off's (#1129)",
+          default == 20 + BEAT.calls + c7.calls, str(default))
+    check("community is 9 calls and admin 14, both under the default", (community, admin) == (9, 14)
           and max(community, admin) <= default, f"{community} {admin}")
     doc = re.sub(r"\s+", " ", kp.__doc__)
     check("the docstring gives the default, the admin and community counts, and by how much it rose",
           f"default {default}; a full admin run needs {admin}, community {community}" in doc
-          and "c2-lands added one call to the community run, 7 to 8, and the default rose by that one, from 20" in doc, doc)
+          and "c2-lands added one call to the community run, 7 to 8, and the default rose by that one, from 20" in doc
+          and "the community c7-off added one more, 8 to 9, and the default rose by that one again, from 21 to 22" in doc,
+          doc)
     check("the docstring lists the 2A beat in the community run",
           "2A's /kubecon public-image ask landing the image it asks for" in doc
           and "Challenge 2's three openings and c2-lands with every guardrail off" in doc)

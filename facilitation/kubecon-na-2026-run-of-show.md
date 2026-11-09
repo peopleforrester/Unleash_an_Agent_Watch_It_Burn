@@ -2193,7 +2193,7 @@ is merely slow rather than rebuilding:
 - [ ] **Every shown beat works, on the clusters that will be on stage (#503).** From
   the repo root, one command per cluster. It runs the beats in this file's order and
   prints PASS or FAIL for each. It spends real Bedrock money, capped by `--max-calls`
-  (default 21): a community run makes 8 model calls, an admin run 14, plus one for
+  (default 22): a community run makes 9 model calls, an admin run 14, plus one for
   each reply that is Bedrock's ToolUse 424, which the probe sends again once as the
   failure playbook says (#889). Pull both clusters' credentials into one isolated kubeconfig first, each
   context named for its cluster; the probe passes it per command and never touches `~/.kube/config`. Both runs
@@ -2216,7 +2216,7 @@ is merely slow rather than rebuilding:
     and both of those on. A challenge beat whose switch did not pass is a FAIL that
     sends nothing, so no prompt goes out at a state the stage does not have then.
 
-  - Community (segments 1 to 4): the kube-context and the hostname are the same
+  - Community (segments 1 to 5): the kube-context and the hostname are the same
     cluster (if not, it stops before touching anything); the wide-open start, a
     burrito order answered, the CEO record leaking with the `/brief` prompt (her
     address in the reply the room reads, or the signature), Whitney's friendly
@@ -2230,12 +2230,18 @@ is merely slow rather than rebuilding:
     (`--switch-context`) as segment 3 runs it, arming the four Kubernetes
     guardrails on both clusters; then Challenge 3's HC-666 ask landing
     `joker-agatha-the-banshee` with Kyverno at Deny, since its image is the internal
-    registry's (the probe deletes it again), the cost counter moving,
-    and the projected feed on. Its last act is `guardrails-off` in the private
-    terminal, run even when a beat fails or the call ceiling is hit, then both
-    clusters read back at the start state: AI guards off and the four Kubernetes
-    guardrails off. It turns no AI guard on and sends no Challenge 4 prompt;
-    Challenge 4 on the public bot waits on #1132. Each beat is judged on what the console shows, with
+    registry's (the probe deletes it again); then `guard-agency-on` and
+    `guard-input-on`, each run in the private terminal as `#/50` runs them and
+    reaching the public bot since #1132, and each read back on the community
+    cluster (the Joker's dry run as `workshop-mcp` Forbidden, both input stages
+    on); then Challenge 4's `/kubecon` weather ask sent once to the public bot with
+    the four Kubernetes guardrails and both fixes on, passing when the rogue tool
+    chains and its sentinel comes back (#1129); the cost counter moving, and the
+    projected feed on. Its last act is `guard-input-off` and `guardrails-off` in
+    the private terminal, run even when a beat fails or the call ceiling is hit
+    (`guardrails-off`'s shipped Role undoes `guard-agency-on`), then both clusters
+    read back at the start state: AI guards off and the four Kubernetes guardrails
+    off. Each beat is judged on what the console shows, with
     Nova's `<thinking>` block folded as the storefront folds it, and a FAIL quotes
     300 characters of the reply.
   - Admin: the kube-context and the hostname are the same cluster (if not, it stops
