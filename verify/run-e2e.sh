@@ -45,6 +45,10 @@
 # #783's trace-id fix (test_otel_trace_id_fix_live.py, #812) is checked on staging and on both KubeCon clusters, so it
 # also needs PRIVATE_CONTEXT, the kube-context of the private admin cluster (watch-it-burn-private). It only reads.
 #
+# #1267's probe criterion (test_coc_floor_probes_live.py, #1293) runs on PRIVATE_CONTEXT and COMMUNITY_CONTEXT: it reads
+# the code-of-conduct floor on and every guardrail off on both, runs verify/kubecon_probe.py's admin and community
+# runs and holds each green, every challenge beat passing, then reads both back. About 24 model calls and 15 minutes.
+#
 # #1052's guard_toggle line (test_guard_toggle_log_live.py, #1068) runs on PRIVATE_CONTEXT too: under the guard lock it
 # flips the output guard on and back off through /toggle, with reads between, and holds guard-proxy's log to one
 # guard_toggle line per change and none for a read. No model call; the guards are left as found.

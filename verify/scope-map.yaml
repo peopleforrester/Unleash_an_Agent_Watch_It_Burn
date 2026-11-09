@@ -2015,6 +2015,31 @@ reads:
     - gitops/ai-layer/web/event.js
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/otel-collector/values-burn.yaml
+  test_coc_floor_probes_live_checks.py:
+    - agent
+    - agent/desk-report-token
+    - challenges/c3-secret-grep/agent-prompt.txt
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/bootstrap/apps/kubearmor.yaml
+    - gitops/namespaces/code-of-conduct-names.yaml
+    - gitops/otel-collector/values.yaml
+    - gitops/workshop-agent/agent.yaml
+    - images/workshop-mcp/Dockerfile
+    - infra
+    - verify/agent_probe.py
+    - verify/guard_lease.py
+    - verify/kubecon_probe.py
+    - verify/run-e2e.sh
+    - verify/test_coc_floor_probes_live.py
+    - verify/topic_cases.py
   test_coc_floor_spike.py:
     - agent
     - challenges/PROMPT-CATALOG.md
