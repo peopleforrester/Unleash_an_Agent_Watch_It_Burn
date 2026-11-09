@@ -4974,6 +4974,25 @@ reads:
     - verify/artifact_cache.py
     - verify/ghcr_pull.py
     - verify/image_cache.py
+  test_kagent_mcp_traceparent.py:
+    - .github/workflows/build-kagent-mcp-traceparent.yml
+    - .gitmodules
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/bootstrap/apps/kagent.yaml
+    - images.lock
+    - images/kagent-mcp-traceparent
+    - images/kagent-mcp-traceparent/build.sh
+    - images/kagent-mcp-traceparent/mcp-traceparent.patch
+    - images/llm-guard
+    - scripts/ghcr_version_tag.py
+    - verify
+    - verify/.tools/bin/crane
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/e2e-tools.lock
+    - verify/git_mirror.py
+    - verify/image_cache.py
   test_kagent_service_name_collector.py:
     - gitops/bootstrap/apps/otel-collector-attendee.yaml
     - gitops/bootstrap/apps/otel-collector-burn.yaml
