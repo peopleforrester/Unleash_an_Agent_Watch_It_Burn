@@ -100,6 +100,7 @@ always:
   test_agent_tools_sync.py: 'verify/test_fleet_converge_repairs.sh: it runs git on the tree or history as a whole; line 576 builds a path under the repo root from a value it finds at run time'
   test_american_english_gate.py: 'line 37 builds a path under the repo root from a value it finds at run time; line 38 builds a path under the repo root from a value it finds at run time; scripts/compile-design-doc.py: line 62 builds a path under the repo root from a value it finds at run time'
   test_backstage_catalog.py: line 106 builds a path under the repo root from a value it finds at run time
+  test_beat3_removed_shim_unreferenced.py: 'it runs git ls-files, which reads the tree or history as a whole; verify/test_poisoned_server_one_copy.py: it runs git ls-files, which reads the tree or history as a whole'
   test_c6_villain_endpoint.py: it runs git ls-files, which reads the tree or history as a whole
   test_challenge_fallbacks.py: line 189 builds a path under the repo root from a value it finds at run time
   test_chat_span_token_counts.py: it runs git ls-tree, which reads the tree or history as a whole

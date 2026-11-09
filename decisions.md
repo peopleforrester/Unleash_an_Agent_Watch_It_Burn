@@ -44327,3 +44327,29 @@ accen-dev`, whose closing guards-off is this script.
 **Tests run.** `python3 verify/test_guards_all_both.py` (17 PASS). `verify/test_topic_guard.py` stops on a missing
 `gitops/ai-layer/guard-proxy/proxy.py` because the submodule is not checked out in this worktree. That is the same at
 the base and has nothing to do with this change. Validation runs the scoped suites.
+## 2026-11-09 · #1199 · run 19402 · A test holds that nothing that deploys, verifies or documents Beat 3 points at the removed shim folder
+
+#1193 deleted `challenges/03-bad-mcp-excessive-agency/evil-mcp-shim/` (a stale `server.py`, its `Dockerfile` and a
+`k8s-manifest.yaml`), and one of its criteria was that nothing that deploys, verifies or documents Challenge 4 / Beat 3
+points at the removed files. Test review run 18673 found no test held it outside the four tests that now read
+`gitops/ai-layer/server.py`. `verify/test_beat3_removed_shim_unreferenced.py` now does.
+
+It sweeps every tracked text file for five forms of a path to the folder: its full path, one of its three files under
+the folder's name, the folder's name alone as a directory (`` `evil-mcp-shim/` ``), a relative path (`./evil-mcp-shim`),
+and the image the deleted manifest named (`REGISTRY/evil-mcp-shim`, `evil-mcp-shim@sha256:`). The live server keeps
+the name, so the Deployment, Service, label, agentgateway host, `deploy/evil-mcp-shim` in a command and the PRD row's
+slash list `Backstage/evil-mcp-shim/customer-stream` do not match. The files left out are the history records
+(decisions.md, PROGRESS.md, PROJECT_STATE.md) and `verify/test_poisoned_server_one_copy.py`, whose docstring tells
+#1193's story; each must still be tracked. It also checks that no tracked path lies under the folder and that
+Challenge 3's FACILITATOR.md names `gitops/ai-layer/server.py`. The sweep runs first on a scratch repo of eight
+pointers and eight live names or records, and must name the pointers alone. This differs from #1198's
+`test_poisoned_server_one_copy.py`, which holds the server's code to one copy; this one holds the references to the
+old place.
+
+Run: `python3 verify/test_beat3_removed_shim_unreferenced.py` passed, 13 checks. With the seven files #1193 edited put
+back from 5d9b836d^ (plant-fake-secret.yaml, the two readiness docs, prds/done/7, test_beat03_c7.py,
+test_trace_walkthrough_view.py and images.lock) it failed, exit 1, naming each of the seven, and they were restored.
+`python3 verify/scope_tests.py write` put it under `always`, since it reads the tree through `git ls-files`. The scoped
+suite is left to validation.
+
+**Live check.** Skipped: the change touches only a `verify/` test no cluster runs, the scope map and this file.
