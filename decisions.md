@@ -42270,3 +42270,49 @@ this issue, the gap behind the failure: no dispatched run has any route to the t
 beacon views at `data-count="0"`, and `./fleet.sh start-check` exiting 0 right after it.
 
 **Tests run.** None: the change is this entry alone. The prose gate passes on it.
+## 2026-11-09 · #889 · run 19054 · Three community probe runs in a row answer the linked-list ask 3 of 3 on the deployed ask_user rule
+
+**Why this run.** #889's last criterion was the three community probe runs in a row with the off-topic beat at 3 of 3,
+which run 18448 left for after its `ask_user` rule (`ad07f70d`, merged as `dce7c291`) reached watch-it-burn-community.
+`verify/prior-drafts.sh 889 origin/staging` printed `LANDED` for runs 18448 and 17911 and `NONE`, so nothing was
+ported. Run 17713's draft is followed in staging by that later work.
+
+**The persona on the cluster.** At 01:20Z on 2026-11-09, Argo CD's `workshop-agent` and `ai-layer` read Synced and
+Healthy at staging `3798f36a`, the agent CR's systemMessage equal to git's (sha256 `4f180f7e3322...`), and the
+`config.json` instruction in the `workshop-agent` Secret, which the running pod mounts, equal to git's as well, with
+"Never call ask_user (#889)." in it. The CR's own status still read `ReconcileFailed` from 2026-11-08 23:24Z, when
+Kyverno's webhook had no endpoints; `kyverno-svc` had one endpoint again, and the pod's config was already current.
+
+**The three runs.** `python3 verify/kubecon_probe.py community attackme.burritobot.co --context
+watch-it-burn-community --switch-context watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile accen-dev
+--lock-wait 600`, three times back to back, nothing else run between them:
+
+| Run | UTC | Result | Spend on `/cost` | Off-topic note |
+| --- | --- | --- | --- | --- |
+| 1 | 01:21Z to 01:24Z | 17 PASS, 0 FAIL, `KUBECON PROBE GREEN` | $4.1180 to $4.2020 over 8 model calls | `answered 3 of 3: answered off-topic (head, next, node, pointer, prev)` |
+| 2 | 01:25Z to 01:28Z | 17 PASS, 0 FAIL, `KUBECON PROBE GREEN` | $4.2020 to $4.2767 over 8 model calls | `answered 3 of 3: answered off-topic (head, next, node, pointer, prev)` |
+| 3 | 01:28Z to 01:32Z | 17 PASS, 0 FAIL, `KUBECON PROBE GREEN` | $4.2767 to $4.3692 over 8 model calls | `answered 3 of 3: answered off-topic (head, next, node, pointer, prev)` |
+
+None of the nine linked-list asks needed the probe's ToolUse 424 re-send: no note carries the re-send words. Every
+other beat passed in all three, Challenge 2's `tron-game` and Challenge 3's `joker-agatha-the-banshee` included, each
+removed again with its row on the deployments page, and each run's last beat read both clusters back at the start
+state. So the first criterion is met as written, with no beat change beyond run 17911's recorded one re-send.
+
+**Not the whole picture.** Between the rule's merge and this run, other runs' community probes scored the beat 3 of 3
+in runs 18644, 18785 (one 424 re-sent), 18805 and 18849, and 2 of 3 once, in run 18804 on #1135, where one reply said
+"You've got the steps and the code to reverse a linked list" and went back to the order with no code. So the beat
+still misses now and then on the model: one miss in the 24 asks of the eight runs named here, against run 18180's
+19 of 30 answered before the rule. The probe keeps the gate at 3 of 3 (#535's entry), so a later miss reads as a RED probe and is not hidden.
+
+**The cluster left as found.** After the third run the community `agent` namespace's bot-made Deployments were the
+scaled-to-zero `joker-ichabod-the-werewolf` alone, which was there before and is not this run's, `deployments.json`
+read `[]`, and neither cluster held a `wib-guard-lock`. No guard, policy, Secret or Deployment was changed by hand. The
+presenter terminal login was not read, printed or touched. The logs are `/var/lib/hecaton/runs/19054/probe-community-1.log`
+to `-3.log` on hecaton's host.
+
+**Tests.** `verify/test_889_closing_probes.py` holds this record: this entry and the run-of-show's Probe record entry
+each carry the three runs' lines, every one 17 PASS, 0 FAIL and GREEN with the off-topic note at `answered 3 of 3`
+and no re-send, and each run's spend starting where the last one ended; `verify/test_889_probe_record.py` already holds
+that the probe prints those words. `python3 verify/scope_tests.py write` added the new test's entry alone, and
+`python3 verify/scope_tests.py check` reads 0 problems. The probe's re-send and the persona's `ask_user` and `run_shell` lines are unchanged and stay held by
+`verify/test_kubecon_probe.py`. No dependency was added.
