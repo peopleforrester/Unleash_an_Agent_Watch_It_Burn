@@ -1,6 +1,6 @@
 # ABOUTME: Tools-tier gate for #869: the pinned terraform-aws-eks module reads the root's node rules the way the
 # ABOUTME: root means them, so 8080 and 3000 open from the security group the control-plane ENIs carry.
-# SUITE: e2e (needs terraform on PATH, or TERRAFORM, and network to registry.terraform.io for the module and a cold cache)
+# SUITE: e2e (needs terraform on PATH, or TERRAFORM, and network to registry.terraform.io and GitHub on a cold cache)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 # E2E SERIAL: terraform (run-e2e-tools.sh runs one such test at a time: they share the provider cache, #1005)
 """Why this is not the offline test. Terraform converts a module input to its declared object type and drops any
@@ -13,7 +13,13 @@ cluster's vpc_config attaches to the control-plane ENIs (live: sg-0ca9886f5a9d4f
 the group the issue's hand-added rules named).
 
 What it does not prove: that a built cluster answers the probes. That is lab-platform's
-TestTheLearnerAppsGroupReachesEveryWorkshopAppLive on a cluster once the change is applied (decisions.md, #869)."""
+TestTheLearnerAppsGroupReachesEveryWorkshopAppLive on a cluster once the change is applied (decisions.md, #869).
+
+#1247: the module comes from the module cache in the host artifact cache (tf_module_cache.py, #1246), with the root's
+other module calls, so a GitHub clone that times out cannot fail this. On a warm host the kept copy is seeded before
+init and the init runs with the network closed (iam_plan_render.CLOSED_NETWORK); on a miss the init installs them and
+store() keeps the copy. The copy holds the 21.29 patch its first install resolved until main.tf's module calls change,
+which is the module this test then reads."""
 from __future__ import annotations
 
 import json
@@ -26,7 +32,9 @@ import sys
 import tempfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import iam_plan_render  # noqa: E402  (CLOSED_NETWORK, the env a seeded init runs with)
 import node_sg_rules as nsr  # noqa: E402
+import tf_module_cache  # noqa: E402
 import tf_plugin_cache  # noqa: E402
 
 INIT_TIMEOUT = 600
@@ -69,16 +77,32 @@ with tempfile.TemporaryDirectory(prefix="tf-node-rules-") as tmp:
         shutil.copy2(f, work / f.name)
 
     print("== the root initialises and validates against the pinned module ==")
+    main_tf = nsr.CLUSTER_TF.read_text(encoding="utf-8")
+    try:
+        seeded = tf_module_cache.seed(work, main_tf, env=env)
+    except tf_module_cache.ModuleCacheError as e:
+        print(f"FAIL: the module cache cannot seed the cluster root: {e}", file=sys.stderr)
+        sys.exit(1)
     try:
         r = subprocess.run([exe, "init", "-lockfile=readonly", "-backend=false", "-input=false", "-no-color"],
-                           cwd=work, env=env, capture_output=True, text=True, timeout=INIT_TIMEOUT)
+                           cwd=work, env={**env, **iam_plan_render.CLOSED_NETWORK} if seeded else env,
+                           capture_output=True, text=True, timeout=INIT_TIMEOUT)
     except subprocess.TimeoutExpired:
         print(f"FAIL: terraform init did not finish within {INIT_TIMEOUT}s (a download stalled)", file=sys.stderr)
         sys.exit(1)
-    check("terraform init of a copy of the cluster root succeeds", r.returncode == 0, (r.stdout + r.stderr)[-2000:])
+    print("  modules: " + ("seeded from the module cache, init run with the network closed" if seeded
+                           else "installed from the network (a module cache miss)"))
+    check("terraform init of a copy of the cluster root succeeds", r.returncode == 0, (r.stdout + r.stderr)[-2000:]
+          + ("\n(seeded from the module cache, with the network closed: the kept modules no longer satisfy main.tf's "
+             "calls, or the init reached for the network)" if seeded else ""))
     if r.returncode != 0:
         print(f"\n{len(failures)} FAILED", file=sys.stderr)
         sys.exit(1)
+    if not seeded:
+        try:
+            print(f"  modules kept in {tf_module_cache.store(work, main_tf, env=env)}")
+        except tf_module_cache.ModuleCacheError as e:
+            check("the module cache keeps the installed modules", False, str(e))
     v = subprocess.run([exe, "validate", "-no-color"], cwd=work, env=env, capture_output=True, text=True,
                        timeout=INIT_TIMEOUT)
     check("terraform validate accepts the root (each rule has the module's required attributes)",

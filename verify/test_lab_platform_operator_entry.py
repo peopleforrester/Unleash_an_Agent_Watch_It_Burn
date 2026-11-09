@@ -1,6 +1,6 @@
 # ABOUTME: Plans the cluster root against a mocked aws provider (`terraform test`) and holds lab-platform-operator's
 # ABOUTME: access entry to #873: on attendee seats only, in accounts that hold the role, group learner-apps, no policy.
-# SUITE: e2e (needs terraform on PATH, or TERRAFORM, and network to registry.terraform.io for modules and a cold cache)
+# SUITE: e2e (needs terraform on PATH, or TERRAFORM, and network to registry.terraform.io and GitHub on a cold cache)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 # E2E SERIAL: terraform (run-e2e-tools.sh runs one such test at a time: they share the provider cache, #1005)
 #
@@ -8,10 +8,17 @@
 # (lab-platform#370), and a seat that admits only its creator answers it with a 401. The cases are in
 # verify/fixtures/lab_platform_operator_entry.tftest.hcl; this copies the root and that file into an empty
 # directory, initialises it against the committed lock, and runs them. The mock provider means no AWS call.
+#
+# #1247: the root's modules (terraform-aws-modules/eks and five of eks-pod-identity) come from the module cache in the
+# host artifact cache (tf_module_cache.py, #1246), so a GitHub clone that times out cannot fail this: on a warm host the
+# copy is seeded before init and the init runs with the network closed (iam_plan_render.CLOSED_NETWORK); on a miss the
+# init installs them and store() keeps the copy for the next run.
 import os, pathlib, shutil, subprocess, sys, tempfile
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "verify"))
+import iam_plan_render  # noqa: E402  (CLOSED_NETWORK, the env a seeded init runs with)
+import tf_module_cache  # noqa: E402
 import tf_plugin_cache  # noqa: E402
 
 ROOT = REPO / "infra/terraform/aws/cluster"
@@ -57,15 +64,31 @@ with tempfile.TemporaryDirectory(prefix="tf-operator-entry-") as tmp:
     (work / "tests").mkdir()
     shutil.copy2(CASES, work / "tests" / CASES.name)
 
-    def tf(*args):
+    main_tf = (ROOT / "main.tf").read_text(encoding="utf-8")
+    try:
+        seeded = tf_module_cache.seed(work, main_tf, env=env)
+    except tf_module_cache.ModuleCacheError as e:
+        print(f"FAIL: the module cache cannot seed the cluster root: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    def tf(*args, closed=False):
         try:
-            return subprocess.run([exe, *args, "-no-color"], cwd=work, env=env, capture_output=True, text=True,
-                                  timeout=TIMEOUT)
+            return subprocess.run([exe, *args, "-no-color"], cwd=work, timeout=TIMEOUT, capture_output=True, text=True,
+                                  env={**env, **iam_plan_render.CLOSED_NETWORK} if closed else env)
         except subprocess.TimeoutExpired:
             return subprocess.CompletedProcess(args, 124, "", f"terraform {args[0]} timed out after {TIMEOUT}s")
 
-    r = tf("init", "-lockfile=readonly", "-backend=false", "-input=false")
-    check("the cluster root initialises against its committed lock", r.returncode == 0, (r.stdout + r.stderr)[-2000:])
+    r = tf("init", "-lockfile=readonly", "-backend=false", "-input=false", closed=seeded)
+    print("modules: " + ("seeded from the module cache, init run with the network closed" if seeded
+                         else "installed from the network (a module cache miss)"))
+    check("the cluster root initialises against its committed lock", r.returncode == 0, (r.stdout + r.stderr)[-2000:]
+          + ("\n(seeded from the module cache, with the network closed: the kept modules no longer satisfy main.tf's "
+             "calls, or the init reached for the network)" if seeded else ""))
+    if r.returncode == 0 and not seeded:
+        try:
+            print(f"modules kept in {tf_module_cache.store(work, main_tf, env=env)}")
+        except tf_module_cache.ModuleCacheError as e:
+            check("the module cache keeps the installed modules", False, str(e))
     if r.returncode == 0:
         r = tf("test")
         out = r.stdout + r.stderr
