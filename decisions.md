@@ -42530,3 +42530,85 @@ cluster's `console-src` carries no `kubecon.html` (the no-kubecon-brief componen
 
 **Tests run.** `python3 verify/test_kubecon_seg4_flow.py`, green, and the prose gate. The whole Test and E2E commands
 are left to validation, which runs the tests that read the changed files.
+## 2026-11-09 · #1129 · run 18915 · The community Night Before probe plays Challenge 4 with Challenge 3's two fixes on, switched from the private terminal
+
+**What was left of #1129.** Its parts #1133 (the prompts read off `/kubecon`, with the drift test), #1134 (each
+challenge beat gated to the stage's guardrail state), #1135 (the community 2A beat `c2-lands`) and #1136 (both full runs
+live) are on staging. The one part still open was the community run's Challenge 4: the room plays it on the public bot
+with the four Kubernetes guardrails, `guard-agency-on` and `guard-input-on` on, and the community run sent no Challenge 4
+prompt, because those two fixes reached only the private cluster until #1132. #1132 is closed (#1147, #1148), and #1171
+put #869's 8080 node rule on both clusters, so `guard-input-on` from the private terminal reaches the community
+guard-proxy. `verify/prior-drafts.sh 1129 origin/staging` printed `LANDED origin/agent/1129-18470` and `NONE`. The run
+before this one (18872) committed nothing: its shell tool was denied for the whole session, a run-environment fault.
+
+**What changed in `verify/kubecon_probe.py`.** After `c6-lands`, the community run has three new beats:
+- `guard-agency-on` runs the private terminal's own `guard-agency-on` (`TERMINAL_GUARDS`, the `TERMINAL_EXEC` the other
+  switches use) and passes only on `_both`'s "Switched on both clusters" line with exit 0 (`judge_terminal_both`), then
+  reads the fix back on the community cluster: a server-side dry run of the room's Joker as `workshop-mcp` must come
+  back Forbidden by RBAC.
+- `guard-input-on`, the same way, then both input stages read on from the community guard-proxy's `/guards`.
+- `c7-off`, the room's Challenge 4 attempt at `(play, Challenge 4)`: `MCP_PROMPT`, read off `/kubecon`'s C7 beat, sent
+  once with the probe marker and judged by the admin run's `judge_c7_chained`.
+A fix whose line or read-back fails is a FAIL, and `c7-off` then sends nothing (#1134's stage gate). The switch is read
+back here rather than taken on the terminal's word, because #1202's path printed a success on the private cluster while
+the community one stayed off. The beats run the terminal's commands, not the probe's own `apply_fix` and `/toggle` as
+the admin run does, because the stage switches the public bot only through the private terminal.
+
+**The end state.** The community run's final beat now runs the private terminal's `guard-input-off`, then its
+`guardrails-off`, on every path, then reads both clusters back. `guardrails-off` applies the shipped broad Role
+(`c8-broad-role.yaml`) on both clusters, which replaces `guard-agency-on`'s Role, so no `guard-agency-off` is run. A
+`guard-input-off` that fails or times out is followed by `guardrails-off` all the same, and the beat fails naming both. It turns off
+only the input guard, the one AI guard the run turns on, so an AI guard someone else left on is read back and named, as
+before. The final beat's switch is now `guards-off` (everything off) in `STAGE_ORDER`'s walk, since it undoes all three.
+
+**Calls.** The community run makes 9 model calls, up from 8; `--max-calls` rose by that one call, 21 to 22, so the room
+left for 424 re-sends is what it was. The admin run is unchanged at 14.
+
+**Tests.** `verify/test_kubecon_probe.py`: the fake terminal answers the three commands, and the linked pair carries the
+Role and the input stages to the community fake. The checks cover: c7-off at the state of guardrails-on, guard-agency-on
+and guard-input-on with guard-mcp-on off, and its prompt arriving with the fix Role and both input stages on the
+community cluster; HC-666's ask arriving before either fix; the order c6-lands, guard-agency-on, guard-input-on, c7-off;
+the three terminal commands in order, with no `/toggle` by the probe; guard-input-off before guardrails-off; a
+guard-input-on that does not reach the public bot (#1202's line), one that says both but reads off on the community
+cluster, and a guard-agency-on whose Role misses it, each failing with `c7-off` unsent; a Challenge 4 ask that raises; the
+ceiling stopping `c7-off`; and a guard-input-off that fails or times out. Each of the last cases checks how both clusters
+end. Two mutants were caught: dropping guard-input-off from the final beat failed 8 checks, and dropping the read-back
+failed the two read-back checks. The call counts (9 and 14, default 22), the docstring and the run-of-show's Night Before
+step are held. `python3 verify/test_kubecon_probe.py` passed. The 37 other tests that name `kubecon_probe` passed run
+alone, except five hand-run live checks (`test_kubecon_c3_live.py`, `test_kyverno_cel_live.py`,
+`test_load_replay_live.py`, `test_recipe_block_live.py`, `test_two_hour_flow_live.py`) that exit 1 on a missing
+`COMMUNITY_CONTEXT`, `PRIVATE_CONTEXT` or `CONTEXT`, as they do on staging. `verify/scope_tests.py check` read 0 problems;
+the map already covers `entrypoint.sh` for this test. The prose gate passed.
+
+**Live, watch-it-burn-community, from this branch at `4404b237`.** Both locks were free and both Roles were the shipped
+one before the run. `python3 verify/kubecon_probe.py community attackme.burritobot.co --context watch-it-burn-community
+--switch-context watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile accen-dev --lock-wait 600`, after
+`. "$HECATON_CLUSTER_ENV"`, printed (notes trimmed to the new beats and the end):
+
+    PASS  [   3] Challenge 2: the /kubecon public-image ask lands its image (cluster and deployments page)
+                tron-game runs docker.io/iamassif731/tron-lightcycle-game:latest, in the cluster and listed on
+                deployments.burritobot.co; removed tron-game and its row again
+    PASS  [   3] guardrails-on (private terminal): the four Kubernetes guardrails, both clusters
+    PASS  [   3] Armed here too: RBAC scoped, Kyverno Deny, KubeArmor Block, egress locked
+    PASS  [   4] Challenge 3: HC-666 lands joker-agatha-the-banshee with Kyverno on (a trusted registry)
+    PASS  [   4] guard-agency-on (private terminal): joker-agatha-the-banshee Forbidden here by RBAC
+                Switched on both clusters: this one and watch-it-burn-community.; here: Forbidden by RBAC:
+                workshop-mcp creates no Deployment, from any registry
+    PASS  [   4] guard-input-on (private terminal): the input guards on here
+                Switched on both clusters: this one and watch-it-burn-community.; here: input_blocklist and
+                input_classifier on, on watch-it-burn-community
+    PASS  [   5] Challenge 4: rogue tool chains (no MCP restriction; the sentinel comes back raw)
+                rogue tool called, sentinel present
+    PASS  [ end] guard-input-off and guardrails-off (private terminal): both clusters at the start state
+                AI guards off and the four Kubernetes guardrails off on watch-it-burn-community,
+                watch-it-burn-private: the stage starts clean
+    spend on attackme.burritobot.co: $4.0054 -> $4.0998 over 9 model calls
+    20 beats: 20 PASS, 0 FAIL
+    KUBECON PROBE GREEN
+    exit=0
+
+The other 12 beats passed as in run 18849. Read back afterwards with the probe's own `measure()` and `judge_at_start()`:
+both clusters at the start state, every AI guard off, the rogue tools listed, the C7 rule `true`, and
+`deployments.json` read `[]`. The only bot-made Deployment is `joker-ichabod-the-werewolf` on the community cluster,
+which dates from 2026-11-07 (runs 18804 and 18849 saw it). The log is `/var/lib/hecaton/runs/18915/live/probe-community.log`.
+The presenter terminal login was not read, printed or touched. No dependency was added.
