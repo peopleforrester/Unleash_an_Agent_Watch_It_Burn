@@ -13,8 +13,10 @@ copy is escaped there.
 
 A copy found anywhere else under gitops/ is a problem too: scan() looks for the pattern's own pieces (floor's
 separator class and its leetspeak classes, in any escaping) in every file there, and each one has to sit
-inside a copy a Site knows. A new copy therefore fails verify/test_coc_pattern_copies.py until it gets a Site here,
-and from then on that test holds it to the floor. On 2026-11-09 #1278 copied the pattern into the admission policy
+inside a copy a Site knows or a Port's block. A Port is a file that carries floor.py's own Python and builds the
+pattern from it (#1269 put one in workshop-mcp-server.py and ticket_site.py); test_deploy_coc.py holds those to the
+floor. A new copy therefore fails verify/test_coc_pattern_copies.py until it gets a Site or a Port here, and from then
+on the tests it names hold it to the floor. On 2026-11-09 #1278 copied the pattern into the admission policy
 and #1277 changed it 17 minutes later; each run passed on its own branch and staging went red (#1289).
 """
 from __future__ import annotations
@@ -75,8 +77,30 @@ SITES = (
 # holds a copy (verify/scope-map.yaml), and it then fails on its own branch rather than on staging.
 FLOOR_SOURCES = ("docs/research/2026-11-09-coc-floor/floor.py", "docs/research/2026-11-09-coc-floor/corpus.py",
                  "docs/research/2026-11-09-coc-floor/terms-proposed.rot13")
+
+
+@dataclasses.dataclass(frozen=True)
+class Port:
+    """A file that carries floor.py's own Python rather than a copy of portable_pattern(): its separator class, its
+    leetspeak table and its term list, from which the file builds the pattern itself as it starts. It sits between two
+    marker lines, and `tests` hold it to floor.proposed_pattern(). The scan reads the floor's pieces between the
+    markers as the port's, so only a piece outside them is a copy no Site or Port knows."""
+    path: str
+    start: str
+    end: str
+    tests: tuple[str, ...]  # by stem, as Site.tests
+
+
+# #1269 put the floor into the deploy path as one block, the same text in both files; test_deploy_coc.py holds it
+# equal in both and its compiled pattern to floor.proposed_pattern(), on the spike's abuse set and hard negatives.
+_PORT_START = "# --- the code-of-conduct floor (#1269, part of #1267) "
+_PORT_END = "# --- end of the code-of-conduct floor "
+PORTS = (
+    Port("gitops/ai-layer/workshop-mcp-server.py", _PORT_START, _PORT_END, ("test_deploy_coc",)),
+    Port("gitops/ai-layer/ticket_site.py", _PORT_START, _PORT_END, ("test_deploy_coc",)),
+)
 # By stem: a test named in full here would read to verify/scope_tests.py as a helper this one runs.
-HOLDERS = ("test_coc_pattern_copies",) + tuple(t for s in SITES for t in s.tests)
+HOLDERS = ("test_coc_pattern_copies",) + tuple(dict.fromkeys(t for s in SITES + PORTS for t in s.tests))
 
 
 def pattern() -> str:
@@ -120,11 +144,35 @@ def gitops_files() -> dict[str, str]:
     return {rel: p.read_bytes().decode("utf-8", errors="replace") for rel, p in gitops_paths().items()}
 
 
-def scan(files: dict[str, str], sites: tuple[Site, ...] = SITES) -> tuple[list[Copy], list[str]]:
-    """Each copy the sites find, and each problem: a site's file or anchor or copy missing, a site holding more than
-    one copy, and a piece of the pattern outside every copy (a copy no Site knows)."""
-    copies: list[Copy] = []
+def port_spans(files: dict[str, str], ports: tuple[Port, ...] = PORTS) -> tuple[dict[str, list[tuple[int, int]]],
+                                                                                  list[str]]:
+    """Where each port's block sits in its file, from the start marker to the end of the end marker's line, and each
+    problem: the file missing, or a marker missing or written more than once."""
+    spans: dict[str, list[tuple[int, int]]] = {}
     problems: list[str] = []
+    for port in ports:
+        text = files.get(port.path)
+        if text is None:
+            problems.append(f"{port.path}: missing, and it carries a port of floor.py")
+            continue
+        counts = {m: text.count(m) for m in (port.start, port.end)}
+        if any(n != 1 for n in counts.values()):
+            problems.append(f"{port.path}: the port's markers {counts} each have to be there once, and the floor's "
+                            "pieces are read as the port's only between them")
+            continue
+        s = text.index(port.start)
+        e = text.find("\n", text.index(port.end))
+        spans.setdefault(port.path, []).append((s, len(text) if e < 0 else e))
+    return spans, problems
+
+
+def scan(files: dict[str, str], sites: tuple[Site, ...] = SITES,
+         ports: tuple[Port, ...] = PORTS) -> tuple[list[Copy], list[str]]:
+    """Each copy the sites find, and each problem: a site's file or anchor or copy missing, a site holding more than
+    one copy, a port's markers missing, and a piece of the pattern outside every copy and port (a copy no Site or Port
+    knows)."""
+    copies: list[Copy] = []
+    known, problems = port_spans(files, ports)
     for site in sites:
         text = files.get(site.path)
         if text is None:
@@ -139,12 +187,12 @@ def scan(files: dict[str, str], sites: tuple[Site, ...] = SITES) -> tuple[list[C
                             f"the Site's pattern is {site.where.pattern[:80]!r}...")
         copies += found
     for path, text in sorted(files.items()):
-        spans = sorted((c.start, c.end) for c in copies if c.site.path == path)
+        spans = sorted([(c.start, c.end) for c in copies if c.site.path == path] + known.get(path, []))
         for m in FINGERPRINT.finditer(text):
             if not any(s <= m.start() and m.end() <= e for s, e in spans):
                 line = text.count("\n", 0, m.start()) + 1
                 problems.append(f"{path}:{line}: a piece of the code-of-conduct pattern ({m.group(0)}) outside every "
-                                f"copy verify/coc_pattern_copies.py knows; add a Site for it there")
+                                f"copy and port verify/coc_pattern_copies.py knows; add a Site or a Port for it there")
                 break
     return copies, problems
 

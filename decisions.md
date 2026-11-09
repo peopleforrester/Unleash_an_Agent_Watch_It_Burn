@@ -49039,3 +49039,19 @@ base, a035e02b, came before 9ca2ebf5 (#1267), which made the policy match the pa
 changed. The test was red on staging itself at that base, and staging's tip, 62b1e339, passes it. The branch was
 rebased onto 62b1e339 with no conflict, and `test_coc_admission.py` and `test_console_rollout_drain.py` each exit 0.
 The change is unchanged, so the live rollout above still waits on its promotion.
+
+**Run 19711, resuming run 19706.** Run 19706's gate failed on `verify/test_coc_pattern_copies.py` alone, 4 checks,
+and that test fails the same way on staging 8b5764a0 with neither of this branch's commits on it. #1289 (e55c1bb6)
+added the test's scan, which fails when any piece of the code-of-conduct pattern (floor.py's separator class
+`_SEP` or a leetspeak class) appears under gitops/ outside a copy its helper has a Site for. #1269 (a9172f5b), which
+landed just before it, had put floor.py's own Python into `gitops/ai-layer/workshop-mcp-server.py` and
+`gitops/ai-layer/ticket_site.py`, `_COC_SEP` included. Each file builds the pattern from that block as it starts,
+and `verify/test_deploy_coc.py` already holds the block to `floor.proposed_pattern()`. The scan read each `_COC_SEP` line as an unknown copy, and the stale-copy checks in case 2
+then failed with it. `verify/coc_pattern_copies.py` now has Ports: a file and the two marker lines #1269's block sits
+between, with the test that holds it. The scan treats the floor's pieces between the markers as the port's. A piece
+below the end marker, or a reworded marker, is still reported, and the test checks both on each port. A change to
+floor.py, corpus.py or terms-proposed.rot13 now also has to select `test_deploy_coc`, and it does. The draft's two
+commits were cherry-picked onto 8b5764a0 with no conflict. `test_coc_pattern_copies.py`,
+`test_console_rollout_drain.py` and `test_scope_tests.py` each exit 0, and `scope_tests.py write` changed no entry.
+The live check this run's own fix needs is none, since it touches only files under verify/ that no cluster runs. The
+console change's live rollout, named above, still waits on its promotion.

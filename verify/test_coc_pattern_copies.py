@@ -6,10 +6,12 @@ PyYAML. No cluster, no network.
 
 1. Each Site in verify/coc_pattern_copies.py finds exactly one copy, each decodes to floor.portable_pattern(), and no
    piece of the pattern (floor's separator class or a leetspeak class, in any escaping) sits anywhere else under
-   gitops/: a copy in a new file fails here until it gets a Site.
+   gitops/ but inside a Port, a block that carries floor.py's own Python (#1269's, held by test_deploy_coc.py): a
+   copy in a new file fails here until it gets a Site or a Port.
 2. The scan finds the pattern however it is escaped, and the check catches what turned staging red on 2026-11-09: a
    copy written before #1277 gave the pattern its JSON-escape edges is stale, and `write` repairs it and touches
-   nothing else in the file. A copy in a file no Site names is reported, and so is a Site whose anchor is reworded.
+   nothing else in the file. A copy in a file no Site names is reported, and so is one in a Port's file below its end
+   marker, a Port whose marker is reworded, and a Site whose anchor is reworded.
 3. Through verify/scope-map.yaml as committed, a change to floor.py, corpus.py or terms-proposed.rot13 selects this
    test and every test a Site names, without running the whole suite, and a change to a copy's file selects them too.
 """
@@ -49,8 +51,14 @@ files = cpc.gitops_files()
 copies, problems = cpc.scan(files)
 for p in problems:
     print(f"        {p}")
-check(f"each of the {len(cpc.SITES)} Sites finds one copy, and no piece of the pattern sits outside them among the "
-      f"{len(files)} files under gitops/", not problems and len(copies) == len(cpc.SITES))
+check(f"each of the {len(cpc.SITES)} Sites finds one copy, and no piece of the pattern sits outside them and the "
+      f"{len(cpc.PORTS)} Ports among the {len(files)} files under gitops/",
+      not problems and len(copies) == len(cpc.SITES))
+spans, _ = cpc.port_spans(files)
+for port in cpc.PORTS:
+    inside = [m for s, e in spans.get(port.path, []) for m in cpc.FINGERPRINT.finditer(files[port.path], s, e)]
+    check(f"{port.path}: the port of floor.py between its markers holds the floor's pieces ({len(inside)} found), "
+          f"which {', '.join(port.tests)} holds to floor.proposed_pattern()", bool(inside))
 for c in copies:
     check(f"{c.site.path}: {c.site.what} decodes to floor.portable_pattern() ({len(c.decoded)} of {len(PATTERN)} "
           "characters)", c.decoded == PATTERN)
@@ -86,6 +94,17 @@ unknown = "/".join(("gitops", "a-file-no-site-names"))
 _, probs = cpc.scan(dict(files, **{unknown: "pattern: " + json.dumps(old) + "\n"}))
 check(f"a copy in {unknown}, which no Site names, is reported with its line ({probs[:1]})",
       len(probs) == 1 and probs[0].startswith(f"{unknown}:1: "))
+for port in cpc.PORTS:
+    text = files[port.path]
+    moved = text + "\n_COPY = " + json.dumps(old) + "\n"
+    _, probs = cpc.scan(dict(files, **{port.path: moved}))
+    last = moved.count("\n")
+    check(f"{port.path}: a copy below the port's end marker is reported with its line ({probs[:1]})",
+          len(probs) == 1 and probs[0].startswith(f"{port.path}:{last}: "))
+    _, probs = cpc.scan(dict(files, **{port.path: text.replace(port.start, "# --- the floor ")}))
+    check(f"{port.path}: a reworded start marker is named as that, and the port's pieces then read as unknown "
+          f"({probs[:1]})", any("markers" in p and p.startswith(port.path) for p in probs)
+          and any(p.startswith(f"{port.path}:") and "outside every copy and port" in p for p in probs))
 site = cpc.SITES[0]
 _, probs = cpc.scan(dict(files, **{site.path: files[site.path].replace(site.anchor, "- name: pattern")}))
 check(f"a reworded anchor in {site.path} is named as that ({probs[:1]})",
@@ -117,7 +136,7 @@ for src in cpc.FLOOR_SOURCES:
     check(f"a change to {src} selects {', '.join(cpc.HOLDERS)} (missing: {missing})", not missing)
     check(f"{src} is not in the map's full list, so a change to it alone is scoped, not the whole suite",
           not any(covers(e, src) for e in doc.get("full") or []))
-for site in cpc.SITES:
+for site in cpc.SITES + cpc.PORTS:
     for t in site.tests:
         check(f"a change to {site.path} selects {t} and this test, which hold its copy to the floor",
               selects(t, site.path) and selects("test_coc_pattern_copies", site.path))
