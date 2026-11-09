@@ -44421,3 +44421,101 @@ gave it an entry under `reads` (decisions.md, PROGRESS.md, and what importing `s
 `python3 verify/test_scope_tests.py` printed `ALL PASS`. The scoped suite is left to validation. No dependency was added.
 
 **Live check.** Skipped: the change touches only a `verify/` test no cluster runs, the scope map and this file.
+
+## 2026-11-09 · #1220 · run 19413 · The admin cluster's own desk hosts redirect to the one desk and deployments page, and desk_ticket_live.py reads the one desk on both bots
+
+**Why now.** #1160 kept `support-burritobot-private.burritobot.co` and `deployments-burritobot-private.burritobot.co`
+serving from the admin cluster's own fake-ticket until #1159 moved the Night Before probe, the trace seeds, the desk
+reset and standby failover to the one desk. #1159 closed on 2026-11-08 and its commits are on staging (`b9363251`,
+`4c60ab27`, `7181d8e0`, `955fd1d8`). Since #1158 the admin bot reads `support.burritobot.co` and reports to
+`deployments.burritobot.co` through `desk-relay`, so a ticket filed on the private desk host was one the admin bot
+never read, and the private deployments page never showed its deploys. `verify/prior-drafts.sh 1220 origin/staging`
+printed `NONE`, so no draft was ported.
+
+**Decided: redirect, not remove.** Both hosts now answer 307 to the one desk's host with the same path and query:
+`support-burritobot-private` to `https://support.burritobot.co$request_uri`, `deployments-burritobot-private` to
+`https://deployments.burritobot.co$request_uri`, on both domains. The reasons:
+
+- Old addresses keep working and land where the admin bot reads. The deck linked both private hosts (#1178, #1179),
+  presenters have them bookmarked, and the private chat page's "see your deployments" link builds
+  `deployments-<bot host>/mine?witch=<name>` (`gitops/ai-layer/web/burritbot.html`), which now opens the same view
+  on the one page, where the admin bot's rows are labelled `private`.
+- Removing the hosts is a DNS change. `fleet.sh` publishes `support-<cluster>` and `deployments-<cluster>` for every
+  cluster from one list, `WIB_VILLAIN_HOSTS`, so dropping two of them needs a per-cluster exception there, and an old
+  link would then fail with no address or the router's 404 and no pointer to the right desk.
+- It is scoped to the KubeCon admin cluster and goes through Argo CD with the rest of the ai-layer. The 2-hour
+  workshop's clusters keep their own desk at `support-<cluster>`, unchanged.
+
+307 keeps the method and body, so a `POST /submit` from a private desk page opened before the change files on the one
+desk, and as a temporary code no browser keeps it once a cluster renders without the file. The admin bot's own host,
+`burritobot-private.burritobot.co`, is untouched.
+
+**How.** `gitops/ai-layer/components/public-desk/private-desk-redirect.conf` holds two nginx servers with exact
+`server_name`s (the two hosts on `burritobot.co` and `agenticburn.com`), on the same listeners and certificate as
+`console.conf`'s desk servers, each a bare `return 307`. The public-desk component, which only kubecon-private adds
+(`desk.usePublicDesk`), merges it into `console-conf`. nginx's own `nginx.conf` includes `conf.d/*.conf` (read live in
+the console pod, below), so the file is read beside `default.conf`, and nginx picks an exact name before any regular
+expression, so these four hosts reach the redirect and not `console.conf`'s `~^support(-[a-z0-9-]+)?\.` or
+`~^deployments(-[a-z0-9-]+)?\.` servers. `console.conf` is not edited. Neither redirect target is a name the file
+serves, so nothing redirects to itself.
+
+**desk_ticket_live.py.** `PUBLIC_DESK` and `ADMIN_DESK` are both `support_desk_hosts.DESK[0]`,
+`support.burritobot.co`, so each bot's read-back, attendee and override tickets are filed on the one desk; the admin
+bot reads them through `desk-relay`. Its docstring says so. Those tickets come from the desk's `/submit` and carry room
+numbers; segment 4's rule that the presenters read only HC-900 to HC-999 or HC-666 on the admin bot is for the stage,
+where a room ticket may be anyone's, and this check files and reads only its own tickets.
+
+**Also changed.** `fleet.sh start-check` reads `https://deployments.burritobot.co` alone by default
+(`WIB_START_DEPLOYMENTS`): the private page now answers 307, which the check would read as a failure, and holds no rows
+of its own. A list of several pages still works as before. `verify/support_desk_hosts.py` says the private hosts
+redirect. The red private banners on those hosts (`desk_banner` and `deployments_banner` in `ticket_site.py`, #1178,
+#1179) no longer render on kubecon-private, since the redirect answers first; they are kept, with their tests, and
+cost nothing.
+
+**Tests.** New: `verify/test_private_desk_redirect.py` (offline) reads the file and `console.conf` outside comments
+and quoted strings, holds the two servers, their exact names, their listeners and certificate and the two 307 targets,
+then chooses a server for each host the way nginx does (exact name, then the first matching regular expression in file
+order, then the default server): the four private hosts reach the redirect, while `support.burritobot.co`,
+`support-attackme`, `deployments.burritobot.co`, `deployments-attackme`, a standby's `-b01` page, two lookalikes and the
+admin bot's host reach the server they reached before. It also holds that only kubecon-private's `console-conf` has
+the file. Run on copies, it failed with the support names made a regular expression (4 checks, the private host then
+falls to `console.conf`'s desk server) and with the deployments code made 301. Changed:
+`verify/test_desk_ticket_live.py` checks both desks are the one desk, neither a private host, and that `Side.file`
+posts both bots' tickets to `https://support.burritobot.co/submit`; `verify/test_fleet_start_check.sh` checks the new
+default; `verify/test_bootstrap_chart_render.py` (tools tier) expects `default.conf` and `private-desk-redirect.conf`
+in kubecon-private's built `console-conf`, the component's own file. `verify/fetch-inventory.yaml` classes the three
+stub `urlopen` lines in `test_desk_ticket_live.py` as none. Runs, once each: `test_private_desk_redirect.py` passed, 53
+checks; `test_desk_ticket_live.py` passed; `test_fleet_start_check.sh` 26 passed, 0 failed; `test_fetch_inventory.py`
+"All fetch inventory checks passed"; `test_scope_tests.py` ALL PASS; `test_public_desk.py`, `test_desk_remote_reports.py`
+and `test_support_desk_named.py` passed. `bash verify/run-e2e-tools.sh test_bootstrap_chart_render.py`, the one tier test changed, with the pinned kubectl v1.36.2 and helm v4.2.1: `1 checks ran (the 1 tier tests named, no offline suite) in 0m52s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`, its lines including `PASS  kubecon-private: kustomize builds it, and console-conf is default.conf and private-desk-redirect.conf`. A local `kubectl kustomize` of the ai-layer with the public-desk component
+built one `console-conf-9tbb5kk74k` holding `default.conf` and `private-desk-redirect.conf`, mounted by the console by
+that name. `python3 verify/scope_tests.py write` added the new test and two reads to `test_desk_ticket_live.py`'s
+entry. The rest of the scoped suite is left to validation. No dependency was added.
+
+**Live check (watch-it-burn-private, read-only for what the console serves).** Before the change, all four hosts
+answered 200 from outside (`curl https://<host>/`). In the console pod (`kubectl --context watch-it-burn-private -n
+agent exec deploy/console -c nginx`), `/etc/nginx/nginx.conf` ends `include /etc/nginx/conf.d/*.conf;`, and nginx is
+1.27.5. With this commit's `console.conf` and `private-desk-redirect.conf` copied into the pod's `/tmp` and a copy of
+`nginx.conf` pointed there, `nginx -t` printed `syntax is ok` and `test is successful`. A second nginx on that copy, on
+ports 18080 and 18443, asked with each Host for `/mine?witch=hazel-the-cyclops`, answered:
+
+    support-burritobot-private.burritobot.co        307  Location: https://support.burritobot.co/mine?witch=hazel-the-cyclops
+    deployments-burritobot-private.burritobot.co    307  Location: https://deployments.burritobot.co/mine?witch=hazel-the-cyclops
+    support-burritobot-private.agenticburn.com      307  Location: https://support.burritobot.co/mine?witch=hazel-the-cyclops
+    deployments-burritobot-private.agenticburn.com  307  Location: https://deployments.burritobot.co/mine?witch=hazel-the-cyclops
+    support.burritobot.co                           404  (the desk server, which serves no /mine)
+    deployments.burritobot.co                       200  (the deployments server)
+    support-attackme.burritobot.co                  404  (the desk server)
+    POST /submit on support-burritobot-private      307  Location: https://support.burritobot.co/submit
+
+The second nginx was stopped and its `/tmp` directory removed; `ps` then showed only the console's own master and
+eight workers, and `/tmp` held only nginx's own temp directories, as found. Nothing on the community cluster was
+touched.
+
+**Not yet run on a cluster.** Once hecaton promotes this and Argo CD syncs the ai-layer on watch-it-burn-private:
+`curl -sI https://support-burritobot-private.burritobot.co/ https://deployments-burritobot-private.burritobot.co/`
+answers 307 with the one desk's Location, and `python3 verify/desk_ticket_live.py --private-context
+watch-it-burn-private --community-context watch-it-burn-community --kubeconfig "$KUBECONFIG" --profile accen-dev` ends
+`DESK TICKET LIVE GREEN`. This run did not run `desk_ticket_live.py`: it spends Bedrock money, arms the guardrails on
+both clusters, and leaves its deploy rows on the one deployments page, since it does not remove its own as the probe
+and the seeds do since #1215, so a run would leave the room's page not as found. A followup asks for that removal.
