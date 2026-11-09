@@ -49733,3 +49733,39 @@ staging is still tree `b2b8abf1`, the `-8` build's. The gate's `--context is emp
 not a failure. Both web-terminal pods still run `68004fb5`; `verify/test_terminal_ws_auth_live.py` on the `-8` pod
 remains under "Not yet run on a cluster" in run 19675's entry. No live check was needed for this resume, which changed
 no file a cluster runs beyond what 19675's entry records.
+
+## 2026-11-09 · #1302 · run 19761 · Heavy gate red on staging 6eaadbd3: the patched kagent runtime's digest has no cosign signature
+
+**The failure.** The heavy gate's one red check was `verify/test_wib_digests_signed.py` (#1282). Run alone here with
+`python3 verify/test_wib_digests_signed.py`, it read 14 digests (14 in images.lock, 11 in manifests) and failed on one:
+`ghcr.io/peopleforrester/watch-it-burn@sha256:59bc5777ae74609446fde57324f4e33e606c819dd32fffc543243c0e7940f6c5`,
+pinned at `gitops/bootstrap/apps/kagent.yaml:66` and `images.lock:132`, "no sha256-59bc5777....sig tag (HTTP 404 Not
+Found)". It is #1222's patched kagent 0.10.1 Go agent runtime (`golang-adk-0.10.1-mcptrace`). The other 13 passed. The
+test is right and nothing in it changes: run 19476's entry on #1222 already said the signature was owed after the
+push, and the push happened first.
+
+**What ghcr.io and the clusters show.** Asked anonymously: the digest answers 200, the tag
+`golang-adk-0.10.1-mcptrace` answers 200 and serves that digest, and `sha256-59bc5777....sig` answers 404. So
+`build-kagent-mcp-traceparent` pushed it and nothing signed it. watch-it-burn-community already runs it on the
+workshop-agent Deployment, since that cluster has no signature policy. watch-it-burn-private still runs the stock
+`ghcr.io/kagent-dev/kagent/golang-adk:0.10.1`, because main does not hold the pin yet. A server-side dry run of a
+Pod in `agent` on watch-it-burn-private with the pinned image (`kubectl apply --dry-run=server`, nothing created) was
+denied: "Policy verify-image-signatures failed: Images from ghcr.io/peopleforrester/watch-it-burn ... must carry a
+valid cosign signature made with the workshop key". So the gate is right to hold main. Promoting the pin unsigned
+would leave the private agent's next pod denied.
+
+**Why this run did not sign it.** This host holds neither the workshop key, which lives on netcup, nor cosign. The
+signing act, run through `sudo -n -u michael /var/lib/hecaton/cli/sources-elevated netcup '...'` as question 1142's
+answer directs, answered `REFUSED sources netcup is the custodian tier's`, as it did for run 19658. It is escalated
+with the exact command: in Michael's checkout on netcup, `cosign2 sign --key ~/secrets/cosign/watch-it-burn.key
+--tlog-upload=false --yes` on the digest, with `COSIGN_PASSWORD` read from `~/secrets/cosign/watch-it-burn.pw`, then
+`cosign2 verify --key policies/cosign/watch-it-burn.pub --insecure-ignore-tlog` on it, as `verify/sign-images.sh` does
+for each digest. The pin is not reverted: that would undo #1222's answered question 1138 to make a check green that is
+correctly red.
+
+**What the next run does.** Run `python3 verify/test_wib_digests_signed.py` (or
+`bash verify/run-e2e-tools.sh test_wib_digests_signed.py`). Once it passes, the dry run above should be admitted
+past `verify-image-signatures`, and the heavy gate can go green on its next run.
+
+**Live check.** Two read-only reads above (the Deployments' images on both clusters, and the server-side dry run on
+watch-it-burn-private). No cluster was changed. The only file changed is this entry.
