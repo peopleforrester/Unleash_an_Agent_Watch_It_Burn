@@ -1577,10 +1577,25 @@ spec:
     spec:
       automountServiceAccountToken: false
       securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+      # A rollout must not drop a chat turn (#1258). Run 19462 saw POST /chat return 502 on the private cluster while
+      # Argo CD rolled this pod: nginx stopped the moment the pod was deleted, and the NLB, whose ip targets the load
+      # balancer controller deregisters only after the pod leaves the endpoints, still sent it new connections. The
+      # preStop sleep keeps nginx serving until the NLB has stopped doing that: 45s, longer than the 30s
+      # deregistration delay the Service below sets. Then nginx gets the image's SIGQUIT and finishes what it holds.
+      # The grace period covers the sleep plus the longest /chat turn, the 285s proxy_read_timeout in console.conf,
+      # so a turn in flight when the rollout starts still gets its answer. The other half is the agent namespace's
+      # elbv2.k8s.aws/pod-readiness-gate-inject label (gitops/namespaces/namespaces.yaml): the new pod is Ready, and
+      # the old one is deleted, only once the NLB has the new one registered and healthy.
+      # verify/test_console_rollout_drain.py holds all three.
+      terminationGracePeriodSeconds: 340
       containers:
         - name: nginx
           image: ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0
           ports: [{ name: http, containerPort: 8080 }, { name: https, containerPort: 8443 }]
+          # The kubelet's own sleep (GA in Kubernetes 1.34, the clusters run 1.36), so it needs no sleep binary.
+          lifecycle:
+            preStop:
+              sleep: { seconds: 45 }
           # /healthz is served by nginx itself, so it reports whether the front door is alive rather
           # than whether the platform behind it is. That distinction is the point: this Service is the
           # single attendee-facing entrypoint, and a probe depending on upstreams would restart it every
@@ -1629,6 +1644,10 @@ metadata:
     service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
     service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
     service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags: "project=watch-it-burn"
+    # #1258: the NLB's default deregistration delay is 300s, longer than any preStop worth waiting on. 30s, under the
+    # console's 45s preStop sleep, so the NLB is done draining a target before nginx stops. Connection termination
+    # stays off, its default, so a /chat turn already on an old pod's connection runs to its answer.
+    service.beta.kubernetes.io/aws-load-balancer-target-group-attributes: deregistration_delay.timeout_seconds=30
 spec:
   type: LoadBalancer
   selector: { app.kubernetes.io/name: console }

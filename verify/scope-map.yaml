@@ -2132,6 +2132,16 @@ reads:
     - scripts/reload-routes.sh
     - security
     - verify/bootstrap_chart.py
+  test_console_rollout_drain.py:
+    - agent
+    - gitops/ai-layer/components
+    - gitops/ai-layer/components/*/kustomization.yaml
+    - gitops/ai-layer/console.conf
+    - gitops/ai-layer/resources.yaml
+    - gitops/bootstrap
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - gitops/bootstrap/values-kubecon-*.yaml
+    - gitops/namespaces/namespaces.yaml
   test_console_service_vhosts.py:
     - CLAUDE.md
     - backstage

@@ -75,6 +75,10 @@ metadata:
   labels:
     app.kubernetes.io/part-of: watch-it-burn
     app.kubernetes.io/component: ai-layer
+    # The AWS load balancer controller's webhook adds a readiness gate to each pod a TargetGroupBinding selects
+    # here, the console's, so a new console pod is Ready only once the NLB has it registered and healthy (#1258).
+    # A cluster without the controller has no webhook, and the label does nothing there.
+    elbv2.k8s.aws/pod-readiness-gate-inject: enabled
 ---
 # Holds one Secret, student-aws-creds: the attendee's own IAM key, which fleet.sh bootstrap_student_aws pushes
 # here and the web terminal reads at boot (#584). The key carries EKS cluster-admin on its cluster, so it must
