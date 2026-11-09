@@ -8,8 +8,9 @@ docs/research/2026-11-09-coc-floor): its 144 terms, and its folding of leetspeak
 zero-width characters, look-alike letters and accents. This half reads the page's one ROT13 term literal and holds it,
 entry for entry and in order, to corpus.terms("proposed"); it holds the page's leetspeak, zero-width and look-alike
 tables to floor.py's _LEET, _ZERO_WIDTH and _HOMOGLYPH, and the separator class to every character Python's \\s
-matches. Guard-proxy's wall still masks its own list until it moves to the floor, so every term of the pinned proxy.py's
-PROFANITY and of the Go build's DefaultProfanity must be on the page's list, or the rail would save what the wall masks.
+matches. Since #1288 guard-proxy is pinned at 48cc2ca or later, whose wall and /chat refusal read the same list, so the
+pinned proxy.py's PROFANITY and the Go build's DefaultProfanity must each be the page's list, entry for entry and in
+order, or the rail and the wall would keep off different terms.
 It also checks the function touches nothing but its argument, and the save and load paths of #948.
 """
 from __future__ import annotations
@@ -108,18 +109,25 @@ check("COC_RE is the whole-word, optional-plural pattern of floor.py's proposed_
       and floor.proposed_pattern().pattern.startswith("(?<![a-z0-9])(?:")
       and floor.proposed_pattern().pattern.endswith(")s?(?![a-z0-9])"))
 
-print("== the wall's list is inside the page's ==")
-check("the pinned proxy.py has a PROFANITY list", len(proxy.PROFANITY) > 0)
-check("every term of proxy.py's PROFANITY is on the page's list, so the rail keeps off what the wall masks",
-      set(proxy.PROFANITY) <= set(terms),
-      f"proxy only (ROT13): {sorted(codecs.encode(t, 'rot13') for t in set(proxy.PROFANITY) - set(terms))}")
+print("== the wall's list is the page's ==")
+# Since #1288 the pin is guard-proxy 48cc2ca or later, whose default list is the same 144 entries in the same order, so
+# the wall, the /chat refusal and the rail keep off one list. A term on one side only is named, ROT13.
+check("the pinned proxy.py's PROFANITY is the page's list, entry for entry and in order", proxy.PROFANITY == terms,
+      f"proxy only (ROT13): {sorted(codecs.encode(t, 'rot13') for t in set(proxy.PROFANITY) - set(terms))}; "
+      f"page only (ROT13): {sorted(codecs.encode(t, 'rot13') for t in set(terms) - set(proxy.PROFANITY))}")
 go = (GP / "internal/config/config.go").read_text(encoding="utf-8")
-m = re.search(r"const DefaultProfanity = ((?:\"[^\"]*\"\s*\+?\s*)+)", go)
-check("the Go build still names const DefaultProfanity", m is not None)
+# The Go build keeps the list ROT13 too: var DefaultProfanity = rot13(defaultProfanityROT13), the constant a run of
+# "..." + lines with // section comments between them, ending at the first string line with no trailing +.
+m = re.search(r"^const defaultProfanityROT13 = \"\" \+\n((?:[ \t]*(?://[^\n]*|\"[^\"]*\" \+)\n)*[ \t]*\"[^\"]*\"\n)",
+              go, re.M)
+check("the Go build still names const defaultProfanityROT13, decoded by rot13 into DefaultProfanity",
+      m is not None and "var DefaultProfanity = rot13(defaultProfanityROT13)" in go)
 if m:
-    go_terms = "".join(re.findall(r'"([^"]*)"', m.group(1))).split(",")
-    check("every term of the Go build's DefaultProfanity is on the page's list", set(go_terms) <= set(terms),
-          f"Go only (ROT13): {sorted(codecs.encode(t, 'rot13') for t in set(go_terms) - set(terms))}")
+    lines = [ln for ln in m.group(1).splitlines() if not ln.strip().startswith("//")]
+    go_terms = [codecs.decode(t, "rot13") for t in "".join(re.findall(r'"([^"]*)"', "\n".join(lines))).split(",")]
+    check("the Go build's DefaultProfanity is the page's list, entry for entry and in order", go_terms == terms,
+          f"Go only (ROT13): {sorted(codecs.encode(t, 'rot13') for t in set(go_terms) - set(terms))}; "
+          f"page only (ROT13): {sorted(codecs.encode(t, 'rot13') for t in set(terms) - set(go_terms))}")
 resources = (REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")
 override = re.search(r"name:\s*PROFANITY_LIST\s*\n\s*value:\s*[\"']?([^\"'\n]*)", resources)
 if override:
