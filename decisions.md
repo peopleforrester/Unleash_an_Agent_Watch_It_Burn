@@ -44233,3 +44233,20 @@ the promoted resources.yaml; the next run on #980 runs it.
 **Tests run.** `test_mesh_enrollment.py`, `test_mesh.py`, `test_lab_text_export.py`, `test_c1_dns_exfil_fix.py`,
 `test_gateway_api_crds.py`, `test_467_live_record.py` and `test_agent_bypass_shapes.py`, all exit 0. The scoped Test
 and E2E commands are left to hecaton's validation. No dependency was added.
+## 2026-11-09 · #1032 · run 19369 · The weather feed's live check is in the fetch inventory
+
+**Why run 18817 did not land.** Hecaton's tests gate failed on `test_fetch_inventory.py` alone: "verify/test_mesh_live.py:118:
+a fetch call site missing from the inventory", the `urlopen` of `http://weather-feed:8080/healthz` that the ported
+draft added inside the evil-mcp-shim exec. Run 18817 ran the mesh tests but not this one, which reads every fetch
+call site under `verify/`. The "--context is empty" line in the gate's output comes from a fixture inside a passing
+test, not from a failed check.
+
+**What changed.** `verify/fetch-inventory.yaml`'s entry for `verify/test_mesh_live.py` now matches
+`wget|weather-feed:8080/healthz`, claims 2 lines, and stays classed `live`, kind `cluster`: both are services on a
+workshop cluster reached from inside a pod with kubectl exec. Nothing else from run 18817 changed.
+
+**Live check.** None new: this change touches only `verify/fetch-inventory.yaml` and this file, which no cluster
+runs. Run 18817's entry above holds the live check on watch-it-burn-private and what is not yet run.
+
+**Tests run.** `python3 verify/test_fetch_inventory.py` (exit 0, "All fetch inventory checks passed") and
+`python3 verify/test_scope_tests.py`. The scoped Test and E2E commands are left to hecaton's validation.

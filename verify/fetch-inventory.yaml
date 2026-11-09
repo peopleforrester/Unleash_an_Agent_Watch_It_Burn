@@ -1210,11 +1210,11 @@ sites:
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   verify/test_mesh_live.py:
-  - match: wget
-    lines: 1
+  - match: wget|weather-feed:8080/healthz
+    lines: 2
     class: live
     kind: cluster
-    target: a service on a workshop cluster, reached from inside a pod with kubectl exec
+    target: a service on a workshop cluster (guard-proxy, the weather feed), reached from inside a pod with kubectl exec
   verify/test_mobile_titles_e2e.py:
   - match: .
     lines: 1
