@@ -47881,3 +47881,64 @@ not display slurs; `corpus.py` decodes them.
 
 **Tests.** `python3 verify/test_coc_floor_spike.py` passed (0 failures). The prose gate passed on the README and on
 this entry. The whole Test and E2E commands were not run; validation runs what the scope map selects.
+## 2026-11-09 · #1271 · run 19593 · The break-it finale runs from the private terminal and caps the room's cluster
+
+**What changed.** The break-it finale is run with `finale-cap-on`, `finale-cap-off` and `cost-watch`, and each one
+acted only on the cluster whose terminal ran it. The room plays on watch-it-burn-community, and that cluster's terminal
+is closed to the presenters: `/lab` and `/terminal/` answer 404 by design. All three now pick the room's cluster with
+`_room` in the terminal's `.guardlib` (`gitops/ai-layer/web-terminal/entrypoint.sh`, with its twin in
+`images/web-terminal/`). On the cluster whose `lab-bootstrap` Application is labelled
+`lab-platform/profile=kubecon-private`, the label `_c7gw` already reads, the room's cluster is the peer. It is reached
+with the `guardrails-switch/guardrails-peer` kubeconfig, through the API server's Service proxy on `guard-proxy:8080`,
+the route `_toggle` uses for #1148. On any other cluster (the community cluster's own terminal, a 2-hour workshop's
+cluster) it is this cluster, through the `kubectl exec` into `deploy/guard-proxy` the finale always used. Each command
+names the cluster it changed and says the private one is unchanged. `cost-watch` shows the room's cluster by name. If
+Argo CD cannot be asked, or the private cluster's peer Secret cannot be read, the command fails, says why and changes
+nothing. A failed read never falls back to capping the admin bot.
+
+**No grant added.** Each call the finale makes to the peer is a GET on guard-proxy's Service proxy: `/cost`, then
+`/toggle?cost_cap=N` or `/toggle?cost_cap=default`. guardrails-switch's Role in `agent` already grants exactly that,
+`get` on `services/proxy` named `guard-proxy:8080`, since #1148. `gitops/guardrails-switch/` is unchanged.
+
+**Found by the live run: kubectl's `--request-timeout` breaks `/cost` on the peer.** The first live run of
+`finale-cap-on` failed safely with "watch-it-burn-community's guard-proxy could not be reached", and the first
+`cost-watch` frame showed `$0.0000`. With `-v=8` the request was
+`GET .../services/guard-proxy:8080/proxy/cost?timeout=20s`: kubectl puts `--request-timeout=20s` on the URL, and
+guard-proxy matches `self.path == "/cost"` exactly. The request therefore fell through to the agent, which answered
+`{"jsonrpc":"2.0",...,"message":"invalid request"}`. `/toggle` was not affected because guard-proxy parses its query
+and ignores `timeout`. The peer call is now bounded by `timeout 20` (coreutils) instead. The offline test's fake
+kubectl now adds `timeout=` to the URL the way the real one does. With the old line put back it failed eight checks,
+and with the fix it passes.
+
+**Live run, from watch-it-burn-private's terminal pod, 2026-11-09 15:31Z.** The new `.guardlib` and each command were
+piped into `kubectl --context watch-it-burn-private -n agent exec -i deploy/web-terminal -- bash -s`, so nothing was
+written into the pod beyond `~/.kube/peer`, which `_peer` rewrites from the Secret (sha256 `69799712d2fd589f...`
+before and after). Both caps were $25.00 before the run (community spent $0.5033 over 55 turns, private $0.3718 over
+40).
+
+    $ timeout 20 kubectl --kubeconfig /home/student/.kube/peer --context watch-it-burn-community get --raw /api/v1/namespaces/agent/services/guard-proxy:8080/proxy/cost
+    $ timeout 20 kubectl --kubeconfig /home/student/.kube/peer --context watch-it-burn-community get --raw '/api/v1/namespaces/agent/services/guard-proxy:8080/proxy/toggle?cost_cap=1.5033'
+    🔥 Finale cap ON on watch-it-burn-community. It has spent $0.50; the cap is now $1.50 for the whole room.
+        Changed: watch-it-burn-community only. This cluster, the private one, is unchanged.
+    capped: community cap_usd 1.5033, private cap_usd 25.0
+    cost-watch:  BurritoBot, watch-it-burn-community   SPENT $0.5033   CAP $1.50   TURNS 55   [#############......]
+    🔓 Finale cap OFF on watch-it-burn-community. It is back on its normal backstop (COST_CAP_USD, $25.00). BurritoBot answers again.
+        Changed: watch-it-burn-community only. This cluster, the private one, is unchanged.
+    after: community cap_usd 25.0 (usd 0.5033, 55 turns), private cap_usd 25.0 (usd 0.3718, 40 turns)
+
+The first, failed attempt changed nothing either: its `finale-cap-on` stopped before any toggle, and its
+`finale-cap-off` set the community cap to `default`, which it already was. A read-only `cost-watch` from
+watch-it-burn-community's own terminal pod drew "BurritoBot, this cluster", `CAP $25.00`, through the exec. Both
+clusters were left as found. The `agent/terminal-auth` Secret was not read or touched.
+
+**Not yet run on a cluster.** The deployed terminal still runs the old scripts until hecaton promotes this change
+and Argo CD syncs the web-terminal. Once that has happened, the next run on the issue runs `finale-cap-on`,
+`cost-watch` and `finale-cap-off` in the private terminal itself.
+
+**Prose.** The run-of-show's close and /kubecon's close now say "in the private terminal". Slide `#/119`'s note is
+in rounds-agenticburn, so it is filed there as a follow-up in the run report.
+
+**Tests.** `verify/test_finale_cap_peer.py` (new, offline) runs the private-to-community route against two real
+guard-proxy instances, along with the community and workshop cases, each failure, the grant and the prose.
+`verify/test_finale_cap.py`'s fake kubectl now answers the Argo CD lookup. Both pass. The whole Test and E2E
+commands were not run, and validation runs the other tests that read the changed files. No dependency was added.

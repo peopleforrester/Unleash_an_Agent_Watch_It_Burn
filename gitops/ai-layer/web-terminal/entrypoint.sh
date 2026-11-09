@@ -355,6 +355,49 @@ _both() { local peer="" link=none here=0 there=0 c r
     unread:1:*) echo "⚠️  This cluster did not switch, and guardrails-switch/guardrails-peer could not be read." ;;
   esac
   return 1; }
+# _room : the cluster the KubeCon finale plays on, the room's (#1271). The room plays on the public bot, on
+# watch-it-burn-community, whose terminal no presenter can open (its /lab and /terminal/ answer 404 by design), so
+# finale-cap-on, finale-cap-off and cost-watch run in the private terminal and reach the room's cluster from there.
+# Sets _ROOM to the kubectl for it and _ROOMNAME to its name. On the KubeCon private cluster, whose Argo CD root
+# lab-bootstrap is labelled lab-platform/profile=kubecon-private (as _c7gw reads it), that is the other cluster, through
+# guardrails-peer as _both reaches it; the peer grant there already covers it (get on services/proxy guard-proxy:8080,
+# gitops/guardrails-switch/guardrails-switch.yaml), so nothing is granted for the finale. Anywhere else, the community
+# cluster's own terminal and a 2-hour workshop's cluster among them, it is this cluster. Fails, saying why, when Argo
+# CD cannot be asked or the private cluster's peer cannot be read, so a flaky read never caps the admin bot instead.
+_room() { local r c p
+  _ROOM=(kubectl); _ROOMNAME="this cluster"
+  c=(kubectl -n argocd get application lab-bootstrap --ignore-not-found \
+    -o jsonpath='{.metadata.labels.lab-platform/profile}')
+  _show "${c[@]}"
+  if ! r="$("${c[@]}" 2>/dev/null)"; then
+    echo "⚠️  Argo CD could not be asked which cluster this is, so no cluster was picked and nothing changed." >&2
+    return 1
+  fi
+  [ "$r" = kubecon-private ] || return 0
+  if ! p="$(_peer)"; then
+    echo "⚠️  This is the private cluster, and guardrails-switch/guardrails-peer could not be read, so the room's" >&2
+    echo "    cluster cannot be reached from here and nothing changed. From the fleet host: fleet.sh guardrails-link" >&2
+    return 1
+  fi
+  _ROOM=(kubectl --kubeconfig "$HOME/.kube/peer" --context "$p"); _ROOMNAME="$p"; }
+# _gpc <path> <kubectl...> : set _GPC to the call that GETs <path> (with its query) from guard-proxy on one cluster and
+# prints the body. With plain kubectl it is the exec into deploy/guard-proxy the finale always ran; on the peer it is
+# the API server's Service proxy on guard-proxy:8080, as _toggle reaches /toggle there. That call is bounded by
+# timeout(1), not kubectl's --request-timeout, which adds ?timeout=20s to the URL: guard-proxy matches /cost exactly,
+# so /cost?timeout=20s fell through to the agent and answered a JSON-RPC error (the live run on #1271, 2026-11-09).
+_gpc() { local p="$1"; shift
+  if [ "$*" = kubectl ]; then
+    _GPC=(kubectl -n agent exec deploy/guard-proxy -- python3 -c \
+      "import urllib.request as u;print(u.urlopen('http://localhost:8080$p',timeout=10).read().decode())")
+  else
+    _GPC=(timeout 20 "$@" get --raw "/api/v1/namespaces/agent/services/guard-proxy:8080/proxy$p")
+  fi; }
+# _gp <path> <kubectl...> : run that call, printing the command on stderr and the body on stdout.
+_gp() { _gpc "$@"; _show "${_GPC[@]}"; "${_GPC[@]}" 2>/dev/null; }
+# _room_after : the line the finale commands end on, saying which cluster changed and which did not.
+_room_after() {
+  if [ "$_ROOMNAME" = "this cluster" ]; then echo "    Changed: this cluster only."
+  else echo "    Changed: $_ROOMNAME only. This cluster, the private one, is unchanged."; fi; }
 EOS
 
 # The rule rewrite behind _c7rule. Reads the ConfigMap as JSON on stdin and prints the JSON patch. Exactly
@@ -651,45 +694,55 @@ else
 fi
 EOS
 # The KubeCon finale (#690): the room is invited to drive the public cluster's spend to its cap. COST_CAP_USD
-# is $25 for the whole cluster, out of reach in a few minutes, so finale-cap-on lowers the cap live to what this
+# is $25 for the whole cluster, out of reach in a few minutes, so finale-cap-on lowers the cap live to what that
 # cluster has already spent plus a little headroom (guard-proxy's /toggle?cost_cap=N, guard-proxy-agenticburn#23).
 # The tally is kept, so the cap sits just above it. finale-cap-off restores COST_CAP_USD. cost-watch shows the
 # spend against the cap, large, for the screen. Nothing lowers the cap until a presenter runs finale-cap-on.
+# All three act on the room's cluster, _room's pick (#1271): run in the private terminal, the one the presenters have
+# open, that is watch-it-burn-community, reached through guardrails-peer; anywhere else it is this cluster.
 cat > "$HOME/finale-cap-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 head="${1:-1.00}"
-case "$head" in ''|*[!0-9.]*|*.*.*) echo "Usage: finale-cap-on [dollars of headroom, default 1.00]"; exit 2 ;; esac
-c=(kubectl -n agent exec deploy/guard-proxy -- python3 -c \
-  "import json,urllib.request as u;g=lambda p:json.load(u.urlopen('http://localhost:8080'+p,timeout=10));s=g('/cost')['usd'];print(json.dumps({'spent':s,'cap':g('/toggle?cost_cap=%.4f'%(s+$head)).get('cost_cap_usd')}))")
-_show "${c[@]}"
-r="$("${c[@]}" 2>/dev/null | tail -1)"
-spent="$(printf '%s' "$r" | python3 -c 'import json,sys;print("%.2f"%json.load(sys.stdin)["spent"])' 2>/dev/null)"
-cap="$(printf '%s' "$r" | python3 -c 'import json,sys;print("%.2f"%json.load(sys.stdin)["cap"])' 2>/dev/null)"
-if [ -z "$spent" ] || [ -z "$cap" ]; then
-  echo "⚠️  The cap did not change: this guard-proxy has no runtime cost cap, or it could not be reached."; exit 1
+case "$head" in ''|.|*[!0-9.]*|*.*.*) echo "Usage: finale-cap-on [dollars of headroom, default 1.00]"; exit 2 ;; esac
+_room || exit 1
+spent="$(_gp /cost "${_ROOM[@]}" | python3 -c 'import json,sys;print(float(json.load(sys.stdin)["usd"]))' 2>/dev/null)"
+if [ -z "$spent" ]; then
+  echo "⚠️  The cap did not change: $_ROOMNAME's guard-proxy could not be reached."; exit 1
 fi
-echo "🔥 Finale cap ON. This cluster has spent \$$spent; the cap is now \$$cap for the whole room."
+want="$(python3 -c "print('%.4f'%($spent+$head))")"
+shown="$(python3 -c "print('%.2f'%$spent)")"
+cap="$(_gp "/toggle?cost_cap=$want" "${_ROOM[@]}" \
+  | python3 -c 'import json,sys;print("%.2f"%json.load(sys.stdin)["cost_cap_usd"])' 2>/dev/null)"
+if [ -z "$cap" ]; then
+  echo "⚠️  The cap did not change: $_ROOMNAME's guard-proxy has no runtime cost cap, or it could not be reached."; exit 1
+fi
+echo "🔥 Finale cap ON on $_ROOMNAME. It has spent \$$shown; the cap is now \$$cap for the whole room."
 echo "    Every turn counts toward it. When the room crosses it, BurritoBot stops calling the model for"
 echo "    everyone, and a blocked request costs nothing. Watch it with: cost-watch. Put it back: finale-cap-off."
+_room_after
 EOS
 cat > "$HOME/finale-cap-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-case "$(_pxkey "cost_cap=default" cost_cap_usd)" in
-  ""|missing) echo "⚠️  The cap did not change: this guard-proxy has no runtime cost cap, or it could not be reached."; exit 1 ;;
-  *) echo "🔓 Finale cap OFF. The cluster is back on its normal backstop (COST_CAP_USD). BurritoBot answers again." ;;
-esac
+_room || exit 1
+cap="$(_gp "/toggle?cost_cap=default" "${_ROOM[@]}" \
+  | python3 -c 'import json,sys;print("%.2f"%json.load(sys.stdin)["cost_cap_usd"])' 2>/dev/null)"
+if [ -z "$cap" ]; then
+  echo "⚠️  The cap did not change: $_ROOMNAME's guard-proxy has no runtime cost cap, or it could not be reached."; exit 1
+fi
+echo "🔓 Finale cap OFF on $_ROOMNAME. It is back on its normal backstop (COST_CAP_USD, \$$cap). BurritoBot answers again."
+_room_after
 EOS
 cat > "$HOME/cost-watch" <<'EOS'
 #!/bin/bash
-# Large spend-against-cap readout for the screen, every 2 seconds. Ctrl-C stops it.
+# Large spend-against-cap readout for the screen, every 2 seconds, of the room's cluster (_room). Ctrl-C stops it.
 source "$HOME/.guardlib"
-c=(kubectl -n agent exec deploy/guard-proxy -- python3 -c \
-  "import json,urllib.request as u;d=json.load(u.urlopen('http://localhost:8080/cost',timeout=10));print(json.dumps(d))")
-cmd="$(_show "${c[@]}" 2>&1)"
+_room || exit 1
+_gpc /cost "${_ROOM[@]}"
+cmd="$(_show "${_GPC[@]}" 2>&1)"
 while true; do
-  r="$("${c[@]}" 2>/dev/null | tail -1)"
+  r="$("${_GPC[@]}" 2>/dev/null)"
   line="$(printf '%s' "$r" | python3 -c '
 import json,sys
 try: d=json.load(sys.stdin)
@@ -697,7 +750,7 @@ except ValueError: print("  waiting for guard-proxy..."); sys.exit()
 s,c=d.get("usd",0),d.get("cap_usd",0)
 bar="" if not c else "#"*min(40,int(40*s/c))+"."*max(0,40-int(40*s/c))
 print("  SPENT  $%.4f\n  CAP    $%.2f\n  TURNS  %d\n  [%s]%s" % (s,c,d.get("requests",0),bar,"  CAP HIT: the kitchen is closed" if c and s>=c else ""))' 2>/dev/null)"
-  printf '\033[H\033[2J%s   (every 2 seconds)\n\n  BurritoBot, this cluster\n\n%s\n\n  (Ctrl-C to stop)\n' "$cmd" "$line"
+  printf '\033[H\033[2J%s   (every 2 seconds)\n\n  BurritoBot, %s\n\n%s\n\n  (Ctrl-C to stop)\n' "$cmd" "$_ROOMNAME" "$line"
   sleep 2
 done
 EOS
