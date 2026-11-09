@@ -18,6 +18,7 @@ from __future__ import annotations
 import ast
 import codecs
 import collections
+import json
 import re
 import pathlib
 import sys
@@ -116,6 +117,20 @@ def main() -> int:
           f"mask() replaces a match spelt with a zero-width space and a Cyrillic look-alike: {masked!r}")
     check(f.mask("put a burrito in the bag") == "put a burrito in the bag",
           "a separator between only some letters does not join words ('put a' stays)")
+
+    # The dotless i (#1301): guard-proxy's re.IGNORECASE reads it as i, so the floor folds it to i, and the RE2 form,
+    # which cannot fold and whose (?i) keeps it apart from i, lists it in every class that holds i. re.ASCII has
+    # Python fold ASCII letters only, as RE2 does the i, so the form is read here as the collector and CEL read it.
+    with_i = [t for t in corpus.terms("proposed") if "i" in t]
+    dotless = [t.replace("i", "ı") for t in with_i]
+    check(len(with_i) > 40 and all(f.spans(t) == [(0, len(t))] for t in dotless),
+          f"the proposed floor flags each of the {len(with_i)} terms holding an i, spelt with a dotless i (U+0131) "
+          f"for every i, from end to end (missed: {sum(f.spans(t) != [(0, len(t))] for t in dotless)})")
+    re2 = re.compile(floor.portable_pattern(), re.ASCII)
+    check(all(floor.portable_mask(t, re2) == "[redacted]" for t in dotless)
+          and all(floor.portable_mask(json.dumps(t), re2) == '"[redacted]"' for t in dotless),
+          "the portable (RE2) pattern, with case folded on ASCII letters alone, masks each of them, as written and as "
+          "json.dumps escapes the dotless i (\\u0131)")
 
     print(f"\n{len(failures)} failure(s)")
     return 1 if failures else 0

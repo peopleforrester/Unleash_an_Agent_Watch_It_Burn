@@ -38,9 +38,14 @@ _LEET = {"a": "4@", "b": "8", "c": "(", "e": "3", "g": "9", "i": "1!|", "l": "1|
 _VOWELS = set("aeiou")
 _SEP = r"[\s._*\-]"
 _ZERO_WIDTH = {"​", "‌", "‍", "⁠", "﻿", "­"}
-# Cyrillic and Greek letters that render as Latin ones
-_HOMOGLYPH = str.maketrans("аеорсухіјѕԁԛԝкмтвнАЕОРСУХІЈЅКМТВНαοερτυνκιΑΒΕΖΗΙΚΜΝΟΡΤΥΧ",
-                           "aeopcyxijsdqwkmtbhaeopcyxijskmtbhaoeptuvkiabezhikmnoptyx")
+# Cyrillic and Greek letters that render as Latin ones, and the dotless i (U+0131), which has no decomposition and which
+# guard-proxy's case-blind match (Python's re.IGNORECASE) reads as i (#1301)
+_HOMOGLYPH = str.maketrans("аеорсухіјѕԁԛԝкмтвнАЕОРСУХІЈЅКМТВНαοερτυνκιΑΒΕΖΗΙΚΜΝΟΡΤΥΧı",
+                           "aeopcyxijsdqwkmtbhaeopcyxijskmtbhaoeptuvkiabezhikmnoptyxi")
+# Letters Python's re.IGNORECASE reads as a Latin letter and RE2's (?i) does not: Go's case folding keeps the dotless i
+# in an orbit of its own (unicode.SimpleFold(0x131) is 0x131). fold() maps it through _HOMOGLYPH, but the portable form
+# cannot fold, so there each class that holds the Latin letter takes it as one more alternative (#1301).
+_RE2_UNFOLDED = {"i": "ı"}
 
 
 def current_pattern() -> re.Pattern:
@@ -111,13 +116,20 @@ def portable_pattern(terms: list[str] | None = None) -> str:
     the two characters `\\n`, and guard-proxy's json.dumps writes every non-ASCII character as `\\uXXXX`. A leading
     edge therefore also takes `\\n`, `\\r`, `\\t` or a `\\uXXXX` escape (a curly quote or an emoji before the term),
     and a non-ASCII letter of a term also matches as its escape. None of these occurs in text that is not
-    JSON-encoded, so the form still agrees with the folded floor there."""
+    JSON-encoded, so the form still agrees with the folded floor there.
+
+    RE2's (?i) folds fewer letters than Python's re.IGNORECASE: it leaves the dotless i apart from i, where fold()
+    and guard-proxy's match read it as i. Each class holding a letter of _RE2_UNFOLDED therefore also matches that
+    letter and its escape (#1301)."""
     terms = corpus.terms("proposed") if terms is None else terms
     alts = "|".join(_term(t) for t in sorted(terms, key=len, reverse=True))
     for ch in sorted({c for c in alts if not c.isascii()}):
         if alts.count(ch) != alts.count(f"[{ch}]"):
             raise ValueError(f"U+{ord(ch):04X} sits in a class with other letters; its JSON escape needs that class split")
         alts = alts.replace(f"[{ch}]", f"(?:{ch}|\\\\u{ord(ch):04x})")
+    for latin, other in _RE2_UNFOLDED.items():
+        classes = re.compile(r"\[[^\]]*" + re.escape(latin) + r"[^\]]*\]")
+        alts = classes.sub(lambda m: f"(?:{m.group(0)}|{other}|\\\\u{ord(other):04x})", alts)
     hexd = "[0-9a-f]" * 4  # not {4}: no brace reaches the collector's Helm-templated config
     return r"(?i)(^|[^a-z0-9]|\\[nrt]|\\u" + hexd + r")((?:" + alts + r")s?)($|[^a-z0-9])"
 

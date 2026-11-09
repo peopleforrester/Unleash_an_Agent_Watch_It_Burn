@@ -70,9 +70,11 @@ def statements() -> list[str]:
 
 
 def mask(text: str) -> str:
-    """The mask as RE2 applies it, in Python: the spike's portable_mask with the collector's replacement."""
+    """The mask as RE2 applies it, in Python: the spike's portable_mask with the collector's replacement. re.ASCII has
+    the pattern's (?i) fold ASCII letters alone. Python's own folding reads a dotless i as i and RE2's does not, so
+    without it a pattern that lacks the dotless i would pass here and miss it in the collector (#1301)."""
     import re
-    return floor.portable_mask(text, re.compile(pattern()))
+    return floor.portable_mask(text, re.compile(pattern(), re.ASCII))
 
 
 def hc666_ticket() -> str:
@@ -94,6 +96,7 @@ def term_cases() -> list[tuple[str, str]]:
     word = next(t for t in terms if " " not in t and len(t) >= 4 and t.isascii() and t.isalpha())
     phrase = next(t for t in terms if " " in t and t.isascii())
     sharp = next(t for t in terms if "ß" in t)  # a letter json.dumps writes as ß, and fold() keeps
+    dotless = next(t for t in terms if " " not in t and "i" in t and t.isascii() and t.isalpha()).replace("i", "ı")
     spaced = " ".join(word)
     # Once JSON-encoded, the second line starts after the two characters \n, and the curly quotes become ‘ and
     # ’: the cases a word edge of [^a-z0-9] alone misses (#1277).
@@ -105,6 +108,8 @@ def term_cases() -> list[tuple[str, str]]:
         (f"I said: {phrase}.", "I said: [redacted]."),
         (f"‘{word}’ said the customer", "‘[redacted]’ said the customer"),
         (f"Ich sage {sharp} dazu", "Ich sage [redacted] dazu"),
+        # The dotless i (U+0131), which guard-proxy's re.IGNORECASE reads as i and RE2's (?i) does not (#1301).
+        (f"what a {dotless} move", "what a [redacted] move"),
     ]
 
 

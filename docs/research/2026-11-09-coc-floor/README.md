@@ -267,8 +267,8 @@ config is written `$$`. https://github.com/open-telemetry/opentelemetry-collecto
 `floor.py` is the reference, standard library only:
 
 - `Floor("proposed").spans(text)` folds the text one character at a time (drops zero-width characters and soft
-  hyphens, reduces fullwidth and accented letters to their base, maps Cyrillic and Greek look-alikes, lower-cases),
-  then matches each term as a whole word with repeatable letters, leetspeak stand-ins, `*` for a vowel, or every
+  hyphens, reduces fullwidth and accented letters to their base, maps Cyrillic and Greek look-alikes and the dotless
+  i `ı`, lower-cases), then matches each term as a whole word with repeatable letters, leetspeak stand-ins, `*` for a vowel, or every
   letter spelt out with one separator between each ("f u c k"; "put a" is not "puta"). An optional plural `s`, as
   guard-proxy's list does today. `mask()` maps each match back onto the original characters.
 - `portable_pattern()` is the same pattern without lookarounds, in the syntax RE2 shares with Python, for the
@@ -278,6 +278,8 @@ config is written `$$`. https://github.com/open-telemetry/opentelemetry-collecto
   is what the collector sees: a leading edge takes a `\n`, `\r`, `\t` or `\uXXXX` escape, and `ß` also matches as
   `ß`, since guard-proxy's `json.dumps` escapes every non-ASCII character. The collector's `transform/coc_mask`
   runs this form.
+  RE2's `(?i)` keeps the dotless i `ı` (U+0131) apart from `i`, where Python's `re.IGNORECASE` (guard-proxy's match)
+  and `fold()` read it as `i`, so every class that holds `i` also takes `ı` and its escape `\u0131` (#1301).
 - The list is `terms-proposed.rot13`, decoded by `corpus.terms("proposed")`. guard-proxy reads its list from
   `PROFANITY_LIST`, so the wall can take the longer list before #78 lands; the folding is code and lands with #78.
 - A refusal says what happened in plain words ("Keep it kind: that message has words the code of conduct rules out,
