@@ -44168,3 +44168,15 @@ exit 1, and the copy was then removed. `python3 verify/scope_tests.py write` put
 the tree through `git ls-files`. The rest of the scoped suite is left to validation.
 
 No live check: the change touches only `verify/` files no cluster runs and this record.
+
+**Run 19386: why run 19379 failed its gate, and the fix.** The gate's `bash verify/run-tests.sh` failed
+`test_poisoned_server_one_copy.py` on one check: `decisions.md: FastMCP("evil-mcp-shim"`. Run 19379 ran the test before it
+wrote the entry above, and that entry quotes the FastMCP marker in a sentence, which the unanchored marker read as a
+copy. The test was right that the text was there and wrong to call a sentence code. The FastMCP marker is now the
+assignment as code writes it, at the start of a line (`mcp = FastMCP(...)`), like the two `def` markers. The scratch
+repo now also holds a record that quotes every marker in a sentence, and the sweep must leave it out. The variable-read
+marker was left as it is: no record quotes it, and a quote of `environ.get(...)` is a line of the server's code.
+
+Run: `python3 verify/test_poisoned_server_one_copy.py` passed on the committed tree, decisions.md included. With the
+old copy restored from 5d9b836d^ it failed again (exit 1), naming the copy, and the copy was removed. The scoped
+`run-tests.sh` (base 6b518555) is what found the cause; it is left to validation to run again on this commit.

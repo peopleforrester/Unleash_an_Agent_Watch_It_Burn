@@ -14,14 +14,16 @@ What this checks:
    bundle's kustomization generates the evil-mcp-src ConfigMap from server.py alone; and the evil-mcp-shim
    Deployment mounts evil-mcp-src at /app and runs `python /app/server.py`.
 2. The server's own markers are in that file: the two rogue tools defined as functions (read_internal_config,
-   apply_optimization), the FastMCP server named evil-mcp-shim, and the read of the FAKE_MCP_SENTINEL variable. If
+   apply_optimization), the FastMCP server named evil-mcp-shim assigned to a name, and the read of the
+   FAKE_MCP_SENTINEL variable. If
    one is reworded, this says which, rather than passing on a sweep for a marker nothing carries.
 3. No other tracked text file carries any of those markers as code: a definition at the start of a line (in a .py, a
-   YAML block, a Dockerfile heredoc or a doc's code block), the FastMCP construction or the variable read. A test
-   that names a tool in a quoted string, or a manifest that sets the variable, is not code of the server and does
-   not match. No tracked path has a directory or file named evil-mcp-shim, the name the removed copy lived under.
+   YAML block, a Dockerfile heredoc or a doc's code block), the FastMCP assignment or the variable read. A test
+   that names a tool in a quoted string, a record that quotes a marker in a sentence, or a manifest that sets the
+   variable, is not code of the server and does not match. No tracked path has a directory or file named evil-mcp-shim, the name the removed copy lived under.
 4. The sweep catches a copy: it runs on a scratch repo holding the server, a copy at the old path and a copy inlined
-   in a ConfigMap, beside a test string and a manifest env entry that must not match, and must name the copies alone.
+   in a ConfigMap, beside a test string, a record quoting the markers in a sentence and a manifest env entry that
+   must not match, and must name the copies alone.
 
 The marker names are built from halves here so this file is not itself a match.
 """
@@ -46,11 +48,13 @@ SERVER_NAME = "evil-mcp" + "-shim"
 SENTINEL_VAR = "FAKE_MCP" + "_SENTINEL"
 
 # Each marker of the poisoned server's code, as code: a function definition at the start of a line, the FastMCP
-# construction, and a read of the sentinel variable through os.environ or os.getenv.
+# server assigned to a name at the start of a line, and a read of the sentinel variable through os.environ or
+# os.getenv. The first two are anchored to a line's start so a record that quotes them in a sentence (decisions.md
+# does, for #1198) is not read as a copy; run 19379 failed its gate on that before the FastMCP marker was anchored.
 MARKERS = {
     f"def {READ_TOOL}": re.compile(rf"^[ \t]*(?:async[ \t]+)?def[ \t]+{READ_TOOL}[ \t]*\(", re.M),
     f"def {APPLY_TOOL}": re.compile(rf"^[ \t]*(?:async[ \t]+)?def[ \t]+{APPLY_TOOL}[ \t]*\(", re.M),
-    f'FastMCP("{SERVER_NAME}"': re.compile(rf"FastMCP\(\s*['\"]{SERVER_NAME}['\"]"),
+    f'= FastMCP("{SERVER_NAME}"': re.compile(rf"^[ \t]*[A-Za-z_]\w*[ \t]*=[ \t]*FastMCP\(\s*['\"]{SERVER_NAME}['\"]", re.M),
     f"read of {SENTINEL_VAR}": re.compile(
         rf"(?:environ\.get\(|getenv\(|environ\[)\s*['\"]{SENTINEL_VAR}['\"]"),
 }
@@ -146,6 +150,8 @@ with tempfile.TemporaryDirectory() as tmp:
                               + "".join(f"    {line}\n" for line in server.splitlines()),
         "verify/test_reads_it.py": f'check("the rogue tool is named", "def {READ_TOOL}(" in shim)\n',
         "gitops/env.yaml": f"env:\n  - {{ name: {SENTINEL_VAR}, value: x }}\n",
+        "decisions.md": f"The server's markers are the `{READ_TOOL}` and `{APPLY_TOOL}` definitions, "
+                        f'`FastMCP("{SERVER_NAME}"`, and `def {READ_TOOL}(` named in a sentence.\n',
     }.items():
         (scratch / rel).parent.mkdir(parents=True, exist_ok=True)
         (scratch / rel).write_text(text)
