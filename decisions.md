@@ -44009,3 +44009,11 @@ checks, exit 0. Alone, once each: `test_package_cache.py`, `test_plan_policy.py`
 `verify/package_cache.py` and `verify/python.lock` are on the scope map's full list, so validation runs every test;
 the scoped `run-tests.sh` and `run-e2e-tools.sh` are left to it, as the run's governance asks. No live check: the
 change touches infra/policy/plan, infra/datadog-room's README and verify/, none of which a cluster runs.
+
+**Run 19374, the same issue, after run 19298's validation.** Run 19298's commit failed the `tests` gate on one test,
+`verify/test_fetch_inventory.py`: `verify/fetch-inventory.yaml` gave `verify/test_package_cache.py` 14 lines that its
+command scan names, and the commit made it 16. The two new lines are quoted install commands in the scan's own
+self-check (`MUST_CATCH`), text that runs nothing, so they belong in the entry's class `none`. The entry now says 16
+and names them in its reason. `test_fetch_inventory.py` and `fetch_inventory.py check` were each rerun alone and
+exit 0. The `--context is empty` line in the gate's output comes from a check that passed, not from a failure. The
+gate listed no other failing test, so nothing else changed.
