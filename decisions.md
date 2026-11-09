@@ -47991,3 +47991,66 @@ ran only the new test, so it did not see this. The fix lists `verify/test_ros_ov
 the way #1270 listed `test_ros_deck_live.py`. The new test reads segment 5 and its row, so its hashes cite the
 127-slide deck. `python3 verify/test_deck_shift_slide_citations.py` now prints `All #1099 deck-shift
 slide citation checks passed.`, exit 0.
+## 2026-11-09 · #1258 · run 19563 · A console rollout drains past the NLB and registers before it takes traffic
+
+**What run 19462 saw.** POST /chat on burritobot-private returned 502 while Argo CD rolled the console Deployment
+(#1232). Read live on watch-it-burn-private at the start of this run: the console's nginx had no preStop and a 30 s
+grace period, the agent namespace had no `elbv2.k8s.aws/pod-readiness-gate-inject` label, and both of the console
+Service's target groups (k8s-agent-console-987ae15e03 on 443, k8s-agent-console-d3e2c2d1b4 on 80) had the NLB's
+default 300 s deregistration delay, with connection termination off. The load balancer controller is v2.14.0, and
+its pod webhook selects namespaces by that label, failure policy Ignore. Both clusters run Kubernetes 1.36.
+
+**The change, on every profile that ships the ai-layer and namespaces Applications, both KubeCon ones included.**
+
+- The console's nginx container gets `lifecycle.preStop.sleep.seconds: 45`, the kubelet's own sleep action, so it
+  needs no sleep binary. nginx keeps serving for 45 s after its pod is deleted, while the controller deregisters
+  the pod's ip targets and the NLB stops opening new connections to them. Then nginx gets the image's SIGQUIT and
+  finishes what it holds.
+- The console Service sets `service.beta.kubernetes.io/aws-load-balancer-target-group-attributes:
+  deregistration_delay.timeout_seconds=30`. The issue asks for a preStop longer than the deregistration delay, and
+  the 300 s default would have meant a five-minute sleep on every rollout. Connection termination stays off, so a
+  turn already on an old pod's connection runs to its answer.
+- `terminationGracePeriodSeconds: 340`: the 45 s sleep plus the 285 s /chat `proxy_read_timeout` in console.conf,
+  plus 10 s. A turn in flight when the rollout starts still gets its answer. An old pod holding a terminal
+  websocket stays up to that long after a rollout; it takes no new connections in that time.
+- The agent namespace carries `elbv2.k8s.aws/pod-readiness-gate-inject: enabled` (gitops/namespaces/namespaces.yaml).
+  The webhook adds a target-health readiness gate per target group to each new console pod, so the new pod is Ready,
+  and the Deployment deletes the old one, only once the NLB has the new one registered and healthy. With one
+  replica, maxSurge 25 % rounds up to one pod and maxUnavailable 25 % down to none, so the old pod serves until then.
+
+A server-side dry-run create of the changed Deployment and Service, renamed into `default` on watch-it-burn-private,
+was admitted, with the sleep action, the grace period and the annotation in what the API server returned. Nothing
+was created.
+
+**Tests.** `verify/test_console_rollout_drain.py` (offline) holds the three settings in git, reads the /chat timeout
+from console.conf, checks both KubeCon profiles list ai-layer and namespaces, that no ai-layer component patches the
+console Deployment, and that the front door patch adds annotations one at a time. Then it removes each setting from
+a copy of the parsed manifests (the preStop, the preStop cut to the delay, the Service's delay, the grace period,
+the namespace label) and checks the rules fail on each. It passed, exit 0. `verify/scope-map.yaml` has its entry
+from `python3 verify/scope_tests.py write`, and `scope_tests.py check` read 0 problems.
+
+`verify/test_console_rollout_drain_live.py` (SUITE: e2e) reads the four settings on the cluster, the deregistration
+delay from the NLB itself, then sends one empty-prompt POST /chat a second through the public host from 20 s before a
+console rollout until 30 s after the old pod is gone. Each turn is a fresh conversation, and guard-proxy answers an
+empty prompt with a 400 before any guard or model, so it costs nothing. It fails on any 502, dropped connection or
+other non-answer, on an old pod gone sooner than its preStop sleep, and on a new pod without True target-health
+gates.
+
+**Live check, before the change is on the cluster.** `. "$HECATON_CLUSTER_ENV"; CONTEXT=watch-it-burn-private python3
+verify/test_console_rollout_drain_live.py` exit 1, as expected: the cluster records its public host, the console
+Service has 2 target groups bound, and the label, the preStop, the grace period and both 300 s delays fail. In
+restart mode it stops there and rolls nothing. One empty-prompt POST to https://burritobot-private.agenticburn.com/chat
+returned HTTP 400 `Tell BurritoBot what you'd like.`, the shape the loop counts as answered. The cluster was left as
+found.
+
+**Why this run did not roll the console.** The block-argocd-drift ValidatingPolicy denies UPDATE on any Argo CD
+tracked Deployment to every principal but Argo CD's application controller, the kagent controller and the
+kube-system, nodes and masters groups. This run's identity (assumed-role/hecaton-run, group system:authenticated)
+is none of those, so `kubectl rollout restart deploy/console` is refused, and a pod delete is not a rollout: with
+one replica and no surge it would leave the NLB with a draining target and an unregistered one at once. The
+promotion of this change rolls the console itself, but that rollout's old pod still has no preStop, so it tests
+only the readiness gate. The first rollout after it is the one the criterion asks for.
+
+**Not yet run on a cluster.** `CONTEXT=watch-it-burn-private python3 verify/test_console_rollout_drain_live.py` as a
+cluster admin, after the ai-layer and namespaces Applications have synced this change; or, by any run, `ROLLOUT=watch`
+with the same command, started before the next promotion that rolls the console lands.
