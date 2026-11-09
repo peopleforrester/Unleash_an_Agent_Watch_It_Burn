@@ -13,7 +13,7 @@ holding, and this fails, when:
   (infra/terraform/drift/known-unmanaged.yaml) comes to cover it;
 - a cluster missing any one mark still reads as built, or its choice is not register, or `cluster` imports it;
 - the register's coverage stops deciding `follows`: a built cluster the register covers, or an unbuilt one it does
-  not, must exit 2;
+  not, must end in the command's findings status, 2;
 - docs/floor.md stops saying the two were built from the root, or stops importing them.
 """
 from __future__ import annotations
@@ -174,7 +174,7 @@ for n in NAMES:
     for how in WAYS:
         w = without(n, how)
         code, lines, held, missing, _, text = main_of("provenance", n, w)
-        check(f"{n}, {how}: one mark missing, not built, choice register, unregistered so exit 2",
+        check(f"{n}, {how}: one mark missing, not built, choice register, unregistered so a findings status",
               len(missing) == 1 and lines.get("verdict") == "not built from infra/terraform/aws/cluster"
               and lines.get("choice") == "register" and lines.get("follows") == "no" and code == 2, text)
         code, _, _, _, fake, text = main_of("cluster", n, w)
@@ -188,7 +188,7 @@ with tempfile.TemporaryDirectory() as t:
     reg.write_text("entries:\n  - kind: eks-cluster\n    name: watch-it-burn-community\n    accounts: [accen-dev]\n"
                    "    made_by: a test\n    why: a test\n", encoding="utf-8")
     code, lines, *_ = main_of("provenance", NAMES[0], WORLD, reg)
-    check("a built cluster the register covers: follows no, exit 2",
+    check("a built cluster the register covers: follows no, a findings status",
           code == 2 and lines.get("choice") == "import" and lines.get("register") == "a test" and lines.get("follows") == "no")
     code, lines, *_ = main_of("provenance", NAMES[0], without(NAMES[0], "drop tag ManagedBy"), reg)
     check("an unbuilt cluster the register covers: choice register, follows yes, exit 0",

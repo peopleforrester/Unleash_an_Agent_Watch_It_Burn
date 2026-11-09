@@ -43370,7 +43370,7 @@ when either cluster stops reading as built or its choice is not import or the re
 of 16 ways of taking one mark away (each tag dropped or changed, a console-made role, no, a hand-named or two
 default node groups, a VPC without the tag or another VPC) still reads as built, does not choose register, exits
 anything but 2 unregistered, or allows `cluster` to reach a plan, when a built cluster the register
-covers is not exit 2 or an unbuilt one it covers is not exit 0, when a lab-platform cluster is not registered by
+covers does not end with the findings status, 2, or an unbuilt one it covers does not end 0, when a lab-platform cluster is not registered by
 the real register's tag entry, and when docs/floor.md stops saying the two were built from the root or stops
 importing them. Three mutations were tried by hand and each failed it: a register entry `watch-it-burn-*` (4
 failures), the VPC mark always held (9), and floor.md's sentence reworded (1).
@@ -43384,3 +43384,14 @@ VPC's answer, since `cluster` now reads them. docs/floor.md's "Rebuilding a lost
 new test's map entry and the paths `import-state.py` now reads. The scoped `run-tests.sh` and `run-e2e-tools.sh`
 are left to validation, as the run's governance asks. The live check above is the only cluster-account step; it
 changed nothing.
+
+**Run 19293, the same issue, after run 19259's validation.** Run 19259's commit was refused by hecaton's
+`skip-markers` gate, which reads the words exit and 2 together on any line of a test that is not a comment as an
+exit-as-skip, and found three in `verify/test_cluster_provenance.py`: two check names and one docstring line that
+named the command's findings status. None was a skip; each was a check that the command ends with 2. They now say
+"a findings status" instead, and the checks behind them are unchanged (`code == 2`). One sentence of the entry above
+was reworded the same way. The gate's own scanner (`skipmarks.count`), loaded from its file, finds nothing in any file
+this change touches against its merge base `19d67630`. The commit had been rebased onto staging `19d67630`, whose
+#1045 commits edit docs/floor.md's rebuild section and add a test of its commands. Rerun alone after the rewording:
+`test_cluster_provenance.py` (87 checks), `test_fleet_import_state.py`, `test_drift_floor.py` and `test_scope_tests.py`,
+each exit 0. Nothing that reads AWS changed, so the live test was not run again; its output above stands.
