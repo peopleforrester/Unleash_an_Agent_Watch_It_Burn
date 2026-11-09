@@ -47115,3 +47115,52 @@ both locks. require-resource-limits still reads `["Deny"]`. No policy was patche
 `test_kubecon_probe.py` (after `git submodule update --init gitops/ai-layer/guard-proxy`, which the worktree lacked)
 and `test_recipe_block_coverage.py`, each exit 0. The whole Test and E2E commands were not run; this change is
 decisions.md alone.
+
+## 2026-11-09 · #1015 · run 19568 · The fixed Kyverno build runs on both KubeCon clusters, drops no report, and step 4 prints the lab's PolicyReport line
+
+Run 18659's change (`388ac467`, `0eaf014b`, then `99a4bbbe`) is on staging and main, and the workflow pushed the three
+pinned digests. Both clusters run them: on watch-it-burn-community the admission, background and reports controllers
+started at 2026-11-08T23:22:32Z, on watch-it-burn-private at 23:34:33Z, each on its
+`ghcr.io/peopleforrester/watch-it-burn:...-v1.19.1-pr17085@sha256:` digest (`6889b414`, `89d0d815`, `90dac88c`), and
+each logs `version=v1.19.1-pr17085` at startup. The cleanup controller is stock v1.19.1, as designed. The kyverno
+Application is Synced and Healthy on both. This run changed no code: it is the live check run 18659 named under "Not
+yet run on a cluster".
+
+**A day after the rollout, read 2026-11-09 from 14:33Z** (metrics through `kubectl port-forward` to :8000; the
+apiserver's pod proxy to :8000 hung past two minutes on community, so it was not used):
+
+| | community reports | community admission | private reports | private admission |
+|---|---|---|---|---|
+| `kyverno_breaker_total` | 10736 | 283 | 22783 | 285 |
+| `kyverno_breaker_drops_total` | not exported (0) | not exported (0) | not exported (0) | not exported (0) |
+
+The drops counter is created on its first increment, so its absence after about 15 hours means not one report was
+dropped. On stock v1.19.1 the same read gave 26085 of 26403 dropped on community's reports controller and 2580 of 2831 on
+private's admission controller. No container logs a `Watch failed` or `too old resource version` line. The
+`kyverno-reports-controller` lease is held by the running pod and renewed (community 14:37:37Z, private 14:37:53Z).
+Every Pod in agent created since the rollout has a PolicyReport: 11 of 11 on community, the newest Pod from
+13:41:21Z, and 12 of 13 on private, where the one without was a Joker Pod created at 14:37:43Z, seconds before the
+read, with 54 EphemeralReports in flight. The newest PolicyReport in agent is from 13:42:01Z on community and 14:01:35Z
+on private.
+
+**Step 4, live.** `CONTEXT=watch-it-burn-community python3 -u verify/test_kyverno_cel_live.py`, exit 0, at about
+14:40Z. It waited on the guard lock (`agent/wib-guard-lock`) while run 19566's kubecon probe held it; the probe switched
+guardrails off before it let go, so this check started with deny-external-registries and restrict-image-registries both
+in Audit, agent-sa and workshop-mcp allowed to create Deployments, and the lock held by this check until after its
+restore. What it printed for step 4:
+
+```
+== 4. Audit admits the villain, and the lab's jq names the rule (run 5a7a37) ==
+  PASS  restrict-image-registries set to Audit (the lab's starting state)
+  PASS  the villain Deployment is admitted as agent-sa while the wall is Audit
+  PASS  the lab's policyreport jq prints 'restrict-image-registries: Images must come from allowed registries: t'...
+```
+
+Steps 1 to 7 passed, as did `the guard lock was held for the whole check` and `no guardrails switch ran on the cluster
+while the check ran`. The restore put restrict-image-registries back to `['Audit']`, removed the Challenge 1
+NetworkPolicies it had applied and deleted its `wib.test/run=5a7a37` Deployments, so the cluster is as it was found:
+guardrails off. The `agent/terminal-auth` Secret was not read or touched.
+
+**Tests run.** No file but this entry changed, so no offline or tier test reads it beyond the prose gate, which was run
+on this entry. `verify/test_kyverno_counter_fix.py` and the scoped E2E command were green at run 18659's `0eaf014b` and
+are left to validation.
