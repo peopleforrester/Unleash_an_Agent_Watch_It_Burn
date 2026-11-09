@@ -6618,6 +6618,30 @@ reads:
     - scripts/reload-routes.sh
     - verify/datadog-orgs.sh
     - verify/no-cloud.sh
+  test_presenter_ticket_live.py:
+    - agent
+    - agent/desk-report-token
+    - challenges/c3-secret-grep/agent-prompt.txt
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/bootstrap/apps/kubearmor.yaml
+    - gitops/workshop-agent/agent.yaml
+    - images/workshop-mcp/Dockerfile
+    - verify/agent_probe.py
+    - verify/desk_ticket_live.py
+    - verify/guard_lease.py
+    - verify/kubecon_probe.py
+    - verify/no-cloud.sh
+    - verify/no_cloud.py
+    - verify/presenter_ticket_live.py
+    - verify/support_desk_hosts.py
+    - verify/topic_cases.py
   test_presenter_ticket_range.py:
     - gitops/ai-layer/console.conf
     - gitops/ai-layer/resources.yaml
