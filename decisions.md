@@ -44989,3 +44989,76 @@ found. The `agent/terminal-auth` Secret was neither read nor written.
 
 **Tests.** Only the two offline drift tests above were run by hand. The scoped suite for this change, which touches
 only decisions.md, is left to validation, as the issue's Notes ask. No dependency was added.
+## 2026-11-09 · #1223 · run 19437 · #1215's row cleanup runs live: the desk check, the community probe and the C3 live test leave the one page as found
+
+`verify/prior-drafts.sh 1223 origin/staging` printed `NONE`. Both clusters' `ai-layer` read Synced and Healthy, at
+`429d97e1` (community) and `c7fdcdb1` (private), each after `83a81662`, so the deployed desk has `/desk-forget`: a POST
+to `https://support.burritobot.co/desk-forget` from outside answered 403, not the 404 run 18753 read.
+
+**The desk check was red first, and the fault was the script's.** At 06:45:46 UTC the first run of
+`python3 verify/one_desk_live.py --community-context watch-it-burn-community --private-context watch-it-burn-private
+--kubeconfig "$KUBECONFIG" --profile accen-dev` filed HC-2311, read it in both tool pods and deployed both ConfigMaps,
+then printed `FAIL page the one page does not list each check row under its cluster: {'community': None, 'private':
+None} (rows: {})` and `ONE DESK LIVE RED`, exit 1. Its cleanup still ran: both ConfigMaps deleted, `removed 0 row(s)`,
+HC-2311 forgotten, the page `[]`. The community desk's log showed `/submit` and the two `/desk-forget` POSTs but no
+`/landed` at all, and the private `desk-relay` passed on no report either. `deploy_app` reports its row from a daemon
+thread (`_report` in `gitops/ai-layer/workshop-mcp-server.py`), and the script calls it in a one-shot `python3 -c` in
+the tool pod, whose exit kills the thread before it sends. Run 18753 wrote the script from run 18737's by-hand check
+and could not run it live, so nothing had caught this.
+
+**The change.** `verify/one_desk_live.py`'s `DEPLOY_TOOL` now prints `deploy_app`'s answer and then joins each thread
+the call started, for up to `REPORT_JOIN_S` (10 s) each, the report among them. A `threading.Timer`, a room Joker's
+scale-down, is left to die with the process as before; a ConfigMap arms none. The deployed server is unchanged.
+`verify/test_live_check_cleanup.py` adds three checks: it runs `DEPLOY_TOOL`'s own code in a fresh interpreter
+against a stand-in `server` whose `deploy_app` reports from a daemon thread after 0.5 s and arms a 600 s daemon Timer,
+and holds that the report prints, the Timer does not, and the call ends within `REPORT_JOIN_S`. With the old
+`DEPLOY_TOOL` put back, the report check fails (`rc 0: 'deployed ConfigMap/desk-check-t1223-community\n'`).
+
+**What the live checks printed.**
+
+1. The desk check, with the fix, at 06:48:17 UTC. The page read `[]` before:
+
+       PASS  filed    the public desk filed HC-1517
+       PASS  read     community: read_support_ticket(HC-1517) printed the ticket
+       PASS  read     private: read_support_ticket(HC-1517) printed the ticket
+       PASS  deploy   community: deploy_app deployed ConfigMap/desk-check-064817-community
+       PASS  deploy   private: deploy_app deployed ConfigMap/desk-check-064817-private
+       PASS  page     the one page lists desk-check-064817-community (community), desk-check-064817-private (private)
+       PASS  cleanup  community: ConfigMap/desk-check-064817-community deleted (or never made)
+       PASS  cleanup  private: ConfigMap/desk-check-064817-private deleted (or never made)
+       PASS  cleanup  the one desk no longer holds the check's rows or ticket HC-1517
+       PASS  gone     community: ConfigMap/desk-check-064817-community is not on the cluster
+       PASS  gone     private: ConfigMap/desk-check-064817-private is not on the cluster
+       PASS  gone     the one page lists no check row
+       12 checks: 12 PASS, 0 FAIL
+       ONE DESK LIVE GREEN
+
+   with `removed 2 row(s) of desk-check-064817-community, desk-check-064817-private from the one page on
+   watch-it-burn-community`, exit 0. Then `deployments.json` read `[]`, byte for byte what it read before (`cmp`),
+   the private desk's own page read `[]`, HC-1517 and HC-2311 answered 404 and HC-666 200.
+
+2. `COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_kubecon_c3_live.py`, 06:49 to 06:50 UTC, holding
+   and then releasing `wib-guard-lock` on the community cluster: 10 PASS lines, `probe beat c6-lands passes:
+   Challenge 3: HC-666 lands joker-agatha-the-banshee with Kyverno on (a trusted registry)`, `the probe left no
+   joker-agatha-the-banshee behind`, and `All live Challenge 3 probe checks passed.`, exit 0. One model call. The page
+   read `[]` after.
+
+3. The Night Before probe, community: `python3 verify/kubecon_probe.py community attackme.burritobot.co --context
+   watch-it-burn-community --switch-context watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile accen-dev`,
+   ending 06:54:37 UTC: `20 beats: 20 PASS, 0 FAIL`, `KUBECON PROBE GREEN`, exit 0, `spend on attackme.burritobot.co:
+   $0.4821 -> $0.5674 over 9 model calls`. Its Challenge 3 beat printed `read_support_ticket(HC-666), then
+   deploy_app(joker-agatha-the-banshee): joker-agatha-the-banshee Deployment created, as the wall shows`, its 2A beat
+   `removed tron-game and its row again`, and its last beat `AI guards off and the four Kubernetes guardrails off on
+   watch-it-burn-community, watch-it-burn-private: the stage starts clean`. Then `deployments.json` read `[]`: no
+   `joker-agatha-the-banshee` row. The admin probe was not run; the criterion asks for one of the two.
+
+**Left as found.** Neither cluster has a `desk-check-*` ConfigMap or a `joker-agatha-the-banshee` Deployment. The one
+Joker on either is `joker-ichabod-the-werewolf` on watch-it-burn-community, 0 of 0 replicas, which run 18753 found
+and left; it was left again. Both `ai-layer` Applications read Synced and Healthy after. No Secret was read or written,
+`agent/terminal-auth` included. About 11 model calls were spent on the public bot.
+
+**Not yet run on a cluster.** None: this change is a verify script's, which no cluster runs, and it was run live here.
+
+**Tests (run 19437).** `python3 verify/test_live_check_cleanup.py`, run alone: `All live check cleanup checks
+passed.`, exit 0. The prose gate printed `prose gate: pass`. The whole Test and E2E commands were not
+run; validation runs the tests that read the changed files. No dependency was added.
