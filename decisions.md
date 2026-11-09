@@ -46844,11 +46844,17 @@ and C7 names `wib-stage-c<n>-attack-<stamp>` on Past 7 Days after its private-bo
 that the page names no saved view and no Challenge N tab (with a self-check that the old wording is caught), and that
 the control, Challenge 2's trace and the `c3-fixed` and `c3-pii` seeds carry their session ids.
 `verify/test_kubecon_seg4_flow.py`'s BLOCK_ORDER and KEPT read the new words, and its `_trace` cut is on
-`<b>The trace, after the attack`, checked first as an anchor. Both passed. `verify/test_scope_tests.py` failed on map
-drift from run 19479's commit (`test_kubearmor_config_tracked.py` reads
-`policies/kyverno/require-resource-limits.yaml`); `python3 verify/scope_tests.py write` added that one read and the
-test then passed. The prose gate passed. The whole Test and E2E commands were not run; validation runs the tests
-that read the changed files.
+`<b>The trace, after the attack`, checked first as an anchor. Both passed. The prose gate passed.
+
+**Run 19541, resuming run 19524 after its tests gate failed.** The gate's one failure,
+`test_kubearmor_config_tracked.py`, was red at run 19524's base, not from this change: it still held #1235's
+namespaceSelector on require-resource-limits, which #1236 replaced with a matchCondition (#1264). Staging fixed it in
+ea520974, with the same scope-map line run 19524 had added, so the branch was rebased on staging 53dd40b7 and that
+scope-map commit dropped as already applied. Then `test_kubearmor_config_tracked.py`, `test_instructor_brief.py`,
+`test_kubecon_seg4_flow.py` and `test_scope_tests.py` each passed alone, and the scoped Test command,
+`HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)" bash verify/run-tests.sh`, ran `267 tests ran`, scoped to
+267 of 424, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `exit=0`, log `/var/lib/hecaton/runs/19541/run-tests.log`. The
+E2E command was not run; validation runs the tests that read the changed files.
 
 **Live.** Before promotion, watch-it-burn-private's `agent/console-src-*` ConfigMap serves the old page ("saved view"
 and "Datadog Challenge 3 tab" present, no `wib-stage-c3-attack`); watch-it-burn-community carries no `kubecon.html`
