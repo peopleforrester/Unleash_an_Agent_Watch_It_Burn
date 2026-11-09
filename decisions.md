@@ -46920,3 +46920,12 @@ and "Datadog Challenge 3 tab" present, no `wib-stage-c3-attack`); watch-it-burn-
 ConfigMap. Not yet run on a cluster: after Argo CD syncs the promoted change, the private cluster's `kubecon.html`
 in `agent/console-src-*` names no "saved view" and no "Datadog Challenge 3 tab" and does name
 `wib-stage-c3-attack-&lt;stamp&gt;`.
+
+**Run 19548 on #1263, the heavy gate red on staging f20e8cdb.** The gate's offline suite failed on two tests,
+`test_kubearmor_config_tracked.py` and `test_scope_tests.py`. Both reds are fixed on staging since f20e8cdb, with no
+change from this run: ea520974 brought `test_kubearmor_config_tracked.py` to the matchCondition #1236 put on
+require-resource-limits in place of #1235's namespaceSelector (#1264), and 964fa0af gave its scope-map entry the
+policy file it reads, the drift `test_scope_tests.py` failed on. On base a6dc70db each passed alone:
+`python3 verify/test_kubearmor_config_tracked.py` printed `All KubeArmor config tracking checks passed.` and
+`python3 verify/test_scope_tests.py` printed `ALL PASS`, both exit 0. The E2E command was not run in the run;
+hecaton's gate runs it on promotion. No live check: this change touches decisions.md alone.
