@@ -1706,6 +1706,22 @@ reads:
     - gitops/ai-layer/web/index.html
     - gitops/ai-layer/web/skin.js
     - gitops/ai-layer/web/skins.js
+  test_chat_wide_font_e2e.py:
+    - facilitation/kubecon-na-2026-audience-qr.svg
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - images/llm-guard
+    - images/workshop-mcp/Dockerfile
+    - scripts/audience-qr.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/ci_chromium_libs.py
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
+    - verify/python.lock
+    - verify/test_chat_pane_overlap_e2e.py
+    - verify/test_chat_phone_screen_e2e.py
+    - verify/test_mobile_titles_e2e.py
   test_check_inventory_ingredient.py:
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py

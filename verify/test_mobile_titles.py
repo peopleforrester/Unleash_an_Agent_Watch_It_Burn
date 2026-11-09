@@ -9,7 +9,8 @@ below 760px the bar is one row, the card header one compact row, the tagline fol
 
 This is the CSS and markup half, which runs anywhere. The rendered halves, which measure the boxes in Chromium, are
 verify/test_mobile_titles_e2e.py (the title bars at phone widths, with a wide-font copy) and
-verify/test_chat_phone_screen_e2e.py (the whole phone screen with a long reply) in the E2E tools tier. The lab is not
+verify/test_chat_phone_screen_e2e.py (the whole phone screen with a long reply) in the E2E tools tier, and
+verify/test_chat_wide_font_e2e.py runs both, with the chat-pane overlap test, on DejaVu fonts alone (#1253). The lab is not
 a phone surface (decisions.md, #387) and nothing here touches lab.html.
 """
 from __future__ import annotations
@@ -80,18 +81,36 @@ check("the page carries its own fit script for the header buttons", bool(fit))
 check("it sits right after the header, before event.js and the page's main script",
       0 <= PAGE.find("</header>") < fit_at < PAGE.find('<script src="event.js"></script>'))
 check("it measures the header buttons", "document.querySelectorAll('body>header a.hb')" in fit)
-check("on a phone the bar counts as overflowing when it is wider than its box",
-      "window.matchMedia('(max-width:760px)')" in fit and "(phone.matches && bar.scrollWidth>bar.clientWidth)" in fit)
+check("at any width the bar counts as overflowing when it is wider than its box (#1253)",
+      "window.matchMedia('(max-width:760px)')" in fit and "return bar.scrollWidth>bar.clientWidth ||" in fit)
 check("a button counts as overflowing when its label is wider than its box", "a.scrollWidth>a.clientWidth" in fit)
-check("on a phone that overflows, the bar switches to icons",
-      "if(phone.matches && over()) bar.classList.add('hbicons');" in fit)
+steps = ["if(over()) bar.classList.add('hbnodom');", "if(phone.matches && over()) bar.classList.add('hbicons');",
+         "if(over()) bar.classList.add('hbtight');",
+         "while(px>8 && over()){ px-=0.5; hb.forEach(function(a){ a.style.fontSize=px+'px'; }); }"]
+at = [fit.find(s) for s in steps]
+check("while it overflows the bar drops its domain, then on a phone switches to icons, then closes its gaps, then "
+      "all the buttons step down together, half a pixel at a time, never below 8px, in that order (#1253)",
+      -1 not in at and at == sorted(at))
+check("those classes drop the domain and close the bar's padding and gaps",
+      "header.hbnodom .brand .dom{display:none}" in PAGE
+      and "header.hbtight{padding-left:8px;padding-right:8px;gap:4px}" in PAGE
+      and "header.hbtight a.hb{margin-left:2px;padding-left:6px;padding-right:6px}" in PAGE)
 check("each fit starts again from the labels and the CSS size",
-      "bar.classList.remove('hbicons');" in fit and "hb.forEach(function(a){ a.style.fontSize=''; });" in fit)
-check("then all the buttons step down together, half a pixel at a time, never below 8px",
-      "while(px>8 && over()){ px-=0.5; hb.forEach(function(a){ a.style.fontSize=px+'px'; }); }" in fit)
-check("it fits again on a resize", "window.addEventListener('resize', fit);" in fit)
-check("and once the main script has hidden the public bot's buttons",
-      "document.addEventListener('DOMContentLoaded', fit);" in fit)
+      "bar.classList.remove('hbnodom','hbicons','hbtight');" in fit
+      and "hb.forEach(function(a){ a.style.fontSize=''; });" in fit)
+check("it fits again on a resize", "window.addEventListener('resize', fitAll);" in fit)
+check("and once the main script has hidden the public bot's buttons and shown the witch name",
+      "document.addEventListener('DOMContentLoaded', fitAll);" in fit and "function fitAll(){ fit(); fitWitchLine(); }" in fit)
+
+print("== the witch line stays one line on a wide font where it can (#1253) ==")
+check("on a phone a wrapped witch line steps the name and its button down together, never below 9px",
+      "if(!phone.matches || name.hidden || roll.hidden) return;" in fit
+      and "while(px>9 && wraps()){ px-=0.5; name.style.fontSize=px+'px'; roll.style.fontSize=(px-gap)+'px'; }" in fit)
+check("a line that still wraps at 9px goes back to the CSS size", "if(wraps()){ name.style.fontSize=''; "
+      "roll.style.fontSize=''; }" in fit)
+check("it fits again after a re-roll", "e.target.closest('.chathead .newwitch')) fitWitchLine();" in fit)
+check("it sets only the size on the re-roll button, never its text, title or label (#762)",
+      set(re.findall(r"\broll\.(\w+(?:\.\w+)?)", fit)) == {"style.fontSize", "hidden", "getBoundingClientRect"})
 
 print("== the chat card's header on a phone is one compact row (#1214) ==")
 card = media_block("@media(max-width:760px)", ".chathead{display:grid")

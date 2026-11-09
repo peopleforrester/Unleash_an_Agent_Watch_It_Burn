@@ -64,6 +64,15 @@
     header.hbicons a.hb{font-size:15px;line-height:1;padding:6px 8px}
     header.hbicons a.hb .hbl{display:none}
   }
+  /* THE BAR'S STEPS FOR A WIDE FONT (#1253). In DejaVu Sans, about 15% wider than the Liberation Sans and Roboto
+     the bar was laid out in, the private bot's brand, domain and four labels ran 29px past a 768px screen, and at
+     320px the icons ran past the edge under the wide-font copy of verify/test_mobile_titles_e2e.py. The fit script
+     below takes these classes in turn, only while the bar still runs past its edge: .hbnodom drops the domain at
+     any width (the address bar shows it), then on a phone .hbicons, then .hbtight closes the bar's padding and the
+     gaps between its buttons, and only then do the buttons step down in size. */
+  header.hbnodom .brand .dom{display:none}
+  header.hbtight{padding-left:8px;padding-right:8px;gap:4px}
+  header.hbtight a.hb{margin-left:2px;padding-left:6px;padding-right:6px}
   select{font:inherit;font-weight:700;padding:7px 10px;border-radius:8px;border:0;background:#fff;color:var(--ink);cursor:pointer}
   .cost{font-variant-numeric:tabular-nums;font-weight:700;font-size:0.81rem;background:rgba(255,255,255,.16);padding:5px 10px;border-radius:8px}
   /* Per-control badges: a badge APPEARS only when its control is measured ON (no grayed-out
@@ -328,38 +337,66 @@
          event.js (#451); do not edit an event's URL in here. -->
     <a class="hb" id="fbbtn" href="https://feedback.burritobot.co/quick?context=Challenges&amp;source=burritobot" target="_blank" rel="noopener" aria-label="Feedback" title="Feedback"><span class="hbi" aria-hidden="true">&#128172;</span><span class="hbl"> Feedback</span></a>
   </header>
-  <!-- HEADER BUTTONS THAT FIT ANY FONT (#1047), ON ONE ROW ON A PHONE (#1214). The CSS size stays the first
-       choice. Below 760px the bar is one row (#1214): where the brand and the labelled buttons run past the
-       bar's edge, the bar takes .hbicons and each button shows its icon alone. Then, where a label or the row
-       still overflows, all the buttons step down together, half a pixel at a time, never below 8px (#1047:
-       four labels across a 360px phone fit in Liberation Sans and ran 4px past in DejaVu Sans). Above 760px
-       only a label wider than its own button counts, as before, which a desktop's buttons never are. It runs
-       again on a resize, once the fonts load, and once the page's main script has run, since that hides the
-       Terminal and Datadog buttons on the public bot (#645, #647), which can leave room for the labels.
-       This is its own script, not part of the page's main one below: verify/chat-saved-harness.js runs
-       that one in a stub DOM with no layout. -->
+  <!-- HEADER BUTTONS THAT FIT ANY FONT (#1047), ON ONE ROW ON A PHONE (#1214), AND ON A WIDE FONT (#1253). The CSS
+       size stays the first choice. The bar counts as overflowing when it is wider than its box, at any width, or
+       when a label is wider than its own button. While it overflows, the fit takes one step at a time and stops
+       at the first that fits: .hbnodom drops the brand's domain (#1253: the private bot's bar ran 29px past a
+       768px screen in DejaVu Sans), then below 760px .hbicons shows each button's icon alone (#1214), then
+       .hbtight closes the bar's padding and gaps (#1253: the icons ran past a 320px screen on the widest fonts),
+       and last all the buttons step down together, half a pixel at a time, never below 8px (#1047: four labels
+       across a 360px phone fit in Liberation Sans and ran 4px past in DejaVu Sans). A desktop bar in Liberation
+       Sans or DejaVu Sans fits as it is and takes no step.
+       THE WITCH LINE ON ONE LINE (#1253). On a phone the witch name and its "Get a new witch name" button are one
+       short line under the card header's row (#1214). In DejaVu Sans the widest name and the button take 358px,
+       and a 390px phone's card has about 324px, so the line wrapped and the card header grew from 72px to 91px.
+       Where the button would wrap under the name, both step down together, half a pixel at a time, the button
+       staying 1px under the name, never below 9px for the name; where the line still wraps at 9px (a 320px
+       phone) both go back to the CSS size and the line wraps, which #1214 allows there. Only the size changes:
+       the button's text, title and label are the main script's alone (#762).
+       Both fits run again on a resize, once the fonts load, and once the page's main script has run, since that
+       hides the Terminal and Datadog buttons on the public bot (#645, #647), which can leave room for the labels,
+       and shows the witch name; the witch line fits again after each re-roll. This is its own script, not part
+       of the page's main one below: verify/chat-saved-harness.js runs that one in a stub DOM with no layout. -->
   <script id="hbfit">
     (function fitHeaderButtons(){
       var bar=document.querySelector('body>header');
       var hb=[].slice.call(document.querySelectorAll('body>header a.hb'));
       var phone=window.matchMedia('(max-width:760px)');
       function over(){
-        return (phone.matches && bar.scrollWidth>bar.clientWidth) ||
+        return bar.scrollWidth>bar.clientWidth ||
                hb.some(function(a){ return a.scrollWidth>a.clientWidth; });
       }
       function fit(){
-        bar.classList.remove('hbicons');
+        bar.classList.remove('hbnodom','hbicons','hbtight');
         hb.forEach(function(a){ a.style.fontSize=''; });
         if(!hb.length) return;
+        if(over()) bar.classList.add('hbnodom');
         if(phone.matches && over()) bar.classList.add('hbicons');
+        if(over()) bar.classList.add('hbtight');
         if(!over()) return;
         var px=parseFloat(getComputedStyle(hb[0]).fontSize);
         while(px>8 && over()){ px-=0.5; hb.forEach(function(a){ a.style.fontSize=px+'px'; }); }
       }
+      function fitWitchLine(){
+        var name=document.querySelector('.chathead .witch'), roll=document.querySelector('.chathead .newwitch');
+        if(!name || !roll) return;
+        name.style.fontSize=''; roll.style.fontSize='';
+        if(!phone.matches || name.hidden || roll.hidden) return;
+        function wraps(){
+          var a=name.getBoundingClientRect(), b=roll.getBoundingClientRect();
+          return (b.top+b.bottom)/2>a.bottom || name.getClientRects().length>1;
+        }
+        if(!wraps()) return;
+        var px=parseFloat(getComputedStyle(name).fontSize), gap=px-parseFloat(getComputedStyle(roll).fontSize);
+        while(px>9 && wraps()){ px-=0.5; name.style.fontSize=px+'px'; roll.style.fontSize=(px-gap)+'px'; }
+        if(wraps()){ name.style.fontSize=''; roll.style.fontSize=''; }
+      }
+      function fitAll(){ fit(); fitWitchLine(); }
       fit();
-      window.addEventListener('resize', fit);
-      document.addEventListener('DOMContentLoaded', fit);
-      if(document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+      window.addEventListener('resize', fitAll);
+      document.addEventListener('DOMContentLoaded', fitAll);
+      document.addEventListener('click', function(e){ if(e.target.closest && e.target.closest('.chathead .newwitch')) fitWitchLine(); });
+      if(document.fonts && document.fonts.ready) document.fonts.ready.then(fitAll);
     })();
   </script>
 
