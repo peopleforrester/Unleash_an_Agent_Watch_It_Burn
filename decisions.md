@@ -45685,3 +45685,67 @@ and asserts the length is within `DRAIN_MAX`; the body past `DRAIN_MAX` is still
 verify/test_public_desk.py` exit 0 (the 4k and 512k refusals both read 413), `python3 verify/test_scope_tests.py` exit
 0. The scoped Test and E2E commands are left to hecaton's validation. No live check: the change touches only tests
 under `verify/`, its map and decisions.md, which no cluster runs. No dependency was added.
+## 2026-11-09 · #1235 · run 19479 · require-resource-limits leaves namespace kubearmor out, so a replaced node on watch-it-burn-private gets its KubeArmor enforcer back, and the Armed beat names a node with none
+
+**What #1235 asks.** In run 18849 (#1136) a node group replacement on watch-it-burn-private left the new node with
+no KubeArmor enforcer: the operator's snitch Job, which writes the `kubearmor.io/*` node labels the enforcer
+DaemonSet selects on, was refused by `require-resource-limits` (Deny at all times there) through Kyverno's autogen
+Job rule, which #1081's LimitRange cannot fill. The labels were put on the node by hand. `verify/prior-drafts.sh 1235
+origin/staging` printed NONE and the issue had no comments.
+
+**The change.**
+- `policies/kyverno/require-resource-limits.yaml`: a `matchConstraints.namespaceSelector` of
+  `kubernetes.io/metadata.name NotIn [kubearmor]`. The issue suggested a `matchConditions` entry on
+  `request.namespace`; a namespaceSelector was chosen instead because the live cluster showed where Kyverno v1.19
+  puts it. Each ValidatingPolicy's namespaceSelector is copied onto its own webhook in
+  `kyverno-resource-validating-webhook-cfg` (for example `vpol.validate.kyverno.svc-fail-eea0006c` for
+  restrict-image-registries carries its `In [apps, agent]`), and the `require-resource-limits` webhook
+  (`svc-fail-d07fe444`) covers pods, daemonsets, deployments, replicasets, statefulsets, cronjobs and jobs. So the
+  API server never sends a kubearmor Job, DaemonSet or Pod to this policy, in admission or for any autogen kind, and
+  the other namespaces' policies already use this form. A `matchConditions` entry would have made the webhook a
+  fine-grained one and depended on autogen rewriting the condition per kind. Every other namespace stays in scope:
+  Beat 1's Deployment in an attendee namespace and the agent's Jobs still fail.
+- `verify/kubecon_probe.py`: `measure()` also reads `kubearmor_unenforced`, the Ready nodes with no Ready
+  `kubearmor-app=kubearmor` pod (`unenforced_nodes`), or None when either list is unreadable, and `judge_armed` fails
+  on either, naming the node: "no Ready KubeArmor enforcer on <node>". A missing enforcer now fails the Armed beat by
+  name, before Challenge 2 can read it as a recipe leak. The beat titles are unchanged.
+- Tests: `verify/test_kubearmor_config_tracked.py` holds the selector (one NotIn naming exactly the namespace the
+  kubearmor Application installs into, no matchLabels, objectSelector or matchConditions, rules still Pods alone);
+  `verify/test_kyverno_cel_policies.py` runs Kyverno's CLI on a limit-less Job and Pod in kubearmor (ignored) and the
+  same Job in agent (fails, the autogen Job rule); `verify/test_kubecon_probe.py` covers `unenforced_nodes`, the
+  cluster read and both new Armed failures; it and `verify/test_stage_traces.py` add the key to their fake
+  `measure()`. `python3 verify/scope_tests.py write` added the policy to `test_kubearmor_config_tracked.py`'s reads,
+  and one read already missing from another entry (`verify/support_desk_hosts.py`), which came from a commit already
+  on staging.
+
+**Live check on watch-it-burn-private and watch-it-burn-community (nothing changed).**
+- A server dry run of a limit-less Job in `kubearmor` on private, the snitch's shape:
+  `admission webhook "vpol.validate.kyverno.svc-fail-d07fe444" denied the request: Policy require-resource-limits
+  failed: CPU and memory resource limits are required on every container.` The same Job with cpu and memory limits:
+  `job.batch/r19479-snitch-dryrun created (server dry run)`. So no other policy refuses the snitch once this one
+  leaves the namespace out.
+- `kubectl apply --dry-run=server` of the changed policy on private was accepted, echoing the NotIn selector; the
+  live policy read `["Deny"]` with no selector, unchanged.
+- The operator's log on private still holds both `Cannot run snitch on node ip-10-0-90-162 ... ip-10-0-90-97` lines.
+  The node's nine `kubearmor.io/*` labels are still owned by manager `kubectl-label` at 2026-11-08T23:53:21Z, the
+  hand-put ones.
+- The new read, `KubeconCluster.kubearmor_unenforced()`, gave `[]` on both clusters: every Ready node has a Ready
+  enforcer today.
+
+**Not yet run on a cluster.** The policy reaches private through Argo CD once hecaton promotes this run. Then, on
+watch-it-burn-private: `kubectl get validatingwebhookconfiguration kyverno-resource-validating-webhook-cfg`
+showing `kubearmor` under NotIn on the `require-resource-limits` webhook; `kubectl -n kubearmor rollout restart
+deploy/kubearmor-operator`, which runs the snitch on every node at start, logging `Snitch was installed on node
+ip-10-0-90-97...`, and the node's `kubearmor.io/*` labels then owned by the snitch's manager in place of `kubectl-label`; the
+enforcer DaemonSet at one Ready pod per node; and the admin Night Before probe (`verify/kubecon_probe.py admin
+burritobot-private.burritobot.co --context watch-it-burn-private`) passing its Armed and
+`Challenge 2: recipe read blocked and alerted (KubeArmor)` beats. A real node replacement is not a run's to cause;
+the operator restart exercises the same snitch path.
+
+**Tests.** `python3 verify/test_kubearmor_config_tracked.py`, `python3 verify/test_kubecon_probe.py`, `python3
+verify/test_stage_traces.py` and `python3 verify/test_scope_tests.py` passed. The new selector check failed with the
+old policy put back. `bash verify/run-e2e-tools.sh test_kyverno_cel_policies.py`: `1 checks ran (the 1 tier tests
+named, no offline suite) in 1m20s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`, log
+`/var/lib/hecaton/runs/19479/kyverno-cel.log`; with the old policy put back its two kubearmor cases failed
+(`expected ignored, got fail`). The whole Test and E2E commands were not run; validation runs the tests that read the
+changed files. No dependency was added.
