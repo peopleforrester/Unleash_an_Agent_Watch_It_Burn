@@ -1574,6 +1574,39 @@ pin_bedrock_profiles() {
     [[ "${bad}" -eq 0 ]] || { record_fail "${name}:bedrock-profiles"; return 1; }
 }
 
+# The /chat code-of-conduct classifier (#1279). The cluster root creates this cluster's Bedrock guardrail and
+# publishes a version; its id is Bedrock's pick, so it reaches guard-proxy here, as agent/coc-guardrail, whose id,
+# version and region keys guard-proxy reads as BEDROCK_GUARDRAIL_ID, _VERSION and _REGION (gitops/ai-layer/
+# resources.yaml). A pod reads its env at start, so guard-proxy is restarted when the map changes, and only then:
+# the first pin after a bring-up, and a new version after a settings change. Not an Argo object, so selfHeal keeps it.
+COC_GUARDRAIL_CM=coc-guardrail
+
+pin_coc_guardrail() {
+    local name="$1" kcfg="$2" out want live
+    out="$(terraform -chdir="${CLUSTER_DIR}" output -state="${STATE_DIR}/${name}.tfstate" \
+        -json coc_guardrail 2>/dev/null || true)"
+    if ! jq -e 'type == "object" and (.id | type == "string" and length > 0)
+                and (.version | type == "string" and test("^[0-9]+$")) and (.region | type == "string")' \
+            >/dev/null 2>&1 <<<"${out}"; then
+        log "  ${name}: ${name}.tfstate has no coc_guardrail with a numbered version; re-apply the cluster so guard-proxy has its code-of-conduct classifier"
+        record_fail "${name}:coc-guardrail"; return 1
+    fi
+    want="$(jq -cS '{id, version, region}' <<<"${out}")"
+    live="$(KUBECONFIG="${kcfg}" kubectl -n agent get configmap "${COC_GUARDRAIL_CM}" -o json 2>/dev/null \
+        | jq -cS '.data // {}' 2>/dev/null || true)"
+    [[ "${live}" == "${want}" ]] && return 0
+    if ! jq -n --argjson d "${want}" --arg n "${COC_GUARDRAIL_CM}" \
+            '{apiVersion: "v1", kind: "ConfigMap", metadata: {name: $n, namespace: "agent"}, data: $d}' \
+            | KUBECONFIG="${kcfg}" kubectl apply -f - >/dev/null 2>&1; then
+        log "  ${name}: could not write agent/${COC_GUARDRAIL_CM}; guard-proxy has no code-of-conduct classifier to call"
+        record_fail "${name}:coc-guardrail"; return 1
+    fi
+    log "  ${name}: agent/${COC_GUARDRAIL_CM} names guardrail $(jq -r .id <<<"${want}") version $(jq -r .version <<<"${want}") in $(jq -r .region <<<"${want}"); restarting guard-proxy so it reads them"
+    KUBECONFIG="${kcfg}" kubectl -n agent delete pod -l app.kubernetes.io/name=guard-proxy \
+        --ignore-not-found --wait=false >/dev/null 2>&1 \
+        || log "  ${name}: the guard-proxy restart failed; it reads agent/${COC_GUARDRAIL_CM} on its next start"
+}
+
 # One repair, in its own subshell under errexit: repair_step <fn> <name> [args...]. An unguarded failure
 # inside a repair used to end the whole backgrounded converge_one job without a word. On 2026-10-28
 # repair_agent_tools did that on both KubeCon clusters, so repair_datadog never ran, nothing reached the
@@ -1599,6 +1632,7 @@ repair_one() {
     repair_step repair_env_order "${name}" "${kcfg}"
     # Not a step: it records its own ledger line when it fails, and a step would record a second one.
     pin_bedrock_profiles "${name}" "${kcfg}" || true
+    pin_coc_guardrail "${name}" "${kcfg}" || true
     repair_step repair_stuck_pods "${name}" "${kcfg}"
     repair_step repair_datadog "${name}" "${kcfg}" "${acct}"
     repair_step verify_one "${name}" "${kcfg}" "${acct}"
@@ -1733,6 +1767,7 @@ bootstrap_one() {
         bootstrap_student_aws "${name}" "${acct_profile}" "${kcfg}"
         bootstrap_terminal_auth "${name}" "${acct_profile}" "${kcfg}"
         pin_bedrock_profiles "${name}" "${kcfg}" || true
+        pin_coc_guardrail "${name}" "${kcfg}" || true
         # Arm on the PROFILE. This used to be gated on a round number, and an attendee cluster has none:
         # cmd_up leaves that spec field empty. So every attendee cluster received all ten Kyverno
         # policies from the full profile and none of them were ever flipped out of Audit. Measured
