@@ -32,6 +32,11 @@ When a probe is red, the guard-proxy events of the floor (`conduct_refused`, `co
 since the probes started are printed under it, to show whether the floor touched a turn. They are printed, not
 checked: a room turn the floor refused in that window would read the same.
 
+The guard lock. The test holds verify/guard_lease.py's lock on both clusters (run_held with the private cluster's
+guardrails peer) from before the start read until after the end read, so no other run switches a guard or a guardrail
+between them. Each probe it runs finds the hold in WIB_GUARD_LEASE and joins it rather than waiting on it. When another
+run keeps the lock for the whole wait (30 minutes by default), the test fails naming the holder, having read nothing.
+
 What it spends: both probe runs, about $0.25 to $0.45 of Bedrock over 24 model calls (run 19724 on #1267), which counts
 on /cost until the counter is reset. Each probe holds the guard lock on both clusters (verify/guard_lease.py) and leaves
 them at the start state. About 15 minutes, longer when another run holds a lock.
@@ -56,6 +61,7 @@ import yaml
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+import guard_lease  # noqa: E402
 import kubecon_probe as kp  # noqa: E402
 
 PROBE = HERE / "kubecon_probe.py"
@@ -329,8 +335,14 @@ def main() -> int:
 
     print(f"== #1267's criterion: the KubeCon probes green with the floor on and every guardrail off "
           f"({private_ctx}, {community_ctx}) ==", flush=True)
-    run_checks(LiveCluster(private_ctx, kubeconfig), LiveCluster(community_ctx, kubeconfig),
-               lambda role, host, ctx, switch: run_probe(role, host, ctx, switch, kubeconfig), check)
+    # The whole check holds the guard lock on both clusters (#1016): the private cluster's and the one its
+    # guardrails-peer Secret names, as the probe does. The start and end reads then see no other run's switch, and each
+    # probe, which inherits WIB_GUARD_LEASE, joins this hold instead of waiting on it, so no run gets in between.
+    body = lambda: run_checks(LiveCluster(private_ctx, kubeconfig), LiveCluster(community_ctx, kubeconfig),  # noqa: E731
+                              lambda role, host, ctx, switch: run_probe(role, host, ctx, switch, kubeconfig), check)
+    if not guard_lease.run_held(private_ctx, body, check, "verify/test_coc_floor_probes_live.py", with_peer=True,
+                                kubeconfig=kubeconfig):
+        return guard_lease.BUSY_EXIT
 
     print()
     if failures:
