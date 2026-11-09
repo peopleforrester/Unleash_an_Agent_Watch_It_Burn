@@ -546,7 +546,7 @@ spec:
       # the proxy without bumping this is a test failure rather than a silent no-op in the room.
       annotations:
         instrumentation.opentelemetry.io/inject-python: "watch-it-burn-python"
-        checksum/proxy-py: "a32927a1851b"
+        checksum/proxy-py: "5e0c8390277e"
     spec:
       # A dedicated ServiceAccount with a mounted token, so /controls can read the badge objects
       # (#197/#209). automountServiceAccountToken is TRUE here, unlike everywhere else in this bundle,
