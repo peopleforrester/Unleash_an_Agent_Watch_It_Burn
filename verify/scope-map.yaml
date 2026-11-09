@@ -8062,6 +8062,20 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/no-cloud.sh
+  test_sign_images_list.py:
+    - '**.json'
+    - '**.sh'
+    - '**.yaml'
+    - '**.yml'
+    - '*Dockerfile'
+    - '*Dockerfile.*'
+    - gitops/bootstrap/apps/kyverno.yaml
+    - images.lock
+    - policies/cosign/watch-it-burn.pub
+    - verify
+    - verify/ghcr_pull.py
+    - verify/sign-images.sh
+    - verify/wib_pins.py
   test_sister_tree.py:
     - CLAUDE.md
     - README.md
@@ -9635,6 +9649,7 @@ reads:
     - '*Dockerfile'
     - '*Dockerfile.*'
     - images.lock
+    - policies/cosign/watch-it-burn.pub
     - verify/ghcr_pull.py
     - verify/wib_pins.py
   test_wib_pins.py:

@@ -769,12 +769,6 @@ sites:
     lines: 1
     class: none
     why: a comment on sister_tree.py's empty bound, which names its clone of another repo; nothing is fetched (#1078)
-  verify/sign-images.sh:
-  - match: curl -sS
-    lines: 2
-    class: live
-    kind: registry
-    target: ghcr.io, for our own packages' tags, tokens and manifests
   verify/sister_tree.py:
   - match: '"clone", "--quiet"'
     lines: 1

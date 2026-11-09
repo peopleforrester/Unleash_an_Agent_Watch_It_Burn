@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# ABOUTME: Sign every image the manifests reference, in the format Kyverno can actually verify, and
-# ABOUTME: prove each signature before returning. Run this after any image build, before deploying.
+# ABOUTME: Sign every watch-it-burn digest images.lock and the manifests pin, by digest, in the format Kyverno can
+# ABOUTME: actually verify, and prove each signature before returning. Run this after any image build, before deploying.
 #
 # COSIGN v3 SIGNATURES DO NOT VERIFY UNDER KYVERNO 1.19. That is the reason this script pins a version.
 #
@@ -14,9 +14,19 @@
 # So: sign with v2 until Kyverno can read the new format. If this script is ever changed to use the
 # cosign on PATH, verify against the Kyverno CLI at the CLUSTER's version before believing it works.
 #
-# Usage: verify/sign-images.sh [--check]
-#   (no args)  sign every referenced image, then verify each one
-#   --check    verify only, sign nothing; exits non-zero if any image is unsigned
+# Usage: verify/sign-images.sh [--check|--list]
+#   (no args)  sign every pinned digest, then verify each one
+#   --check    verify only, sign nothing; exits non-zero if any digest is unsigned
+#   --list     print the digests it would sign, one per line, and nothing else; needs no cosign and no network
+#
+# The list is verify/wib_pins.py's (#1285), the one verify/test_wib_digests_signed.py checks: every
+# ghcr.io/peopleforrester/watch-it-burn...@sha256 digest images.lock's digest column holds, or a manifest pins, on an
+# image: key, a FROM or ARG, a shell variable, or a Helm values or kustomize block that splits it into repository and
+# tag. This script once found tags on image: keys and Dockerfile FROM/ARG lines and asked the registry which digest each
+# tag served now. That missed the Kyverno counter-fix builds, which gitops/bootstrap/apps/kyverno.yaml names as Helm
+# repository and tag values, and the llm-guard zero-shot model, pinned only in images.lock (#1282), and for a tag that
+# had moved it signed the new digest rather than the pinned one. Signing the pinned digest itself has neither fault.
+# verify/test_sign_images_list.py holds this list to wib_pins' offline.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "${HERE}/.." && pwd)"
@@ -26,7 +36,27 @@ KEY="${WIB_COSIGN_KEY:-${HOME}/secrets/cosign/watch-it-burn.key}"
 PWFILE="${WIB_COSIGN_PW:-${HOME}/secrets/cosign/watch-it-burn.pw}"
 COSIGN="${WIB_COSIGN:-cosign2}"
 CHECK_ONLY=0
-[[ "${1:-}" == "--check" ]] && CHECK_ONLY=1
+LIST_ONLY=0
+case "${1:-}" in
+    "") : ;;
+    --check) CHECK_ONLY=1 ;;
+    --list) LIST_ONLY=1 ;;
+    *) echo "usage: verify/sign-images.sh [--check|--list]" >&2; exit 2 ;;
+esac
+
+# Each line is "<registry>/<package>@sha256:<hex> <where it is pinned>". wib_pins.py exits 1, naming the source, when
+# images.lock or the manifests yield no digest: that is the reader broken, not a repo with nothing to sign.
+pins="$(python3 "${HERE}/wib_pins.py" refs "${REPO}")" || {
+    echo "verify/wib_pins.py could not read the pinned digests: the reader is broken, not the manifests" >&2
+    exit 1
+}
+mapfile -t lines <<<"${pins}"
+[[ -n "${pins}" && "${#lines[@]}" -gt 0 ]] || { echo "no pinned digests found: the reader is broken" >&2; exit 1; }
+
+if [[ "${LIST_ONLY}" -eq 1 ]]; then
+    for line in "${lines[@]}"; do echo "${line%% *}"; done
+    exit 0
+fi
 
 command -v "${COSIGN}" >/dev/null 2>&1 || {
     echo "missing ${COSIGN}. This must be cosign 2.x: see the header for why." >&2
@@ -39,55 +69,33 @@ case "${ver}" in
        exit 1 ;;
 esac
 
-# Every distinct tag of ours, from BOTH places one can be named:
-#
-#   - a manifest `image:` line, with the comment stripped first, so an '@sha256' inside a comment
-#     cannot be mistaken for a digest (that mistake once made a sweep report "none left" while two
-#     files were still unpinned);
-#   - a Dockerfile, where an image can arrive as a FROM or a build ARG and never appear in any
-#     manifest. llm-guard-model is exactly that: consumed by images/llm-guard/Dockerfile as
-#     ARG MODEL_IMAGE, so a manifest-only scan signed seven of our eight images and called it done.
-mapfile -t tags < <( {
-    # Not docs/research (spikes, never deployed: tool-pin was never built) nor .claude (other checkouts).
-    grep -rhE "^[[:space:]]*image:" "${REPO}" --include=*.yaml --exclude-dir=.git --exclude-dir=.claude \
-        --exclude-dir=research 2>/dev/null | sed 's/#.*//'
-    grep -rhE "^[[:space:]]*(FROM|ARG)[[:space:]]" "${REPO}"/images --include=Dockerfile 2>/dev/null | sed 's/#.*//'
-  } | grep -oE "${REGISTRY}:[A-Za-z0-9._-]+" \
-    | sed "s|${REGISTRY}:||" | sort -u)
-[[ "${#tags[@]}" -gt 0 ]] || { echo "no images found: the matcher is broken, not the manifests" >&2; exit 1; }
-
-token="$(curl -sS "https://ghcr.io/token?scope=repository:peopleforrester/watch-it-burn:pull&service=ghcr.io" \
-    | python3 -c 'import json,sys;print(json.load(sys.stdin)["token"])')"
-
 fail=0
-for tag in "${tags[@]}"; do
-    digest="$(curl -sS -D- -o /dev/null -H "Authorization: Bearer ${token}" \
-        -H 'Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json' \
-        "https://ghcr.io/v2/peopleforrester/watch-it-burn/manifests/${tag}" 2>/dev/null \
-        | grep -i '^docker-content-digest:' | tr -d '\r' | awk '{print $2}')"
-    if [[ -z "${digest}" ]]; then
-        printf '%-30s NOT IN THE REGISTRY\n' "${tag}"; fail=1; continue
-    fi
-    ref="${REGISTRY}@${digest}"
-    printf '%-30s ' "${tag}"
+for line in "${lines[@]}"; do
+    ref="${line%% *}"
+    at="${line#* }"
+    case "${ref}" in
+        "${REGISTRY}"*@sha256:*) : ;;
+        *) printf '%s  NOT A DIGEST OF OURS (%s)\n' "${ref}" "${at}"; fail=1; continue ;;
+    esac
+    printf '%s  ' "${ref}"
     if [[ "${CHECK_ONLY}" -eq 0 ]]; then
         # Sign the DIGEST, never the tag: the signature belongs to the artifact, not to a pointer.
         COSIGN_PASSWORD="$(cat "${PWFILE}")" "${COSIGN}" sign --key "${KEY}" --tlog-upload=false --yes "${ref}" \
-            >/dev/null 2>&1 && printf 'signed  ' || { printf 'SIGN FAILED\n'; fail=1; continue; }
+            >/dev/null 2>&1 && printf 'signed  ' || { printf 'SIGN FAILED  (%s)\n' "${at}"; fail=1; continue; }
     fi
     # --insecure-ignore-tlog matches the policy's rekor.ignoreTlog: verify the path the cluster uses.
     if "${COSIGN}" verify --key "${PUB}" --insecure-ignore-tlog "${ref}" >/dev/null 2>&1; then
-        echo "verified"
+        echo "verified  (${at})"
     else
-        echo "NOT VERIFIED"; fail=1
+        echo "NOT VERIFIED  (${at})"; fail=1
     fi
 done
 
 if [[ "${fail}" -ne 0 ]]; then
     echo
-    echo "At least one image is unsigned or unverifiable, and verify-image-signatures is Enforce," >&2
+    echo "At least one pinned digest is unsigned or unverifiable, and verify-image-signatures is Enforce," >&2
     echo "so a cluster would DENY it at admission. Fix before deploying." >&2
     exit 1
 fi
 echo
-echo "all ${#tags[@]} images signed and verified against policies/cosign/watch-it-burn.pub"
+echo "all ${#lines[@]} pinned digests signed and verified against policies/cosign/watch-it-burn.pub"

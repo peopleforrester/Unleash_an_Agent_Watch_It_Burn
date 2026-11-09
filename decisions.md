@@ -48532,3 +48532,35 @@ nothing is built or pulled), which brings the totals to 972 sites in 255 files a
 reads "every call site classed". The whole Test command is left to validation.
 
 **Live check.** None: the change touches only files under verify/ that no cluster runs. No dependency was added.
+## 2026-11-09 · #1285 · run 19682 · sign-images.sh signs the digests verify/wib_pins.py reads, by digest
+
+**What changed.** `verify/sign-images.sh` no longer builds its own list. It found tags on `image:` keys and Dockerfile
+FROM/ARG lines and asked ghcr.io which digest each tag served now, so it never saw the three Kyverno counter-fix builds
+`gitops/bootstrap/apps/kyverno.yaml` names as Helm repository and tag values, nor the llm-guard zero-shot model pinned
+only in images.lock (#1282), and for a moved tag it would have signed the new digest, not the pinned one. It now takes
+`python3 verify/wib_pins.py refs <repo>`, one `ghcr.io/<package>@sha256:<hex>` per line with where it is pinned, and
+signs and verifies each by digest. The reading that `verify/test_wib_digests_signed.py` did inline moved into
+`wib_pins.repo_pins()` with its check that both sources find something (`empty_reading()`), so the tier test checks
+the same list the script signs. A new `--list` mode prints the list with no cosign and no network. The script asks the
+registry nothing itself now, so its `verify/fetch-inventory.yaml` entry (two lines of class live) is gone. The cosign
+README says what the script signs.
+
+On staging at 79361915 the list is 13 digests: every tag the old matcher found was already pinned by digest, so the
+old set is inside the new one, and the new one adds the three Kyverno builds, the two llm-guard cpu.4 and cpu.5 rows and
+the zero-shot model, all six read from images.lock or the Helm values.
+
+**Tests.** `verify/test_sign_images_list.py` (new, offline) checks that `--list` prints exactly wib_pins' refs, each a
+digest, the three kyverno.yaml pins and the zero-shot row among them; then drives the script with a stub cosign 2.x
+that logs its arguments: each ref is signed once with the key, the password file and `--tlog-upload=false`, and
+verified once against `policies/cosign/watch-it-burn.pub` with `--insecure-ignore-tlog`, with no other image named;
+`--check` signs nothing; a ref the stub will not verify fails the run by name; a cosign 3.x is refused before any
+signing; the reader exits 1 on a checkout with nothing pinned. It passed, as did `test_wib_pins.py`,
+`test_image_signing.py`, `test_fetch_inventory.py` and `test_scope_tests.py`. `test_wib_digests_signed.py`, changed
+to read through `repo_pins()`, passed against ghcr.io: 13 digests, each served with its `.sig` tag. The whole Test and
+E2E commands are left to validation.
+
+**Not run.** The script itself with the workshop key: the key lives on netcup, not here. `verify/sign-images.sh
+--check` there, with cosign2, is the check of the key itself; the tier test above already finds every `.sig` tag.
+
+**Live check.** None: the change touches files under verify/ that no cluster runs, decisions.md and the cosign README,
+which no Argo CD Application sources. No dependency was added.

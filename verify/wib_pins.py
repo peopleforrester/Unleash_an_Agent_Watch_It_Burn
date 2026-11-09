@@ -1,18 +1,23 @@
 # ABOUTME: Finds every ghcr.io/peopleforrester/watch-it-burn digest images.lock or a manifest pins, and asks ghcr.io,
-# ABOUTME: with no credential, for each digest's cosign sha256-<digest>.sig tag (#1282). Shared by its two tests.
+# ABOUTME: with no credential, for each digest's cosign sha256-<digest>.sig tag (#1282). Its tests and sign-images.sh read it.
 """Kyverno's verify-image-signatures (policies/kyverno/verify-image-signatures.yaml) denies, at Pod admission on
 watch-it-burn-private, any image from ghcr.io/peopleforrester/watch-it-burn* that carries no cosign signature made
 with the workshop key. Kyverno 1.19 reads cosign v2's signature from the legacy sha256-<digest>.sig tag next to the
 image (the repo's signing script says why it signs with cosign v2), so a pinned digest with no such tag is one a cluster
 refuses. Run 19641 on #1276 found two unsigned web-terminal builds that nothing in the gate would have stopped.
 
-pins() reads images.lock rows and manifest text; unsigned() asks ghcr.io. Both take their inputs as arguments, so
-verify/test_wib_pins.py drives them on fixtures with a stub opener and verify/test_wib_digests_signed.py on the repo.
+lock_pins() and manifest_pins() read images.lock rows and manifest text; unsigned() asks ghcr.io. Each takes its input as
+an argument, so verify/test_wib_pins.py drives them on fixtures with a stub opener. repo_pins() reads them from a checkout,
+and is the one list both verify/test_wib_digests_signed.py checks and verify/sign-images.sh signs (#1285): run as
+`python3 verify/wib_pins.py refs <repo>`, it prints each pinned digest as ghcr.io/<package>@<digest> and where it is
+pinned, one per line, and exits 1 when images.lock or the manifests yield none.
 """
 from __future__ import annotations
 
 import json
+import pathlib
 import re
+import sys
 import urllib.error
 import urllib.request
 
@@ -59,6 +64,46 @@ def manifest_pins(text: str, where: str) -> dict[tuple[str, str], list[str]]:
         key = (m.group(2).rstrip("/"), m.group(3))
         out.setdefault(key, []).append(f"{where}:{_line(text, m.start(3))}")
     return out
+
+
+# Directories that are not the repo's files: git's own, the pinned tools, the ignored scratch (hecaton's TMPDIR sits
+# under tmp/, #1119), a package install and the tier's logs.
+NOT_TRACKED = {".git", ".tools", "tmp", "node_modules", ".e2e-logs", ".claude"}
+
+
+def repo_pins(repo: pathlib.Path) -> tuple[dict[tuple[str, str], list[str]], dict[tuple[str, str], list[str]]]:
+    """(images.lock's pins, the manifests' pins) in a checkout at <repo>. A manifest is a YAML, JSON, shell script or
+    Dockerfile outside NOT_TRACKED. A test's own fixtures (verify/test_*) are not manifests: verify/test_reset_bot.sh
+    pins a made-up digest."""
+    lock_file = repo / "images.lock"
+    lock = lock_pins(lock_file.read_text(encoding="utf-8")) if lock_file.is_file() else {}
+    files = sorted({*repo.rglob("*.yaml"), *repo.rglob("*.yml"), *repo.rglob("*.json"), *repo.rglob("*.sh"),
+                    *repo.rglob("Dockerfile"), *repo.rglob("Dockerfile.*")})
+    manifests: dict[tuple[str, str], list[str]] = {}
+    for p in files:
+        rel = p.relative_to(repo)
+        if NOT_TRACKED & set(rel.parts) or (rel.parts[0] == "verify" and rel.name.startswith("test_")) \
+                or not p.is_file():
+            continue
+        manifests = merge(manifests, manifest_pins(p.read_text(encoding="utf-8", errors="replace"), str(rel)))
+    return lock, manifests
+
+
+def empty_reading(lock: dict, manifests: dict) -> list[str]:
+    """Each source must find something, so a reworded row or a moved manifest reads as that and not as a green check
+    or a signing run that signs nothing."""
+    out = []
+    if not lock:
+        out.append("images.lock: no ghcr.io/peopleforrester/watch-it-burn row with a digest; the row pattern in "
+                   "verify/wib_pins.py no longer reads it")
+    if not manifests:
+        out.append("no manifest pins a ghcr.io/peopleforrester/watch-it-burn digest; the patterns in "
+                   "verify/wib_pins.py no longer read them")
+    return out
+
+
+def ref(package: str, digest: str) -> str:
+    return f"{HOST}/{package}@{digest}"
 
 
 def merge(*found: dict[tuple[str, str], list[str]]) -> dict[tuple[str, str], list[str]]:
@@ -112,3 +157,22 @@ def unsigned(pinned: dict[tuple[str, str], list[str]], opener=None) -> list[str]
         if why:
             problems.append(f"{HOST}/{package}@{digest} ({at}): no {sig_tag(digest)} tag ({why})")
     return problems
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) != 3 or argv[1] != "refs":
+        print("usage: wib_pins.py refs <repo>", file=sys.stderr)
+        return 2
+    lock, manifests = repo_pins(pathlib.Path(argv[2]).resolve())
+    problems = empty_reading(lock, manifests)
+    for p in problems:
+        print(p, file=sys.stderr)
+    if problems:
+        return 1
+    for (package, digest), wheres in sorted(merge(lock, manifests).items()):
+        print(f"{ref(package, digest)} {','.join(sorted(set(wheres)))}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

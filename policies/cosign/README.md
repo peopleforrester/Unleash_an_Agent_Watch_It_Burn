@@ -67,7 +67,8 @@ cosign verify --key policies/cosign/watch-it-burn.pub --insecure-ignore-tlog \
   ghcr.io/peopleforrester/watch-it-burn@sha256:<digest>
 ```
 
-`verify/sign-images.sh` does both for every tag the manifests reference, and is the thing to run after
-any image build.
+`verify/sign-images.sh` does both for every `ghcr.io/peopleforrester/watch-it-burn` digest that images.lock or a
+manifest pins, as `verify/wib_pins.py` reads them (Helm repository/tag values included), by digest, and is the thing
+to run after any image build. `verify/sign-images.sh --list` prints that list (#1285).
 
 **An unsigned image is now denied at admission.** Sign before you deploy, not after the pod fails.

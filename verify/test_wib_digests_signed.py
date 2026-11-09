@@ -13,6 +13,7 @@ JSON, shell script or Dockerfile that names ghcr.io/peopleforrester/watch-it-bur
 kustomize block that splits it into repository and tag. A test's own fixtures (verify/test_*) are not manifests:
 verify/test_reset_bot.sh pins a made-up digest. For each digest it does an anonymous HEAD of the image and of
 sha256-<digest>.sig, the tag cosign v2 writes and Kyverno 1.19 reads, and fails naming each one ghcr.io does not serve.
+verify/wib_pins.py's repo_pins() does the reading, and verify/sign-images.sh signs what it reads (#1285).
 
 A 200 on the .sig tag says a signature was pushed, not that the workshop key made it. The signing script's --check
 mode (cosign 2.x) and the Kyverno CLI check the key. verify/test_wib_pins.py holds the reading and the verdict to
@@ -25,30 +26,11 @@ import sys
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "verify"))
-from wib_pins import lock_pins, manifest_pins, merge, unsigned  # noqa: E402
+from wib_pins import empty_reading, merge, repo_pins, unsigned  # noqa: E402
 
-# Directories that are not the repo's files: git's own, the pinned tools, the ignored scratch (hecaton's TMPDIR sits
-# under tmp/, #1119), a package install and the tier's logs.
-NOT_TRACKED = {".git", ".tools", "tmp", "node_modules", ".e2e-logs", ".claude"}
-
-lock = lock_pins((REPO / "images.lock").read_text(encoding="utf-8"))
-files = sorted({*REPO.rglob("*.yaml"), *REPO.rglob("*.yml"), *REPO.rglob("*.json"), *REPO.rglob("*.sh"),
-                *REPO.rglob("Dockerfile"), *REPO.rglob("Dockerfile.*")})
-manifests = {}
-for p in files:
-    rel = p.relative_to(REPO)
-    if NOT_TRACKED & set(rel.parts) or (rel.parts[0] == "verify" and rel.name.startswith("test_")) or not p.is_file():
-        continue
-    manifests = merge(manifests, manifest_pins(p.read_text(encoding="utf-8", errors="replace"), str(rel)))
-
-failures: list[str] = []
-# Each source must find something, so a reworded row or a moved manifest reads as that and not as a green check.
-if not lock:
-    failures.append("images.lock: no ghcr.io/peopleforrester/watch-it-burn row with a digest; the row pattern in "
-                    "verify/wib_pins.py no longer reads it")
-if not manifests:
-    failures.append("no manifest pins a ghcr.io/peopleforrester/watch-it-burn digest; the patterns in "
-                    "verify/wib_pins.py no longer read them")
+# The same reading verify/sign-images.sh signs (#1285), so the list this checks is the list that script signs.
+lock, manifests = repo_pins(REPO)
+failures: list[str] = empty_reading(lock, manifests)
 pinned = merge(lock, manifests)
 print(f"{len(pinned)} digest(s) of ghcr.io/peopleforrester/watch-it-burn: {len(lock)} pinned in images.lock, "
       f"{len(manifests)} in manifests")
@@ -63,8 +45,7 @@ if failures:
     print(f"FAILED: {len(failures)} pinned digest(s) unserved or unsigned, or a reading that found nothing:")
     for f in failures:
         print(f"  - {f}")
-    print("Sign each digest with the workshop key and cosign 2.x, as the repo's signing script does: "
-          "cosign2 sign --key ~/secrets/cosign/watch-it-burn.key --tlog-upload=false <image>@<digest>, "
-          "then pin it.")
+    print("Sign them with the workshop key and cosign 2.x: verify/sign-images.sh signs and verifies every digest "
+          "this reads, by digest.")
     sys.exit(1)
 print("Every pinned watch-it-burn digest is served with its sha256-<digest>.sig tag, anonymously.")
