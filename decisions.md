@@ -48054,3 +48054,10 @@ only the readiness gate. The first rollout after it is the one the criterion ask
 **Not yet run on a cluster.** `CONTEXT=watch-it-burn-private python3 verify/test_console_rollout_drain_live.py` as a
 cluster admin, after the ai-layer and namespaces Applications have synced this change; or, by any run, `ROLLOUT=watch`
 with the same command, started before the next promotion that rolls the console lands.
+
+**Run 19612, resuming run 19563.** Run 19563's gate failed on `test_fetch_inventory.py` alone: the live test's
+`urlopen` call in `verify/test_console_rollout_drain_live.py` had no entry in `verify/fetch-inventory.yaml`. It is
+now classed `live`, kind `lab-endpoint`, beside test_audience_path_live.py's. `python3 verify/test_fetch_inventory.py`
+and `python3 verify/test_console_rollout_drain.py` each exit 0. The "--context is empty" line in that gate's output is
+test_burritobot_cluster_live.py's argument check printing under a passing test, not a failure. The live rollout is
+still not run, for the reason above.

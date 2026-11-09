@@ -938,6 +938,12 @@ sites:
     class: live
     kind: lab-endpoint
     target: the lab's public endpoint (https://<host>/chat, /cost, /controls and the pages) on a workshop cluster
+  verify/test_console_rollout_drain_live.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: lab-endpoint
+    target: the lab's public endpoint (POST https://<host>/chat, an empty prompt a second) on a KubeCon cluster
   verify/test_backups.py:
   - match: .
     lines: 1
