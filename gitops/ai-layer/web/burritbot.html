@@ -705,22 +705,48 @@
     var items=s.querySelectorAll('.saved-item');
     while(items.length>10){s.removeChild(items[items.length-1]);items=s.querySelectorAll('.saved-item');}
   }
-  // The code-of-conduct check for "Your saved prompts" (#947, the first half of #922). COC_TERMS is guard-proxy's
-  // PROFANITY list, the words its wall feed masks with [redacted], and cocViolation matches them the way
-  // proxy.py's _profanity_pattern() does: whole words, an optional plural s, longest term first, case-blind.
-  // JavaScript's \b and i flag are not Python's, so both are spelled out: a word edge is any character that is
-  // not a Unicode letter, digit or underscore, and each letter matches what re.IGNORECASE folds it with (i also
-  // takes the dotted and dotless i, k the Kelvin sign, s the long s). Only this list: BLOCK_LIST attack words and
-  // personal data are masked on the wall but are not code-of-conduct problems in the attendee's own saved list.
-  // verify/test_chat_coc_e2e.py runs this against the pinned proxy.py on every assigned code point.
-  const COC_TERMS='fuck,fucks,fucked,fucker,fucking,fuckin,motherfucker,motherfucking,shit,shitty,shitting,bullshit,shithead,cunt,bitch,bitches,bitching,bastard,dick,dickhead,cock,pussy,asshole,dumbass,jackass,wanker,twat,nigger,faggot,retard,retarded,tranny,slut,whore,rape,raped,rapist,kike,spic,chink';
-  const COC_FOLD={i:'iI\u0130\u0131',k:'kK\u212A',s:'sS\u017F'};
-  function cocLetter(c){return '['+(COC_FOLD[c]||c+c.toUpperCase())+']';}
-  const COC_RE=new RegExp('(?<![\\p{L}\\p{N}_])(?:'+COC_TERMS.split(',')
-    .sort(function(a,b){return b.length-a.length;})
-    .map(function(w){return w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/[a-z]/g,cocLetter);})
-    .join('|')+')'+cocLetter('s')+'?(?![\\p{L}\\p{N}_])','u');
-  function cocViolation(t){return COC_RE.test(String(t==null?'':t));}
+  // The code-of-conduct check for "Your saved prompts" (#947, the first half of #922). Since #1280 it is the floor
+  // the code-of-conduct spike chose for every surface (#1267, docs/research/2026-11-09-coc-floor/floor.py, the
+  // "proposed" floor), so the rail keeps off what guard-proxy refuses on /chat once it runs that floor, and the
+  // collector and the admission policy on names in agent mask and refuse the same terms. COC_TERMS is the spike's
+  // terms-proposed.rot13, entry for entry and in its order, still ROT13-encoded so the page source does not display
+  // the terms. cocFold folds the text one character at a time as floor.py's fold() does: zero-width characters and
+  // the soft hyphen dropped, compatibility and accent forms reduced to their base letter (NFKD, marks dropped),
+  // Cyrillic and Greek look-alikes mapped to Latin, lower case. COC_RE is floor.py's proposed_pattern(): each
+  // letter repeatable, its leetspeak stand-ins, "*" for a vowel, or the term spelt with one separator between
+  // every letter; a phrase's words with any run of separators between them; a whole word on the folded text, with
+  // an optional plural s. A separator is what Python's \s matches (spelt out here, as JavaScript's \s differs), a
+  // dot, an underscore, an asterisk or a hyphen. Only this list: BLOCK_LIST attack words and personal data are
+  // masked on the wall but are not code-of-conduct problems in the attendee's own saved list.
+  // verify/test_chat_coc.py holds the list and tables to floor.py, and verify/test_chat_coc_e2e.py runs this against
+  // floor.py on every assigned code point, the abuse set and the stage's own text.
+  const COC_TERMS='shpx,shpxf,shpxrq,shpxre,shpxref,shpxvat,shpxva,shpxnoyr,shpxsnpr,shpxurnq,shpxjvg,spx,shx,shd,sipx,cuhpx,zbgureshpxre,zbgureshpxvat,fuvg,fuvgf,fuvggl,fuvggvat,fuvggrq,fuvgurnq,fuvgsnpr,ohyyfuvg,ubefrfuvg,qvcfuvg,phag,ovgpu,ovgpurf,ovgpuvat,ovngpu,onfgneq,qvpx,qvpxurnq,pbpx,pbpxfhpxre,chffl,nffubyr,nefrubyr,qhzonff,wnpxnff,jnaxre,gjng,cevpx,fgsh,tgsb,jgs,avttre,avttn,snttbg,snt,qlxr,genaal,genaavr,furznyr,ergneq,ergneqrq,gneq,fcnm,zbatbybvq,xvxr,fcvp,puvax,tbbx,jrgonpx,ornare,enturnq,gbjryurnq,cnxv,pbba,jbc,qntb,ubaxl,erqfxva,mvccreurnq,frk,cbea,cbeab,oybjwbo,unaqwbo,phz,phzfubg,qvyqb,ubeal,gvgf,gvggvrf,obbof,ahqrf,rebgvp,guerrfbzr,nany frk,wrex bss,wnpx bss,anxrq obql,fyhg,juber,encr,encrq,encvfg,encvat,xvyy lbhefrys,xvyy hefrys,xlf,unat lbhefrys,urvy uvgyre,fvrt urvy,juvgr cbjre,tnf gur wrjf,craqrwb,craqrwn,zvreqn,chgn,chgb,pnoeba,puvatn,puvatnqn,znevpba,wbqre,pbñb,iretn,chgnva,zreqr,pbaaneq,fnybcr,raphyr,raphyre,chgr,fpurvffr,fpurvßr,uherafbua,sbgmr,jvpufre,svpx qvpu,fpuynzcr,pnenyub,cbeen,ivnqb,ohprgn,inssnaphyb,fgebamb,pnmmb,chggnan'.split(',').map(function(w){return w.replace(/[a-z]/gi,function(c){var b=c<='Z'?65:97;return String.fromCharCode((c.charCodeAt(0)-b+13)%26+b);});});
+  const COC_LEET={a:'4@',b:'8',c:'(',e:'3',g:'9',i:'1!|',l:'1|',o:'0',s:'5$',t:'7+'};
+  const COC_ZERO_WIDTH='\u200b\u200c\u200d\u2060\ufeff\u00ad';
+  const COC_LOOKALIKE=['\u0430\u0435\u043e\u0440\u0441\u0443\u0445\u0456\u0458\u0455\u0501\u051b\u051d\u043a\u043c\u0442\u0432\u043d\u0410\u0415\u041e\u0420\u0421\u0423\u0425\u0406\u0408\u0405\u041a\u041c\u0422\u0412\u041d\u03b1\u03bf\u03b5\u03c1\u03c4\u03c5\u03bd\u03ba\u03b9\u0391\u0392\u0395\u0396\u0397\u0399\u039a\u039c\u039d\u039f\u03a1\u03a4\u03a5\u03a7','aeopcyxijsdqwkmtbhaeopcyxijskmtbhaoeptuvkiabezhikmnoptyx'];
+  const COC_SEP='[\\t-\\r\\x1c-\\x20\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000._*\\-]';
+  function cocFold(t){
+    var out='';
+    for(const ch of String(t)){
+      if(COC_ZERO_WIDTH.indexOf(ch)>=0)continue;
+      var c=Array.from(ch.normalize('NFKD').replace(/\p{M}/gu,'')||ch)[0];
+      var k=COC_LOOKALIKE[0].indexOf(c);
+      out+=Array.from((k<0?c:COC_LOOKALIKE[1][k]).toLowerCase())[0];
+    }
+    return out;
+  }
+  function cocLetter(c){
+    var a=(c+(COC_LEET[c]||'')).replace(/[\\\]\[^\-]/g,'\\$&');
+    return '['+a+('aeiou'.indexOf(c)>=0?'*':'')+']';
+  }
+  function cocTerm(w){
+    var words=cocFold(w).split(/\s+/).filter(Boolean);
+    var joined=words.map(function(x){return Array.from(x).map(function(c){return cocLetter(c)+'+';}).join('');}).join(COC_SEP+'+');
+    if(words.length===1&&Array.from(words[0]).length>=3)return '(?:'+joined+'|'+Array.from(words[0]).map(cocLetter).join(COC_SEP)+')';
+    return '(?:'+joined+')';
+  }
+  const COC_RE=new RegExp('(?<![a-z0-9])(?:'+COC_TERMS.slice().sort(function(a,b){return b.length-a.length;}).map(cocTerm).join('|')+')s?(?![a-z0-9])');
+  function cocViolation(t){return COC_RE.test(cocFold(t==null?'':t));}
   // A prompt cocViolation flags is not saved (#948, the second half of #922): it is still sent and still shows as
   // the person's bubble, since guard-proxy and the bot handle it as before, but it never reaches the rail or
   // wib-saved. loadSaved does the same at page load for entries saved before this check, and writes the pruned

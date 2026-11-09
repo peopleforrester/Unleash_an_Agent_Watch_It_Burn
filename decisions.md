@@ -49328,3 +49328,60 @@ when it lands. The criterion here is the probes green with the floor on, which t
 
 **Tests.** `python3 verify/test_coc_floor_note.py`, `test_coc_floor_mapping.py`, `test_coc_floor_spike.py` and the
 prose gate, once each. `git grep` for the reworded note lines under verify and scripts found no reader.
+## 2026-11-09 · #1280 · run 19662 · The chat page's saved-prompts check runs the code-of-conduct floor's list and folding
+
+**What changed.** `cocViolation` in `gitops/ai-layer/web/burritbot.html`, which keeps a prompt off "Your saved
+prompts" (#947, #948), checked guard-proxy's 40 `PROFANITY` terms. It now runs the floor the spike chose for every
+surface (#1267, `docs/research/2026-11-09-coc-floor/floor.py`, the proposed floor), so the rail keeps off what `/chat`
+refuses once guard-proxy runs that floor, and agrees with the collector's mask (#1277) and the admission policy on
+names (#1278). The block is a port of `floor.py` to the browser:
+
+- `COC_TERMS` is `terms-proposed.rot13`, all 144 entries in the file's order, still ROT13-encoded in the page and
+  decoded at load, so the page source does not display the terms, as the spike's own files do not.
+- `cocFold` folds one character at a time as `fold()` does: the six zero-width characters dropped, NFKD with marks
+  dropped, the 56 Cyrillic and Greek look-alikes mapped to Latin (written as `\u` escapes so a reader can tell them
+  apart), lower case.
+- `cocLetter`, `cocTerm` and `COC_RE` build `proposed_pattern()`: each letter repeatable, its leetspeak stand-ins,
+  `*` for a vowel, the term spelt with one separator between every letter, a phrase's words with any run of
+  separators, a whole word on the folded text with an optional plural s. The separator class spells out what Python's
+  `\s` matches (29 characters), since JavaScript's `\s` differs on `\x1c`-`\x1f`, `\x85` and `﻿`.
+
+One difference with `floor.py` is accepted and held: Python drops a character by its combining class and the page
+by `\p{M}`. On 48 of 287,346 assigned code points (Bengali, Oriya, Tamil, Kannada, Malayalam, Sinhala, Thai, Lao,
+Tibetan, Balinese and Chakma vowel signs) the two keep a different mark, and neither result is a character the pattern
+reads, so no verdict changes. The test holds that.
+
+Every term of the pinned guard-proxy's `PROFANITY` (a637e68) and of the Go build's `DefaultProfanity` is on the new
+list, so the rail still keeps off everything the wall masks today.
+
+**Tests.** All three were rewritten for the floor and run once each:
+
+- `verify/test_chat_coc.py` (offline, 24 checks, all pass): the decoded `COC_TERMS` is `corpus.terms("proposed")`
+  entry for entry and in order; `COC_LEET`, `COC_ZERO_WIDTH`, `COC_LOOKALIKE` and the separator class are `floor.py`'s
+  `_LEET`, `_ZERO_WIDTH`, `_HOMOGLYPH` and `_SEP`; the wall's lists sit inside the page's; the function is pure and
+  `save()` and `loadSaved()` still call it.
+- `verify/test_chat_coc_e2e.py` (tools tier, needs node; all pass, 11 s): the page's block run in node against
+  `floor.Floor("proposed")`. Every term in 11 forms (as typed, plural, upper, leetspeak, tripled letters, fullwidth,
+  zero-width spaces, spaced, dotted) is flagged; the fold agrees on every assigned code point where the pattern reads
+  it; 357,521 cases (each of 152 characters at 2,364 places in the terms) get the same verdict; the 2,906 stage texts
+  `corpus.stage_texts()` reads are flagged by neither; the abuse set agrees on all 155 (111 caught, the spike's
+  figure), all 25 evasions are flagged, and the 60 hard negatives agree. A mutant without `cocFold` misses 3 of the
+  25 evasions, so the check reads the folding.
+- `verify/test_chat_saved_coc_e2e.py` (tools tier; all pass): its terms are the page's decoded list and "flagged" is
+  `floor.py`'s verdict. A new section sends, through the page's own `send()`, the 56 stage prompts a person types
+  (every `/kubecon` prompt, the replay set, the prompt catalog, the probes' asks) in rounds of five, each interleaved
+  with one of the 25 evasions: every stage prompt reaches the rail and `wib-saved`, newest first, no evasion does,
+  and every evasion is still POSTed to `/chat`.
+
+`verify/scope-map.yaml` was rewritten by `scope_tests.py write` for the three tests' new reads (the spike's
+directory and the stage files `corpus.py` reads). The prose gate passes on the page.
+
+**Live.** The change touches `gitops/`, so a read was run on both clusters: the `console-src` ConfigMap in `agent`
+(`console-src-62584446g2` on watch-it-burn-private, `console-src-72td67mgk9` on watch-it-burn-community) serves a
+`burritbot.html` of 76,683 bytes, identical to staging's at 9ebd8d2b, with 40 `COC_TERMS` entries and no `cocFold`.
+That is the page before this change. Nothing was changed on either cluster.
+
+**Not yet run on a cluster.** The new page, once Argo CD syncs it after promotion: read `burritbot.html` from the
+`console-src` ConfigMap in `agent` on both clusters and confirm it equals the repo file, then
+`python3 verify/test_chat_saved_coc_e2e.py` against that copy (the test reads the repo file, so the equality is the
+check).

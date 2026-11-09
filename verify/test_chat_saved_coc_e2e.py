@@ -1,16 +1,23 @@
 # ABOUTME: Runs the chat page's own script in node (verify/chat-saved-harness.js) and checks that a prompt cocViolation
-# ABOUTME: flags is sent and shown but never saved, that old flagged entries are pruned at load, and clean ones save as before (#948).
+# ABOUTME: flags is sent and shown but never saved, old flagged entries are pruned at load, and the stage's prompts save (#948, #1280).
 # SUITE: e2e (needs node: the page's script runs in a node vm)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 """Why (#948, the second half of #922). "Your saved prompts" and localStorage `wib-saved` must never hold a prompt
-with a guard-proxy PROFANITY term, which #947's cocViolation detects. The prompt itself still goes to /chat and
+that #947's cocViolation flags, which since #1280 is the code-of-conduct floor the spike chose (#1267,
+docs/research/2026-11-09-coc-floor/floor.py), so the rail keeps off what /chat refuses once guard-proxy runs it. The prompt itself still goes to /chat and
 still shows as the person's bubble, since guard-proxy and the bot handle it as before.
 
 The harness runs the whole inline script of burritbot.html in a node vm, with a stub DOM built from the page's own
 ids and saved-list markup, a stub localStorage that survives a reload, and a stub fetch that records each /chat
 prompt. Every step calls the page's own functions: send(), the Reuse button and the text's click handler that
 renderSaved wires, resetChat(), clearSaved(), and the init block's load of the rail. The terms come from the page's
-COC_TERMS, which verify/test_chat_coc_e2e.py holds to the pinned proxy.py, so every term is tried here.
+COC_TERMS, which verify/test_chat_coc.py holds to corpus.terms("proposed"), so every term is tried here, and what
+counts as flagged is floor.py's verdict, which verify/test_chat_coc_e2e.py holds the page's function to.
+
+The floor is longer and folds spellings, so the stage's own prompts are sent too (#1280): every /kubecon prompt, the
+room's replay set, the prompt catalog's prompts and the probes' asks, as corpus.py reads them, each interleaved with
+the abuse set's evasions (leetspeak, spaced letters, repeated letters, a zero-width space, fullwidth letters). Every
+stage prompt must reach the rail and wib-saved, and no evasion may.
 
 Two mutants of the page, made by cutting the change back out on literals checked first, show the test reads the
 change: without the guard in save() a flagged prompt is saved, and with init's old load line an old violation comes
@@ -18,6 +25,7 @@ back on a reload. A missing node is a failure, not a skip.
 """
 from __future__ import annotations
 
+import codecs
 import json
 import pathlib
 import re
@@ -29,6 +37,13 @@ import tempfile
 REPO = pathlib.Path(__file__).resolve().parents[1]
 PAGE_PATH = REPO / "gitops/ai-layer/web/burritbot.html"
 HARNESS = REPO / "verify/chat-saved-harness.js"
+SPIKE = REPO / "docs/research/2026-11-09-coc-floor"
+sys.path.insert(0, str(SPIKE))
+
+import corpus  # noqa: E402
+import floor  # noqa: E402
+
+FLOOR = floor.Floor("proposed")
 failures: list[str] = []
 
 
@@ -50,11 +65,12 @@ for f in (PAGE_PATH, HARNESS):
         sys.exit(1)
 
 PAGE = PAGE_PATH.read_text(encoding="utf-8")
-literals = re.findall(r"const COC_TERMS='([^']*)';", PAGE)
+literals = re.findall(r"const COC_TERMS='([^']*)'\.split\(','\)", PAGE)
 if len(literals) != 1:
-    print(f"FAIL: expected one const COC_TERMS='...'; literal in {PAGE_PATH.relative_to(REPO)}, found {len(literals)}")
+    print(f"FAIL: expected one const COC_TERMS='...'.split(',') literal in {PAGE_PATH.relative_to(REPO)}, "
+          f"found {len(literals)}")
     sys.exit(1)
-TERMS = literals[0].split(",")
+TERMS = [codecs.decode(t, "rot13") for t in literals[0].split(",")]
 TMP = pathlib.Path(tempfile.mkdtemp(prefix="chat-saved-"))
 
 
@@ -75,8 +91,8 @@ def stored_texts(raw: str | None) -> list[str]:
 
 
 def flagged_in(texts: list[str]) -> list[str]:
-    words = {t.lower() for t in TERMS} | {t.lower() + "s" for t in TERMS}
-    return [t for t in texts if any(w in words for w in re.findall(r"[a-z]+", t.lower()))]
+    """The texts floor.py's proposed floor flags; shown ROT13-encoded, as the spike keeps them."""
+    return [codecs.encode(t, "rot13") for t in texts if FLOOR.spans(t)]
 
 
 # One prompt per term, in the case forms a person types, each a whole sentence.
@@ -165,6 +181,39 @@ check("and loads as before", len(snap["load"]["rail"]) == 3, snap["load"]["rail"
 snap = run([{"snapshot": "load"}], stored="not json{")
 check("an unreadable wib-saved is left alone and the list shows its hint",
       snap["load"]["stored"] == "not json{" and snap["load"]["rail"] == [] and snap["load"]["hint"], snap["load"])
+
+print("== the stage's own prompts are saved, and the abuse set's evasions are not ==")
+PERSON = ("kubecon-prompt", "replay-prompt", "catalog-prompt", "probe-prompt")
+STAGE = [t for src, t in corpus.stage_texts() if src in PERSON]
+EVASIONS = [t for c, t in corpus.abuse_set() if c == "evasion"]
+check(f"corpus.py reads at least 40 stage prompts a person types, and the abuse set 25 evasions "
+      f"(read {len(STAGE)}, {len(EVASIONS)})", len(STAGE) >= 40 and len(EVASIONS) == 25)
+BATCH = 5  # five stage prompts and five evasions a round, so the ten-item rail holds a round's stage prompts
+steps = []
+rounds = []
+for n in range(0, len(STAGE), BATCH):
+    batch = STAGE[n:n + BATCH]
+    for i, t in enumerate(batch):
+        steps.append({"send": t})
+        steps.append({"send": EVASIONS[(n + i) % len(EVASIONS)]})
+    steps.append({"snapshot": f"round{len(rounds)}"})
+    rounds.append(batch)
+steps += [{"reload": True}, {"snapshot": "reloaded"}]
+snap = run(steps)
+# send() trims what it sends, as a person's typed prompt is trimmed; corpus.py's texts are already stripped
+missing = [t for k, batch in enumerate(rounds) for t in batch if t not in snap[f"round{k}"]["rail"][:len(batch)]]
+check(f"every one of the {len(STAGE)} stage prompts is in the rail after its round", not missing, missing[:5])
+order = [k for k, batch in enumerate(rounds) if snap[f"round{k}"]["rail"][:len(batch)] != batch[::-1]]
+check("each round's stage prompts are the rail's newest, newest first", not order, order[:5])
+stored = [k for k, batch in enumerate(rounds) if stored_texts(snap[f"round{k}"]["stored"])[-len(batch):] != batch]
+check("and the newest of wib-saved, oldest first", not stored, stored[:5])
+leaked = sorted({t for k in range(len(rounds)) for t in flagged_in(snap[f"round{k}"]["rail"]
+                                                                   + stored_texts(snap[f"round{k}"]["stored"]))})
+check(f"none of the {len(EVASIONS)} evasions reaches the rail or wib-saved in any round", not leaked, leaked[:5])
+sent_evasions = [t for t in snap[f"round{len(rounds) - 1}"]["posts"] if t in EVASIONS]
+check("the evasions are still POSTed to /chat", len(sent_evasions) == len(STAGE), len(sent_evasions))
+check("after a reload the rail is the last ten stage prompts, newest first",
+      snap["reloaded"]["rail"] == STAGE[-10:][::-1], snap["reloaded"]["rail"])
 
 print("== the checks above read the change (mutants of the page) ==")
 GUARD = "function save(t){if(cocViolation(t))return;"
