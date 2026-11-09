@@ -44880,3 +44880,31 @@ tier tests, is run 17941's result on its own base `24670870` (with `add3386b` on
 staging, which is 661 commits later. The live results are likewise from 2026-11-06 at the revisions named above.
 This port ran no live check, because it changes only decisions.md, which no cluster runs (CLAUDE.md, Dispatched runs,
 point 1).
+## 2026-11-09 · #1205 · run 19389 · A test holds the Night Before seed step to the deck's four Datadog links and to no saved views
+
+Test review run 18720 found that no test held #1139's criterion: the run-of-show's Night Before step "Seed the stage's
+Datadog traces" names the four slide links and no longer tells the presenter to save nine views. The one check that
+read the step, in `verify/test_deck_shift_slide_citations.py`, passes on any one hash of `#/43` or more.
+
+**The test.** `verify/test_ros_seed_step_links.py` cuts the step from its first words to the next `- [ ] **` step,
+each anchor checked first, and fails when any of these stops holding: the step has its "The four Datadog links"
+paragraph and says the deck opens Datadog once per challenge; its link table's rows are `#/11`, `#/26`, `#/48` and
+`#/68`, in that order; each row gives its segment, the words that open Datadog, the attack seed, its session
+`wib-stage-<key>-<stamp>` and the spans in the order `verify/stage_traces.py`'s `SEEDS` holds them; the step cites no
+other slide hash; and it says no "save", "saves" or "saving", no "saved view" but in "not from saved views", and no
+"nine views" or "nine links". Each check is shown failing on a changed copy of the step: the paragraph cut, Challenge
+4's row put on `#/65`, the `#/26` row dropped, the `#/48` and `#/68` rows swapped, Challenge 2's row on the fix's
+session, Challenge 4's spans reversed, `#/65` cited as well, and four save instructions, the pre-#1139 "saves it as a
+view, in that order" among them.
+
+**Challenge 4's link is `#/68`, not the `#/65` the issue names.** #1139's entry above (2026-11-08) says why: the
+issue's numbers came from before the deck grew (rounds-agenticburn#118), and #1138 read the "tools" hint on `#/68`,
+where `#/65` is segment 5's tee-up. The test holds `#/68` and fails on `#/65`.
+
+**Run here.** `python3 verify/test_ros_seed_step_links.py` passed all 5 checks and all 11 self-checks, exit 0. Run
+against the run-of-show at `18d36efc^`, before #1139, it failed the paragraph, table and save checks (it read
+"saves", "Save", "save" and "saved view") and exited at the missing "The four Datadog links." anchor.
+`python3 verify/scope_tests.py write` added the test's entry to `verify/scope-map.yaml`, and
+`python3 verify/test_scope_tests.py` ended `ALL PASS`.
+
+**Live check.** Skipped: the change adds an offline test under `verify/` that no cluster runs, and this entry.
