@@ -29,9 +29,14 @@ Both come from one file, `gitops/ai-layer/web/event.js`:
 - `publicUrl`, `https://attackme.burritobot.co/`, is what the QR encodes.
   burritobot.co is the displayed domain (#651); `attackme.agenticburn.com`
   still serves the same bot as its twin.
-- `feedbackUrl`, the Sessionize survey for session 1249553, is where the
-  storefront's Feedback button goes. It opens in a new tab, so the chat is still
-  there afterwards, and no cluster or user is added to it.
+- `feedbackUrl`, `https://feedback.burritobot.co/?source=burritobot`, is where
+  the storefront's Feedback button goes: the talk's own short form on our
+  feedback app (EVENT_ID `kubecon-na-2026`, Michael's decision of 2026-11-08,
+  #1162). It opens in a new tab, so the chat is still there afterwards, and no
+  cluster or user is added to it. `source=burritobot` is stored with each
+  response, so the storefront's answers are told apart from the deck QR's
+  `source=deck`. The form's thanks page links on to the Sessionize rating for
+  session 1249553.
 
 The projector QR is `facilitation/kubecon-na-2026-audience-qr.svg` (version 3,
 error correction M, black on white). Put that file on the slide; do not make a
@@ -74,8 +79,10 @@ What each column means:
 - **Prompt answered:** send "What burritos do you have?". A menu answer, or a
   refusal you can read, counts. "the kitchen isn't answering" or "NO BURRITOS FOR
   YOU" does not.
-- **Feedback opens:** tap Feedback. A new tab opens on the Sessionize page for
-  session 1249553, and the chat tab is still there when you switch back.
+- **Feedback opens:** tap Feedback. A new tab opens on our form at
+  `feedback.burritobot.co/?source=burritobot`, naming this talk, with the
+  usefulness question (1 to 5) and no lab, Datadog or sponsor link, and the chat
+  tab is still there when you switch back.
 
 | Phone | Network | Model and OS | Loads | No overlap | Prompt answered | Feedback opens | Checked by, date |
 |---|---|---|---|---|---|---|---|
@@ -96,12 +103,25 @@ Scan it with each phone's own camera app, not a QR app, from the back row.
 | iPhone, camera | | | | |
 | Android, camera | | | | |
 
-## The session survey
+## Submit the form, then the Sessionize link
+
+On each phone, from the Feedback tab the storefront opened, submit the form once:
+tap a usefulness score and type `phone check` in the "one thing you'll change"
+box, so the answer is easy to find and set aside. The thanks page appears, and
+its Sessionize link opens session 1249553, "BurritoBot Said Let's Dance, the
+Platform Said No". Then confirm the answer shows in the feedback app's `/admin`
+under `kubecon-na-2026` with source `burritobot` (ask feedback-agenticburn to
+read it if you cannot sign in there).
+
+| Phone | Thanks page appears | Its Sessionize link opens session 1249553 | Shows in /admin with source burritobot | Checked by, date |
+|---|---|---|---|---|
+| iPhone, Safari | | | | |
+| Android, Chrome | | | | |
 
 Sessionize rating is mobile-only and opens near the session. On 2026-10-24 the
-page said "There are no sessions to rate at the moment."
+Sessionize page said "There are no sessions to rate at the moment."
 
-- [ ] Once rating opens, the Feedback link on a phone shows **this** talk,
-  "BurritoBot Said Let's Dance, the Platform Said No" (session 1249553), and lets
-  you rate it. If it shows another session or nothing, change `feedbackUrl` in
-  `event.js` to the right URL and run the Feedback column again.
+- [ ] Once rating opens, the thanks page's Sessionize link on a phone shows
+  **this** talk (session 1249553) and offers to rate it. If it shows another
+  session or nothing, the link lives in the feedback app, not here: ask
+  feedback-agenticburn to correct it, then run this table again.

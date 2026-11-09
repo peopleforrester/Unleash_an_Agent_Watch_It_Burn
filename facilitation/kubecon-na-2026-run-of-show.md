@@ -1968,6 +1968,11 @@ and `guard-mcp-on` with its reload delay. See the total under "The segments, in 
   `https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/blob/main/docs/mcp-server-vetting-checklist.md`.
 - **Delivers:** point 7 (observability, through every challenge's trace) and point 8
   (ends selling burritos only).
+- **Feedback ask (one line, if the clock allows, #1162):** on the take-home slide's
+  "Rate this session" QR, which opens `https://feedback.burritobot.co/?source=deck`
+  (rounds-agenticburn#107), say: "Scan this, one tap, tell us how it went; the thanks
+  page takes you on to rate us on Sessionize." The storefront's Feedback button opens
+  the same form with `source=burritobot`.
 - **Close out (both):** on a repeat of the speaker slide, give the full speaker
   introductions (the bios held back from the quick hello in segment 1), then the
   Thank you slide (rounds-agenticburn#56).
@@ -2489,7 +2494,8 @@ is merely slow rather than rebuilding:
   Feedback link work on a real iPhone and a real Android phone on venue-like
   Wi-Fi and on cellular. Fill in `facilitation/kubecon-na-2026-phone-check.md`.
   The QR on the slide is `facilitation/kubecon-na-2026-audience-qr.svg`, and the
-  Feedback button opens the session survey, both set in
+  Feedback button opens the talk's own form,
+  `https://feedback.burritobot.co/?source=burritobot` (#1162), both set in
   `gitops/ai-layer/web/event.js`.
 - [ ] **The community bot at room scale (#644), before the reset below.** From the repo
   root, replay the DevOpsDays Portland prompts at attackme as 500 phones, each its own
