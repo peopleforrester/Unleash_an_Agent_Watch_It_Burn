@@ -1,12 +1,17 @@
-# ABOUTME: Holds #1157: the public desk records a deploy report from outside only with the configured token, labels each
-# ABOUTME: deployments row with its cluster, and every profile but kubecon-community renders no remote-report route.
-"""Offline checks for #1157, the desk's half of #1145 (one deployments page for both KubeCon clusters).
+# ABOUTME: Holds #1157 and #1209: the public desk takes a deploy report or cluster read from outside only with its token,
+# ABOUTME: a read greys only its own cluster's rows, and every profile but kubecon-community renders no remote route.
+"""Offline checks for #1157, the desk's half of #1145 (one deployments page for both KubeCon clusters), and #1209.
 
 deployments.burritobot.co is served by the community cluster's fake-ticket. For the private cluster's deploys to show
 there too, that desk takes reports from outside the cluster at POST /remote-landed, a route only the
 desk-remote-reports component publishes (the kubecon-community profile's desk.remoteReports). The desk records a report
 there only when its X-Desk-Report-Token header carries the token in DESK_REPORT_TOKEN, and labels each row with the
 cluster it came from. With no token, and on every other profile, the desk and the console are as they were.
+
+Since #1209 the private cluster's reader (#1050) posts what that cluster still runs to POST /remote-cluster-read, with
+the same token, and the desk applies it to the rows labelled private alone, as an in-cluster /cluster-read is applied
+to the rows labelled community alone: a community read never greys a private row, and a private read never a community
+one.
 
 Three parts, with no cluster and no network:
   1. the real ticket_site.py on localhost, loaded once with no token and once with one, every report over HTTP;
@@ -25,6 +30,7 @@ import pathlib
 import re
 import sys
 import threading
+import time
 import urllib.error
 import urllib.request
 
@@ -138,6 +144,12 @@ check("the deployments page shows a row's cluster only when it has one, so this 
       "if(x.cluster){" in script and "k.textContent=x.cluster" in script, script[-600:])
 check("/remote-landed under the deployments host is a 404 too",
       plain.post("/remote-landed", report("x"), host=DEPLOYMENTS, headers={HEADER: TOKEN})[0] == 404)
+for headers, why in (({}, "no token header"), ({HEADER: TOKEN}, "a token header")):
+    code, body = plain.post("/remote-cluster-read", {"taken_at": time.time() + 5, "ok": True, "kinds": {"Deployment": []}},
+                            headers=headers)
+    check(f"POST /remote-cluster-read with {why} is the desk's plain 404", (code, body) == (404, {"error": "not found"}),
+          f"{code} {body}")
+check("and marks nothing", not [r for r in plain.site.LANDINGS if r["removed_at"]], str(plain.site.LANDINGS))
 plain.server.shutdown()
 
 print("== with the token configured, only a report that carries it is recorded ==")
@@ -185,7 +197,79 @@ check("the chat page's own /deployments.json carries the cluster too",
       code == 200 and [r["cluster"] for r in json.loads(chat)] == ["community", "private", "private"], chat[:300])
 code, page = desk.get("/")
 check("the deployments page styles the cluster tag", code == 200 and ".cluster{" in page)
+
+print("== a cluster read greys its own cluster's rows alone: in-cluster for community, with the token for private ==")
+
+
+def read(names: list[str], at: float | None = None) -> dict:
+    return {"taken_at": time.time() + 1 if at is None else at, "ok": True, "kinds": {"Deployment": names}}
+
+
+def removed(d: Desk) -> set[str]:
+    return {r["name"] for r in d.site.LANDINGS if r["removed_at"]}
+
+
+for i, (headers, why) in enumerate(refused):
+    code, body = desk.post("/remote-cluster-read", read([]), headers=headers)
+    check(f"a remote cluster read with {why} is a 401", code == 401 and HEADER in body.get("error", ""),
+          f"{code} {body}")
+check("and none of them marks a row", removed(desk) == set(), str(removed(desk)))
+code, body = desk.post("/remote-cluster-read", b"not json", headers={HEADER: TOKEN})
+check("a remote cluster read that is not JSON is a 400, as on /cluster-read", code == 400, f"{code} {body}")
+code, body = desk.post("/remote-cluster-read", {"taken_at": "now", "ok": True, "kinds": {}}, headers={HEADER: TOKEN})
+check("a remote cluster read the desk cannot read is a 400 naming why", code == 400 and "taken_at" in body.get("error", ""),
+      f"{code} {body}")
+code, body = desk.post("/remote-cluster-read", read([]), host=DEPLOYMENTS, headers={HEADER: TOKEN})
+check("POST /remote-cluster-read under the deployments host is a 404", code == 404, str(code))
+check("and still no row is marked", removed(desk) == set(), str(removed(desk)))
+
+# Rows of the same kind on both sides, one name landed on both (each cluster has its own Deployment of it).
+desk.post("/landed", report("joker-shared-name", "Hazel the Witch"))
+desk.post("/remote-landed", report("joker-shared-name", "Edgar the Kelpie"), headers={HEADER: TOKEN})
+community = {r["name"] for r in desk.rows() if r["cluster"] == "community"}
+private = {r["name"] for r in desk.rows() if r["cluster"] == "private"}
+check("both clusters have rows, and one name is on each side", "joker-shared-name" in community & private
+      and len(community) == 2 and len(private) == 3, f"{community} {private}")
+code, body = desk.post("/remote-cluster-read", read(["joker-mabel-the-imp"]), headers={HEADER: TOKEN})
+check("a private read that lists one private row marks the other private rows, the shared name's included",
+      code == 200 and set(body.get("marked", [])) == {"joker-edgar-the-kelpie", "joker-shared-name"}, f"{code} {body}")
+rows = desk.rows()
+check("a private read never marks a community row: both community rows, the shared name's included, are as they were",
+      all(not r["removed_at"] for r in rows if r["cluster"] == "community")
+      and {r["name"] for r in rows if r["cluster"] == "community"} == community, str(rows))
+check("the private row it listed is not marked", [r["removed_at"] for r in rows if r["name"] == "joker-mabel-the-imp"]
+      == [""], str(rows))
+code, body = desk.post("/cluster-read", read([]))
+check("an in-cluster community read that lists no Deployment marks exactly the community rows",
+      code == 200 and set(body.get("marked", [])) == community, f"{code} {body}")
+rows = desk.rows()
+check("a community read never marks a private row: the listed private row is still not marked",
+      [r["removed_at"] for r in rows if r["name"] == "joker-mabel-the-imp"] == [""], str(rows))
+code, body = desk.post("/remote-cluster-read", read([], at=time.time() - 3600), headers={HEADER: TOKEN})
+check("a private read taken before the rows landed marks nothing, as on /cluster-read",
+      code == 200 and body == {"applied": True, "marked": []}, f"{code} {body}")
+code, body = desk.post("/remote-cluster-read", {"taken_at": time.time() + 1, "ok": False, "kinds": {}},
+                       headers={HEADER: TOKEN})
+check("a failed private read is applied to no row", code == 200 and body == {"applied": False, "marked": []},
+      f"{code} {body}")
+code, body = desk.post("/remote-cluster-read", read([]), headers={HEADER: TOKEN})
+check("a later private read that lists nothing marks the last private row, and nothing else",
+      code == 200 and body.get("marked") == ["joker-mabel-the-imp"], f"{code} {body}")
+check("every row is now greyed on the page, each by its own cluster's read",
+      all(r["removed_at"] for r in desk.rows()), str(desk.rows()))
 desk.server.shutdown()
+
+print("== a desk whose two labels are unset: a remote read covers only rows labelled remote ==")
+bare = Desk("bare", {"DESK_REPORT_TOKEN": TOKEN})
+bare.post("/landed", report("joker-own-row"))
+bare.post("/remote-landed", report("joker-their-row"), headers={HEADER: TOKEN})
+code, body = bare.post("/remote-cluster-read", read([]), headers={HEADER: TOKEN})
+check("a remote read marks the remote row and not the desk's own unlabelled row",
+      code == 200 and body.get("marked") == ["joker-their-row"], f"{code} {body}")
+code, body = bare.post("/cluster-read", read([]))
+check("and the in-cluster read marks the desk's own row and not the remote one",
+      code == 200 and body.get("marked") == ["joker-own-row"], f"{code} {body}")
+bare.server.shutdown()
 
 print("== the console: the support-desk server includes a route file only the component ships ==")
 inc = re.findall(r"^\s*include\s+(\S+);", DESK_SERVER, re.M)
@@ -195,7 +279,8 @@ check("the pattern is a glob, so nginx starts when no file matches it", any(c in
 check("it cannot match nginx's own *.conf includes or the ConfigMap's ..data entries",
       not pattern.endswith(".conf") and not pattern.startswith("."), pattern)
 check("console.conf includes nothing anywhere else", len(re.findall(r"^\s*include\s", CONF, re.M)) == 1)
-check("console.conf has no /remote-landed route of its own", "location = /remote-landed" not in CONF)
+check("console.conf has no /remote-landed or /remote-cluster-read route of its own",
+      "location = /remote-landed" not in CONF and "location = /remote-cluster-read" not in CONF)
 check("and still refuses /landed and /cluster-read from outside on the support server",
       re.search(r"location = /landed \{\s*deny all;", DESK_SERVER) is not None
       and re.search(r"location = /cluster-read \{\s*deny all;", DESK_SERVER) is not None)
@@ -204,12 +289,21 @@ check("the component merges one file into console-conf",
       gen == [{"name": "console-conf", "behavior": "merge", "files": ["desk-remote-report.locations"]}], str(gen))
 check("and that file's name matches the include", fnmatch.fnmatchcase("desk-remote-report.locations", pattern), pattern)
 locs = re.findall(r"^location\s+(\S+)\s+(\S+)\s+\{", LOCATIONS, re.M)
-check("the file holds one location, the exact /remote-landed", locs == [("=", "/remote-landed")], str(locs))
-check("POST only", "limit_except POST { deny all; }" in LOCATIONS)
-check("refused at the console without the token header", 'if ($http_x_desk_report_token = "") { return 401; }' in LOCATIONS)
-check("and passed to the in-cluster desk, which checks the token",
-      re.search(r"set \$(\w+) http://fake-ticket\.agent\.svc\.cluster\.local:8080;\s*proxy_pass \$\1;", LOCATIONS)
-      is not None)
+check("the file holds two locations, the exact /remote-landed and /remote-cluster-read",
+      locs == [("=", "/remote-landed"), ("=", "/remote-cluster-read")], str(locs))
+blocks = dict(re.findall(r"^location = (\S+) \{\n(.*?)^\}", LOCATIONS, re.M | re.S))
+check("each location's block was read", sorted(blocks) == ["/remote-cluster-read", "/remote-landed"], str(sorted(blocks)))
+for path, block in sorted(blocks.items()):
+    check(f"{path}: POST only", "limit_except POST { deny all; }" in block)
+    check(f"{path}: refused at the console without the token header",
+          'if ($http_x_desk_report_token = "") { return 401; }' in block)
+    check(f"{path}: and passed to the in-cluster desk, which checks the token",
+          re.search(r"set \$(\w+) http://fake-ticket\.agent\.svc\.cluster\.local:8080;\s*proxy_pass \$\1;", block)
+          is not None)
+check("/remote-landed takes a deploy report's 4k, /remote-cluster-read a cluster read's 512k, the desk's MAX_READ_BODY",
+      "client_max_body_size 4k;" in blocks.get("/remote-landed", "")
+      and "client_max_body_size 512k;" in blocks.get("/remote-cluster-read", "")
+      and "MAX_READ_BODY = 512 * 1024" in (AI / "ticket_site.py").read_text(encoding="utf-8"))
 check("the file has no server or http block of its own", re.search(r"^\s*(server|http)\s*\{", LOCATIONS, re.M) is None)
 patches = COMP.get("patches") or []
 env = {}
@@ -267,5 +361,5 @@ if failures:
     for f in failures:
         print(f"  - {f}")
     sys.exit(1)
-print("The public desk takes a remote deploy report only with its token, labels every row with its cluster, and "
-      "only kubecon-community publishes the route.")
+print("The public desk takes a remote deploy report or cluster read only with its token, labels every row with its "
+      "cluster, greys a row only from its own cluster's read, and only kubecon-community publishes the routes.")
