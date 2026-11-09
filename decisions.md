@@ -42624,4 +42624,4 @@ afterwards, both clusters were at the start state, and there was no probe Deploy
 `/var/lib/hecaton/runs/18915/live/probe-admin.log`.
 
 **Not yet run on a cluster.** Nothing this issue needs: both full runs above ran the merged beats from this branch,
-and the probe is a script the presenters run, not something the clusters take from staging.
+and the clusters take nothing from this change: the probe is a script the presenters run against them.
