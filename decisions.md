@@ -45304,3 +45304,10 @@ reworded, and the reason given for the cluster root instead of the audit root.
 **Tests run.** `python3 verify/test_drift_floor.py` passes. The test reads no file it did not read before, so
 `verify/scope-map.yaml` is unchanged. The full Test and E2E commands are left to hecaton's validation. No live check:
 the change touches only `verify/` and decisions.md, which no cluster runs. No dependency was added.
+
+**Run 19461, normal lane.** Run 18807's draft moved to the normal lane because it changes `verify/test_drift_floor.py`,
+and this run keeps it as it is. On base 5da273eb `python3 verify/test_drift_floor.py` passes. Four scratch edits, each
+restored from git, made it exit 1 on the check named: the order sentence in docs/floor.md swapped, the two roots swapped
+in the quoted line, the audit-root-alone sentence removed, and the report's f-string reworded with the doc left alone.
+`python3 verify/scope_tests.py write` added nothing to `verify/scope-map.yaml`. No live check: the change touches only
+`verify/` and decisions.md.
