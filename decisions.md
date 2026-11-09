@@ -41883,3 +41883,60 @@ Left as found: the last `/toggle` read equalled the first (every guard false), a
 
 **Not yet run on a cluster.** Nothing: the live test ran from this checkout, and the change touches nothing the
 clusters run.
+
+## 2026-11-09 · #1227 · run 18982 · `fleet.sh start-check` reads the room's start state: no deploy row on any deployments page, the beacon count at zero
+
+**What.** #1144 asked for the room to start with an empty deployments page and a zero beacon count. #1159 built
+`desk-reset` and #1226 `beacon-reset`; this run adds the read that says both took. `./fleet.sh start-check` GETs
+`/deployments.json` on each host in `WIB_START_DEPLOYMENTS` (default `https://deployments.burritobot.co` and
+`https://deployments-burritobot-private.burritobot.co`) and the beacon view `beacon-reset` checks
+(`WIB_BEACON_VIEW_URL`, default `https://beacon.burritobot.co/beacon/view`). It prints a PASS or FAIL line per
+read, with the row count or the beacon count, and a last line naming every read that failed and what it held. It
+exits 0 only when every page lists 0 rows and the view's `data-count` is 0. It fails on a page that cannot be read,
+answers other than 200 or is not a JSON list, and on a view with no `data-count`. It makes GETs alone.
+
+**Choices.** The name is `start-check`, not `desk-check --empty`, because one verb reads both the desk pages and the
+beacon, which the issue allowed, and the room sees both from the first attack on: one line before doors says the
+start state holds. A removed row counts as a row, since the page still shows it greyed. The first host in
+`WIB_START_DEPLOYMENTS` is taken as the public desk's page: a row there points at `./fleet.sh desk-reset`, and a row
+on any later host says `desk-reset` clears only the first, since the private page is the private cluster's own desk,
+which keeps its rows in memory until its fake-ticket pod restarts. The private host is in the default list because
+it is still served; drop it from the default when that page is retired. The deck's own deployments link,
+`kubecon.html`, names only `deployments.burritobot.co` today.
+
+**Tests.** `bash verify/test_fleet_start_check.sh`: 25 passed, 0 failed. It runs the real `fleet.sh start-check`
+against two real desks (`gitops/ai-layer/ticket_site.py`, each on 127.0.0.1 with a handler that logs each request)
+and a fake beacon. It checks that two rows on the public page, one on the private page, a removed row, a count of
+321 and a count of 1 each fail and are named with their counts, that all three failing at once are named together on
+the last line, that each failing run made GETs alone and left the rows and the count as they were, and that the check
+passes after each desk's own `/desk-reset` and the real `fleet.sh beacon-reset` against the fake. Unreachable hosts,
+a 404, a page with no `data-count` and a stray argument fail. A mutation that ignored the row count failed 5 of its
+checks. `verify/test_one_desk_tools.py` gained what #1144 asked of it that it lacked: that HC-666 is in
+`FIXED_TICKETS`; that the default reset and `--tickets`, on the desk and through `fleet.sh desk-reset`, leave every
+fixed ticket with each field unchanged; that a reset from 127.0.0.2, off the pod's loopback address, is a 403 that
+changes nothing; and that the forwarded-header refusals hold with `{"tickets": true}` too and with
+`X-Forwarded-For: 127.0.0.1`. It passes (46 checks). `verify/scope-map.yaml` gained the new test's entry from
+`python3 verify/scope_tests.py write`, and `verify/fetch-inventory.yaml` its 8 curl lines, classed `loopback`.
+Passed: `verify/test_scope_tests.py` ALL PASS, `verify/test_fetch_inventory.py`, `verify/test_fleet_standbys.sh`
+40/40, `verify/test_fleet_wall_check.sh` 21/21, `verify/test_fleet_beacon_reset.sh` 25/25,
+`verify/test_fleet_wall_reset.sh` 35/35, `verify/test_fleet_exit_codes.sh` 15/15. `verify/test_fleet_contract.py`
+could not run here: it opens `gitops/ai-layer/guard-proxy/proxy.py`, and this worktree has the guard-proxy submodule
+not checked out. The rest of the scoped selection (188 offline tests, 19 tier tests) is left to validation.
+
+**Live.** `./fleet.sh start-check` from this branch at 2026-11-09T00:54:38Z, read-only, against the live hosts:
+
+```
+  PASS  https://deployments.burritobot.co/deployments.json lists 0 deploy rows
+  PASS  https://deployments-burritobot-private.burritobot.co/deployments.json lists 0 deploy rows
+  FAIL  https://beacon.burritobot.co/beacon/view reads 321 beacon(s)
+        run './fleet.sh beacon-reset', which zeroes the count
+start-check: NOT at the start state: https://beacon.burritobot.co/beacon/view 321 beacon(s)
+rc=1
+```
+
+`https://agenticburn.com/beacon/view` read the same 321. Both pages are empty; the count is the practice beacons
+#1226's reset is still owed on, on a host holding the admin token. No cluster was read or changed: the check reads
+public pages alone.
+
+**Not yet run on a cluster.** The passing run: `./fleet.sh start-check` exiting 0 after `./fleet.sh beacon-reset` has
+run on a host holding the provisioning admin token.
