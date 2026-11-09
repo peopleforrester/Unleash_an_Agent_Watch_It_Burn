@@ -47512,3 +47512,59 @@ judge disabled (three cases) and with its one-pod judge loosened to at least one
 commands were not run; validation runs the tests that read the changed files. `scope_tests.py select tools` names three
 tier tests that read the whole tree (`test_iam_policy_structural.py`, `test_image_version_tags.py`,
 `test_kyverno_counter_fix_cache.py`), left to validation. No dependency was added.
+
+## 2026-11-09 · #1265 · run 19575 · #1235's webhook NotIn check is superseded by #1236's matchCondition, and its other owed checks pass on watch-it-burn-private
+
+**What #1265 asks.** Run 19479's #1235 entry lists, under "Not yet run on a cluster", a read of
+`kyverno-resource-validating-webhook-cfg` showing `kubearmor` under NotIn on the `require-resource-limits` webhook.
+That check belonged to #1235's namespaceSelector design (e4bdbc8a). #1236's matchCondition (c768d47a) landed after
+it and replaced it on staging (#1264), so the NotIn will never be there, and that check is dropped. The rest of the
+list still applies: the operator restart runs the snitch and the snitch writes the node's `kubearmor.io/*` labels,
+every Ready node runs a Ready enforcer, and the admin probe passes its Armed and Challenge 2 KubeArmor beats. Run
+19566's #1235 entry ran those an hour earlier by stripping the node's labels; this run ran them again as the list
+words them, with the labels left in place. `verify/prior-drafts.sh 1265 origin/staging` printed NONE. This run
+changed no code.
+
+**What the webhook holds instead (watch-it-burn-private, 14:49Z, read only).** require-resource-limits reads
+`["Deny"]`, matchConstraints Pods alone, and the one matchCondition
+`!(request.namespace == 'kubearmor' && request.kind.kind != 'Pod')`, as on staging. Kyverno now registers it on a
+fine-grained webhook, `vpol.validate.kyverno.svc-fail-finegrained-require-resource-limits`, whose namespaceSelector
+holds only Kyverno's own NotIn lists (`kube-system`, `kube-public`, `kube-node-lease`, then `kyverno`) and whose
+three autogen matchConditions (`autogen-`, `autogen-cronjobs-` and `autogen-defaults-kubearmor-workloads-judged-at-their-pods`)
+each carry the condition for their kinds. So the snitch Job is skipped by the condition, not by a selector, and the
+`svc-fail-d07fe444` webhook #1235's check named is gone.
+
+**Operator restart (14:50Z to 14:53Z, under the guard lock).** Scripts and logs in
+`/var/lib/hecaton/runs/19575/live/` (`operator-restart.*`, `operator-pod-delete.*`), each run under
+`verify/guard_lease.py hold --context watch-it-burn-private`. The list's `kubectl -n kubearmor rollout restart
+deploy/kubearmor-operator` cannot run there: block-argocd-drift refused the patch (`This resource is managed by
+ArgoCD. Change it in Git, not in the cluster.`) and nothing changed. Deleting the operator pod is the same restart
+without patching the Deployment, so the check did that:
+
+    pod "kubearmor-operator-7b778cf5d6-5lwzw" deleted
+    Installing snitch on node ip-10-0-90-97.us-west-2.compute.internal
+    Snitch was installed on node ip-10-0-90-97.us-west-2.compute.internal
+    job kubearmor-snitch-jxlgk   Complete   1/1   4s
+    labels: the same ten kubearmor.io/* labels, rand fwzj -> c2td
+    label managers: snitch 2026-11-09T14:52:30Z (was snitch 14:33:46Z, run 19566's)
+    nodes: ip-10-0-90-97 Ready (the cluster's only node)
+    kubearmor-bpf-containerd-98c2c   DESIRED 1   READY 1   (pod kubearmor-bpf-containerd-98c2c-dtzgv 1/1 Running)
+    no denied, FailedCreate or admission Warning event in kubearmor
+
+**Admin probe after it.** `python3 verify/kubecon_probe.py admin burritobot-private.burritobot.co --context
+watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile accen-dev`, 14:54Z to 15:01Z, log
+`/var/lib/hecaton/runs/19575/live/admin-probe.log`: `34 beats: 34 PASS, 0 FAIL`, `KUBECON PROBE GREEN`, `exit=0`.
+
+    PASS  [3] Armed: ... KubeArmor Block with an enforcer on every node, egress locked
+    PASS  [3] Challenge 2: recipe read blocked and alerted (KubeArmor)
+              KubeArmor denied the read and its block-recipe-snoop alert fired
+
+**Left on the cluster.** A new operator pod and snitch Job; the node's labels as before with a new `rand`; the same
+enforcer pod. require-resource-limits still reads `["Deny"]`, no policy was patched, and the probe ended with guards
+and guardrails off on both clusters and released both locks (`wib-guard-lock is free` afterwards). One leftover that
+is not this run's: a DaemonSet `kubearmor---cf83e` with empty label values in its node selector, DESIRED 0, created by
+the operator at 14:33:30Z while run 19566 had the node's labels off. It schedules nothing and the Armed beat does not
+read it; this run left it in place. The `agent/terminal-auth` Secret was not read or touched.
+
+**Tests run.** Only this entry changed, so no offline or tier test reads it; the prose gate was run on it. The whole
+Test and E2E commands were not run and are left to validation.
