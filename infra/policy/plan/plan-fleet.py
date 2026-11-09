@@ -210,6 +210,12 @@ def main() -> None:
                     proc = subprocess.run([args.tf, f"-chdir={dst}", *step], env=env, capture_output=True, text=True)
                     if proc.returncode != 0:
                         sys.exit(f"{args.tf} {step[0]} failed for {root}:\n{proc.stdout[-3000:]}{proc.stderr[-3000:]}")
+                    if step[0] == "init":
+                        # Where each provider came from: `(unauthenticated)` is the host artifact cache's mirror,
+                        # `(signed ...)` a registry download, which test_plan_policy_e2e.py fails on (#1131).
+                        for line in proc.stdout.splitlines():
+                            if line.startswith(("- Installed ", "- Using ")):
+                                print(f"{root}: {line}")
                 show = subprocess.run([args.tf, f"-chdir={dst}", "show", "-json", "plan.bin"],
                                       env=env, capture_output=True, text=True, check=True)
                 out = args.out / f"{root}.plan.json"

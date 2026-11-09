@@ -129,6 +129,7 @@ always:
   test_guard_proxy_pin_1048.py: it runs git cat-file, ls-tree, show, which reads the tree or history as a whole
   test_guard_proxy_pin_bound_pricing.py: it runs git cat-file, ls-files, show, which reads the tree or history as a whole
   test_guard_proxy_pin_on_main.sh: 'verify/guard-proxy-pin-on-main.sh: it runs git on the tree or history as a whole; verify/submodule-pins-pushed.sh: it runs git on the tree or history as a whole'
+  test_guard_toggle_record.py: 'verify/pantry_replay.py: it runs git ls-tree, rev-list, show, which reads the tree or history as a whole'
   test_guardrail_slide_citations.py: it runs git ls-files, which reads the tree or history as a whole; line 193 builds a path under the repo root from a value it finds at run time; line 189 builds a path under the repo root from a value it finds at run time
   test_harvest_tracked.sh: it runs git on the tree or history as a whole
   test_iam_policy_ci.py: 'verify/test_iam_policy_coverage.py: it runs git ls-files, which reads the tree or history as a whole; verify/test_iam_policy_coverage.py: line 124 builds a path under the repo root from a value it finds at run time; verify/test_iam_policy_coverage.py: line 162 builds a path under the repo root from a value it finds at run time'
@@ -151,9 +152,12 @@ always:
   test_no_docker_hub.py: 'it runs git grep, ls-files, which reads the tree or history as a whole; verify/test_demo_app_web_image.py: it runs git ls-files, which reads the tree or history as a whole; line 299 builds a path under the repo root from a value it finds at run time; line 92 builds a path under the repo root from a value it finds at run time; verify/test_demo_app_web_image.py: line 146 builds a path under the repo root from a value it finds at run time; verify/app_render.py: line 122 builds a path under the repo root from a value it finds at run time; verify/app_render.py: line 98 builds a path under the repo root from a value it finds at run time'
   test_no_presenter_login.py: it runs git ls-files, which reads the tree or history as a whole
   test_observability.py: line 41 builds a path under the repo root from a value it finds at run time
+  test_old_2b_attack_retired.py: it runs git grep, ls-files, which reads the tree or history as a whole
+  test_old_tron_ask_retired.py: it runs git grep, ls-files, which reads the tree or history as a whole
   test_otel_trace_id_fix_live_checks.py: 'verify/test_otel_trace_id_fix_live.py: it runs git cat-file, show, which reads the tree or history as a whole'
   test_package_cache.py: 'it runs git ls-files, which reads the tree or history as a whole; verify/test_e2e_toolchain.py: it runs git ls-files, which reads the tree or history as a whole; line 348 builds a path under the repo root from a value it finds at run time; line 364 builds a path under the repo root from a value it finds at run time'
   test_pantry_header_pin.py: it runs git cat-file, ls-tree, which reads the tree or history as a whole
+  test_pantry_shut_record.py: 'verify/test_pantry_header_pin.py: it runs git cat-file, ls-tree, which reads the tree or history as a whole'
   test_platform_version_pins.py: 'line 165 builds a path under the repo root from a value it finds at run time; verify/test_observability.py: line 41 builds a path under the repo root from a value it finds at run time'
   test_prose_gate.py: 'verify/prose_gate.py: it runs git diff, ls-files, show, which reads the tree or history as a whole'
   test_replay_prompts.py: it runs git ls-files, which reads the tree or history as a whole; line 537 builds a path under the repo root from a value it finds at run time
@@ -265,6 +269,9 @@ reads:
     - verify/record_467.py
     - verify/test_kyverno_cel_live.py
     - verify/topic_cases.py
+  test_889_closing_probes.py:
+    - decisions.md
+    - facilitation/kubecon-na-2026-run-of-show.md
   test_889_probe_record.py:
     - agent
     - challenges/c3-secret-grep/agent-prompt.txt
@@ -1118,6 +1125,11 @@ reads:
     - verify/c1-exfil-block.sh
     - verify/fake_lease_kubectl.py
     - verify/guard_lease.py
+  test_c2_tron_single_prompt.py:
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - facilitation/kubecon-na-2026/fallback/assets.yaml
+    - facilitation/kubecon-na-2026/fallback/prompts.yaml
+    - gitops/ai-layer/web/kubecon.html
   test_c3_bait_baked.py:
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
@@ -3100,6 +3112,43 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/no-cloud.sh
+  test_fleet_beacon_reset.sh:
+    - agent
+    - agent/*
+    - agent/desk-report-token
+    - agent/terminal-auth
+    - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - cost
+    - docs/admin-console.md
+    - gitops/ai-layer
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/workshop-agent/agent.yaml
+    - infra/datadog-fleet
+    - infra/org/boundary
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network
+    - infra/terraform/fleet
+    - infra/terraform/fleet/backups.py
+    - infra/terraform/fleet/backups.tsv
+    - infra/terraform/fleet/check-tls.sh
+    - infra/terraform/fleet/event.sh
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/logs
+    - infra/terraform/fleet/preflight.sh
+    - infra/terraform/fleet/providers/*.sh
+    - infra/terraform/fleet/providers/aws.sh
+    - infra/terraform/fleet/providers/azure.sh
+    - infra/terraform/fleet/providers/gcp.sh
+    - infra/terraform/fleet/providers/local.sh
+    - infra/terraform/fleet/roster.tsv
+    - infra/terraform/fleet/scheduled-up.sh
+    - scripts/harvest_cluster_access.sh
+    - scripts/harvest_terminal_credential.sh
+    - scripts/push_vtt_aws_creds.sh
+    - scripts/reload-routes.sh
+    - verify/no-cloud.sh
   test_fleet_contract.py:
     - CLAUDE.md
     - agent
@@ -3476,6 +3525,44 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/no-cloud.sh
+  test_fleet_start_check.sh:
+    - agent
+    - agent/*
+    - agent/desk-report-token
+    - agent/terminal-auth
+    - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - cost
+    - docs/admin-console.md
+    - gitops/ai-layer
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/workshop-agent/agent.yaml
+    - infra/datadog-fleet
+    - infra/org/boundary
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network
+    - infra/terraform/fleet
+    - infra/terraform/fleet/backups.py
+    - infra/terraform/fleet/backups.tsv
+    - infra/terraform/fleet/check-tls.sh
+    - infra/terraform/fleet/event.sh
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/logs
+    - infra/terraform/fleet/preflight.sh
+    - infra/terraform/fleet/providers/*.sh
+    - infra/terraform/fleet/providers/aws.sh
+    - infra/terraform/fleet/providers/azure.sh
+    - infra/terraform/fleet/providers/gcp.sh
+    - infra/terraform/fleet/providers/local.sh
+    - infra/terraform/fleet/roster.tsv
+    - infra/terraform/fleet/scheduled-up.sh
+    - scripts/harvest_cluster_access.sh
+    - scripts/harvest_terminal_credential.sh
+    - scripts/push_vtt_aws_creds.sh
+    - scripts/reload-routes.sh
+    - verify/no-cloud.sh
   test_fleet_teardown_hooks.sh:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
@@ -3617,6 +3704,47 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/no-cloud.sh
+  test_floor_rebuild_state.py:
+    - agent
+    - agent/*
+    - agent/desk-report-token
+    - agent/terminal-auth
+    - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - cost
+    - docs/admin-console.md
+    - docs/floor.md
+    - gitops/ai-layer
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/workshop-agent/agent.yaml
+    - infra
+    - infra/datadog-fleet
+    - infra/org/boundary
+    - infra/terraform/aws/cluster
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network
+    - infra/terraform/fleet
+    - infra/terraform/fleet/backups.py
+    - infra/terraform/fleet/backups.tsv
+    - infra/terraform/fleet/check-tls.sh
+    - infra/terraform/fleet/event.sh
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/import-state.py
+    - infra/terraform/fleet/logs
+    - infra/terraform/fleet/preflight.sh
+    - infra/terraform/fleet/providers/*.sh
+    - infra/terraform/fleet/providers/aws.sh
+    - infra/terraform/fleet/providers/azure.sh
+    - infra/terraform/fleet/providers/gcp.sh
+    - infra/terraform/fleet/providers/local.sh
+    - infra/terraform/fleet/roster.tsv
+    - infra/terraform/fleet/scheduled-up.sh
+    - infra/terraform/fleet/states
+    - scripts/harvest_cluster_access.sh
+    - scripts/harvest_terminal_credential.sh
+    - scripts/push_vtt_aws_creds.sh
+    - scripts/reload-routes.sh
   test_forkbomb_defense.py:
     - gitops/bootstrap/apps/falco-talon.yaml
     - gitops/bootstrap/apps/falco.yaml
@@ -4314,6 +4442,18 @@ reads:
     - verify/no-cloud.sh
     - verify/no_cloud.py
   test_iam_plan_render_cache.py:
+    - VERSIONS.lock
+    - infra
+    - infra/**/.terraform.lock.hcl
+    - infra/org/boundary
+    - infra/org/permissions-boundary.json.tftpl
+    - infra/terraform/aws/audit
+    - infra/terraform/aws/cluster
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/iam_plan_render.py
+    - verify/tf_plugin_cache.py
+  test_iam_plan_render_plugin_start.py:
     - VERSIONS.lock
     - infra
     - infra/**/.terraform.lock.hcl
@@ -5460,6 +5600,24 @@ reads:
     - verify/fixtures/llmobs-chat-judge/chat-098fcb00.json
     - verify/llmobs_chat_judge.py
     - verify/test_llmobs_chat_judge_live.py
+  test_llmobs_one_ml_app.py:
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/otel-collector
+    - gitops/otel-collector/values.yaml
+    - gitops/workshop-agent/agent.yaml
+    - infra/datadog-fleet/dashboard.yaml
+    - infra/datadog-fleet/fleet_monitors.py
+    - infra/datadog-fleet/leaderboard.yaml
+    - infra/datadog-fleet/monitors.yaml
+    - verify/collector_render.py
+    - verify/test_datadog_sandbox_live.py
+    - verify/test_datadog_service_map.py
+    - verify/test_service_naming.py
   test_local_inference.py:
     - CLAUDE.md
     - backstage
@@ -6732,6 +6890,33 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
+  test_purge_647_record.py:
+    - CLAUDE.md
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/datadog-fleet/dashboard.yaml
+    - infra/datadog-fleet/fleet_monitors.py
+    - infra/datadog-fleet/leaderboard.yaml
+    - infra/datadog-fleet/monitors.yaml
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/chart_fetch.py
+    - verify/charts.lock
+    - verify/charts_lock.py
+    - verify/dd_purge_public.py
+    - verify/gh_comments.py
+    - verify/purge_647.py
+    - verify/test_dd_purge_public_live.py
   test_readme_current.py:
     - README.md
   test_recipe_block_coverage.py:

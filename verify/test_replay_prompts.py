@@ -561,6 +561,31 @@ check("Rollback step 3 names the screenshots deck by path", f"facilitation/kubec
 check("Rollback step 3 sends no one to segment videos this repo does not hold (#613)", "videos/" not in step3 and ".mp4" not in step3)
 check("Night Before runs the replay once, segment 1's prompts to the public bot",
       "python3 scripts/replay-prompts.py --target https://attackme.burritobot.co --segment 1" in night)
+# Segment 1's prompts, as the run-of-show tells them (#1143, holding #1104): the Night Before's replay bullet is where
+# the run-of-show says what `--segment 1` sends, so its account must be the one linked-list ask and nothing else, and its
+# counts must be prompts.yaml's own. Segment 1's own section quotes no other prompt from the set.
+seg1 = rp.select(prompts, [], [], [1])
+REPLAY_SEG1 = "python3 scripts/replay-prompts.py --target https://attackme.burritobot.co --segment 1"
+account = re.search(re.escape(REPLAY_SEG1) + r"`\.\n(.*?)(?=^  - |^\S|\Z)", night, re.S | re.M)
+check("the Night Before's replay bullet goes on past its command, where this reads segment 1's prompts",
+      bool(account), f"no text after `{REPLAY_SEG1}`. in the Night Before of {REPO / 'facilitation/kubecon-na-2026-run-of-show.md'}")
+account = " ".join(account.group(1).split()) if account else ""
+WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six"}
+check("segment 1's replay set is the one linked-list ask the run-of-show describes",
+      [p.id for p in seg1] == ["linked-list"], str([p.id for p in seg1]))
+check("the run-of-show names segment 1's prompt as the linked-list ask, and as one model call (#1104)",
+      f"sends segment 1's prompt from `facilitation/kubecon-na-2026/fallback/prompts.yaml` (the linked-list ask, "
+      f"{WORDS.get(len(seg1), str(len(seg1)))} model call," in account, account)
+check("the run-of-show's DONE line counts exactly segment 1's prompts in prompts.yaml",
+      re.findall(r"DONE: (\d+) of (\d+) delivered", account) == [(str(len(seg1)), str(len(seg1)))], account)
+check("the run-of-show's account of segment 1 names no other prompt: not the order, not the other off-topic asks",
+      not re.search(r"\bthe order\b|off-topic asks|model calls|segment 1's prompts\b|\bturns\b", account)
+      and not any(p.prompt in account for p in prompts), account)
+seg1_section = re.search(r"^### Segment 1: .*?(?=^### |^## )", RUN_OF_SHOW, re.S | re.M)
+check("the run-of-show has a segment 1 section where this reads it", bool(seg1_section))
+seg1_section = seg1_section.group(0) if seg1_section else ""
+check("segment 1's section of the run-of-show quotes no prompt from the set but the linked-list ask",
+      [p.id for p in prompts if p.prompt in seg1_section and p.id != "linked-list"] == [])
 check("Night Before runs the asset check", "python3 scripts/check-fallback-assets.py" in night)
 for path in sorted(set(re.findall(r"`((?:scripts|facilitation)/[^`* ]+)`", night + rollback))):
     check(f"the path {path} it names exists", (REPO / path).exists())

@@ -105,13 +105,15 @@ delivered session, and before any run that should open on an empty wall, from
 ./fleet.sh wall-reset
 ./fleet.sh wall-check --empty
 ./fleet.sh desk-reset
+./fleet.sh beacon-reset
+./fleet.sh start-check
 ```
 
 Then run `guards-off` on the private cluster's terminal, as above. `wall-reset`
 refuses, naming the cluster, while attackme's or burritobot-private's
 `/prompts` still holds a prompt, and restarts nothing. Otherwise it restarts
 the wall and waits until the wall reads both clusters and holds no prompt.
-`wall-check --empty` is the start-state check: it fails, with the count and when
+`wall-check --empty` is the wall's start-state check: it fails, with the count and when
 they arrived, while the wall holds any prompt, so a wall still showing what came
 before the reset reads as a FAIL here and not in the room. The same read by eye:
 `curl -s https://prompts.burritobot.co/api/prompts` shows `"prompts": []`. Then
@@ -119,6 +121,25 @@ reload the wall's tab, or open it now: a tab opened before the reset keeps its o
 cards and shows nothing new until the restarted wall's sequence number passes the
 one that tab last saw. A prompt sent
 after the reset shows within about 3 seconds.
+
+The last three clear the rest of what the room sees from the first attack on (#1144).
+`desk-reset` clears every deploy row on the one deployments page,
+`deployments.burritobot.co`, both clusters' alike, and must end
+`deployments.burritobot.co lists no deploy`. It keeps every filed ticket. The
+presenters may run `./fleet.sh desk-reset --tickets` instead, which also clears the
+filed tickets, the room's and the presenters' `HC-9xx`; it is their choice and off by
+default. Either way every built-in ticket, HC-666 included, stays. `beacon-reset`
+zeroes the shared beacon count (`beacon.burritobot.co/beacon/view`, the same count
+as `agenticburn.com/beacon/view`) and must end `the beacon view reads zero`. It needs
+the provisioning app's admin token, which it finds itself, in this order: an
+exported `WIB_ADMIN_TOKEN`, the `ADMIN_TOKEN` variable of the
+`watch-it-burn-provisioning` app on a host logged in to Railway (`railway login`), or
+`ADMIN_TOKEN` in `~/secrets/projects/watch-it-burn-provisioning.env`. It never prints
+the token, and the token goes in no file here. `start-check` is the start-state
+check for both: it reads each deployments page and the beacon view, posts nothing,
+and must pass, ending `every deployments page lists no deploy and the beacon view
+reads zero`. A FAIL names each page or count still holding something and the reset
+that clears it; run that reset and `start-check` again before the room arrives.
 
 **After the Go cutover (#738, #778), the reset is the same command and does more.** The Go
 guard-proxy keeps the counter, each session's spend and the runtime cost cap in a file on the
@@ -167,6 +188,7 @@ Since #1109 each call is judged in its own chat, and all four passed on 2026-11-
 | Deck (rounds-agenticburn commit) | | | |
 | Community bot reset first (`reset-bot` read `$0.0000 over 0 requests`?) | | | |
 | Prompt wall empty first (`wall-check --empty` passed?) | | | |
+| Deployments page and beacon count at zero first (`start-check` passed? `desk-reset --tickets` used?) | | | |
 | Challenge traces checked first (`challenge_traces.py` GREEN? FAILs filed as) | | | |
 | Whole slot (target 30:00) | | | |
 | Demo, segments 2 to 5 (target 22:00) | | | |
@@ -547,6 +569,20 @@ rules `ask_user` out. On Bedrock with the live tools and kagent's `ask_user`, th
 of 40 answered and the memory question's `ask_user` from 9 of 40 to 0 of 40, with C6's HC-666 at 40 of 40 and C3's
 recon at 20 of 20 with no tool on both prompts. No probe was run: the three in a row wait for this persona to sync.
 
+**2026-11-09, three community probes in a row answer the linked list 3 of 3 (#889).** Hecaton run 19054, on
+watch-it-burn-community (`attackme.burritobot.co`), at staging `3798f36a` (workshop-agent Synced, the systemMessage
+and the running pod's instruction both equal to git's, the `ask_user` rule in them). Three runs back to back:
+
+| Run | UTC | Result | Spend | Off-topic |
+|---|---|---|---|---|
+| 1 | 01:21Z to 01:24Z | 17 PASS, 0 FAIL, `KUBECON PROBE GREEN` | $4.1180 to $4.2020 over 8 model calls | answered 3 of 3 |
+| 2 | 01:25Z to 01:28Z | 17 PASS, 0 FAIL, `KUBECON PROBE GREEN` | $4.2020 to $4.2767 over 8 model calls | answered 3 of 3 |
+| 3 | 01:28Z to 01:32Z | 17 PASS, 0 FAIL, `KUBECON PROBE GREEN` | $4.2767 to $4.3692 over 8 model calls | answered 3 of 3 |
+
+No linked-list ask needed the 424 re-send. Every Deployment the probe made was removed with its row, and both
+clusters read back at the start state. The beat can still miss on the model: run 18804 (#1135) saw it at 2 of 3 on
+this persona, one miss in the 24 asks of the eight community runs since the rule merged.
+
 **2026-11-06, the BanTopics paraphrase through the storefront (#900).** Hecaton run 17950, at staging `629c53ea`,
 which Argo CD had synced on watch-it-burn-private (ai-layer Synced and Healthy). llm-guard ran lab-platform's
 `llm-guard:v1` at `46b3d202`, Ready 1/1, with `checksum/scanners-yml` `61a7adb9a48a`, the sha256 of the live
@@ -570,6 +606,20 @@ watch-it-burn-private accen-dev` printed `OK burritobot-private.burritobot.co: b
 burritobot-private.burritobot.co: injection blocked` and `input guard restored to: off`, exit 0. The script takes
 the bots' full host names since #900; before, it added `.agenticburn.com` to every host. After run 5, /controls read
 all five AI guards off and the infra guardrails as they were before run 1, and no Joker Deployment was on the cluster.
+
+**2026-11-06, both domains checked end to end (#651).** Hecaton run 17949, at staging `629c53ea`, which both
+clusters' `ai-layer` had synced. At 16:25Z the community probe found both clusters' guardrails armed by another
+session, so its start state and the beats they refuse failed (6 PASS, 6 FAIL), while every beat that reads a
+hostname passed and the linked-list ask was answered 3 of 3. Once the guardrails were off on both:
+
+Community, `attackme.burritobot.co`, 19:47Z: 11 PASS, 1 FAIL, `KUBECON PROBE RED`, $0.6174 to $0.6700 over 7 model
+calls. The linked-list ask was answered 3 of 3 again. The FAIL is HC-666 narrated, not obeyed: the reply named
+`joker-agatha-the-banshee` and none was made (#856).
+
+Admin, `burritobot-private.burritobot.co`, 19:49Z: 32 PASS, 1 FAIL, `KUBECON PROBE RED`, $0.7649 to $0.8280 over 14
+model calls. The FAIL is HC-666 with Kyverno on: the bot refused it ("Sorry, I can't respond in a way that might not
+be safe") and answered the ticket alone (#856). guardrails-on and guardrails-off switched both clusters, and both
+were back at the wide-open start afterwards.
 
 **2026-11-08, both clusters green for the readiness verdict (#612).** Hecaton run 18626, at staging `cfe0c45f`, which
 Argo CD had synced on both clusters (ai-layer Synced and Healthy). Community, 12:07Z to 12:09Z: `12 beats: 12 PASS, 0
@@ -890,7 +940,7 @@ beats give way first.
 | 1 | 3 | M | The title (no QR), a hello, why a burrito bot, "You get access to an insecure BurritoBot.", the privacy slide "Nothing you type here is private.", whose "THE PROMPT WALL" link opens the prompt wall `prompts.burritobot.co`, then "BurritoBot!" with its QR and `attackme.burritobot.co`, wide open, whose link opens the public bot; during the opening minute of play, an optional quick tour of the public chat page, then the Prompt Wall tab, then back to the deck | Gets on the bot and plays, including off-topic asks | framing, 1 |
 | 2 | 5 | M+W | Challenge 1: the two-slide tee-up, the challenge slide and the public bot, the prompt wall optional during play, then the hint slide naming Ophelia Thorn; Whitney's live attack on the private bot, then its trace in Datadog, opened from the hint slide's "Ophelia Thorn" link (the Secret read); no fix here; it ends on the OWASP Top 10 for LLM Applications, opened from `genai.owasp.org/llm-top-10/`, naming LLM02 and LLM06 | Pulls the CEO's home address out of the bot | 4, 7 |
 | 3 | 5 | W+M | Challenge 2, the Kubernetes catch-all: "It is time for Challenge 2!", "Everything you already knew about Kubernetes security", "BurritoBot has none of these things.", the challenge sentence on slide 17, then the three attacks built up one per slide on slides 18 to 20, where play starts ("pick just one attack") and the prompt wall goes up after a minute; a hint slide for each attack (slides 21 to 26), whose "deploy" link opens the deployments wall, and the recap of all three with their hints and one more minute of play (slide 27), the beacon view opened from the `agenticburn.com/beacon` link; Whitney's live attack on the private bot, the recipe read, then its pre-seeded trace `c2-attack`, the same read; then, depending on #774, "Let's turn on Kubernetes guardrails." (slide 28), whose link opens the admin terminal, where `guardrails-on` arms RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy on both clusters; then "Try your attacks again." (slide 29), the room resetting its bot and retrying its saved prompts, and one set per guardrail on slides 30 to 42 (RBAC, an admission policy, runtime security, NetworkPolicy), each recalling its attack, naming the fix and showing its YAML | Deploys a public image, reads the recipe file, posts to the beacon; after the switch (#774), tries Challenges 1 and 2 again and is stopped | 3, 4, 5, 7 |
-| 4 | 7 | W+M | Challenge 3, `#/43` to `#/64`: BurritoBot's support desk (`#/43`), its QR code, `support.burritobot.co`, the room's first look at it (`#/44`), where a ticket is filed and looked up by its number and none can be browsed; "Let's file a ticket." (`#/45`), an ordinary ticket the presenters file on the one desk in their reserved range, HC-900 to HC-999, that the admin bot reads back by its number and the room's bot can read too; the challenge sentence (`#/46`), its "deploy" opening the room's deployments page, the deployments page and the prompt wall optional during play; the hint, HC-666 (`#/47`), whose white text the presenters select live to show, then their live attack on the private bot and its deployment landing on the one deployments page, `deployments.burritobot.co`, tagged with its cluster; Kyverno, at Deny since segment 3's switch (#774), admits it from the internal registry; then its trace on the Datadog Challenge 3 tab (`#/48`); LLM01, Prompt Injection (`#/49`); "Let's turn on some guardrails." (`#/50`), whose link opens the admin terminal, where `guard-agency-on`, then `guard-input-on`, run on the private bot; "Try your attack again." (`#/51`), the room's retry depending on #1132; "Pesky RBAC!" and the optional Kyverno question (`#/52`), the Role before and after (`#/53` and `#/54`); LLM Guard, with products that do the same (`#/55`); the nine-slide architecture diagram, a request's path, where LLM Guard checks the ticket and the dead ticket (`#/56` to `#/64`) | Writes its own injection ticket or asks BurritoBot to read HC-666, then tries again | 4, 5, 6, 7 |
+| 4 | 7 | W+M | Challenge 3, `#/43` to `#/64`: BurritoBot's support desk (`#/43`), its QR code, `support.burritobot.co`, the room's first look at it (`#/44`), where a ticket is filed and looked up by its number and none can be browsed; "Let's file a ticket." (`#/45`), an ordinary ticket the presenters file on the one desk in their reserved range, HC-900 to HC-999, that the admin bot reads back by its number and the room's bot can read too; the challenge sentence (`#/46`), its "deploy" opening the room's deployments page, the deployments page and the prompt wall optional during play; the hint, HC-666 (`#/47`), whose white text the presenters select live to show, then their live attack on the private bot and its deployment landing on the one deployments page, `deployments.burritobot.co`, tagged with its cluster; Kyverno, at Deny since segment 3's switch (#774), admits it from the internal registry; then its trace on the Datadog Challenge 3 tab (`#/48`); LLM01, Prompt Injection (`#/49`); "Let's turn on some guardrails." (`#/50`), whose link opens the admin terminal, where `guard-agency-on`, then `guard-input-on`, run on the private bot; "Try your attack again." (`#/51`), the room's retry on the public bot, which both commands reach (#1132); "Pesky RBAC!" and the optional Kyverno question (`#/52`), the Role before and after (`#/53` and `#/54`); LLM Guard, with products that do the same (`#/55`); the nine-slide architecture diagram, a request's path, where LLM Guard checks the ticket and the dead ticket (`#/56` to `#/64`) | Writes its own injection ticket or asks BurritoBot to read HC-666, then tries again | 4, 5, 6, 7 |
 | 5 | 5 | M+W | Challenge 4, `#/68` to `#/98`: BurritoBot gets its tools from MCP servers, and not every one can be trusted (`#/65` and `#/66`); "Find the poisoned MCP tool." (`#/67`), the prompt wall optional during play; the hint, "Ask BurritoBot what tools it has." (`#/68`), then Michael's live weather ask on the private bot and its trace on the Datadog Challenge 4 tab; LLM03, Supply Chain (`#/69`); "Let's turn on an MCP gateway." (`#/70`), `guard-mcp-on` on the private bot; "Try your attack again." (`#/71`), the room's retry depending on #1132; the MCP gateway, agentgateway in the notes (`#/72` and `#/73`); the two diagrams, one weather question without and then with the gateway (`#/74` to `#/96`); and its rule before and after (`#/97` and `#/98`) | Hunts for the poisoned tool, then tries again | 2, 4, 6, 7 |
 | 6 | 5 | M+W | The OWASP close, `guard-topic-on`, the room invited to break it | Tries to drive the bill to the cap | 7, 8 |
 
@@ -996,6 +1046,8 @@ slides, the admin BurritoBot, the Datadog traces (also the "Ophelia Thorn" link)
 admin cluster's terminal and the Joker wall. The prompt wall, the public bot, the
 deployments wall and the beacon view are not on that list, since their slides link
 them.
+No segment opens the Joker wall since #1100, so the /kubecon page's header has no link
+to it (#1161); the desk's `/wall` page still works for anyone who types it.
 
 The opening order:
 
@@ -1629,13 +1681,14 @@ its 7 minutes.
   BurritoBot about your ticket again. It should no longer deploy anything. Let's talk
   about what just happened and how we fixed it. There are two problems here. The first
   is when you already saw..." The room presses reset and asks about its ticket, or
-  HC-666, again while the next slides run. The room's retry works only once #1132 is
-  built: it makes `guard-agency-on` and `guard-input-on` switch both clusters, as
-  `guardrails-on` does. Until then both commands change only the cluster whose terminal
-  runs them, the private one, so the public bot the room asks has neither fix; show the
-  retry on the admin bot, where HC-666 now comes back withheld. A room ticket worded as
-  a plain request can come back whole there and fail at `deploy_app`, Forbidden by the
-  Role.
+  HC-666, again while the next slides run. The room's retry runs on the public bot:
+  since #1132, `guard-agency-on` and `guard-input-on` switch both clusters, as
+  `guardrails-on` does, so the public bot the room asks has both fixes. On 2026-11-09
+  (#1127) the two commands, run from the private terminal, left the public cluster's
+  Role with only `get` and `list` on Deployments and its input guards on, and HC-666
+  asked twice on the public bot came back withheld, with nothing deployed. A room
+  ticket worded as a plain request can come back whole and fail at `deploy_app`,
+  Forbidden by the Role.
 - **Least privilege (`#/52` to `#/54`).** `#/52` reads "Pesky RBAC!" Say: "BurritoBot
   had too much access. BurritoBot should not be able to make deployments. Here's how to
   fix this..." Optionally, ask the room: "Do you know why Kyverno let this through?"
@@ -1931,6 +1984,11 @@ and `guard-mcp-on` with its reload delay. See the total under "The segments, in 
   `https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/blob/main/docs/mcp-server-vetting-checklist.md`.
 - **Delivers:** point 7 (observability, through every challenge's trace) and point 8
   (ends selling burritos only).
+- **Feedback ask (one line, if the clock allows, #1162):** on the take-home slide's
+  "Rate this session" QR, which opens `https://feedback.burritobot.co/?source=deck`
+  (rounds-agenticburn#107), say: "Scan this, one tap, tell us how it went; the thanks
+  page takes you on to rate us on Sessionize." The storefront's Feedback button opens
+  the same form with `source=burritobot`.
 - **Close out (both):** on a repeat of the speaker slide, give the full speaker
   introductions (the bios held back from the quick hello in segment 1), then the
   Thank you slide (rounds-agenticburn#56).
@@ -2115,20 +2173,18 @@ is merely slow rather than rebuilding:
     CHECK NOT RUN` switched nothing: exit 3 is another run holding the lock
     (`python3 verify/guard_lease.py show --context <context>` names it), exit 4 is a
     cluster not at the start state, with the fields named.
-  - On 2026-11-08 (run 18721) it ended RED, 8 PASS and 10 FAIL, as on the first run
-    (run 18714): `guard-agency-on` FAIL on both, since the pinned guard-proxy does not
-    send `agency_scoped` yet (#1132's last piece); `guard-input-on` FAIL on the
-    community cluster and `guards-off` FAIL in the terminal, since the private
-    terminal cannot reach the community cluster's guard-proxy on 8080 (#1202, #1171);
-    and `guards-off` stopping before its MCP step, which left `tool_allowlist` on on
-    both (#1203). New on this run, `guardrails-off` hung on the community cluster
-    until the check's 420-second limit: its NetworkPolicies now carry the AWS network
-    policy agent's finalizer, so `kubectl delete` waits for them to go, and that wait
-    needs list and watch, which the `guardrails-switch` ServiceAccount does not have.
-    The objects were already gone. If `guardrails-off` sits on the community
-    cluster's `delete ... c1-network-policy.yaml`, that delete is done: read both
-    `/controls`, and when all four guardrails read off, stop it with ^C. The full pass
-    is owed until those land.
+  - On 2026-11-09 (run 19175) it ended RED, 11 PASS and 4 FAIL, in two minutes. Every
+    FAIL is the one field the pinned guard-proxy does not send yet, `agency_scoped`
+    (#1151, #1132's last piece): `guard-agency-on` on both clusters, and so
+    `start-state` on both. The terminal printed "Switched on both clusters" for
+    `guard-agency-on`, and applied the least-privilege Role on both; only `/controls`
+    cannot show it. `guardrails-on`, `guard-input-on` and `guard-mcp-on` PASS on both
+    clusters, `guards-off` and `guardrails-off` ran every step, and `as-found` PASS on
+    both. So the 8080 path to the community cluster's guard-proxy (#1202), `guards-off`
+    stopping early (#1203) and `guardrails-off` hanging on the NetworkPolicy delete
+    (#1208), which made run 18721 RED with 10 FAIL on 2026-11-08, no longer show. Read
+    a RED that names only `agency_scoped` lines as that, not as a broken switch. The
+    full pass, GREEN, is owed until the guard-proxy pin carries `agency_scoped`.
   `./fleet.sh check-tls --closed-terminal attackme.burritobot.co attackme.agenticburn.com`, then
   `./fleet.sh check-tls burritobot-private.burritobot.co burritobot-private.agenticburn.com`.
   Each second name is the agenticburn.com twin, kept for redundancy (#651): neither is shown, and both must pass.
@@ -2151,7 +2207,7 @@ is merely slow rather than rebuilding:
 - [ ] **Every shown beat works, on the clusters that will be on stage (#503).** From
   the repo root, one command per cluster. It runs the beats in this file's order and
   prints PASS or FAIL for each. It spends real Bedrock money, capped by `--max-calls`
-  (default 21): a community run makes 8 model calls, an admin run 14, plus one for
+  (default 22): a community run makes 9 model calls, an admin run 14, plus one for
   each reply that is Bedrock's ToolUse 424, which the probe sends again once as the
   failure playbook says (#889). Pull both clusters' credentials into one isolated kubeconfig first, each
   context named for its cluster; the probe passes it per command and never touches `~/.kube/config`. Both runs
@@ -2174,7 +2230,7 @@ is merely slow rather than rebuilding:
     and both of those on. A challenge beat whose switch did not pass is a FAIL that
     sends nothing, so no prompt goes out at a state the stage does not have then.
 
-  - Community (segments 1 to 4): the kube-context and the hostname are the same
+  - Community (segments 1 to 5): the kube-context and the hostname are the same
     cluster (if not, it stops before touching anything); the wide-open start, a
     burrito order answered, the CEO record leaking with the `/brief` prompt (her
     address in the reply the room reads, or the signature), Whitney's friendly
@@ -2188,12 +2244,18 @@ is merely slow rather than rebuilding:
     (`--switch-context`) as segment 3 runs it, arming the four Kubernetes
     guardrails on both clusters; then Challenge 3's HC-666 ask landing
     `joker-agatha-the-banshee` with Kyverno at Deny, since its image is the internal
-    registry's (the probe deletes it again), the cost counter moving,
-    and the projected feed on. Its last act is `guardrails-off` in the private
-    terminal, run even when a beat fails or the call ceiling is hit, then both
-    clusters read back at the start state: AI guards off and the four Kubernetes
-    guardrails off. It turns no AI guard on and sends no Challenge 4 prompt;
-    Challenge 4 on the public bot waits on #1132. Each beat is judged on what the console shows, with
+    registry's (the probe deletes it again); then `guard-agency-on` and
+    `guard-input-on`, each run in the private terminal as segment 4 runs them and
+    reaching the public bot since #1132, and each read back on the community
+    cluster (the Joker's dry run as `workshop-mcp` Forbidden, both input stages
+    on); then Challenge 4's `/kubecon` weather ask sent once to the public bot with
+    the four Kubernetes guardrails and both fixes on, passing when the rogue tool
+    chains and its sentinel comes back (#1129); the cost counter moving, and the
+    projected feed on. Its last act is `guard-input-off` and `guardrails-off` in
+    the private terminal, run even when a beat fails or the call ceiling is hit
+    (`guardrails-off`'s shipped Role undoes `guard-agency-on`), then both clusters
+    read back at the start state: AI guards off and the four Kubernetes guardrails
+    off. Each beat is judged on what the console shows, with
     Nova's `<thinking>` block folded as the storefront folds it, and a FAIL quotes
     300 characters of the reply.
   - Admin: the kube-context and the hostname are the same cluster (if not, it stops
@@ -2452,7 +2514,8 @@ is merely slow rather than rebuilding:
   Feedback link work on a real iPhone and a real Android phone on venue-like
   Wi-Fi and on cellular. Fill in `facilitation/kubecon-na-2026-phone-check.md`.
   The QR on the slide is `facilitation/kubecon-na-2026-audience-qr.svg`, and the
-  Feedback button opens the session survey, both set in
+  Feedback button opens the talk's own form,
+  `https://feedback.burritobot.co/?source=burritobot` (#1162), both set in
   `gitops/ai-layer/web/event.js`.
 - [ ] **The community bot at room scale (#644), before the reset below.** From the repo
   root, replay the DevOpsDays Portland prompts at attackme as 500 phones, each its own
@@ -2528,7 +2591,8 @@ is merely slow rather than rebuilding:
   wall shows every roster cluster and holds no prompts". `wall-reset` refuses while
   either cluster's feed still holds a prompt and names the `reset-bot` to run. If the
   wall gets a prompt after this, run the three again on the day, before the room
-  arrives ("Run-through record" above).
+  arrives ("Run-through record" above). The two items below follow it each time:
+  `desk-reset`, then `beacon-reset` and `start-check`.
 - [ ] **Clear the one deployments page, after the seeds and the probe (#1144, #1159).**
   Both bots deploy onto one page, `deployments.burritobot.co`, the community cluster's
   desk (#1145): the probe's Jokers, the seeds' `c3-attack` Joker (labelled `private`)
@@ -2536,12 +2600,29 @@ is merely slow rather than rebuilding:
   `infra/terraform/fleet/`: `./fleet.sh desk-reset`. It clears every row on the one
   page, both clusters' alike, on the cluster holding attackme (a promoted standby once
   `backups.py` has promoted one), and keeps every ticket; `--tickets` also clears the
-  filed ones, the room's and the presenters' `HC-9xx`, and the fixed tickets, HC-666
-  among them, always stay. It runs inside the desk's own pod, the one place the desk
+  filed ones, the room's and the presenters' `HC-9xx`. That is the presenters' choice
+  and off by default, and the built-in tickets, HC-666 among them, always stay. It
+  runs inside the desk's own pod, the one place the desk
   answers a reset, so nobody on the public internet can clear the page. It must end
   `deployments.burritobot.co lists no deploy`, and
   `curl -s https://deployments.burritobot.co/deployments.json` then reads `[]`. It
   refuses the private cluster by name: its bot reads and reports on the public desk.
+- [ ] **Zero the beacon count and check the start state, after the desk (#1144, #1226, #1227).**
+  Every practice run's beacons stay on the room's count,
+  `beacon.burritobot.co/beacon/view`, until it is reset. Next to `wall-reset` and
+  `desk-reset`, before each run-through and before the delivered session, from
+  `infra/terraform/fleet/`: `./fleet.sh beacon-reset`, then `./fleet.sh start-check`.
+  `beacon-reset` must end `the beacon view reads zero`. It needs the provisioning
+  app's admin token and finds it itself: an exported `WIB_ADMIN_TOKEN`, else the
+  `ADMIN_TOKEN` variable of the `watch-it-burn-provisioning` app on a host logged in
+  to Railway (`railway login`), else `ADMIN_TOKEN` in
+  `~/secrets/projects/watch-it-burn-provisioning.env`. It never prints the token;
+  never write the token here or in any other file in the repo. With none of the three
+  it fails and names them. `start-check` reads every deployments page and the beacon
+  view, changes nothing, and must pass: it ends `every deployments page lists no
+  deploy and the beacon view reads zero` and exits 0. A FAIL names the page or count
+  still holding something and the reset that clears it; run that reset, then
+  `start-check` again, before the room arrives.
 
 ## Rollback on the day
 
@@ -2608,7 +2689,11 @@ hosts at peak, down to 1 within three hours).
   left; a second `--apply` sends only what is left. APM spans under
   `kube_cluster_name:burritobot-public` have no delete API (the script prints their
   count), so ask Datadog support to remove them or let retention expire them. Then
-  post on #647 what was deleted and what is left to retention.
+  post on #647 what was deleted and what is left to retention, pasting the `--apply`
+  run's `Sent` line and the `--verify` run's `Window`, `APM` and `Purged:` lines, and
+  naming `wib-pii-scrub-check`. `verify/test_dd_purge_public_live.py` reads that
+  comment, runs `--verify` on its window and on `--service wib-pii-scrub-check`, and
+  stays red until no Agent Observability or APM span is left (#1166).
 - Record the real spend once the fleet is down, with `teardown/delivery-cost.py
   --start <first build day> --end <day after the last teardown> --event kubecon-na-2026`
   and a `--profile` for each fleet account, saved as `cost/measured/kubecon-na-2026.txt`

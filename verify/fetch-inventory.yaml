@@ -640,7 +640,7 @@ sites:
     lines: 2
     class: pinned
     kind: terraform-provider
-    pin: 'the infra/ .terraform.lock.hcl files (each provider zip''s zh: SHA-256), filled into the artifact cache'
+    pin: 'the infra/ .terraform.lock.hcl files (each provider zip''s zh: SHA-256; registry.opentofu.org''s from infra/policy/plan/opentofu, #1131), filled into the artifact cache'
     cached: true
   - match: .
     lines: 4
@@ -1004,6 +1004,15 @@ sites:
     lines: 1
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_fleet_beacon_reset.sh:
+  - match: FAKE\}/seed
+    lines: 1
+    class: loopback
+    why: the fake provisioning app on 127.0.0.1 the test starts itself, seeded with its beacon count
+  - match: .
+    lines: 2
+    class: none
+    why: a check on fleet.sh's text, that the token goes to curl on stdin; nothing leaves the host
   verify/test_fleet_pool_reconcile.sh:
   - match: .
     lines: 4
@@ -1018,6 +1027,11 @@ sites:
     lines: 1
     class: none
     why: comments, docstrings or messages that name the command; none runs it
+  verify/test_fleet_start_check.sh:
+  - match: .
+    lines: 8
+    class: loopback
+    why: the two desks (ticket_site.py) and the fake beacon on 127.0.0.1 the test starts itself, which it seeds, resets and reads
   verify/test_fleet_teardown_hooks.sh:
   - match: .
     lines: 1
@@ -1038,6 +1052,11 @@ sites:
     lines: 2
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_floor_rebuild_state.py:
+  - match: .
+    lines: 4
+    class: none
+    why: the docstring and the checks that read docs/floor.md's terraform init loop as text; none runs terraform
   verify/test_friendly_hostnames.py:
   - match: .
     lines: 1
@@ -1230,7 +1249,7 @@ sites:
     lines: 1
     class: pinned
     kind: terraform-provider
-    pin: .terraform.lock.hcl of the root it inits, its providers served from the artifact cache's mirror (tf_plugin_cache.py)
+    pin: 'the infra/ .terraform.lock.hcl files, infra/policy/plan/opentofu''s for its tofu (#1131), served from the artifact cache''s mirror (tf_plugin_cache.py)'
     cached: true
   verify/test_playwright_browsers.py:
   - match: .
@@ -1389,7 +1408,7 @@ sites:
     why: comments, docstrings or messages that name the command; none runs it
   verify/test_tf_plugin_cache.py:
   - match: .
-    lines: 10
+    lines: 9
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   verify/test_tier_swap_live.py:

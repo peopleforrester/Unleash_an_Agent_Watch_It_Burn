@@ -783,6 +783,15 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
                       standby when backups.py has promoted one, else watch-it-burn-community. Refuses any other
                       cluster, the private one included, whose bot reads and reports on the public desk. Restarts
                       nothing and touches no Secret.
+    beacon-reset      Zero the shared beacon count (#1144, #1226): POST /beacon/reset on the provisioning app
+                      (WIB_PROVISIONING_URL) with its admin token in X-Admin-Token, then read the beacon view
+                      (WIB_BEACON_VIEW_URL, default beacon.burritobot.co/beacon/view) and fail unless it reads 0.
+                      The token comes as for ingest and ops: WIB_ADMIN_TOKEN, a Railway login, or the secrets env
+                      file. It is never printed.
+    start-check       Read the room's start state (#1144, #1227): every deployments page's /deployments.json
+                      (WIB_START_DEPLOYMENTS: deployments.burritobot.co and deployments-burritobot-private) lists
+                      no row, and the beacon view (WIB_BEACON_VIEW_URL) reads 0. Read-only, GETs alone; fails
+                      naming each read and the rows or beacons it held. Run it after desk-reset and beacon-reset.
     terminal-password <name...>
                       Re-issue the terminal login: rewrite terminal-auth with the credential the
                       cluster's role is handed, then restart the terminal so ttyd reads it.
@@ -5432,6 +5441,111 @@ print(urllib.request.urlopen(r, timeout=20).read().decode())' "${DESK_RESET_PATH
     log "desk-reset: done; deployments.burritobot.co lists no deploy, the room's or the presenters'"
 }
 
+# The beacon reset (#1144, #1226). Every practice beacon stays on the room's count, beacon.burritobot.co/beacon/view (the
+# same count as agenticburn.com/beacon/view), which the provisioning app keeps in its database. Its POST /beacon/reset
+# deletes every beacon for the admin token in X-Admin-Token, and answers 403 to any other. This posts it, then reads the
+# view the room sees and fails unless the count it renders, data-count="N", is 0. The token comes from
+# resolve_admin_token and goes to curl on stdin (-H @-), so it is never on a command line, in the log or in the repo.
+# WIB_BEACON_VIEW_URL points the read elsewhere; WIB_PROVISIONING_URL the reset.
+WIB_BEACON_VIEW_URL="${WIB_BEACON_VIEW_URL:-https://beacon.burritobot.co/beacon/view}"
+cmd_beacon_reset() {
+    [[ $# -eq 0 ]] || { log "usage: beacon-reset"; return 2; }
+    local tok url="${WIB_PROVISIONING_URL%/}/beacon/reset" out code body cleared view count
+    if ! tok="$(resolve_admin_token)" || [[ -z "${tok}" ]]; then
+        log "beacon-reset: FAIL cannot resolve the provisioning admin token; the beacon count was not reset. It comes from"
+        log "  an exported WIB_ADMIN_TOKEN, or the Railway variables of ${WIB_PROVISIONING_RW_SERVICE} on a host logged in"
+        log "  to Railway (railway login), or ADMIN_TOKEN in ~/secrets/projects/watch-it-burn-provisioning.env"
+        return 1
+    fi
+    out="$(printf 'X-Admin-Token: %s\n' "${tok}" \
+        | curl -sS --max-time 30 -o - -w '\n%{http_code}' -X POST -H @- "${url}" 2>/dev/null)" || out=$'\n000'
+    code="${out##*$'\n'}"; body="${out%$'\n'*}"
+    case "${code}" in
+        200) ;;
+        000) log "beacon-reset: FAIL could not reach ${url}; the beacon count was not reset"; return 1 ;;
+        403) log "beacon-reset: FAIL ${url} refused the reset (403): the admin token resolved is not the provisioning"
+             log "  app's ADMIN_TOKEN. Check WIB_ADMIN_TOKEN, or the secrets env file, against its Railway variables"
+             return 1 ;;
+        *) log "beacon-reset: FAIL ${url} answered ${code}, not 200; the beacon count was not reset"; return 1 ;;
+    esac
+    cleared="$(_json_field "${body}" cleared || true)"
+    log "  PASS  ${url} answered 200, cleared ${cleared:-an unstated number of} beacon(s)"
+    view="$(curl -fsS --max-time 15 "${WIB_BEACON_VIEW_URL}" 2>/dev/null)" \
+        || { log "beacon-reset: FAIL could not read ${WIB_BEACON_VIEW_URL}, so the count was not checked"; return 1; }
+    count="$({ grep -o 'data-count="[0-9]*"' <<<"${view}" || true; } | head -1 | tr -dc '0-9')"
+    if [[ -z "${count}" ]]; then
+        log "beacon-reset: FAIL ${WIB_BEACON_VIEW_URL} shows no data-count, so it is not the beacon view"; return 1
+    fi
+    if [[ "${count}" != 0 ]]; then
+        log "beacon-reset: FAIL ${WIB_BEACON_VIEW_URL} still reads ${count} beacon(s) after the reset: a cluster still"
+        log "  posting (a practice run, a probe), or a view that is not the provisioning app's own"
+        return 1
+    fi
+    log "  PASS  ${WIB_BEACON_VIEW_URL} reads 0"
+    log "beacon-reset: done; the beacon view reads zero"
+}
+
+# The start state (#1144, #1227): before the room comes in, every deployments page lists no deploy and the beacon view
+# reads zero. One verb reads both, since the room sees both from the first attack on, and one PASS line before doors
+# is what the Night Before wants. It reads /deployments.json on each deployments host, the JSON list the page polls,
+# and the data-count the beacon view renders (the view beacon-reset checks), with GETs only: it posts nothing and
+# changes nothing, so it can run any number of times. It fails while a page lists a row, removed rows included, since
+# the page shows them greyed, or while the count is above zero, naming each read and what it held, and while a read
+# cannot be made. WIB_START_DEPLOYMENTS lists the hosts, split on spaces, the public desk's page first: that is the page
+# the deck links and desk-reset clears; after it, the private cluster's own page, while that is still served.
+# WIB_BEACON_VIEW_URL points the beacon read elsewhere.
+WIB_START_DEPLOYMENTS="${WIB_START_DEPLOYMENTS:-https://deployments.burritobot.co https://deployments-burritobot-private.burritobot.co}"
+cmd_start_check() {
+    [[ $# -eq 0 ]] || { log "usage: start-check"; return 2; }
+    local base url out code body n view count rc=0 held=() public=""
+    for base in ${WIB_START_DEPLOYMENTS}; do
+        [[ -n "${public}" ]] || public="${base%/}"
+        url="${base%/}/deployments.json"
+        if ! out="$(curl -sS --max-time 15 -w '\n%{http_code}' "${url}" 2>/dev/null)"; then
+            log "  FAIL  could not read ${url}"; held+=("${url} unreadable"); rc=1; continue
+        fi
+        code="${out##*$'\n'}"; body="${out%$'\n'*}"
+        if [[ "${code}" != 200 ]]; then
+            log "  FAIL  ${url} answered ${code}, not 200"; held+=("${url} answered ${code}"); rc=1; continue
+        fi
+        if ! n="$(jq -er 'if type == "array" then length else error("not a list") end' <<<"${body}" 2>/dev/null)"; then
+            log "  FAIL  ${url} is not a deployments list"; held+=("${url} not a deployments list"); rc=1; continue
+        fi
+        if [[ "${n}" == 0 ]]; then
+            log "  PASS  ${url} lists 0 deploy rows"
+        else
+            log "  FAIL  ${url} lists ${n} deploy row(s)"; held+=("${url} ${n} row(s)"); rc=1
+            if [[ "${base%/}" == "${public}" ]]; then
+                log "        run './fleet.sh desk-reset', which clears every row on the one desk"
+            else
+                log "        desk-reset clears only ${public}; this page is another desk's, which keeps its"
+                log "        rows in memory until its fake-ticket pod restarts"
+            fi
+        fi
+    done
+    if ! view="$(curl -fsS --max-time 15 "${WIB_BEACON_VIEW_URL}" 2>/dev/null)"; then
+        log "  FAIL  could not read ${WIB_BEACON_VIEW_URL}"; held+=("${WIB_BEACON_VIEW_URL} unreadable"); rc=1
+    else
+        count="$({ grep -o 'data-count="[0-9]*"' <<<"${view}" || true; } | head -1 | tr -dc '0-9')"
+        if [[ -z "${count}" ]]; then
+            log "  FAIL  ${WIB_BEACON_VIEW_URL} shows no data-count, so it is not the beacon view"
+            held+=("${WIB_BEACON_VIEW_URL} no data-count"); rc=1
+        elif [[ "${count}" != 0 ]]; then
+            log "  FAIL  ${WIB_BEACON_VIEW_URL} reads ${count} beacon(s)"
+            log "        run './fleet.sh beacon-reset', which zeroes the count"
+            held+=("${WIB_BEACON_VIEW_URL} ${count} beacon(s)"); rc=1
+        else
+            log "  PASS  ${WIB_BEACON_VIEW_URL} reads 0 beacons"
+        fi
+    fi
+    if [[ "${rc}" -eq 0 ]]; then
+        log "start-check: every deployments page lists no deploy and the beacon view reads zero"
+    else
+        log "start-check: NOT at the start state: $(IFS=';'; printf '%s' "${held[*]}" | sed 's/;/; /g')"
+    fi
+    return "${rc}"
+}
+
 # One field of a JSON object, empty when absent.
 _json_field() { python3 -c 'import json, sys; v = json.loads(sys.argv[1]).get(sys.argv[2]); print("" if v is None else v)' "$1" "$2" 2>/dev/null; }
 
@@ -5806,6 +5920,8 @@ main() {
         guardrails-link) cmd_guardrails_link "$@" ;;
         desk-link) cmd_desk_link "$@" ;;
         desk-reset) cmd_desk_reset "$@" ;;
+        beacon-reset) cmd_beacon_reset "$@" ;;
+        start-check) cmd_start_check "$@" ;;
         terminal-password) cmd_terminal_password "$@" ;;
         serve-actions) cmd_serve_actions "$@" ;;
         harvest) cmd_harvest "$@" ;;
