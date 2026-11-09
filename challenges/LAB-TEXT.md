@@ -9,8 +9,8 @@
 |---|---|
 | Copied out | 2026-11-09 |
 | Source | `gitops/ai-layer/web/lab.html` |
-| Source commit | `70777933d01b8d10a81bf2d728bafc57121949e5` (the last commit to change lab.html, on 2026-11-09) |
-| Source blob | `8bc074a1e42cb8411217ed2b551a5eeaea1a5005` |
+| Source commit | `df612fdd0344f5859fddfd144429e5556c4bf838` (the last commit to change lab.html, on 2026-11-09) |
+| Source blob | `0c9646f6ded6047c447e3179cb84d0d79042425c` |
 
 **Is this copy current?** It is current when `git hash-object gitops/ai-layer/web/lab.html` prints the
 source blob above. `verify/test_lab_text_export.py` checks that and fails when the page has changed
@@ -104,7 +104,7 @@ There is a lot here and you are not expected to know what all of it is. But here
 
 *[Community cluster only]* The Community cluster carries a shorter list on purpose. Istio is not installed here, and neither is anything that defends the agent: no Kyverno, no Falco, no NetworkPolicy until you apply one.
 
-- *[Not on the Community cluster]* [Istio ambient mesh](https://istio.io/latest/docs/ambient/overview/) carries the hop from the console to guard-proxy, which every chat message crosses. On that hop the traffic is mutual TLS: each pod proves who it is with a certificate that names its ServiceAccount. Only those two pods are in the mesh. Run `kubectl get pods -n agent -L istio.io/dataplane-mode` to see which, then send BurritoBot a message and run `kubectl -n istio-system logs -l app=ztunnel --tail=500 | grep 'connection complete' | grep guard-proxy-reader | tail -1` to see that connection, with both identities.
+- *[Not on the Community cluster]* [Istio ambient mesh](https://istio.io/latest/docs/ambient/overview/) carries the hop from the console to guard-proxy, which every chat message crosses. On that hop the traffic is mutual TLS: each pod proves who it is with a certificate that names its ServiceAccount. The weather feed, the one pod allowed out to the internet, is in the mesh too, so that where it may call out to can be held to a short list of hosts. No other pod is. Run `kubectl get pods -n agent -L istio.io/dataplane-mode` to see which, then send BurritoBot a message and run `kubectl -n istio-system logs -l app=ztunnel --tail=500 | grep 'connection complete' | grep guard-proxy-reader | tail -1` to see that connection, with both identities.
 - [cert-manager](https://cert-manager.io/docs/) issues and renews the TLS certificates that services present (for example the console's HTTPS).
 - [OpenTelemetry](https://opentelemetry.io/docs/) collects the traces and metrics. We send them to Datadog, but OpenTelemetry is vendor neutral. You can send the collected data to any observability backend.
 - [External Secrets](https://external-secrets.io/latest/) pulls your Datadog keys out of AWS Secrets Manager, so no credential is committed anywhere.
