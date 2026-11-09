@@ -48370,3 +48370,30 @@ live check; the two read-only `kubectl get` calls above were for the finding. No
 as described, on the four digests and on nothing else. `python3 verify/scope_tests.py check`,
 `python3 verify/test_scope_tests.py`, `python3 verify/test_fetch_inventory.py` and `python3 verify/test_e2e_tools_tier.py` passed. The whole Test and E2E
 commands are left to validation. No dependency was added.
+
+## 2026-11-09 · #1282 · run 19658 · question 1142: the signing act goes through the `sources-elevated` wrapper, which refuses it as the custodian tier's
+
+**Question 1142** asked how the four unsigned digests run 19646 found get signed. **Answer:** the escalated
+`ssh netcup netcup bash ...` act was refused because its working directory was the placeholder `<checkout of ...>`,
+not a path; the run is to do the act itself through the `sources-elevated` wrapper, and if that refuses, end with the exact
+command in `escalate` and the wrapper's `REFUSED` line quoted. **Decided by** the coordinator under Michael's
+standing rules, not by Michael. **What it changes:** this run wrote the command with concrete paths (Michael's
+checkout on netcup is `~/repos/talks/Unleash_an_Agent_Watch_It_Burn`, whose `policies/cosign/watch-it-burn.pub` is
+byte for byte this repo's, sha256 `59dc30a8...`) and ran it through
+`sudo -n -u michael /var/lib/hecaton/cli/sources-elevated netcup '<command>'`, first with `--check`. Both answered
+`REFUSED sources netcup is the custodian tier's`: a command on netcup in Michael's home, where the cosign key is, is
+the custodian tier's, and the `sources-elevated` `fleet` verb reaches only tanjiro-wsl2 and megumi-wsl2. So the act is
+escalated again, with the same command and that line quoted.
+
+**Why run 19646 failed validation.** `verify/test_scope_tests.py` failed: the scope map's entry for
+`test_wib_digests_signed.py` did not list `verify/ghcr_pull.py`, which it reads through `verify/wib_pins.py`.
+`scope_tests.py write` had not added it while `wib_pins.py` was uncommitted. This run ran `write` again, which added
+it, and `scope_tests.py check` and `test_scope_tests.py` pass. The `--context is empty` line in that gate's output
+is another test's message, not a failure of this change.
+
+**State of the criterion.** `python3 verify/test_wib_digests_signed.py`, run once in this run, still fails on the same
+four digests (the three Kyverno counter-fix builds and `llm-guard-model-zeroshot`), and on nothing else. It passes once
+the escalated act signs them. Until then the branch must not reach staging: the tools tier selects this test for a
+change to YAML or images.lock, so a red copy on staging would hold the promotion to main red.
+
+**Live check.** None needed: the change is under `verify/` and decisions.md, which no cluster runs.

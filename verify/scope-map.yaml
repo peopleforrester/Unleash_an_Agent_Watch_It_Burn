@@ -9635,6 +9635,7 @@ reads:
     - '*Dockerfile'
     - '*Dockerfile.*'
     - images.lock
+    - verify/ghcr_pull.py
     - verify/wib_pins.py
   test_wib_pins.py:
     - images
