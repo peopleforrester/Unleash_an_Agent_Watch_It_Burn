@@ -6662,6 +6662,11 @@ reads:
     - policies/kyverno
     - policies/kyverno/*.yaml
     - verify/policy_spec.py
+  test_poll_spans.py:
+    - verify/fixtures/unsampled-polls/after-repin.json
+    - verify/fixtures/unsampled-polls/agentgateway.log
+    - verify/fixtures/unsampled-polls/before-repin.json
+    - verify/poll_spans.py
   test_prd13_ust.py:
     - gitops/ai-layer/agentgateway.yaml
     - gitops/ai-layer/resources.yaml

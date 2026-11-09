@@ -48,6 +48,11 @@
 # flips the output guard on and back off through /toggle, with reads between, and holds guard-proxy's log to one
 # guard_toggle line per change and none for a read. No model call; the guards are left as found.
 #
+# #1225's unsampled polls (test_unsampled_polls_live.py, #1260) run on PRIVATE_CONTEXT too: c1-exfil-block.sh, under the
+# guard lock, sends the HC-204 prompt with the Challenge 1 policies on, and the blocked run_shell turn's trace is read
+# out of Tempo and held to no tasks/get poll span from guard-proxy, agentgateway or kagent, with the message/send hop
+# and the agent's spans under it, while the gateway's log shows the polls went out. One model call; policies as found.
+#
 # #954's recipe block (test_recipe_block_live.py) runs on PRIVATE_CONTEXT too: the terminal's guardrails-on, the card
 # BurritoBot's prompt names read back Permission denied with KubeArmor's Block alert, one marked model call asking for
 # it, then guardrails-off. The switch reaches the community cluster as well, for the minute or two it runs.

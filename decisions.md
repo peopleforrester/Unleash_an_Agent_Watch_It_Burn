@@ -47416,3 +47416,45 @@ gate output is another test's expected failure case, not a red.
 guard-proxy on 127.0.0.1, started by the test in front of a stand-in agent that the test also starts. Then
 `python3 verify/test_fetch_inventory.py` printed `All fetch inventory checks passed.` Nothing that a cluster runs
 changed, so no live check was run. Run 19549's live record above stands.
+
+## 2026-11-09 · #1260 · run 19567 · a test for #1225's criterion: no poll span in a blocked run_shell turn's trace
+
+**Why.** Test review run 19509 found that no test held #1225's criterion: a blocked run_shell turn's trace in Tempo has
+no tasks/get poll span from guard-proxy, agentgateway or kagent, and the message/send hop and the agent's spans under
+it are still there. Only the research reader `docs/research/2026-11-09-unsampled-polls/poll_spans.py` read it, by hand.
+`bash verify/prior-drafts.sh 1260 origin/staging` printed NONE, so nothing was ported.
+
+**What changed.**
+- `verify/poll_spans.py` judges one turn's trace. It is stricter than the research reader on the gateway and kagent:
+  the reader counted their spans only under guard-proxy's poll hops, so a poll guard-proxy stopped recording but the
+  gateway or kagent still recorded, which hangs straight off `agent.forward` as the poll's traceparent names, would
+  have read as none. The judge fails any gateway or agent span that is not below the message/send hop. It also counts
+  the gateway's A2A requests to the agent under the trace id in its access log.
+- `verify/test_poll_spans.py` (offline) runs the judge on the two real traces of #1225, read out of Tempo on
+  watch-it-burn-private and cut to ids, names, kinds, start times and the prompt (`verify/fixtures/unsampled-polls/`):
+  trace 117dfe9f after the repin passes every check, and trace 5619b12f before it fails exactly the three poll checks
+  (25 at guard-proxy, 50 at the gateway, 25 at kagent). One poll span added to the after trace at one place fails
+  that place's check and no other, and taking the message/send hop, the gateway's span under it, the agent's server
+  span, `invocation` or `run_shell` away fails the check that names it. The gateway's log fixture holds 26 A2A
+  requests for each trace.
+- `verify/test_unsampled_polls_live.py` (`# SUITE: e2e`, PRIVATE_CONTEXT) checks guard-proxy runs git's proxy.py, runs
+  `c1-exfil-block.sh burritobot-private` with run 19452's HC-204 `C1_PROMPT`, reads the trace whose prompt is that one
+  out of Tempo, judges it, and holds the gateway's log to at least two A2A requests under its trace id, so a pass is
+  a turn whose polls went out unsampled and not a turn that never polled. `run-e2e.sh`'s header names it.
+- `verify/fetch-inventory.yaml` classes the live test's Tempo read, and `verify/scope-map.yaml` maps the offline
+  test's fixtures.
+
+**Live, on watch-it-burn-private.** `PRIVATE_CONTEXT=watch-it-burn-private python3 verify/test_unsampled_polls_live.py`
+ran from 1794234987 (14:36:27Z), exit 0, every check PASS. It waited for run 19566's kubecon_probe.py to release the
+guard lock, then c1-exfil-block.sh printed OK and released it. The read:
+
+    unsampled polls read: trace 5f86f189a03adab50f1c9b26f828b2bb: 14 spans; guard-proxy hops under agent.forward 1 (tasks/get polls 0); gateway SERVER under them 1; agent server spans 1; gateway A2A requests 25 (tasks/get 24); PASS
+
+The six Challenge 1 NetworkPolicies in agent were in a list taken before the run and gone after it. The list was
+taken while run 19566's probe held the lock with guardrails on. The probe ends with guardrails-off, and afterwards
+guard-proxy's `/controls` read `infra.networkpolicy` false, so the policies left with the probe. c1-exfil-block.sh
+snapshots the policies after it takes the lock, so it put back what it found then.
+
+**Tests run.** `python3 verify/test_poll_spans.py` (27 PASS), `python3 verify/fetch_inventory.py check`, the live
+test above, and the tests the scoped selector names for this change; see the commit. The live test and the judge
+touch only `verify/`, which no cluster runs.

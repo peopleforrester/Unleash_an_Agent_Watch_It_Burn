@@ -1570,6 +1570,16 @@ sites:
     lines: 5
     class: none
     why: what the trace must carry, as text
+  verify/test_unsampled_polls_live.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: cluster
+    target: Tempo on watch-it-burn-private, reached through a kubectl port-forward on 127.0.0.1
+  - match: .
+    lines: 2
+    class: none
+    why: the docstring on c1-exfil-block.sh's curl, and the check that curl is on PATH for it; the curl runs in c1-exfil-block.sh, classed there
   verify/test_verify_harness.py:
   - match: .
     lines: 2
