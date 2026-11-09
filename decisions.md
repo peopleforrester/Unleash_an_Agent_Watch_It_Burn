@@ -48061,3 +48061,60 @@ now classed `live`, kind `lab-endpoint`, beside test_audience_path_live.py's. `p
 and `python3 verify/test_console_rollout_drain.py` each exit 0. The "--context is empty" line in that gate's output is
 test_burritobot_cluster_live.py's argument check printing under a passing test, not a failure. The live rollout is
 still not run, for the reason above.
+## 2026-11-09 · #1277 · run 19633 · The collector masks the code of conduct's terms in the conversation, on every profile
+
+**What.** `transform/coc_mask` in `gitops/otel-collector/values.yaml` masks the #1267 spike's 144 terms
+(`docs/research/2026-11-09-coc-floor/`) in the eight conversation attributes burn's `transform/scrub_pii` keeps
+(`gen_ai.input.messages`, `gen_ai.output.messages`, `gen_ai.tool.call.arguments`, `gen_ai.tool.call.result` and the
+four `gcp.vertex.agent.*` attributes they are copied from), on spans and on span events. It is the last traces
+processor in values.yaml, so admin, full and attendee run it, and values-burn.yaml restates it just before
+`transform/scrub_pii`. It runs before every exporter: Tempo, Datadog and `forward/llmobs`, so Agent Observability's
+copy is masked too. The guardrail toggles do not touch it. The shape is scrub_pii's: the keys are copied to
+`cache["coc"]`, masked there with `replace_all_patterns(..., "$$1[redacted]$$3")` twice (an edge is consumed, so two
+terms one separator apart take two passes), and merged back. Ids such as `session.id` stay whole.
+
+**The pattern.** It is `floor.portable_pattern()`, written once under a YAML anchor that the other three statements
+alias. `python3 verify/coc_mask_cases.py` prints it, with each backslash doubled for the OTTL string and each `$`
+doubled for confmap. The pattern is about 18 KB. Rendered, the four copies take the relay config from about 22 KB to
+117 KB, and JSON-escaped for the last-applied annotation from about 23 KB to 157 KB. The annotation is 26,797 bytes on
+watch-it-burn-private today, so it lands near 160 KB of the 256 KiB cap. A much longer term list would need the
+span-event copies dropped or server-side apply on the Application.
+
+**What the collector run found.** The first run of the tier test through the pinned otelcol-contrib 0.160.0 failed:
+a term at the start of a line went unmasked. The attributes are JSON, so a newline before a term is the two
+characters `\n`, and the `n` is not a word edge. guard-proxy writes them with `json.dumps`, which also escapes every
+non-ASCII character, so a curly quote or an emoji before a term (`’`) hid it too, and the terms spelled with `ß`
+never matched. Python's test on raw text could not see this. `floor.portable_pattern()` now also takes `\n`, `\r`,
+`\t` or `\uXXXX` as a leading edge, and `ß` as `ß`. On text that is not JSON nothing changes:
+`verify/test_coc_floor_spike.py` still passes, the stage texts are untouched, and the RE2 form still agrees with the
+folded floor on the abuse texts. A term spelled with an accent still gets past the RE2 form, as the spike's README
+already says.
+
+**Live check, read only, on watch-it-burn-private.** Both clusters run collector image
+`opentelemetry-collector-contrib:0.160.0-5b66b0dc6921`, the version the tier test pins, and both `otel-collector`
+Applications track staging. A script in the run's scratch directory port-forwarded `service/tempo` and read the 200
+`chat` traces of the last 24 hours, counting only and printing no content. Of 2,927 values of the eight attributes,
+`\n` escapes were in 178 of 400 `gen_ai.input.messages` and in all 393 `gcp.vertex.agent.llm_request`, and `\uXXXX`
+escapes were in 389 of 791 replies. That is the JSON the fix above is for. The new pattern would change none of the
+2,927 values, so the mask hides no real turn of the last day. Nothing on either cluster was changed.
+
+**Not yet run on a cluster.** The issue's live criterion, one `/chat` turn whose span in watch-it-burn-private's Tempo
+shows the masked attribute, needs this change running. The collector takes it once hecaton promotes the run and
+Argo CD syncs `otel-collector` from staging. The next run on the issue then sends one `/chat` turn that asks the bot
+to repeat a term from the list, and reads that trace from Tempo (`pull_turns.py`'s port-forward and search, on
+`{ name = "chat" }`). It should find `[redacted]` in `gen_ai.output.messages`, or in `gen_ai.input.messages` if
+guard-proxy passed the prompt on.
+
+**Tests.** `verify/test_collector_coc_mask.py` (new, offline) renders each profile's config with and without
+datadog-secret, and with one org and two on attendee. It checks the placement, that every other traces pipeline
+either takes only the masked pipeline's copy or keeps none of the eight keys (traces/lab), the statements, and the
+decoded pattern against `floor.portable_pattern()`. It also checks the term cases on raw text and on both JSON
+encodings, and that HC-666's ticket comes out unchanged. `verify/test_collector_coc_mask_e2e.py` (new, tools tier)
+runs the instructor and burn traces processors in otelcol-contrib 0.160.0. Each spelling of a term comes out masked
+in the prompt, its span event and the tool call's arguments, `session.id` stays whole, and HC-666's ticket comes out
+unchanged in the reply and in `read_support_ticket`'s result. It passed alone (`bash verify/run-e2e-tools.sh
+test_collector_coc_mask_e2e.py`, 30 checks). Also passed: `test_coc_floor_spike.py`, `test_fetch_inventory.py` (the
+new test's loopback call is listed), `test_scope_tests.py`, `test_e2e_tools_tier.py`, `test_e2e_toolchain.py`, and
+the collector tests that hold the pipeline lists (`test_collector_backends.py`, `test_collector_pii_scrub.py`,
+`test_collector_config.py`, `test_collector_no_datadog.py`, `test_collector_act2_redaction.py`). The whole Test and
+E2E commands are left to validation. No dependency was added.
