@@ -85,14 +85,14 @@ beautifulsoup4==4.15.0 \
     --hash=sha256:288e3ca7d54b06f2ac191970bc275c1939cb46d450b255bf6718b04aa37ab4f7 \
     --hash=sha256:d6f88de62e1d4e38ecb1077eb9724cd0eff29d2a08ca16a401e9b9e93f117cf9
     # via nbconvert
-bleach==6.4.0 \
+bleach[css]==6.4.0 \
     --hash=sha256:4202482733d85cedd04e59fcb2f89f4e4c7c385a78d3c3c23c30446843a37452 \
     --hash=sha256:4b6b6a54fff2e69a3dde9d21cc6301220bee3c3cb792187d11403fd795031081
     # via nbconvert
 boto3==1.43.126 \
     --hash=sha256:5fda4a3dd2782c134a01d1678911962c2860dd8de8cd10bef168ba1507b371a9 \
     --hash=sha256:dd701a973b02a73930e546a6a15d13edbfbedc3180bb3d55b0a88678c284ccd6
-    # via -r images/web-terminal/requirements.in
+    # via -r requirements.in
 botocore==1.43.126 \
     --hash=sha256:2f2239a47025a2fa173cd145ab8803ac02b76114864bf5b66475ff1cb88e6b0a \
     --hash=sha256:96996af07d8b703c3cdf44863f69c0b4b8b2d1cb6976c641986ced3e38c072f3
@@ -485,7 +485,7 @@ ipython-pygments-lexers==1.1.1 \
 ipywidgets==8.1.9 \
     --hash=sha256:bcccba38a6ec3253f7a39c943cea5b9ad01999ce071396171adbc51c6a6a8613 \
     --hash=sha256:f2b8cbcaae10252b809fbe4d7470db75c09b769a32cbf816d20e5ca6d3c5a79d
-    # via -r images/web-terminal/requirements.in
+    # via -r requirements.in
 isoduration==20.11.0 \
     --hash=sha256:ac2f9015137935279eac671f94f89eb00584f940f5dc49462a0c4ee692ba1bd9 \
     --hash=sha256:b2904c2a4228c3d44f409c8ae8e2370eb21a26f7ac2ec5446df141dde3452042
@@ -517,7 +517,7 @@ jsonpointer==3.10 \
     --hash=sha256:3b08b9e5239f1b683e31c9561c350d75ce3fa8cdd407130ca8491fdb0c9e56f3 \
     --hash=sha256:69349c0e738c93e9efa501397091f49ad302ae686293effd05d7755c06f88ef0
     # via jsonschema
-jsonschema==4.26.0 \
+jsonschema[format-nongpl]==4.26.0 \
     --hash=sha256:0c26707e2efad8aa1bfc5b7ce170f3fccc2e4918ff85989ba9ffa9facb2be326 \
     --hash=sha256:d489f15263b8d200f8387e64b4c3a75f06629559fb73deb8fdfb525f2dab50ce
     # via
@@ -543,7 +543,7 @@ jupyter-client==8.10.0 \
 jupyter-collaboration==5.0.1 \
     --hash=sha256:6b46a1af5fc8d927e4596dc2b82bbdf41ba5273f42d9506bee68e505a2e27556 \
     --hash=sha256:e0ba9e8954de676002772e655909fc4536495e20505da86aa726922a2ddba654
-    # via -r images/web-terminal/requirements.in
+    # via -r requirements.in
 jupyter-collaboration-ui==3.0.4 \
     --hash=sha256:81b1000c0731888c81bf5ef820091e8565f42da9d700dc1364710b456a3cef83 \
     --hash=sha256:a45290efc32eb934dfae020fd1848f35d1cf0c6cbd16f94a4e7984e32df1b7a5
@@ -578,7 +578,7 @@ jupyter-lsp==2.3.1 \
 jupyter-resource-usage==1.3.0 \
     --hash=sha256:14c248dc18b831515090a40b863ea68bef26c72a66a1d74beb8959f69a0c9e37 \
     --hash=sha256:a221fdec498c243d0f771688e839d586d09e932e862ca8b2ccb78c377045d5ec
-    # via -r images/web-terminal/requirements.in
+    # via -r requirements.in
 jupyter-server==2.21.1 \
     --hash=sha256:2a6467606af7dbae2e7e31640030025969e15db6a649eae334af90415dc71dca \
     --hash=sha256:a8960aa29263f6041283e97d4756b099fb49b767baab6371891ecb1bd40a63df
@@ -608,22 +608,22 @@ jupyter-ydoc==4.2.1 \
     --hash=sha256:a4ae661e845e7d5acb99c4c8c650568483e9386123c23fe5deb538fa605664bd \
     --hash=sha256:bfe59ac76a3576f5e1949d484187d5ce4a576e11abd55cca485afcc49966c74a
     # via jupyter-server-ydoc
-jupyterlab==4.6.3 \
-    --hash=sha256:0a1ebc6567186f1eabd99536e94df7ed9e96d1e7c5ddf3e4406ae16e88abacb7 \
-    --hash=sha256:2e3db6e3a12495ebd188276e985bf5ac502fbde3d1e8628819920210008de498
+jupyterlab==4.6.4 \
+    --hash=sha256:15b13f991d3985129c797eb84d9949eeb8b6615e14b444868e642411f2c418b2 \
+    --hash=sha256:404f49b081819378524886c9db66dba57a5565981eff885830df1baba3a17df5
     # via
-    #   -r images/web-terminal/requirements.in
+    #   -r requirements.in
     #   jupyter-collaboration
     #   jupyterlab-execute-time
 jupyterlab-execute-time==3.3.0 \
     --hash=sha256:900fd1aebbfd3d943d3625eef973eed555bb2745d49840402783959c8a1dfc3a \
     --hash=sha256:ed246db4d25c2fdbf2825206203d9d12251ebb38d46eb17ce0e11d271b2738f7
-    # via -r images/web-terminal/requirements.in
+    # via -r requirements.in
 jupyterlab-git==0.55.0 \
     --hash=sha256:07521392cb2cee183a04701409984efee16f29811532be9f497ee581eada7743 \
     --hash=sha256:b631ee1476aa9d9c7dc1bc3909593dfbc788ca1fd04e079d21d7688ecfc1d0d7
-    # via -r images/web-terminal/requirements.in
-jupyterlab-git-core==0.55.0 \
+    # via -r requirements.in
+jupyterlab-git-core[nbdime]==0.55.0 \
     --hash=sha256:7a9b00e6fc901c2b39b710e3cf45251d6b855565a45cbd06ff09e3401836f251 \
     --hash=sha256:cd3c3bb1db78d67aa61318d5c0cacfdb0e8f81b654e89cb8ebdc4bf8a37138ed
     # via jupyterlab-git
@@ -837,10 +837,6 @@ notebook-shim==0.2.4 \
     --hash=sha256:411a5be4e9dc882a074ccbcae671eda64cceb068767e9a3419096986560e1cef \
     --hash=sha256:b4b2cfa1b65d98307ca24361f5b30fe785b53c3fd07b7a47e89acb5e6ac638cb
     # via jupyterlab
-overrides==7.7.0 \
-    --hash=sha256:55158fa3d93b98cc75299b1e67078ad9003ca27945c76162c1c0766d6f91820a \
-    --hash=sha256:c7ed9d062f78b8e4c1a7b70bd8796b35ead4d9f510227ef9c5dc7626c60d7e49
-    # via jupyter-server
 packaging==26.3 \
     --hash=sha256:94edc256424af38762eb31306eed28beb9f0efc50a8837492c9d6fd6004aed79 \
     --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
@@ -866,10 +862,6 @@ pexpect==4.9.0 \
     # via
     #   ipython
     #   jupyterlab-git-core
-pip==26.3 \
-    --hash=sha256:6c36ae7da8695be67e3cd9f7d87919667ced53f57ce2ede75d89b5912ed2bc4c \
-    --hash=sha256:f3b60b20ffaadd4415ed7957212a38ac63fa4c5fa375bd0f4a797777940fad13
-    # via -r images/web-terminal/requirements.in
 platformdirs==4.14.5 \
     --hash=sha256:32e9921db7385aa8169bee4fe9501923e5715ba9fb7ea3b9c69b0d8e0639f7a1 \
     --hash=sha256:8e778c6fa421516f4d3369449f8df3b0e1b72c0e0005fe88e3ec772d0a14e750
@@ -1418,12 +1410,8 @@ typing-extensions==4.16.0 \
     --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8 \
     --hash=sha256:dc983d19a509c94dba722ee6abd33940f7c05a89e243c47e907eb4db6f1a43e5
     # via
-    #   anyio
     #   beautifulsoup4
-    #   ipython
     #   jupyter-client
-    #   jupyterlab
-    #   referencing
     #   sqlite-anyio
 tzdata==2026.6 \
     --hash=sha256:0a10eec6e13ef16b627fabed9a5f2ba61a62b1c67f327305f4e7e412a70b4aec \
