@@ -124,7 +124,20 @@ sites:
     lines: 7
     class: none
     why: the usage text, comments, the CRANE variable and its `crane version` check, which reads the binary and fetches nothing
+  images/sample-app/Dockerfile:
+  - match: ^FROM
+    lines: 1
+    class: pinned
+    kind: container-image
+    pin: images/sample-app/Dockerfile (FROM, the ghcr.io copy of nginx:1.27-alpine, by digest)
+    cached: false
   images/tool-pin/Dockerfile:
+  - match: ^FROM
+    lines: 1
+    class: pinned
+    kind: container-image
+    pin: images/tool-pin/Dockerfile (FROM, the ghcr.io copy of python:3.12-slim, by digest)
+    cached: false
   - match: pip install
     lines: 1
     class: pinned
@@ -167,10 +180,21 @@ sites:
     why: a path in the ignore list (.yarn/install-state.gz), not a command
   images/watch-it-burn-backstage/README.md:
   - match: .
-    lines: 3
+    lines: 5
     class: none
-    why: build instructions a person reads and runs by hand; no workflow or test runs them from here
+    why: build instructions a person reads and runs by hand (its buildah from and apt-get lines among them); no workflow or test runs them from here
   images/watch-it-burn-backstage/packages/backend/Dockerfile:
+  - match: ^FROM
+    lines: 1
+    class: pinned
+    kind: container-image
+    pin: images/watch-it-burn-backstage/packages/backend/Dockerfile (FROM, lab-platform's ghcr.io copy of node:24.22.2-trixie-slim, by digest)
+    cached: false
+  - match: apt-get (update|install)
+    lines: 4
+    class: live
+    kind: upstream-index
+    target: Debian's apt archive for the base image's trixie release as it stands at build time (python3, g++, build-essential and libsqlite3-dev, each at whatever version the archive serves)
   - match: .
     lines: 2
     class: none
@@ -191,8 +215,14 @@ sites:
     class: none
     why: the lockfile's generated header; it runs nothing
   images/web-terminal/Dockerfile:
-  - match: ca-certificates curl wget
+  - match: ^FROM
     lines: 1
+    class: pinned
+    kind: container-image
+    pin: images/web-terminal/Dockerfile (FROM, lab-platform's ghcr.io copy of debian:bookworm-slim, by digest)
+    cached: false
+  - match: ca-certificates curl wget|apt-get -o Acquire
+    lines: 3
     class: pinned
     kind: tool
     pin: images/web-terminal/Dockerfile (DEBIAN_SNAPSHOT, the snapshot.debian.org time the base image names; apt checks each package's sha256 against the snapshot's signed index)
@@ -227,8 +257,14 @@ sites:
     kind: python-package
     pin: images/workshop-mcp/Dockerfile (mcp==1.29.1 and pyyaml==6.0.2 on the lines after it)
     cached: false
-  - match: apt-get install
+  - match: ^FROM
     lines: 1
+    class: pinned
+    kind: container-image
+    pin: images/workshop-mcp/Dockerfile (FROM, the ghcr.io copy of python:3.12-slim, by digest)
+    cached: false
+  - match: apt-get (update|install)
+    lines: 2
     class: live
     kind: upstream-index
     target: Debian's apt archive for the base image's release as it stands at build time (curl is a package it installs)
@@ -450,10 +486,15 @@ sites:
     class: none
     why: comments, docstrings or messages that name the command; none runs it
   verify/ci_chromium_libs.py:
+  - match: '"-q", "(update|download)"'
+    lines: 2
+    class: live
+    kind: upstream-index
+    target: Debian's archive at deb.debian.org for the runner's own release, as it stands when verify-suites.yml runs (the package lists, then the .debs the shell lacks, each checked by apt against the signed index)
   - match: .
-    lines: 1
+    lines: 6
     class: none
-    why: '`playwright install --dry-run` lists where the browsers go and downloads nothing'
+    why: '`playwright install --dry-run` lists where the browsers go and downloads nothing; `apt-get -s install` resolves against the lists the update fetched and downloads nothing; the rest are docstrings and messages naming the command'
   verify/datadog-orgs.sh:
   - match: api.datadoghq.com
     lines: 2
@@ -967,7 +1008,7 @@ sites:
     why: comments, docstrings or messages that name the command; none runs it
   verify/test_c1_dns_exfil.py:
   - match: .
-    lines: 8
+    lines: 11
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   verify/test_c1_exfil_block_restore.py:
@@ -1025,6 +1066,11 @@ sites:
     lines: 4
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_ci_chromium_libs.py:
+  - match: .
+    lines: 2
+    class: none
+    why: messages on the apt output the test feeds ci_chromium_libs.py as text; nothing here runs apt
   verify/test_collector_act2_redaction_e2e.py:
   - match: urlopen
     lines: 1
@@ -1336,6 +1382,11 @@ sites:
     kind: helm-chart
     pin: verify/charts.lock (each chart's tarball SHA-256)
     cached: true
+  verify/test_images_lock.py:
+  - match: .
+    lines: 1
+    class: none
+    why: Dockerfile FROM lines in a string the test parses; nothing is built or pulled
   verify/test_input_pii_guard.py:
   - match: urlopen
     lines: 1
@@ -1446,7 +1497,7 @@ sites:
     why: comments, docstrings or messages that name the command; none runs it
   verify/test_no_docker_hub.py:
   - match: .
-    lines: 2
+    lines: 11
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   verify/test_no_docker_hub_render.py:

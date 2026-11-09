@@ -12,7 +12,8 @@ new file is seen before it is committed, and searches each line with the PATTERN
 verbs that read a repository, a Terraform init, the Python installs of pip and uv, the Node fetches of npm, yarn and
 corepack, a Playwright browser install, a Docker or Podman pull, crane, a git clone or submodule update, the setup
 actions a workflow downloads a runtime with, and a get from the host artifact cache (#1117), a chart pull, an image
-layout (or #1216's platform layout) or a git mirror through it (#1122), which fetch on a miss. It is a line scan, as #1115's `git grep` was: a command built across lines is found on the
+layout (or #1216's platform layout) or a git mirror through it (#1122), which fetch on a miss, a Dockerfile's FROM (with
+COPY --from and `buildah from`) and apt or apt-get with an archive verb (#1274). It is a line scan, as #1115's `git grep` was: a command built across lines is found on the
 line that names it, and a line that only names a command (a comment, a message, a regex, a stub) is found too.
 
 The inventory, verify/fetch-inventory.yaml, lists by file the entries that claim those lines. An entry's `match` is a
@@ -83,6 +84,20 @@ PATTERNS = {
     "artifact-cache": r"artifact-cache\.sh\W{1,4}get\b|\$\{CACHE\}\W{1,4}get\b|\bartifact_cache\.get(?:_retrying)?\("
                       r"|\bchart_fetch\.pull\(|\bimage_cache\.(?:platform_)?layout\(|image_cache\.py\W{1,4}(?:platform-)?layout\b"
                       r"|\bgit_mirror\.(?:ensure|submodules)\(|git_mirror\.py\W{1,4}(?:ensure|submodules)\b",
+    # A Dockerfile's FROM, which pulls its base when it is neither scratch nor an earlier stage, and COPY --from, which
+    # pulls an image the same way (#1274). The instruction is FROM, flags, one image reference and an AS name or none:
+    # a whole line, or FROM in capitals opening a string up to its quote or \n ("FROM x\n" in a test). Dockerfile
+    # instructions are not case sensitive, so a whole line may open with `from`; a Python `from x import y`, a prose
+    # line that opens with "from" and runs past one word, and a quoted "from v1.37.0" are not found. `buildah from`, the base a by-hand build
+    # pulls, is the same fetch, as verify/test_no_docker_hub.py reads it.
+    "dockerfile-from": r"""^\s*(?:FROM|from)\s+(?:--\w+=\S+\s+)*[\w${}./:@-]+(?:\s+(?:AS|as)\s+[\w.-]+)?\s*\\?$"""
+                       r"""|(?:["']|\\n)\s*FROM\s+(?:--\w+=\S+\s+)*[\w${}./:@-]+(?:\s+AS\s+[\w.-]+)?\s*(?=["'\\])"""
+                       r"""|\b(?:COPY|copy)\s+(?:--\S+\s+)*--from=|\bbuildah\s+from\b|["']buildah["'],\s*["']from\b""",
+    # apt and apt-get with a verb that reads the archive, in a shell line or a list form (["apt-get", *opts, "update"]),
+    # options between them (#1274). /usr/bin/apt-get is the command; apt as a directory (/var/lib/apt/lists, /etc/apt/)
+    # is not.
+    "apt": r"(?<![\w.-])apt(?:-get)?(?![\w./-]).*?\b(?:install|update|upgrade|dist-upgrade|full-upgrade|download"
+           r"|source|build-dep)\b",
 }
 SCAN = re.compile("|".join(f"(?:{p})" for p in PATTERNS.values()))
 FAMILY = {name: re.compile(p) for name, p in PATTERNS.items()}
