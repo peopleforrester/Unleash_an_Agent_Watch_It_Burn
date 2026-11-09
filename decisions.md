@@ -48285,3 +48285,42 @@ was not read; it gets the same processed batch as Tempo, after `transform/coc_ma
 
 **Tests.** Only this entry changed. The prose gate passed, and the scoped `run-tests.sh` ran the 112 offline tests
 that read decisions.md, `ALL OFFLINE RENDER-GATE TESTS GREEN`, exit 0. No tier test reads it, so none ran.
+
+## 2026-11-09 · #1284 · run 19652 · Argo CD syncs code-of-conduct-names on both KubeCon clusters, and nothing in `agent` is refused by it
+
+**What was checked.** Both clusters' namespaces Application tracks `staging` (path `gitops/namespaces`), so they took
+#1278's policy from staging at 31d03d8d without waiting on a promotion to main: the namespaces sync that created it
+finished at 17:30:39Z on watch-it-burn-private and 17:31:26Z on watch-it-burn-community. No file but this entry
+changed; the run is a live check only.
+
+**Criterion 1.** `kubectl --context <ctx> get validatingadmissionpolicy,validatingadmissionpolicybinding
+code-of-conduct-names` lists both on each cluster. Each carries the tracking annotation
+`namespaces:admissionregistration.k8s.io/ValidatingAdmissionPolicy:/code-of-conduct-names` (and the same with
+`ValidatingAdmissionPolicyBinding`), created at the sync times above. The binding reads `["Deny"]` on both, and the
+policy's generation and observed generation are both 1.
+
+**Criterion 2.** The namespaces Application reads Synced, Healthy, revision 31d03d8d, last operation Succeeded, on
+both. The Applications that sync into `agent` (ai-layer, ai-layer-otel, guardrails-switch, istio-mesh-config on
+private, workshop-agent) all read Synced and Healthy at 31d03d8d with no conditions, and none of their status text
+names code-of-conduct-names. The policy's matchConditions skip every `system:` identity but the service accounts in
+`agent`, so Argo CD's own sync is never evaluated by it. The check was therefore run as the run's own IAM identity
+(`assumed-role/hecaton-run`), which the policy does evaluate:
+
+- A server dry-run create of a ConfigMap whose name holds a ruled-out term was refused by
+  `ValidatingAdmissionPolicy 'code-of-conduct-names'` on both clusters, and one with a plain name was admitted, so the
+  policy is enforcing.
+- A server dry-run replace of each of the 149 Argo-managed objects in `agent` (77 on private, 72 on community, read
+  live): 111 admitted, 38 on private refused by Kyverno's block-argocd-drift, and none refused by
+  code-of-conduct-names. The apiserver runs ValidatingAdmissionPolicy ahead of the validating webhooks, so a Kyverno
+  refusal means the policy had already admitted the object.
+- The live pattern, read from each cluster's policy, run over the name and label text of every object in `agent`
+  (359 on private, 354 on community, every listable kind): none on private; on community, two Kyverno PolicyReports
+  named for a UID, the false positive the policy file's comment describes, written by Kyverno under a `system:`
+  identity the policy skips and not managed by Argo CD.
+- No event in `agent` (19 on private, 55 on community) and no line of either application controller's last 30
+  minutes of log names a code-of-conduct-names refusal.
+
+Nothing on either cluster was changed: every write was a server dry run.
+
+**Tests.** No test was added or changed: the change is this entry alone, and `verify/test_coc_admission.py` already
+holds the policy offline. The prose gate was run on it.
