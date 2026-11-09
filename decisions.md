@@ -48250,3 +48250,38 @@ selects. No dependency was added.
 **Not yet run on a cluster.** Argo CD syncing the policy from git through the namespaces Application, once hecaton
 promotes this and the clusters take the new revision: `kubectl --context <ctx> get validatingadmissionpolicy
 code-of-conduct-names` then shows it carrying Argo CD's tracking annotation.
+## 2026-11-09 · #1277 · run 19651 · The live /chat check: Tempo on watch-it-burn-private shows the term masked
+
+**Why this run.** Run 19633's change merged into staging as a64689ae and left the issue's live criterion under "Not
+yet run on a cluster". Both `otel-collector` Applications have since synced from staging (private at 31d03d8d,
+community at a64689ae, both Synced and Healthy at 17:17Z). On both clusters the collector's ConfigMap
+`otel-collector-opentelemetry-collector-agent` names `transform/coc_mask` three times, and the collector Pod restarted
+on it at 17:17Z (image `opentelemetry-collector-contrib:0.160.0-5b66b0dc6921`, the version the tier test pins).
+
+**The turn, watch-it-burn-private, 2026-11-09 about 17:30Z.** A script in the run's scratch directory took the first
+ASCII term on the proposed list (`terms-proposed.rot13`, index 1, five letters) that `floor.portable_pattern()`
+matches, and sent one `/chat` turn to burritobot-private.burritobot.co. The prompt carried the term and a marker
+(`probe1277x530f5aacff`) and asked the bot to repeat the word. The script then port-forwarded `service/tempo` and
+found the turn by the marker. It never printed the term. Output:
+
+    term chosen: index 1 length 5
+    chat answered: keys ['cost_usd', 'guarded', 'input_tokens', 'output_tokens', 'reply'] guarded False reply length 272 term in reply False
+    trace 8879ab6f42e2dd3fc6542b01ad1a48da found after 0 retries
+      burritobot / chat / span / gen_ai.input.messages: [redacted] x1, term present: False, nonce present: True
+      burritobot / chat / span / gen_ai.output.messages: [redacted] x0, term present: False, nonce present: False
+      burritobot / POST /chat / span / gen_ai.input.messages: [redacted] x1, term present: False, nonce present: True
+      burritobot / POST /chat / span / gen_ai.output.messages: [redacted] x0, term present: False, nonce present: False
+      burritobot-agent / generate_content ... / span / gcp.vertex.agent.llm_request: [redacted] x1, term present: False, nonce present: True
+      burritobot-agent / generate_content ... / span / gcp.vertex.agent.llm_response: [redacted] x0, term present: False, nonce present: False
+      burritobot-agent / generate_content ... / span / gen_ai.output.messages: [redacted] x0, term present: False, nonce present: False
+    conversation attributes read: 7 values still carrying the term: 0
+
+The `chat` span's prompt in Tempo reads `Ticket note probe1277x530f5aacff: a customer wrote the word [redacted] in a
+review. Please repeat th...`. The input guard let the turn through (`guarded False`). The bot did not repeat the word,
+so the reply had nothing to mask. The term is masked in guard-proxy's prompt on both of its spans and in the agent's
+model request, and no attribute anywhere in the trace still carries it. The check sent one turn and changed nothing,
+so it took no guard lock. Its log is `tmp/hecaton/live/chat-1277.log`, scratch that the run's end removes. Datadog
+was not read; it gets the same processed batch as Tempo, after `transform/coc_mask`, as run 19633's offline test holds.
+
+**Tests.** Only this entry changed. The prose gate passed, and the scoped `run-tests.sh` ran the 112 offline tests
+that read decisions.md, `ALL OFFLINE RENDER-GATE TESTS GREEN`, exit 0. No tier test reads it, so none ran.
