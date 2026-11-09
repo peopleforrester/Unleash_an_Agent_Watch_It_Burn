@@ -49646,3 +49646,18 @@ fixes. `test_ttyd_ws_auth.py`, `test_wib_digests_signed.py`, `test_cloud_credent
 **Not yet run on a cluster.** `CONTEXT=watch-it-burn-community python3 verify/test_terminal_ws_auth_live.py` (and the
 same on watch-it-burn-private) against a web-terminal pod on `sha256:b81d336c...`, after hecaton promotes this change
 and Argo CD syncs it. The next run on the issue runs it.
+
+## 2026-11-09 · #1276 · run 19747 · resume of run 19675: the tests gate's test_coc_admission.py failure was staging's own
+
+Run 19675's tests gate failed on `verify/test_coc_admission.py` alone, at the check "variables.floor is
+floor.portable_pattern() as one CEL raw string". Run alone on 19675's base `d77ad23d`, it fails the same way with
+this change set aside: #1277 changed `floor.portable_pattern()` and the policy in
+`gitops/namespaces/code-of-conduct-names.yaml` still held the old form. Staging fixed it in 9ca2ebf5 (#1267). This
+run rebased the two commits onto staging `6eaadbd3` with no conflict, and on the rebased tree
+`python3 verify/test_coc_admission.py` passes, as do `test_c6_villain_endpoint.py`, `test_workflow_registry_writes.py`,
+`test_images_lock.py`, `test_wib_pins.py`, `test_scope_tests.py` and `scope_tests.py check`.
+`bash verify/run-e2e-tools.sh test_image_version_tags.py` is green again on the rebased tree. `images/web-terminal` on
+staging is still tree `b2b8abf1`, the `-8` build's. The gate's `--context is empty` line is another test's message,
+not a failure. Both web-terminal pods still run `68004fb5`; `verify/test_terminal_ws_auth_live.py` on the `-8` pod
+remains under "Not yet run on a cluster" in run 19675's entry. No live check was needed for this resume, which changed
+no file a cluster runs beyond what 19675's entry records.
