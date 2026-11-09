@@ -1060,9 +1060,9 @@ sites:
     class: loopback
     why: the fake provisioning app on 127.0.0.1 the test starts itself, seeded with its beacon count
   - match: .
-    lines: 2
+    lines: 5
     class: none
-    why: a check on fleet.sh's text, that the token goes to curl on stdin; nothing leaves the host
+    why: a check on fleet.sh's text, that the token goes to curl on stdin, and the curl shim that logs curl's arguments with the checks that the token is not in them (#1239); nothing leaves the host
   verify/test_fleet_pool_reconcile.sh:
   - match: .
     lines: 4
