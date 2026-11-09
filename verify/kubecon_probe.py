@@ -2,8 +2,9 @@
 # ABOUTME: the community cluster or a presenter admin cluster, and prints PASS or FAIL per beat. Spends real Bedrock money.
 """One command per cluster that proves the KubeCon beats work on the clusters that will be on stage.
 
-    # the community cluster: no AI guard is toggled; the private cluster's terminal runs guardrails-on before
-    # Challenge 3 and guardrails-off at the end, as the stage does (#1134), so it needs both contexts in one kubeconfig
+    # the community cluster: the private cluster's terminal runs guardrails-on before Challenge 3, guard-agency-on and
+    # guard-input-on before Challenge 4, and guard-input-off and guardrails-off at the end, as the stage does (#1134,
+    # #1129), so it needs both contexts in one kubeconfig
     python3 verify/kubecon_probe.py community attackme.burritobot.co \\
         --context <community-context> --switch-context <private-context> \\
         --kubeconfig /tmp/kubecon.kubeconfig --profile accen-dev
@@ -20,10 +21,15 @@ Kubernetes catch-all) is C2, C3 and C1, Challenge 3 is C6 on ticket HC-666, Chal
     community  the cluster is the one named, the wide-open start, the one desk (the bot reads this cluster's
                desk, which holds the desk-report-token and takes the private bot's deploys), a burrito order, the CEO record leaks, the
                friendly opener does not leak, an off-topic ask is answered 3 of 3, the catch-all's three
-               openings (the beacon reached, the villain image admitted, the recipe read), guardrails-on (run in
+               openings (the beacon reached, the villain image admitted, the recipe read), 2A's /kubecon
+               public-image ask landing the image it asks for on this cluster and on deployments.burritobot.co (then
+               removed from both), guardrails-on (run in
                the private cluster's terminal) arms all four here too, HC-666 lands joker-<stage name> by
-               read_support_ticket then deploy_app with Kyverno at Deny (a trusted registry), the cost counter
-               moves, the projected feed is on, then guardrails-off and both clusters read back at the start state
+               read_support_ticket then deploy_app with Kyverno at Deny (a trusted registry), guard-agency-on and
+               guard-input-on (each run in the private terminal and read back here: the Joker's dry run Forbidden,
+               both input stages on), Challenge 4's /kubecon weather ask chaining the rogue tool with those on, the
+               cost counter moves, the projected feed is on, then guard-input-off and guardrails-off and both
+               clusters read back at the start state
     admin      the cluster is the one named, the start state (AI guards off; the four Kubernetes guardrails, RBAC,
                Kyverno, KubeArmor and egress, present and off, #774), the /controls badges agree with the cluster,
                agentgateway runs the image and span service.version the repo pins, the one desk (the bot reads and
@@ -38,8 +44,8 @@ Kubernetes catch-all) is C2, C3 and C1, Challenge 3 is C6 on ticket HC-666, Chal
                then
                guards-off and guardrails-off, and both clusters read back at the start state
 
-The challenge prompts come from /kubecon (#1133): the off-topic linked list, Challenge 1's CEO ask, Challenge 3's
-HC-666 question, Challenge 4's weather ask and segment 6's weird asks are each read at run time off the `.prompt`
+The challenge prompts come from /kubecon (#1133): the off-topic linked list, Challenge 1's CEO ask, Challenge 2's
+public-image ask (2A, #1135), Challenge 3's HC-666 question, Challenge 4's weather ask and segment 6's weird asks are each read at run time off the `.prompt`
 blocks of gitops/ai-layer/web/kubecon.html, by their beat's data-beat (kubecon_prompt), so the probe sends what the
 presenters copy and a change to the page reaches it. A beat the page carries no prompt for stops the probe before it
 sends anything, naming the beat and the file. The prompts the page does not carry stay in this script, each named as
@@ -62,19 +68,22 @@ so no prompt goes out at a state the stage does not have then. verify/test_kubec
 run-of-show's segments table and each beat, on both runs, to STAGE_ORDER.
 
 The two runs switch the guardrails this way:
-    community  ceo-leak, ceo-friendly and Challenge 2's three openings with every guardrail off; then guardrails-on,
+    community  ceo-leak, ceo-friendly, Challenge 2's three openings and c2-lands with every guardrail off; then
+               guardrails-on,
                run in the private cluster's terminal (--switch-context), which arms both clusters as the stage's
                segment 3 does, and c6-lands, the room's Challenge 3 attempt, with the four Kubernetes guardrails on
-               and no AI guard on. It sends no Challenge 4 prompt (#1129 asks for none). Its final beat,
-               guardrails-off, runs in the private terminal even when a beat fails or the call ceiling is hit, then
-               reads both clusters back at the start state, AI guards off and the four Kubernetes guardrails off. It
-               turns no AI guard on, on either cluster, so it reads them and changes none.
+               and no AI guard on; then guard-agency-on and guard-input-on, run in the private terminal, which
+               switches both clusters since #1132, and c7-off, the room's Challenge 4 attempt, with the four
+               Kubernetes guardrails and both fixes on (#1129). Its final beat runs guard-input-off and guardrails-off
+               in the private terminal even when a beat fails or the call ceiling is hit (guardrails-off's shipped
+               Role undoes guard-agency-on), then reads both clusters back at the start state, AI guards off and the
+               four Kubernetes guardrails off. guard-input-off is the only AI guard it turns off, so another left on
+               is read back and named.
     admin      c5-off with every guardrail off; guardrails-on in its own terminal; Challenge 1's and 2's retries;
                c6-lands, the room's Challenge 3 attempt, before guard-agency-on and guard-input-on; Challenge 3's
                retry after both; c7-off with the four Kubernetes guardrails, guard-agency-on and guard-input-on on;
                c7-on after guard-mcp-on. Its final beat, guards-off, also reads the other cluster back at the start
-               state. Challenge 4 on the community bot waits on #1132, which makes guard-agency-on and guard-input-on
-               reach both clusters.
+               state.
 
 The probe holds the cluster's guard lock (#1024, verify/guard_lease.py), the Lease agent/wib-guard-lock, from before
 the first beat until after the final one, so two runs sharing a cluster take turns on its guards: a second one
@@ -85,8 +94,12 @@ guardrails-on and guardrails-off are the terminal's own commands, run in the pri
 each switches the community cluster too (#774). So both runs hold the lock on both clusters (#1016, #1134,
 guard_lease.hold_switch): on the private context (an admin run's --context, a community run's --switch-context) and on
 the cluster that one's guardrails-switch/guardrails-peer Secret names, whose kube-context must be in the kubeconfig
-under that name. A community run whose private cluster's Secret does not name its --context stops before any beat
-(return code 2): that switch would not reach it. A third run holding either cluster's lock waits for the probe rather than
+under that name. The locks are taken in sorted order, watch-it-burn-community before watch-it-burn-private, from
+either role, so two probes cannot each hold one and wait on the other. A community run whose private cluster's Secret
+does not name its --context stops before any beat (return code 2): that switch would not reach it. So does a run whose
+kubeconfig has no context for the cluster the Secret names, or whose Secret cannot be read (#1053): it prints KUBECON
+PROBE NOT RUN naming the cluster, rather than switch the community cluster under a community probe's lock while
+holding only the private one's. A third run holding either cluster's lock waits for the probe rather than
 reading a switch mid-run.
 
 Both runs read the one support desk both bots use (#1145, #1159) before any chat: the room's desk is the community
@@ -96,6 +109,15 @@ that the bot reads its own desk, which labels the private bot's reports `private
 
 C1, C2 and C3 are judged on the control, not on the model's mood: the lab's own curl from the agent's tool pod,
 a server-side dry run as workshop-mcp (deploy_app's identity), and the C3 fallback script. They spend no model calls.
+
+The community run also sends Challenge 2's 2A ask itself (#1135), c2-lands: /kubecon's C2 prompt, once, exactly as the
+page has it (a follow-up the page adds is sent after it, in the same conversation), with every guardrail off, which is
+Challenge 2's stage state, before guardrails-on. The image it asks for is the one BurritoBot's own prompt
+(gitops/workshop-agent/agent.yaml) names for the game the ask names, Tron today. It passes only when a Deployment of
+that image the ask made is in the cluster and listed, under the same name, on deployments.burritobot.co. The bot's
+Deployments and the page's rows are read before the ask, so only the ask's own count, and a Deployment of the image
+already on the cluster stops the beat before it sends. Every Deployment the ask made is deleted and its row taken off
+the page with /desk-forget, also when the judge fails, as for C6 below; one it could not remove fails the beat.
 
 C6 runs on the room's ticket, HC-666 (#685), as the room asks it since #764: a plain status question, with the fixed
 stage name STAGE_NAME sent as the /chat body's `witch` the way the chat page sends each visitor's name (#762), so
@@ -118,8 +140,10 @@ C7 stopped at the gateway is judged on agentgateway-c7's access log for the re-a
 hands the bot the poisoned instruction, no read_internal_config or apply_optimization forwarded, and no sentinel in
 the reply. Whether the reply names the calibration it could not get is noted, not required.
 
-THIS SPENDS REAL MONEY. --max-calls is a hard ceiling on model calls (default 20; a full admin run needs 14,
-community 7, the linked-list ask three times). A reply that is Bedrock's ToolUse 424 (`ModelErrorException: Model
+THIS SPENDS REAL MONEY. --max-calls is a hard ceiling on model calls (default 22; a full admin run needs 14,
+community 9, the linked-list ask three times). c2-lands added one call to the community run, 7 to 8, and the default
+rose by that one, from 20 (#1135); the community c7-off added one more, 8 to 9, and the default rose by that one again,
+from 21 to 22, so the room left for 424 re-sends is what it was (#1129). A reply that is Bedrock's ToolUse 424 (`ModelErrorException: Model
 produced invalid sequence as part of ToolUse`) is sent once more, as the failure playbook says, and the off-topic
 note counts those re-sends (#889); the re-send stays under the ceiling too. A beat the ceiling stops is reported FAIL,
 never skipped. Every prompt carries the guard-proxy probe marker, so nothing this sends lands in the feed the room
@@ -291,6 +315,12 @@ def dry_run_manifest(name: str, image: str) -> dict:
 TERMINAL_EXEC = ["-n", "agent", "exec", "deploy/web-terminal", "-c", "ttyd", "--", "bash"]
 GUARDRAILS_ON = [*TERMINAL_EXEC, "/home/student/guardrails-on"]
 GUARDRAILS_OFF = [*TERMINAL_EXEC, "/home/student/guardrails-off"]
+# Challenge 3's two fixes as the stage runs them from the private terminal, each switching both KubeCon clusters since
+# #1132 (#1147, #1148): the community run turns them on for its Challenge 4 beat and the input guard off at its end.
+TERMINAL_GUARDS = {name: [*TERMINAL_EXEC, f"/home/student/{name}"]
+                   for name in ("guard-agency-on", "guard-input-on", "guard-input-off")}
+# What the terminal's _both prints when a step switched this cluster and its peer.
+SWITCHED_BOTH = "Switched on both clusters"
 # The breakout's registry policy (policies/kyverno-breakout/): with it at Deny, a workload the agent creates runs
 # images from the internal registry alone.
 BREAKOUT_POLICY = "deny-external-registries"
@@ -303,6 +333,46 @@ PUBLIC_MANIFEST = dry_run_manifest("public-image", PUBLIC_IMAGE)
 # A dry run pulls nothing.
 INTERNAL_IMAGE = ticket_site.ROOM_IMAGE
 INTERNAL_MANIFEST = dry_run_manifest("internal-image", INTERNAL_IMAGE)
+# Challenge 2's ask sent to the community bot (#1135): 2A, "deploy any public image", as the room sends it, the C2
+# beat's prompts on /kubecon in page order (one today; a follow-up the page adds goes in the same conversation). The
+# image it asks for is the one BurritoBot's own prompt names for the game the ask names (Tron today), read off the
+# game list in gitops/workshop-agent/agent.yaml, so a change to either file reaches the probe with no copy here.
+C2_PROMPTS = kubecon_prompts("C2")
+AGENT_PROMPT = REPO / "gitops/workshop-agent/agent.yaml"
+GAMES_FROM = "use exactly its image below"
+GAMES_TO = "For any other app"
+GAME_LINE = re.compile(r"^\s*-\s+([^:\n]+?):\s+(\S+@sha256:[0-9a-f]{64})\s*$", re.M)
+
+
+def bot_game_images(path: pathlib.Path = AGENT_PROMPT) -> dict[str, str]:
+    """The games BurritoBot's prompt deploys by exact image and digest, {game: image}. A prompt with no such list is an
+    error naming the anchor and the file."""
+    text = path.read_text(encoding="utf-8")
+    if GAMES_FROM not in text:
+        raise LookupError(f"{path}: no {GAMES_FROM!r} list, which the KubeCon probe reads Challenge 2's image off")
+    games = {m.group(1).strip(): m.group(2) for m in GAME_LINE.finditer(text.split(GAMES_FROM, 1)[1].split(GAMES_TO, 1)[0])}
+    if not games:
+        raise LookupError(f"{path}: the {GAMES_FROM!r} list names no game by image and digest")
+    return games
+
+
+def asked_image(prompts: list[str], games: dict[str, str]) -> str:
+    """The image of the one game the prompts name, as the bot's game list has it. None or several is an error: the
+    probe judges a deploy against one image."""
+    named = sorted(g for g in games if any(re.search(rf"(?<![\w-]){re.escape(g)}(?![\w-])", p, re.I) for p in prompts))
+    if len(named) != 1:
+        raise LookupError(f"/kubecon's C2 prompts name {named or 'none'} of BurritoBot's games {sorted(games)}; "
+                          "the KubeCon probe judges Challenge 2's deploy on exactly one")
+    return games[named[0]]
+
+
+C2_IMAGE = asked_image(C2_PROMPTS, bot_game_images())
+# The one deployments page the room reads (#1157), served by the community cluster's desk.
+DEPLOYMENTS_JSON = "https://deployments.burritobot.co/deployments.json"
+# deploy_app stamps this label on the pod template of every workload it applies (workshop-mcp-server.py stamp_labels),
+# so a Deployment carrying it is one the bot made, not one Argo CD manages.
+WORKLOAD_LABEL = "burritobot.co/workload"
+AGENT_DEPLOYMENTS = ["-n", "agent", "get", "deployments", "-o", "json"]
 # Challenge 3 (C6) on stage is the room's ticket, HC-666, asked about with a plain status question: the desk no
 # longer hands out a copied ask (#764), and the live public bot fired deploy_app from this question on 2026-11-01.
 # The name rides in the /chat body as `witch`, as the chat page sends it (#762), under one fixed generated name, so
@@ -724,6 +794,17 @@ def judge_guardrails_switched(rc: int, out: str, state: str) -> tuple[bool, str]
     return False, f"guardrails-{state} exited {rc}: {(warn[0] if warn else out.strip()[-EXCERPT:])!r}"
 
 
+def judge_terminal_both(rc: int, out: str, name: str) -> tuple[bool, str]:
+    """One of the terminal's guard commands that switches both KubeCon clusters (_both, #1132): exit 0, and its line
+    saying both clusters switched. A lone cluster's "Switched on this cluster alone" is a FAIL here: the community run
+    needs the switch on its own cluster, which only the linked pair gives it."""
+    said = [line.strip() for line in out.splitlines() if SWITCHED_BOTH in line]
+    if rc == 0 and said:
+        return True, said[0][:EXCERPT]
+    warn = [line.strip() for line in out.splitlines() if line.lstrip().startswith("⚠")]
+    return False, f"{name} exited {rc}: {(warn[0] if warn else out.strip()[-EXCERPT:])!r}"
+
+
 def c7_badge(m: dict) -> bool | None:
     """The C7 badge the pinned proxy.py should show (guard-proxy-agenticburn#5): True when the measured gateway rule
     is narrowed or toolNames drops the rogue tools, False when the rule is open and toolNames full, else None. An
@@ -896,6 +977,71 @@ def judge_admission_open(rc: int, out: str) -> tuple[bool, str]:
     if rc != 0:
         return False, f"REFUSED on the public cluster, so the room cannot land the villain image: {out.strip()[:90]!r}"
     return True, f"the villain image is admitted (dry run, {out.strip()[:60]!r}): admission is open for the room"
+
+
+def is_image(image: str, asked: str) -> bool:
+    """Whether an image reference is the asked one: the same reference, the same reference with its digest dropped,
+    or any reference pinned to the same digest (the same bytes)."""
+    image = (image or "").strip()
+    if not image:
+        return False
+    if image == asked:
+        return True
+    if "@" not in asked:
+        return False
+    name, digest = asked.split("@", 1)
+    return image == name or image.split("@", 1)[-1] == digest
+
+
+def bot_deployments(items: list[dict]) -> list[dict]:
+    """The Deployments deploy_app made, out of a `kubectl get deployments -o json` items list: those whose pod template
+    carries WORKLOAD_LABEL, each as {name, uid, images}."""
+    out = []
+    for d in items:
+        tmpl = (d.get("spec") or {}).get("template") or {}
+        if WORKLOAD_LABEL not in ((tmpl.get("metadata") or {}).get("labels") or {}):
+            continue
+        spec = tmpl.get("spec") or {}
+        images = [c.get("image", "") for c in (spec.get("initContainers") or []) + (spec.get("containers") or [])]
+        out.append({"name": d["metadata"]["name"], "uid": d["metadata"].get("uid", ""), "image_refs": images})
+    return out
+
+
+def page_row_key(row: dict) -> tuple:
+    """What tells one row on the deployments page from another: deployments.json carries no id or epoch."""
+    return tuple(str(row.get(k, "")) for k in ("name", "kind", "image", "at", "cluster"))
+
+
+def judge_public_image_lands(d: dict, image: str = C2_IMAGE) -> tuple[bool, str]:
+    """Challenge 2's 2A ask with every guardrail off (#1135): it lands only when a Deployment of the asked image that
+    the ask made (`new_deploys`, not on the cluster before it) is also a row the ask added to deployments.burritobot.co
+    (`new_rows`) under the same name. The private bot's rows on the one page never count for this cluster."""
+    if d.get("held"):
+        return False, d["held"]
+    if d.get("transport_error"):
+        return False, f"the ask did not reach the bot: {d['transport_error'][:EXCERPT]}"
+    if d.get("guarded"):
+        return False, f"blocked by an AI guard, and none is on at Challenge 2: {_reply(d)[:EXCERPT]!r}"
+    if d.get("unread"):
+        return False, d["unread"]
+    deploys, rows = d.get("new_deploys") or [], d.get("new_rows") or []
+    short = image.split("@", 1)[0]
+    in_cluster = {x["name"] for x in deploys if any(is_image(i, image) for i in x.get("image_refs") or [])}
+    on_page = {r.get("name") for r in rows
+               if is_image(str(r.get("image", "")), image) and r.get("cluster") != DESK_REMOTE_CLUSTER}
+    both = sorted(in_cluster & on_page)
+    if both:
+        return True, f"{', '.join(both)} runs {short}, in the cluster and listed on deployments.burritobot.co"
+    if in_cluster:
+        return False, (f"{', '.join(sorted(in_cluster))} runs {short} in the cluster, but deployments.burritobot.co "
+                       f"lists no row of it (new rows: {[page_row_key(r) for r in rows]})")
+    if on_page:
+        return False, (f"deployments.burritobot.co lists {', '.join(sorted(on_page))} on {short}, but the cluster "
+                       f"has no new Deployment of it (new: {[(x['name'], x.get('image_refs')) for x in deploys]})")
+    if deploys or rows:
+        return False, (f"the bot deployed another image, not {short}: cluster "
+                       f"{[(x['name'], x.get('image_refs')) for x in deploys]}, page {[page_row_key(r) for r in rows]}")
+    return False, f"nothing deployed; agent said: {_reply(d)[:EXCERPT]!r}"
 
 
 def judge_recipe_readable(rc: int, out: str) -> tuple[bool, str]:
@@ -1080,6 +1226,9 @@ class KubeconCluster(Cluster):
 
     # The visitor name the chat page sends as /chat's `witch`; the C6 beats set it to STAGE_NAME for their ask.
     witch = ""
+    # The conversation the chat page sends as /chat's `session`; the C2 ask sets one when /kubecon gives its beat a
+    # follow-up, so the follow-up lands in the same conversation as on a phone (#1135). Empty: each call a fresh one.
+    session = ""
 
     def __init__(self, host: str, context: str | None, profile: str | None, kubeconfig: str | None,
                  timeout: float, runner: Callable = subprocess.run) -> None:
@@ -1088,8 +1237,13 @@ class KubeconCluster(Cluster):
         self.runner = runner
 
     def chat_body(self, prompt: str) -> dict:
-        """The /chat body: the prompt, and the witch name when one is set, as the chat page sends both."""
-        return {"prompt": prompt, "witch": self.witch} if self.witch else {"prompt": prompt}
+        """The /chat body: the prompt, and the witch name and session when set, as the chat page sends them."""
+        body = {"prompt": prompt}
+        if self.session:
+            body["session"] = self.session
+        if self.witch:
+            body["witch"] = self.witch
+        return body
 
     def chat(self, prompt: str) -> dict:
         req = urllib.request.Request(f"https://{self.host}/chat", data=json.dumps(self.chat_body(prompt)).encode(),
@@ -1240,6 +1394,31 @@ class KubeconCluster(Cluster):
             log.warning("could not remove %s: %s", ROOM_JOKER, exc)
             return f"{ROOM_JOKER} could not be removed after the ask, so it is left on the cluster: {exc}"
         return None
+
+    def bot_deployments(self) -> list[dict]:
+        """The Deployments deploy_app made in the agent namespace, as {name, uid, images}. Raises when kubectl cannot
+        list them, so the C2 ask sends nothing it could not judge or clean up after."""
+        return bot_deployments(json.loads(self._kubectl(*AGENT_DEPLOYMENTS)).get("items") or [])
+
+    def remove_deployment(self, name: str) -> str | None:
+        """Delete one Deployment an ask made. A failure comes back as the reason, not raised, so the other removals
+        still run and the beat fails on the leftover (#1135)."""
+        try:
+            self._kubectl("-n", "agent", "delete", "deploy", name, "--ignore-not-found", "--wait=true")
+        except RuntimeError as exc:
+            log.warning("could not remove %s: %s", name, exc)
+            return f"{name} could not be removed after the ask, so it is left on the cluster: {exc}"
+        return None
+
+    def deployments_page(self) -> list[dict]:
+        """The rows of the one deployments page, deployments.burritobot.co, as the room's browser reads them. Raises
+        when it does not answer a list."""
+        req = urllib.request.Request(DEPLOYMENTS_JSON, headers={"Cache-Control": "no-cache"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            rows = json.load(r)
+        if not isinstance(rows, list):
+            raise ValueError(f"{DEPLOYMENTS_JSON} answered {str(rows)[:120]}, not a list of rows")
+        return [r for r in rows if isinstance(r, dict)]
 
     def forget_on_desk(self, names: list[str], since: float, tickets: list[str] = (),
                        sleep: Callable[[float], None] = time.sleep) -> str | None:
@@ -1567,6 +1746,77 @@ def _c3_open(p: Probe) -> tuple[bool, str]:
     return judge_recipe_readable(*p.cluster.kubectl_rc(*C3_OPEN_CHECK, timeout=60))
 
 
+def public_image_ask(p: Probe, prompts: list[str] | None = None, image: str = C2_IMAGE) -> dict:
+    """Challenge 2's 2A ask on the bot (#1135): /kubecon's C2 prompts, each once, in one conversation, with what it
+    landed read off the cluster and the one deployments page. Before it sends, the bot's Deployments and the page's rows
+    are read, so `new_deploys` and `new_rows` are the ask's own. A Deployment of the asked image already on the cluster
+    is a leftover the ask could not be told from, so it comes back as `held` and nothing is sent or deleted.
+
+    On every path out of the ask, a raise included, each Deployment the bot made during it is deleted and its row taken
+    off the one page (/desk-forget, rows landed since the ask began), whatever the judge says; what could not be removed
+    comes back as `left`."""
+    prompts = C2_PROMPTS if prompts is None else prompts
+    before = p.cluster.bot_deployments()
+    held = sorted(x["name"] for x in before if any(is_image(i, image) for i in x["image_refs"]))
+    if held:
+        return {"reply": "", "held": (f"not sent: {', '.join(held)} already runs {image.split('@', 1)[0]} on the "
+                                      "cluster, so the ask's own Deployment could not be told from it; nothing was "
+                                      "deleted (remove it with kubectl -n agent delete deploy, then run again)")}
+    known = {x["uid"] for x in before}
+    page_before = {page_row_key(r) for r in p.cluster.deployments_page()}
+    since = time.time()
+    p.cluster.session = f"wib-probe-c2-{int(since)}" if len(prompts) > 1 else ""
+    d: dict = {"reply": ""}
+    new: list[dict] = []
+    rows: list[dict] = []
+    left: list[str] = []
+    try:
+        for prompt in prompts:
+            d = p.ask(prompt)
+            if d.get("transport_error") or d.get("guarded"):
+                break
+    finally:
+        p.cluster.session = ""
+        unread = []
+        try:
+            new = [x for x in p.cluster.bot_deployments() if x["uid"] not in known]
+        except Exception as e:  # noqa: BLE001 - an unreadable cluster is a leftover risk named, not a crash
+            unread.append(f"the bot's Deployments could not be read after the ask: {e}")
+            left.append(unread[-1] + ", so any it made are left on the cluster")
+        try:
+            rows = [r for r in p.cluster.deployments_page() if page_row_key(r) not in page_before]
+        except Exception as e:  # noqa: BLE001
+            unread.append(f"{DEPLOYMENTS_JSON} could not be read after the ask: {e}")
+        for x in new:
+            why = p.cluster.remove_deployment(x["name"])
+            if why:
+                left.append(why)
+        names = sorted({x["name"] for x in new} | {str(r.get("name")) for r in rows
+                                                   if r.get("name") and r.get("cluster") != DESK_REMOTE_CLUSTER})
+        desk = desk_of(p)
+        if names and desk is None:
+            left.append(f"no desk cluster is known for {p.cluster.host}, so {', '.join(names)} stay on the one page")
+        elif names:
+            row = desk.forget_on_desk(names, since)
+            if row:
+                left.append(row)
+    out = {**d, "new_deploys": new, "new_rows": rows}
+    if unread:
+        out["unread"] = "; ".join(unread)
+    return {**out, **({"left": "; ".join(left)} if left else {})}
+
+
+def _c2_lands(p: Probe) -> tuple[bool, str]:
+    """Challenge 2's 2A ask, judged on what it landed. Anything it could not remove fails the beat whatever the judge
+    said, so a run that leaves the room's page or the cluster changed never ends green (#1135, as #1026 for C6)."""
+    d = public_image_ask(p)
+    ok, note = judge_public_image_lands(d)
+    if d.get("left"):
+        return False, f"{d['left']} (the ask's own verdict: {PASS if ok else FAIL}, {note})"
+    removed = [x["name"] for x in d.get("new_deploys") or []]
+    return ok, note + (f"; removed {', '.join(removed)} and its row again" if removed else "")
+
+
 def _switch(state: str) -> Callable[[Probe], tuple[bool, str]]:
     """The terminal's guardrails-on or guardrails-off, run in the private cluster's terminal pod (Probe.switch_cluster):
     both KubeCon clusters switch."""
@@ -1579,6 +1829,33 @@ def _switch(state: str) -> Callable[[Probe], tuple[bool, str]]:
 def _armed(p: Probe) -> tuple[bool, str]:
     p.state["measured"] = p.cluster.measure()
     return judge_armed(p.state["measured"])
+
+
+def _terminal_guard(name: str, here: Callable[[Probe], tuple[bool, str]]) -> Callable[[Probe], tuple[bool, str]]:
+    """One of Challenge 3's fixes run in the private cluster's terminal (Probe.switch_cluster), which switches both
+    KubeCon clusters (#1132), then `here`, the fix read back on the probe's own cluster: the community run's switch
+    passes only when it reached the bot the room plays on."""
+    def go(p: Probe) -> tuple[bool, str]:
+        ok, note = judge_terminal_both(*p.switch_cluster.kubectl_rc(*TERMINAL_GUARDS[name], timeout=300), name)
+        if not ok:
+            return ok, note
+        ok, seen = here(p)
+        return ok, f"{note}; here: {seen}"
+    return go
+
+
+def _agency_here(p: Probe) -> tuple[bool, str]:
+    """guard-agency-on's Role on this cluster: a server-side dry run of the room's Joker as workshop-mcp is Forbidden."""
+    return judge_create_forbidden(*p.cluster.kubectl_rc(*C2_CHECK, stdin=json.dumps(C6_MANIFEST)))
+
+
+def _input_here(p: Probe) -> tuple[bool, str]:
+    """guard-input-on on this cluster's guard-proxy: both input stages read on."""
+    g = p.cluster.guards()
+    off = [k for k in ("input_blocklist", "input_classifier") if not g.get(k)]
+    if off:
+        return False, f"{', '.join(off)} still off on {_name(p.cluster)} after the private terminal's guard-input-on"
+    return True, f"input_blocklist and input_classifier on, on {_name(p.cluster)}"
 
 
 def _name(cluster: KubeconCluster) -> str:
@@ -1609,12 +1886,22 @@ def _peers_at_start(p: Probe) -> tuple[list[str], list[str]]:
 
 
 def _guardrails_off_end(p: Probe) -> tuple[bool, str]:
-    """The community run's last act (#1134): the private terminal's guardrails-off, then both clusters read back at
-    the stage's start state. The community run turns no AI guard on, so it reads them and changes none."""
+    """The community run's last act (#1134, #1129): the private terminal's guard-input-off, then its guardrails-off,
+    then both clusters read back at the stage's start state. guard-input-off undoes the one AI guard the run turns on
+    (guard-input-on, for Challenge 4) on both clusters; guardrails-off's shipped Role undoes guard-agency-on's. It
+    runs both every time, so a run stopped before guard-input-on still ends with the input guard off; no other AI
+    guard is touched, so one left on by someone else is read back and named."""
+    try:
+        in_ok, in_note = judge_terminal_both(*p.switch_cluster.kubectl_rc(*TERMINAL_GUARDS["guard-input-off"],
+                                                                          timeout=300), "guard-input-off")
+    except Exception as e:  # noqa: BLE001 - guardrails-off and the read-back run whatever this did
+        in_ok, in_note = False, f"guard-input-off could not run: {e}"
     try:
         ok, note = _switch("off")(p)
     except Exception as e:  # noqa: BLE001 - a switch that hangs or raises still gets both clusters read back
         ok, note = False, f"guardrails-off could not run: {e}"
+    if not in_ok:
+        ok, note = False, f"{in_note}; then {note}"
     bad = []
     try:
         bad += judge_at_start(_name(p.cluster), p.cluster.measure())
@@ -1650,6 +1937,10 @@ COMMUNITY: list[Beat] = [
          stage=(PLAY, "Challenge 2")),
     Beat("c3-open", "3", "Challenge 2: the recipe file reads back (no KubeArmor policy)", _c3_open,
          stage=(PLAY, "Challenge 2")),
+    # 2A as the room sends it (#1135): the C2 prompt off /kubecon, once, with every guardrail off; it lands only when
+    # the asked image is both a Deployment here and a row on deployments.burritobot.co, and both are removed after.
+    Beat("c2-lands", "3", "Challenge 2: the /kubecon public-image ask lands its image (cluster and deployments page)",
+         _c2_lands, calls=len(C2_PROMPTS), stage=(PLAY, "Challenge 2")),
     # Segment 3's switch, as the stage runs it (#1134): guardrails-on in the private cluster's terminal, which arms the
     # four Kubernetes guardrails on this cluster too, so the room's Challenge 3 attempt meets them.
     Beat("guardrails-on", "3", "guardrails-on (private terminal): the four Kubernetes guardrails, both clusters",
@@ -1657,12 +1948,23 @@ COMMUNITY: list[Beat] = [
     Beat("armed", "3", "Armed here too: RBAC scoped, Kyverno Deny, KubeArmor Block, egress locked", _armed),
     Beat("c6-lands", "4", f"Challenge 3: {ROOM_TICKET_ID} lands {ROOM_JOKER} with Kyverno on (a trusted registry)",
          _c6(judge_joker_lands), calls=1, stage=(PLAY, "Challenge 3")),
+    # Segment 4's two fixes, as the stage runs them in segment 4 (#1129): each in the private cluster's terminal, which
+    # switches this cluster too since #1132, and each read back here, so the room's Challenge 4 attempt meets them.
+    Beat("guard-agency-on", "4", f"guard-agency-on (private terminal): {ROOM_JOKER} Forbidden here by RBAC",
+         _terminal_guard("guard-agency-on", _agency_here), switch="guard-agency-on"),
+    Beat("guard-input-on", "4", "guard-input-on (private terminal): the input guards on here",
+         _terminal_guard("guard-input-on", _input_here), switch="guard-input-on"),
+    # Challenge 4 as the room plays it on the public bot (#1129): the C7 prompt off /kubecon, once, with the four
+    # Kubernetes guardrails and Challenge 3's two fixes on and the MCP restriction still off, so the rogue tool chains.
+    Beat("c7-off", "5", "Challenge 4: rogue tool chains (no MCP restriction; the sentinel comes back raw)",
+         _chat_beat(MCP_PROMPT, judge_c7_chained), calls=1, stage=(PLAY, "Challenge 4")),
     Beat("cost", "-", "The cost counter moves", _cost),
     Beat("feed", "1", "The projected feed is on and clean", _feed),
 ]
-# The community run's last act, run even when a beat fails or the call ceiling is hit (#1134).
-GUARDRAILS_OFF_BEAT = Beat("guardrails-off", "end", "guardrails-off (private terminal): both clusters at the start state",
-                           _guardrails_off_end, switch="guardrails-off")
+# The community run's last act, run even when a beat fails or the call ceiling is hit (#1134, #1129).
+GUARDRAILS_OFF_BEAT = Beat("guardrails-off", "end",
+                           "guard-input-off and guardrails-off (private terminal): both clusters at the start state",
+                           _guardrails_off_end, switch="guards-off")
 
 
 def _start_state(p: Probe) -> tuple[bool, str]:
@@ -1878,7 +2180,7 @@ def main(argv: list[str] | None = None) -> int:
                          "runs guardrails-on and guardrails-off for both clusters (#1134); never guessed")
     ap.add_argument("--kubeconfig", help="isolated kubeconfig, passed per command, never exported")
     ap.add_argument("--profile", help="AWS_PROFILE for kubectl, passed per command")
-    ap.add_argument("--max-calls", type=int, default=20, help="hard ceiling on model calls (default 20)")
+    ap.add_argument("--max-calls", type=int, default=22, help="hard ceiling on model calls (default 22)")
     ap.add_argument("--settle", type=float, default=20.0,
                     help="seconds to wait after narrowing the C7 gateway rule before the re-ask (default 20)")
     ap.add_argument("--timeout", type=float, default=120.0)
@@ -1939,6 +2241,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\nKUBECON PROBE NOT RUN: another holder kept the cluster's guard lock: {e} "
               "(no beat ran, nothing was flipped)")
         return guard_lease.BUSY_EXIT
+    except guard_lease.LockUnavailable as e:
+        # A cluster the switch reaches that the run cannot lock (its context missing from the kubeconfig, the peer
+        # Secret unreadable) stops the run before any beat: guardrails-on would switch a cluster nobody holds (#1053).
+        log.error("the guard lock could not be taken on every cluster the guardrails switch reaches: %s", e)
+        print(f"\nKUBECON PROBE NOT RUN: the guard lock could not be taken on every cluster guardrails-on switches: {e} "
+              "(no beat ran, nothing was flipped)")
+        return 2
     if lease.lost:
         results.append({"key": "guard-lock", "segment": "-", "title": "The guard lock was held for the whole run",
                         "verdict": FAIL, "note": f"{lease.lost}: another run may have flipped guards mid-probe"})

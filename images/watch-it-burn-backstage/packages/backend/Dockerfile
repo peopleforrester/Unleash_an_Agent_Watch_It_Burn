@@ -53,6 +53,11 @@ COPY --chown=node:node .yarn ./.yarn
 COPY --chown=node:node .yarnrc.yml ./
 COPY --chown=node:node backstage.json ./
 
+# Yarn 4 hashes no platform-conditional package (a native binary such as @esbuild/linux-x64). This plugin fails the
+# install before the link step when one of those differs from yarn-plugins/conditional-checksums.lock (#1167).
+COPY --chown=node:node yarn-plugins ./yarn-plugins
+ENV YARN_PLUGINS=/app/yarn-plugins/conditional-checksums.cjs
+
 # This switches many Node.js dependencies to production mode.
 ENV NODE_ENV=production
 

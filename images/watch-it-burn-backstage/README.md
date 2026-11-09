@@ -18,7 +18,7 @@ buildah, from this directory:
 ctr=$(buildah from ghcr.io/peopleforrester/lab-platform/mirror/library/node:24.22.2-trixie-slim-e053394f1551@sha256:e053394f15519046270b637f0655c284d2fc844e013451fcb36e02dcfba29280)
 buildah run --network=host -v "$PWD":/src --workingdir /src "$ctr" -- bash -c \
   'apt-get update -qq && apt-get install -y -qq python3 g++ build-essential libsqlite3-dev &&
-   yarn install --immutable && yarn tsc && yarn build:backend'
+   YARN_PLUGINS=/src/yarn-plugins/conditional-checksums.cjs yarn install --immutable && yarn tsc && yarn build:backend'
 buildah rm "$ctr"
 # 2. build and push the image
 buildah bud --layers --network=host -f packages/backend/Dockerfile \
@@ -47,6 +47,20 @@ ask for a vulnerable range. Two came from Dependabot alerts:
 - `node-forge` 1.4.2 (GHSA-86w9-cpqp-85rv, CVE-2026-85393, fixed in 1.4.1 per forge's changelog).
 
 `.yarnrc.yml` refuses a release younger than three days (`npmMinimalAgeGate`), so a fix newer than that waits.
+
+## Hash pins Yarn does not keep
+
+`yarn.lock` records a checksum for every package except the platform-conditional ones, the native binaries such as
+`@esbuild/linux-x64` that carry a `conditions:` line: Yarn 4 neither writes nor checks one for those (#1167).
+`yarn-plugins/conditional-checksums.lock` records each one's cache checksum, and
+`yarn-plugins/conditional-checksums.cjs`, loaded through `YARN_PLUGINS` (`verify/run-e2e.sh`, the Dockerfile and
+step 1 above set it), fails an install whose zip for one of them differs, before anything is linked. After a change
+to `yarn.lock`, rewrite the lock with `python3 verify/yarn_pins.py write` (it needs the network: each tarball is
+checked against npm's `dist.integrity` and then zipped by the committed yarn).
+
+`package.json`'s `packageManager` carries the SHA-512 of the yarn release corepack downloads, which is
+`.yarn/releases/yarn-4.13.0.cjs` byte for byte, so corepack refuses a download that differs. On a version change,
+put the new release's `sha512sum` there.
 
 ## Local development
 

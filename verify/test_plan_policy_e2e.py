@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -74,10 +75,22 @@ def tf_version(binary: str) -> str | None:
 
 
 TF_ENV: dict[str, str] = {}
+INSTALL_LINE = re.compile(r"(?:[a-z]+: )?- (?:Installed|Using) ")
 
 
 def run(cmd: list[str], **kw) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True, env=TF_ENV or None, **kw)
+
+
+def installed_from_mirror(binary: str, what: str, out: str) -> None:
+    """A provider install the init printed came from the mirror: terraform and tofu print `(unauthenticated)` for a
+    filesystem mirror's zip and `(signed by ...)` or `(signed, key ID ...)` for a registry download (#1119, #1131)."""
+    # An init's own lines, or plan-fleet's, which prefix each with its root: "network: - Installed ...".
+    lines = [ln.strip() for ln in out.splitlines() if INSTALL_LINE.match(ln.strip())]
+    check(f"{binary}: {what} installed its providers from the host artifact cache's mirror and downloaded none",
+          bool(lines) and not any("(signed" in ln for ln in lines))
+    for ln in lines:
+        print(f"      {ln}")
 
 
 def plan_fixture(binary: str, fixture: str, work: pathlib.Path) -> pathlib.Path:
@@ -87,6 +100,8 @@ def plan_fixture(binary: str, fixture: str, work: pathlib.Path) -> pathlib.Path:
         proc = run([binary, f"-chdir={dst}", *step])
         if proc.returncode != 0:
             raise SystemExit(f"{binary} {step[0]} failed on fixtures/{fixture}:\n{proc.stdout}{proc.stderr}")
+        if step[0] == "init":
+            installed_from_mirror(binary, f"init on fixtures/{fixture}", proc.stdout)
     out = dst / "plan.json"
     out.write_text(run([binary, f"-chdir={dst}", "show", "-json", "plan.bin"], check=True).stdout)
     return out
@@ -110,10 +125,11 @@ if missing:
 
 # Terraform takes every registry.terraform.io provider from the host artifact cache's mirror, which holds the versions
 # the committed locks pin (tf_plugin_cache.py, #1119): the fixtures and plan-fleet's `init -upgrade` get the newest of
-# those the configuration allows. OpenTofu reads the same CLI config, and its registry.opentofu.org providers install
-# directly, as the config leaves every other host to `direct`.
+# those the configuration allows. OpenTofu reads the same CLI config and takes its registry.opentofu.org providers from
+# the same mirror, filled by opentofu=True from infra/policy/plan/opentofu/.terraform.lock.hcl (#1131); the config gives
+# neither host a `direct` source, so a provider the mirror lacks fails init by name and none is downloaded.
 try:
-    TF_ENV.update(tf_plugin_cache.terraform_env(os.environ))
+    TF_ENV.update(tf_plugin_cache.terraform_env(os.environ, opentofu=True))
 except tf_plugin_cache.CacheError as e:
     print(f"PLAN POLICY E2E CANNOT RUN: {e}", file=sys.stderr)
     sys.exit(1)
@@ -147,6 +163,7 @@ with tempfile.TemporaryDirectory() as tmp:
         if planned.returncode != 0:
             print(planned.stderr[-4000:])
             continue
+        installed_from_mirror(binary, "plan-fleet's init on both fleet roots", planned.stdout)
         res = run([*checker, "--require-all-exceptions-used",
                    str(fleet / "network.plan.json"), str(fleet / "cluster.plan.json")])
         if res.returncode != 0:

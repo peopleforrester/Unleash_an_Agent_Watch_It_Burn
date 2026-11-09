@@ -69,6 +69,19 @@ On 2026-11-06, on `watch-it-burn-private` (Istio 1.30.4), in a scratch namespace
   `hosts` matches HTTP only and the waypoint passes this TLS through. With the SNI rule, `example.com`,
   steered to the same waypoint, was refused and Open-Meteo was admitted.
 
+## The waypoint reaches istiod on TCP 15012 (`#980`, `#1033`)
+
+The waypoint is an Envoy that takes its config and certificates from istiod on TCP 15012. The stage-2
+allowlist selects every pod in `agent` and admits 443 alone, so `agent-allow-egress-waypoint` also admits pods
+labelled `app: istiod` in `istio-system` on TCP 15012, and on nothing else of that namespace.
+
+Run 17960 found why on `watch-it-burn-private` on 2026-11-06. A waypoint under the stage-2 policies connected to
+istiod at start, in the window before the VPC CNI applies a new pod's policies. When istiod closed the xDS
+stream 30 minutes later, every redial of 15012 timed out, and the waypoint went on serving its last config with
+no way to get a new one or renew its certificate. With the rule applied in place it reconnected within a
+second, and a pod wearing the waypoint's label reached istiod on 15012 and timed out on 15010 and 15014.
+`verify/test_c1_dns_exfil_fix.py` holds the rule to istiod alone and 15012 alone.
+
 ## The weather feed is in the mesh (`#980`)
 
 ztunnel steers only an enrolled pod's traffic to the waypoint; a pod outside the mesh reached `example.com`

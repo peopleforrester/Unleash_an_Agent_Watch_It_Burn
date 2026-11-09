@@ -315,7 +315,8 @@ check(f"the Backstage yarn.lock records a checksum for each of its {len(plain)} 
       "platform condition", len(plain) > 1000 and unsummed == [], str(unsummed[:5]))
 # Yarn 4 writes no checksum for a package with a `conditions:` line (a platform's native binary, such as
 # @esbuild/linux-x64) even with supportedArchitectures naming linux x64 (tried in run 18530), so those are the only
-# entries without one. They are counted here so a new one shows in the output.
+# entries without one. They are counted here so a new one shows in the output; the app's conditional-checksums plugin
+# and lock check them instead (#1167, held in test_yarn_pins.py).
 cond_unsummed = [e.splitlines()[0] for e in hard_npm if conditional.search(e) and not summed.search(e)]
 print(f"        ({len(cond_unsummed)} platform-conditional entries carry no checksum, as Yarn 4 writes them)")
 rc_yml = yaml.safe_load((BACKSTAGE / ".yarnrc.yml").read_text(encoding="utf-8")) or {}
@@ -333,6 +334,10 @@ ALLOWED = {
     "verify/test_package_cache_e2e.py": "the end-to-end half of this test",
     "verify/run-e2e.sh": "`corepack yarn install --immutable`, after node-env, held above",
     "verify/test_e2e_toolchain.py": "quotes run-e2e.sh's yarn line, which it holds",
+    "verify/yarn_pins.py": "`write` runs the app's yarn in a scratch project on a loopback registry of tarballs it "
+                           "checked against npm's dist.integrity, to record the conditional checksums (#1167)",
+    "verify/test_yarn_pins_e2e.py": "runs the app's yarn and its conditional-checksums plugin on a loopback registry",
+    "verify/test_yarn_pins.py": "quotes run-e2e.sh's and the Backstage README's yarn install lines, which it holds",
     "verify/prompts_wall_suite.py": "runs prompts-agenticburn's own `uv run` command as written, on that repo's "
                                     "uv.lock, whose hashes uv checks, with UV_CACHE_DIR the artifact root's",
     "verify/test_prompts_wall_suite.py": "quotes that command",

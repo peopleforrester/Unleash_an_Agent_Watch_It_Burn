@@ -1,5 +1,5 @@
-# ABOUTME: Offline check of verify/tf_plugin_cache.py (#1114, #1119): the provider mirror is filled through the artifact
-# ABOUTME: cache by each lock's zh: SHA-256 and refuses what the lock does not vouch for, and every terraform init uses it.
+# ABOUTME: Offline check of verify/tf_plugin_cache.py (#1114, #1119, #1131): the provider mirror is filled through the artifact
+# ABOUTME: cache by each lock's zh: SHA-256 and refuses what no lock vouches for, OpenTofu's zips too; every init uses it.
 """Offline: no network and no terraform. The real inits against the mirror are test_terraform_lock_init.py,
 test_terraform_plugin_cache_lock.py and test_terraform_mirror_lock.py in the tools tier.
 
@@ -8,6 +8,10 @@ tf_plugin_cache.fill() reads each lock, looks up this platform's zip once (the r
 SHA-256 is a zh: hash the lock records), fetches it through artifact_cache.get(), and links it into a filesystem mirror
 that the CLI config makes terraform's only source for registry.terraform.io. The registry and the download are stubs
 here, with a made-up provider whose zip bytes this test makes, so each refusal is shown with nothing fetched.
+
+#1131 does the same for OpenTofu's registry.opentofu.org, whose zips are OpenTofu's own builds: only a lock recorded for
+that host (infra/policy/plan/opentofu/.terraform.lock.hcl) vouches for them, never the registry.terraform.io lock of
+the same provider and version, and the config gives that host no `direct` source either.
 
 It also holds the call sites: every file under verify/ that runs a real terraform init goes through
 tf_plugin_cache.terraform_env, every workflow that runs one fills the mirror outside the workspace first, and none sets
@@ -167,10 +171,11 @@ with tpc.scratch("tf-plugin-cache-test-") as td:
     check("and drops TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE", "TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE"
           not in got)
     cfg = pathlib.Path(got["TF_CLI_CONFIG_FILE"]).read_text()
-    check("the config installs registry.terraform.io providers from the mirror and from nowhere else",
-          f'path    = "{tpc.mirror_dir(root)}"' in cfg and cfg.count('["registry.terraform.io/*/*"]') == 2
-          and re.search(r'filesystem_mirror \{[^}]*include = \["registry\.terraform\.io/\*/\*"\]', cfg)
-          and re.search(r'direct \{\s*exclude = \["registry\.terraform\.io/\*/\*"\]', cfg)
+    hosts = '["registry.terraform.io/*/*", "registry.opentofu.org/*/*"]'
+    check("the config installs registry.terraform.io and registry.opentofu.org providers from the mirror and from "
+          "nowhere else", f'path    = "{tpc.mirror_dir(root)}"' in cfg and cfg.count(hosts) == 2
+          and re.search(r'filesystem_mirror \{[^}]*include = ' + re.escape(hosts), cfg)
+          and re.search(r'direct \{\s*exclude = ' + re.escape(hosts), cfg)
           and "plugin_cache_dir" not in cfg, cfg)
 
     print("== a warm fill makes no lookup and no fetch ==")
@@ -211,14 +216,93 @@ with tpc.scratch("tf-plugin-cache-test-") as td:
                                         '  hashes = [\n    "h1:AAAA=",\n  ]\n}\n')
     err = refusal(lambda: tpc.fill(nozh, out / "nozh", plat=PLAT, fetch_meta=no_network, fetch=no_network))
     check("a lock with no zh: hashes, which nothing can be checked against", "records no zh: hashes" in err, err)
-    other_host = [tpc.Locked("registry.opentofu.org/hashicorp/aws", "6.0.0", frozenset({sha(ONE)}), "x")]
+    other_host = [tpc.Locked("registry.example.invalid/hashicorp/aws", "6.0.0", frozenset({sha(ONE)}), "x")]
     err = refusal(lambda: tpc.fill(other_host, out / "host", plat=PLAT, fetch_meta=no_network, fetch=no_network))
-    check("a provider on another host is not mirrored", "only registry.terraform.io providers are mirrored" in err, err)
+    check("a provider on another host is not mirrored",
+          "only registry.terraform.io and registry.opentofu.org providers are mirrored" in err, err)
     bad = Stubs()
     bad.meta = lambda url: {"shasum": sha(TWO), "filename": "terraform-provider-two_2.0.0_darwin_arm64.zip",
                             "download_url": "https://dl.example.invalid/two/2.0.0.zip"}
     err = refusal(lambda: tpc.fill(lone, out / "wrong-name", plat=PLAT, fetch_meta=bad.meta, fetch=no_network))
     check("a registry answer for another platform's zip", "want terraform-provider-two_2.0.0_linux_amd64.zip" in err, err)
+
+    print("== registry.opentofu.org: only a lock recorded for that host vouches for its zips (#1131) ==")
+    TOFU = zip_of(b"one, built by OpenTofu\n")
+    LOCK_TOFU = (f'provider "registry.opentofu.org/wib-test/one" {{\n  version = "1.0.0"\n'
+                 f'  hashes = [\n    "zh:{sha(TOFU)}",\n  ]\n}}\n')
+    tf_lock, tofu_lock = locks(out / "locks-tofu", tf=LOCK_A, tofu=LOCK_TOFU)
+    rt = out / "tofu"
+    s = Stubs(answers={"one": sha(ONE), "two": sha(TWO)})
+    tpc.fill([tf_lock, tofu_lock], rt, plat=PLAT, fetch_meta=s.meta, fetch=s.fetch)
+    check("without opentofu, an OpenTofu lock is passed over: no lookup on registry.opentofu.org, nothing fetched for it",
+          not any("registry.opentofu.org" in u for u in s.lookups) and len(s.fetches) == 2
+          and not (tpc.mirror_dir(rt) / "registry.opentofu.org").exists(), f"{s.lookups} {s.fetches}")
+    s = Stubs(answers={"one": sha(ONE)}, serve={"one": ONE})
+    err = refusal(lambda: tpc.fill([tf_lock, tofu_lock], rt, plat=PLAT, fetch_meta=s.meta, fetch=s.fetch,
+                                   opentofu=True))
+    check("an OpenTofu registry answer that only the registry.terraform.io lock of the same provider and version "
+          "records is refused", f"has SHA-256 {sha(ONE)}, which is not one of the 1 zh: hashes" in err
+          and "registry.opentofu.org/wib-test/one" in err and "so it is not fetched" in err, err)
+    check("and nothing is looked up past it, fetched, indexed or linked for registry.opentofu.org",
+          s.lookups == ["https://registry.opentofu.org/v1/providers/wib-test/one/1.0.0/download/linux/amd64"]
+          and not s.fetches and not (rt / tpc.PROVIDERS_SUBDIR / "index/registry.opentofu.org").exists()
+          and not (tpc.mirror_dir(rt) / "registry.opentofu.org").exists(), f"{s.lookups} {s.fetches}")
+    s = Stubs(answers={"one": sha(TOFU)}, serve={"one": ONE})
+    err = refusal(lambda: tpc.fill([tofu_lock], out / "tofu-bytes", plat=PLAT, fetch_meta=s.meta, fetch=s.fetch,
+                                   opentofu=True))
+    check("an OpenTofu download whose bytes the OpenTofu lock does not vouch for is refused",
+          f"expected SHA-256 {sha(TOFU)}, got {sha(ONE)}" in err and "registry.opentofu.org/wib-test/one" in err, err)
+    check("and nothing is linked into the mirror for it", not tpc.mirror_dir(out / "tofu-bytes").exists())
+    s = Stubs(answers={"one": sha(TOFU)}, serve={"one": TOFU})
+    got = tpc.fill([tf_lock, tofu_lock], rt, plat=PLAT, fetch_meta=s.meta, fetch=s.fetch, opentofu=True)
+    link = tpc.mirror_dir(rt) / f"registry.opentofu.org/wib-test/one/terraform-provider-one_1.0.0_{PLAT}.zip"
+    check("with opentofu, the zip the OpenTofu lock vouches for is fetched once and linked under registry.opentofu.org",
+          s.fetches == ["https://dl.example.invalid/one/1.0.0.zip"] and link.is_symlink()
+          and link.resolve() == rt / "sha256" / sha(TOFU), f"{s.fetches} {link}")
+    check("beside the registry.terraform.io zip of the same provider and version, which keeps its own bytes",
+          (tpc.mirror_dir(rt) / f"registry.terraform.io/wib-test/one/terraform-provider-one_1.0.0_{PLAT}.zip").resolve()
+          == rt / "sha256" / sha(ONE))
+    tidx = rt / tpc.PROVIDERS_SUBDIR / f"index/registry.opentofu.org/wib-test/one/terraform-provider-one_1.0.0_{PLAT}.zip.json"
+    saved = tidx.read_text()
+    tidx.write_text(json.dumps({"sha256": sha(ONE), "url": "https://dl.example.invalid/one/1.0.0.zip"}))
+    err = refusal(lambda: tpc.fill([tf_lock, tofu_lock], rt, plat=PLAT, fetch_meta=no_network, fetch=no_network,
+                                   opentofu=True))
+    check("an OpenTofu index entry naming the registry.terraform.io zip's SHA-256 is refused",
+          f"names SHA-256 {sha(ONE)}" in err and "nothing is served from it" in err, err)
+    tidx.write_text(saved)
+
+    print("== the committed OpenTofu lock: what it vouches for, and only that ==")
+    real = tpc.read_locks(tpc.committed_locks())
+    tofu_real = [p for p in real if p.parts[0] == tpc.OPENTOFU_HOST]
+    check("infra/policy/plan/opentofu/.terraform.lock.hcl is the one committed lock for registry.opentofu.org",
+          {p.lock for p in tofu_real} == {"infra/policy/plan/opentofu/.terraform.lock.hcl"}, str({p.lock for p in real}))
+    pins = dict(re.findall(r'source\s*=\s*"hashicorp/([a-z0-9]+)"\s*\n\s*version\s*=\s*"([^"]+)"',
+                           (REPO / "infra/policy/plan/opentofu/versions.tf").read_text()))
+    check("it pins exactly the versions versions.tf asks for (regenerated with `tofu providers lock`)",
+          {p.parts[2]: p.version for p in tofu_real} == pins and len(tofu_real) == len(pins),
+          f"{pins} vs {[(p.address, p.version) for p in tofu_real]}")
+    # What tofu installs in test_plan_policy_e2e.py: the fixtures' providers, and plan-fleet's two fleet roots'.
+    needed = {p.parts[1:] for p in real if p.lock in ("infra/terraform/aws/network/.terraform.lock.hcl",
+                                                      "infra/terraform/aws/cluster/.terraform.lock.hcl")}
+    for fx in ("violating", "compliant"):
+        needed |= {tuple(m.split("/")) for m in re.findall(r'source\s*=\s*"([a-z0-9-]+/[a-z0-9-]+)"',
+                                                            (REPO / "infra/policy/plan/fixtures" / fx / "main.tf").read_text())}
+    check("it covers every provider the fixtures and the fleet roots need, so a tofu init there finds each in the mirror",
+          needed and needed <= {p.parts[1:] for p in tofu_real}, f"{needed} vs {[p.address for p in tofu_real]}")
+    tf_zh = {(p.parts[1:], p.version): p.zh for p in real if p.parts[0] == tpc.TERRAFORM_HOST}
+    aws = next(p for p in tofu_real if p.parts[2] == "aws")
+    foreign = sorted(tf_zh[(aws.parts[1:], aws.version)] - aws.zh)
+    check(f"the registry.terraform.io lock of hashicorp/aws {aws.version} records zips OpenTofu's lock does not",
+          bool(foreign))
+    s = Stubs()
+    s.meta = lambda url: (s.lookups.append(url) or {"shasum": foreign[0], "download_url": "https://dl.example.invalid/a.zip",
+                                                   "filename": aws.zip_name(PLAT)})
+    err = refusal(lambda: tpc.fill([aws], out / "real-tofu", plat=PLAT, fetch_meta=s.meta, fetch=no_network,
+                                   opentofu=True))
+    check("an OpenTofu registry answer naming the HashiCorp build of it is refused, with nothing fetched",
+          f"has SHA-256 {foreign[0]}" in err and "registry.opentofu.org/hashicorp/aws" in err
+          and s.lookups == [f"https://registry.opentofu.org/v1/providers/hashicorp/aws/{aws.version}/download/linux/amd64"]
+          and not (out / "real-tofu" / "sha256").exists(), err)
 
     print("== a caller's prepared config is checked, never filled again ==")
     prepared = {"TF_CLI_CONFIG_FILE": str(tpc.config_path(root)), "TF_PLUGIN_CACHE_DIR": str(out / "pc")}
@@ -234,6 +318,13 @@ with tpc.scratch("tf-plugin-cache-test-") as td:
     err = refusal(lambda: tpc.terraform_env({**prepared, "TF_CLI_CONFIG_FILE": str(inside)}))
     check("a config whose mirror is inside the worktree is refused", "provider mirror" in err
           and "inside the git worktree" in err, err)
+    err = refusal(lambda: tpc.terraform_env(prepared, [a, tofu_lock], plat=PLAT, opentofu=True))
+    check("one whose mirror lacks an OpenTofu zip is refused for a tofu caller, naming the zip and `prepare --opentofu`",
+          "registry.opentofu.org/wib-test/one 1.0.0" in err and "prepare --opentofu" in err, err)
+    tofu_root = {"TF_CLI_CONFIG_FILE": str(tpc.config_path(rt)), "TF_PLUGIN_CACHE_DIR": str(out / "pc")}
+    tpc.write_config(rt)
+    check("and one whose mirror holds it is taken", tpc.terraform_env(tofu_root, [tf_lock, tofu_lock], plat=PLAT,
+          opentofu=True, fetch_meta=no_network, fetch=no_network)["TF_CLI_CONFIG_FILE"] == str(tpc.config_path(rt)))
     err = refusal(lambda: tpc.terraform_env({"TF_CLI_CONFIG_FILE": prepared["TF_CLI_CONFIG_FILE"]}))
     check("a config with no TF_PLUGIN_CACHE_DIR beside it is refused", "TF_PLUGIN_CACHE_DIR is not" in err, err)
     err = refusal(lambda: tpc.terraform_env({**prepared, "TF_PLUGIN_CACHE_DIR": str(REPO / "tmp" / "pc-1119")}))
@@ -246,8 +337,9 @@ listed = subprocess.run(["git", "-C", str(REPO), "ls-files", "*.terraform.lock.h
 check("committed_locks() is every lock git tracks", [str(p.relative_to(REPO)) for p in tpc.committed_locks()]
       == sorted(listed), f"{tpc.committed_locks()} vs {listed}")
 for p in tpc.read_locks(tpc.committed_locks()):
-    check(f"{p.lock}: {p.address} {p.version} is on registry.terraform.io and records zh: hashes",
-          p.parts[0] == "registry.terraform.io" and len(p.zh) > 0)
+    host = "registry.opentofu.org" if p.lock.startswith("infra/policy/plan/opentofu/") else "registry.terraform.io"
+    check(f"{p.lock}: {p.address} {p.version} is on {host} and records zh: hashes",
+          p.parts[0] == host and len(p.zh) > 0)
 
 print("== every terraform init under verify/ takes its providers from the mirror ==")
 # The files that run a real terraform init, each through tf_plugin_cache.terraform_env.
@@ -255,8 +347,8 @@ REAL = ["iam_plan_render.py", "test_control_plane_app_ports_module.py", "test_la
         "test_plan_policy_e2e.py", "test_terraform_lock_init.py", "test_terraform_mirror_lock.py",
         "test_terraform_plugin_cache_lock.py"]
 # The ones whose terraform is a stub that installs nothing, or that only name an init in a message.
-STUBBED = ["test_audit_import_state.py", "test_drift_report.py", "test_event_tag.py", "test_iam_plan_render_cache.py",
-           "test_terraform_lock_init_retry.py", "test_terraform_module_pins.py", "test_tf_plugin_cache.py"]
+STUBBED = ["test_audit_import_state.py", "test_drift_rebuilt_states.py", "test_drift_report.py", "test_event_tag.py", "test_iam_plan_render_cache.py",
+           "test_iam_plan_render_plugin_start.py", "test_terraform_lock_init_retry.py", "test_terraform_module_pins.py", "test_tf_plugin_cache.py"]
 # test_preflight_boundary.sh holds the command text fleet.sh prints for a person to run; it runs no terraform.
 SHELL_TEXT_ONLY = ["test_preflight_boundary.sh"]
 RUNS_TERRAFORM = re.compile(r'TERRAFORM|terraform_binary\(|which\("terraform"\)|"terraform"')
@@ -275,6 +367,12 @@ for name in REAL:
 shells = [p.name for p in HERE.glob("*.sh") if re.search(r"^[^#]*\bterraform\b.*\binit\b", p.read_text(), re.M)
           and p.name not in SHELL_TEXT_ONLY]
 check("no verify/ shell script runs terraform init", not shells, str(shells))
+e2e = (HERE / "test_plan_policy_e2e.py").read_text()
+check("test_plan_policy_e2e.py fills the OpenTofu half for its tofu, whose providers come from the mirror (#1131)",
+      "tf_plugin_cache.terraform_env(os.environ, opentofu=True)" in e2e)
+check("and fails an init, its own or plan-fleet's, that printed a signed (downloaded) provider",
+      'not any("(signed" in ln for ln in lines)' in e2e and 'installed_from_mirror(binary, "plan-fleet' in e2e
+      and 'line.startswith(("- Installed ", "- Using "))' in (REPO / "infra/policy/plan/plan-fleet.py").read_text())
 lock_init = (HERE / "test_terraform_lock_init.py").read_text()
 check("the lock-init test fills exactly the locks it inits against",
       'tf_plugin_cache.terraform_env(env, [REPO / r / ".terraform.lock.hcl" for r in ROOTS])' in lock_init)
@@ -322,8 +420,10 @@ for wf in sorted(WF.glob("*.yml")):
         check(f"{wf.name}: WIB_ARTIFACT_CACHE is set by verify/ci-artifact-cache.sh before the first init (#1123)",
               cache is not None and cache < first, str(runs[:first + 1]))
         if wf.name != "verify-suites.yml":
-            prep = next((i for i, r in enumerate(runs) if 'tf_plugin_cache.py prepare >> "$GITHUB_ENV"' in r), None)
-            check(f"{wf.name}: it fills the mirror into the job's env before the first init",
+            # plan-policy.yml runs tofu too (test_plan_policy_e2e.py), so it fills the OpenTofu half (#1131).
+            cmd = "tf_plugin_cache.py prepare" + (" --opentofu" if wf.name == "plan-policy.yml" else "")
+            prep = next((i for i, r in enumerate(runs) if f'{cmd} >> "$GITHUB_ENV"' in r), None)
+            check(f"{wf.name}: it fills the mirror into the job's env before the first init ({cmd})",
                   prep is not None and cache <= prep < first, str(runs[:first + 1]))
     else:
         check(f"{wf.name}: runs no terraform init this test does not know of", not runs_init)

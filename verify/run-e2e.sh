@@ -25,12 +25,22 @@
 # holds the deployments page to greying the public one as "removed at <time>" and not the internal one, and puts the
 # policies back. No model call; its two rows stay on the desk, both greyed once it deletes what it made.
 #
+# #885's last criterion (test_load_replay_live.py, #1056) also runs on COMMUNITY_CONTEXT: once the turn guard is synced
+# there, it runs `load_replay.py attackme.burritobot.co --yes --users 150 --harvest <dir>` and fails on any turn
+# answered 502 after guard-proxy's PROXY_TIMEOUT. The harvest is the gitignored Portland prompts, named by
+# LOAD_REPLAY_HARVEST (default .harvest/devopsdays-portland/prompts). It spends up to 450 model calls, about $3 on
+# attackme's /cost, and deletes what the replayed attacks had the bot create.
+#
 # The tier swap (test_tier_swap_live.py, #793) runs on CONTEXT: it patches workshop-agent from bedrock-nova to
 # bedrock-haiku, holds guard-proxy's /cost to the new tier within 5 seconds and one /chat turn to Haiku rates, and
 # patches it back. It spends one Haiku call and restarts the agent pod twice.
 #
 # #783's trace-id fix (test_otel_trace_id_fix_live.py, #812) is checked on staging and on both KubeCon clusters, so it
 # also needs PRIVATE_CONTEXT, the kube-context of the private admin cluster (watch-it-burn-private). It only reads.
+#
+# #1052's guard_toggle line (test_guard_toggle_log_live.py, #1068) runs on PRIVATE_CONTEXT too: under the guard lock it
+# flips the output guard on and back off through /toggle, with reads between, and holds guard-proxy's log to one
+# guard_toggle line per change and none for a read. No model call; the guards are left as found.
 #
 # #954's recipe block (test_recipe_block_live.py) runs on PRIVATE_CONTEXT too: the terminal's guardrails-on, the card
 # BurritoBot's prompt names read back Permission denied with KubeArmor's Block alert, one marked model call asking for
@@ -189,12 +199,18 @@ run_one "backstage-footprint.sh (SAMPLES=1)" \
 # The install reads yarn.lock, which records a checksum for every package, and yarn's global cache and corepack's
 # home are in the host artifact cache, outside every worktree, with a checksum mismatch thrown (package_cache.py
 # node-env, #1121): a warm host installs with no package download, and a cached zip whose bytes changed fails the
-# install with YN0018 instead of being fetched again.
+# install with YN0018 instead of being fetched again. Yarn 4 hashes no platform-conditional package (the native
+# binaries such as @esbuild/linux-x64), so YARN_PLUGINS loads the app's conditional-checksums plugin, which fails the
+# install with YN0018 before the link step when one of those zips differs from yarn-plugins/conditional-checksums.lock.
+# corepack checks the yarn it downloads against package.json's packageManager hash but reuses one already in
+# COREPACK_HOME unhashed, so yarn_pins.py corepack-check hashes that one first (#1167).
 backstage_e2e() {
     local node_env
     node_env="$(python3 "${SCRIPT_DIR}/package_cache.py" node-env)" || return 1
     ( cd "${BACKSTAGE_DIR}" && unset CI \
         && while IFS='=' read -r k v; do export "${k}=${v}"; done <<<"${node_env}" \
+        && python3 "${SCRIPT_DIR}/yarn_pins.py" corepack-check "${PWD}" \
+        && export YARN_PLUGINS="${PWD}/yarn-plugins/conditional-checksums.cjs" \
         && corepack yarn install --immutable \
         && corepack yarn playwright install chromium \
         && corepack yarn test:e2e )

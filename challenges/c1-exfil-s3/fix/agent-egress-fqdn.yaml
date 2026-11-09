@@ -67,3 +67,12 @@ spec:
       ports:
         - { protocol: UDP, port: 53 }
         - { protocol: TCP, port: 53 }
+    # istiod's xDS and certificate port, so the waypoint keeps its config. The stage-2 allowlist admits 443 alone, so
+    # without this the waypoint loses istiod for good the first time its stream closes. On watch-it-burn-private
+    # (#980, 2026-11-06) a waypoint under the stage-2 policies connected at start, in the window before the VPC CNI
+    # applies a new pod's policies, and when istiod closed the stream 30 minutes later every redial of
+    # 172.20.76.29:15012 timed out.
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: istio-system } }
+          podSelector: { matchLabels: { app: istiod } }
+      ports: [{ protocol: TCP, port: 15012 }]

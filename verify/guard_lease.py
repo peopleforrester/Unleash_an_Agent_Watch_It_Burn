@@ -93,6 +93,12 @@ class LeaseBusy(RuntimeError):
     """The lock stayed held by someone else for the whole wait."""
 
 
+class LockUnavailable(RuntimeError):
+    """hold_switch could not take a lock it needs, for a reason other than a holder: the peer Secret could not be read,
+    or a cluster the switch reaches has no context in the kubeconfig or refused the Lease. Nothing ran under it, so a
+    probe says NOT RUN instead of switching a cluster it holds no lock on (#1053)."""
+
+
 def micro_time(t: float) -> str:
     """A Kubernetes MicroTime: RFC 3339 in UTC with six fraction digits."""
     return dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
@@ -392,8 +398,12 @@ def hold_switch(context: str, kubeconfig: str | None = None, profile: str | None
                 wait: float = WAIT_S, runner: Callable = subprocess.run, **kw) -> Iterator[SwitchHold]:
     """Hold the lock on `context` and on the cluster its guardrails switch also reaches (peer_context), for a check
     that runs guardrails-on or guardrails-off (#1016). Both are taken in sorted order, so two runs that each need the
-    pair cannot deadlock; each waits up to `wait`. A peer the kubeconfig has no context for raises, naming it."""
-    peer = peer_context(context, kubeconfig, profile, runner=runner)
+    pair cannot deadlock; each waits up to `wait`. A peer the kubeconfig has no context for raises LockUnavailable,
+    naming it, as does a peer Secret that cannot be read: never a lock on one cluster only (#1053)."""
+    try:
+        peer = peer_context(context, kubeconfig, profile, runner=runner)
+    except RuntimeError as e:
+        raise LockUnavailable(str(e)) from e
     with ExitStack() as stack:
         leases = []
         for c in sorted({context, peer} - {""}):
@@ -404,8 +414,8 @@ def hold_switch(context: str, kubeconfig: str | None = None, profile: str | None
                 raise
             except RuntimeError as e:
                 if c != peer:
-                    raise
-                raise RuntimeError(f"{context}'s guardrails switch also switches {peer} ({PEER_NAMESPACE}/"
+                    raise LockUnavailable(f"taking the guard lock on {c} failed: {e}") from e
+                raise LockUnavailable(f"{context}'s guardrails switch also switches {peer} ({PEER_NAMESPACE}/"
                                    f"{PEER_SECRET}), so the lock is needed there too, and taking it failed: {e}. "
                                    f"Run with a kubeconfig that has a context named {peer}") from e
         yield SwitchHold(leases)

@@ -20,7 +20,9 @@ What it proves without a cluster:
   - the fix keeps the stage-2 L3/L4 egress allowlist intact: it defines no agent-egress-allowlist and no
     agent-allow-dns of its own, so those stage-2 objects stand, and the policies/network-policies files
     still carry Bedrock's in-VPC allow;
-  - the waypoint is the one workload granted a public 443, and the weather feed's direct public door is shut.
+  - the waypoint is the one workload granted a public 443, and the weather feed's direct public door is shut;
+  - the waypoint may reach istiod on TCP 15012 and on nothing else of istio-system (#1033), and the check fails on
+    mutated copies of that rule: removed, another peer, another port, a range or UDP.
 """
 from __future__ import annotations
 
@@ -183,6 +185,64 @@ check("the waypoint pod is the one workload granted a public 443",
 check("the waypoint may resolve names through the locked resolver (DNS to kube-system)",
       any(p.get("port") == 53 for rule in wpn.get("spec", {}).get("egress", []) for p in rule.get("ports", [])),
       "no DNS allow for the waypoint")
+
+# The waypoint is an Envoy that takes its config and certificates from istiod on TCP 15012. Under the stage-2
+# allowlist (443 only) it lost istiod for good when its first xDS stream closed, 30 minutes in (#980, run 17960 on
+# watch-it-burn-private), so the fix admits istiod on 15012 and nothing else of istio-system (#1033).
+ISTIOD_PEER = [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "istio-system"}},
+                "podSelector": {"matchLabels": {"app": "istiod"}}}]
+
+
+def istiod_rule_problem(egress: list) -> str:
+    """Empty when exactly one egress rule names istio-system or 15012, and it admits istiod on TCP 15012 alone."""
+    def names_istio(rule: dict) -> bool:
+        return ("istio-system" in str(rule.get("to", "")) or "istiod" in str(rule.get("to", ""))
+                or any(p.get("port") == 15012 for p in rule.get("ports", [])))
+    rules = [rule for rule in egress if names_istio(rule)]
+    if len(rules) != 1:
+        return f"want one rule naming istiod or 15012, found {len(rules)}: {rules}"
+    rule = rules[0]
+    if rule.get("to") != ISTIOD_PEER:
+        return f"peer is not app: istiod in istio-system alone: {rule.get('to')}"
+    ports = [(p.get("protocol", "TCP"), p.get("port"), p.get("endPort")) for p in rule.get("ports", [])]
+    if ports != [("TCP", 15012, None)]:
+        return f"ports are not TCP 15012 alone: {ports}"
+    return ""
+
+
+wp_egress = wpn.get("spec", {}).get("egress", [])
+problem = istiod_rule_problem(wp_egress)
+check("the waypoint may reach istiod on TCP 15012, and that rule names only istiod and only 15012",
+      not problem, problem)
+
+
+def mutated(change) -> list:
+    egress = yaml.safe_load(yaml.safe_dump(wp_egress))
+    hits = [rule for rule in egress if rule.get("to") == ISTIOD_PEER]
+    if not hits:
+        sys.exit("the istiod rule (app: istiod in istio-system) is not in "
+                 "challenges/c1-exfil-s3/fix/agent-egress-fqdn.yaml; the mutation cases below edit it")
+    change(egress, hits[0])
+    return egress
+
+
+MUTATIONS = {
+    "the rule removed": lambda eg, r: eg.remove(r),
+    "the peer widened to all of istio-system": lambda eg, r: r["to"][0].pop("podSelector"),
+    "the peer changed to another app": lambda eg, r: r["to"][0]["podSelector"]["matchLabels"].update(app="ztunnel"),
+    "the peer changed to another namespace": lambda eg, r: r["to"][0]["namespaceSelector"]["matchLabels"].update(
+        {"kubernetes.io/metadata.name": "kube-system"}),
+    "a second peer added": lambda eg, r: r["to"].append({"ipBlock": {"cidr": "0.0.0.0/0"}}),
+    "the peer list dropped (any destination)": lambda eg, r: r.pop("to"),
+    "the port changed to 15010": lambda eg, r: r["ports"][0].update(port=15010),
+    "a second port added": lambda eg, r: r["ports"].append({"protocol": "TCP", "port": 15014}),
+    "the port widened to a range": lambda eg, r: r["ports"][0].update(endPort=15017),
+    "the protocol changed to UDP": lambda eg, r: r["ports"][0].update(protocol="UDP"),
+    "a second rule to istiod on another port": lambda eg, r: eg.append(
+        {"to": yaml.safe_load(yaml.safe_dump(ISTIOD_PEER)), "ports": [{"protocol": "TCP", "port": 15010}]}),
+}
+for label, change in MUTATIONS.items():
+    check(f"the istiod check fails with {label}", bool(istiod_rule_problem(mutated(change))))
 
 # The stage-2 L3/L4 allowlist file itself still carries Bedrock's in-VPC allow, unchanged by the fix.
 stage2 = next((d for d in docs(STAGE2_ALLOWLIST) if d.get("kind") == "NetworkPolicy"), {})

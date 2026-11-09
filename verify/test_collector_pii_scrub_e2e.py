@@ -39,6 +39,7 @@ from pii_scrub_cases import ATTENDEE, ATTENDEE_SCRUBBED, UNTOUCHED, c5_record  #
 
 OTELCOL = REPO / "verify/.tools/bin/otelcol-contrib"
 LOCK = REPO / "verify/e2e-tools.lock"
+START_BOUND = float(os.environ.get("COLLECTOR_START_BOUND", "120"))  # seconds the collector gets to take the spans
 
 failures: list[str] = []
 
@@ -127,15 +128,25 @@ with tempfile.TemporaryDirectory() as d:
         body = json.dumps({"resourceSpans": [
             {"resource": {"attributes": [kv("service.name", svc)]}, "scopeSpans": [{"spans": spans}]}
             for svc, spans in SPANS.items()]}).encode()
-        sent, deadline = False, time.time() + 30
-        while not sent and time.time() < deadline and proc.poll() is None:
+        # The bound only stops a collector that never listens. 30 seconds ran out on a loaded host (load average
+        # near 40, run 17949) with the collector still logging its OTTL rewrites, and the same test passed alone in
+        # 10 seconds, so a slow start gets START_BOUND, and one that never takes the spans is named with why. Spans
+        # go only once the collector says it is ready, since free_port's port is free for any process until then (#799).
+        sent, start = False, time.time()
+        while not sent and time.time() - start < START_BOUND and proc.poll() is None:
+            if "Everything is ready" not in (pathlib.Path(d) / "collector.log").read_text():
+                time.sleep(0.3)
+                continue
             try:
                 req = urllib.request.Request(f"http://127.0.0.1:{port}/v1/traces", data=body,
                                              headers={"Content-Type": "application/json"})
                 sent = urllib.request.urlopen(req, timeout=5).status == 200
             except OSError:
                 time.sleep(0.3)
-        check("the collector took the spans", sent)
+        waited = time.time() - start
+        why = ("" if sent else f"exited {proc.returncode} after {waited:.0f} s" if proc.poll() is not None
+               else f"still not taking spans on {port} after {waited:.0f} s")
+        check("the collector took the spans", sent, why)
         got: dict[str, dict] = {}
         deadline = time.time() + 30  # the batch processor holds spans up to its 5 s timeout
         while sent and len(got) < 3 and time.time() < deadline:

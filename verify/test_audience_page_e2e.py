@@ -6,7 +6,7 @@
 
 1. The page's real `(function init(){...})();` block, cut from burritbot.html, runs in a node vm with a
    stub DOM: once with the committed event.js and once with no event at all. The Feedback href that comes
-   out is what a phone would get. With the event set it must be the survey URL exactly, with no cluster
+   out is what a phone would get. With the event set it must be the talk form's URL exactly (#1162), with no cluster
    or user. Without it, it must be the workshop's /quick form carrying both. On the public bot's hosts the
    Terminal button (#645) and the Datadog button (#647) are hidden; elsewhere both stay.
 2. scripts/audience-qr.py --check re-renders the QR from event.js with segno 1.6.6 (the package cache's segno
@@ -29,7 +29,7 @@ REPO = pathlib.Path(__file__).resolve().parent.parent
 WEB = REPO / "gitops/ai-layer/web"
 PAGE = (WEB / "burritbot.html").read_text(encoding="utf-8")
 EVENT_JS = (WEB / "event.js").read_text(encoding="utf-8")
-SURVEY = "https://kubecon-cloudnativecon-north-america-2026.sessionize.com/session/1249553"
+FORM = "https://feedback.burritobot.co/?source=burritobot"
 QUICK = "https://feedback.burritobot.co/quick?context=Challenges&source=burritobot"
 
 failures: list[str] = []
@@ -91,8 +91,8 @@ def feedback_href(event_src: str) -> str:
 
 print("== the page's own init, with the committed event.js ==")
 got = feedback_href(EVENT_JS)
-check("Feedback opens the session survey, exactly", got == SURVEY, got)
-check("no cluster or user is handed to the survey", "cluster=" not in got and "user=" not in got, got)
+check("Feedback opens the talk's own form, exactly", got == FORM, got)
+check("no cluster or user is handed to the form", "cluster=" not in got and "user=" not in got, got)
 
 print("== the page's own init, with no event set (the workshop) ==")
 got = feedback_href("")

@@ -9,7 +9,8 @@ reply. After send() the chat stream holds the page's ring-me-up button, or nothi
 the celebration. The button must appear, exactly once, for every reply holding "your order is now complete" in any
 case, with any whitespace between the words and any punctuation around it, and never for a reply without it,
 the old "Free burritos for life!" included. Every reply must also reach botReply, so no case passes by throwing
-inside send()'s try and landing in its catch. celebrate()'s Math.random is pinned and its setTimeout is held, so
+inside send()'s try and landing in its catch. Since #1214 the button scrolls the stream back to the start of the
+reply that completed the order, the bubble botReply returned, so a long reply is read from its first line. celebrate()'s Math.random is pinned and its setTimeout is held, so
 nothing depends on the run (#797).
 
 Needs node. A missing node is a failure, not a skip. Nothing here touches the network or a cluster.
@@ -49,7 +50,7 @@ def cut(start: str, end: str) -> str:
     return PAGE[i:j]
 
 
-WIN = cut("  function winBubble(){", "  // Enter sends;")
+WIN = cut("  function winBubble(reply){", "  // Enter sends;")
 SEND = cut("  async function send(){", "  // The left menu is a static reference")
 
 HARNESS = r"""
@@ -64,12 +65,13 @@ function node(tag) {
 async function run(reply) {
   const els = {stream: node('div'), celebrate: node('div'), inp: node('textarea'), sendbtn: node('button'),
                tokens: node('span'), costusd: node('span')};
-  const got = [], bubbles = [];
+  const got = [], bubbles = [], shown = [];
   const ctx = {
     document: {getElementById: id => els[id] || node('div'), createElement: node},
     CHAT_ENDPOINT: '/chat', WITCH_NAME: 'Mortimer the Warlock', busy: false, tokens: 0, costUsd: 0, unreachable: 0,
     getSession: () => 'sess-1010', save() {}, growComposer() {}, noBurritos() {}, checkMyDeployments() {},
-    bubble(t, who) { bubbles.push([t, who]); }, botReply(r) { got.push(r); },
+    bubble(t, who) { bubbles.push([t, who]); }, botReply(r) { got.push(r); return {reply: got.length}; },
+    showReplyStart(d) { shown.push(d); },
     fetch: async () => ({ok: true, json: async () => ({reply, input_tokens: 1, output_tokens: 1, cost_usd: 0})}),
     setTimeout() {}, Math: Object.assign(Object.create(Math), {random: () => 0.5}),
   };
@@ -87,7 +89,7 @@ async function run(reply) {
   }
   return {got, bubbles, buttons: buttons.map(b => ({text: b.textContent, cls: b.className, type: b.type,
                                                     celebrates: b.onclick === ctx.celebrate})),
-          opened, confetti, busy: ctx.busy};
+          opened, confetti, busy: ctx.busy, shown};
 }
 
 (async () => {
@@ -132,6 +134,8 @@ for reply, res in zip(SHOWS, results[:len(SHOWS)]):
     check(f"that button reads {LABEL!r} and is the page's winbtn",
           res["buttons"][:1] == [{"text": LABEL, "cls": "winbtn", "type": "button", "celebrates": True}],
           f"buttons {res['buttons']}")
+    check(f"the button keeps the completing reply's first line in view for {reply!r} (#1214)",
+          res["shown"] == [{"reply": 1}], f"showReplyStart got {res['shown']}")
     check(f"clicking it opens the celebration with its confetti for {reply!r}",
           res["opened"] and res["confetti"] == 48, f"opened {res['opened']}, confetti {res['confetti']}")
 for reply, res in zip(HIDES, results[len(SHOWS):]):

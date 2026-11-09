@@ -53,7 +53,7 @@ BEATS4 = [
     ("the switch from /lab (#/50)", "`https://burritobot-private.burritobot.co/lab`"),
     ("guard-agency-on", "The presenter types `guard-agency-on`, then `guard-input-on`"),
     ("the retry (#/51)", "**The retry (`#/51`).**"),
-    ("#1132 at the retry", "The room's retry works only once #1132 is built"),
+    ("#1132 at the retry", "The room's retry runs on the public bot: since #1132"),
     ("Pesky RBAC (#/52)", "\"Pesky RBAC!\""),
     ("the optional Kyverno question", "\"Do you know why Kyverno let this through?\""),
     ("LLM Guard (#/55)", "**The input guard, LLM Guard (`#/55`).**"),
