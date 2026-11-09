@@ -44688,3 +44688,28 @@ tarballs, since sources returns a file as text; the netcup test above did that h
 
 **Live check.** None: this change touches only images.lock's saved column and comments and decisions.md, and no
 cluster reads the saved column.
+## 2026-11-09 · #1207 · run 19424 · A test holds the Night Before seed step's spans and prompt source to stage_traces.py
+
+#1139's third criterion asked that the run-of-show's "Seed the stage's Datadog traces" step match
+`verify/stage_traces.py` as #1137 and #1138 left it. Test review run 18720 found the spans held only to the segment
+steps (`test_stage_trace_slides.py`) and the prompt-source paragraph held to nothing. The new
+`verify/test_seed_step_matches_stage_traces.py` reads the step itself, from its first line to the next Night Before
+step, and holds:
+
+- the four-link table: one row per attack seed in SEEDS' order, each naming its key, `session_id()` and its `must`
+  spans in order;
+- the `-fixed` bullets: each `-fixed` seed's tools as its `must` spans and the ones it says are absent ("no
+  `deploy_app`") as its `must_not`, with one bullet for `c3-pii` searching `pii_view()`'s query and naming the guard
+  stage `judge_pii_trace()` reads;
+- the wait list: one group per challenge, the attack seed's spans in order and every `must_not` of that challenge;
+- the prompt-source paragraph against SEED_BEATS and OFF_PAGE_SEEDS: the page, each challenge's beat and whether it
+  is the beat's first or last prompt (read off the page, so `("C5", -1)` on a one-prompt beat still passes), each
+  `-fixed` seed reading its attack's beat, and `c3-pii` as the one off-page seed;
+- the seed count, session id, the `-2` and `-3` retries, ATTEMPTS, the filtered link (`llmobs_url()` on the
+  presenters' cluster), the seed searches, the retention filter and the room's link.
+
+Each check is shown failing on an edited step and on an edited SEEDS, SEED_BEATS, OFF_PAGE_SEEDS or ATTEMPTS. Every
+literal the test cuts on is checked first and named when missing, so a reworded step fails by name and the test is
+updated in the same commit (Tests own their inputs, point 2). The criterion's second half, an offline test updated
+with the wording, was already met by `test_deck_shift_slide_citations.py` in 28d68555. The scope map gains the test's
+entry from `scope_tests.py write`. Only `verify/` changed, a test no cluster runs, so no live check.
