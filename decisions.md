@@ -48061,3 +48061,40 @@ now classed `live`, kind `lab-endpoint`, beside test_audience_path_live.py's. `p
 and `python3 verify/test_console_rollout_drain.py` each exit 0. The "--context is empty" line in that gate's output is
 test_burritobot_cluster_live.py's argument check printing under a passing test, not a failure. The live rollout is
 still not run, for the reason above.
+
+## 2026-11-09 · #1276 · run 19641 · The web-terminal pin waits on a cosign signature for the build from the pinned fetches
+
+**What build-web-terminal.yml pushed.** The staging run on d86dd355 (Actions run 42652904884, the #1273 Dockerfile)
+logged `pushed ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-1.7.7-7` at
+`sha256:a37b9e12798a53ef6add4dffa8a9c8c15c46d81fc2bed4b350e99e1d58eadcc9`, source tree `0968a9b0`. The staging run on
+1de321ad (run 42656069032) found no tag built from the next tree, `b2b8abf1`, which #1271's entrypoint.sh change made,
+and pushed `web-terminal-ttyd-1.7.7-8` at `sha256:b81d336c6a71cf98889ab6815269af7b0cb9cb1e7b3a3e0464435dcdcbc77386`.
+`b2b8abf1` is still the tree of `images/web-terminal` on staging, and its Dockerfile is the #1273 one (blob `784af490`
+on both trees). Read anonymously from ghcr.io, `-8`'s config carries the source-tree label `b2b8abf1...` and `-7`'s
+carries `0968a9b0...`. The digest to pin is `-8`'s, so the image matches every file the repo now holds under
+`images/web-terminal`; `-7` would ship the entrypoint from before #1271.
+
+**Why the pin is not moved in this run.** Neither new digest is signed: an anonymous HEAD of
+`sha256-a37b9e12....sig` and of `sha256-b81d336c....sig` on ghcr.io answers 404, while `sha256-68004fb5....sig`
+answers 200. watch-it-burn-private runs the `verify-image-signatures` ImageValidatingPolicy with `validationActions:
+[Deny]` on Pod CREATE for `ghcr.io/peopleforrester/watch-it-burn*`. A server-side dry run of a Pod in the `agent`
+namespace (`kubectl --context watch-it-burn-private apply --dry-run=server`, nothing created) was denied for `-8`
+("Policy verify-image-signatures failed: ... must carry a valid cosign signature made with the workshop key") and
+admitted for the current `68004fb5`. The web-terminal Deployment is `strategy: Recreate`, so promoting the pin before
+the signature exists would stop the private terminal's pod and leave its replacement denied. watch-it-burn-community
+has no such policy and would take it. The signing key is in mrf-secrets on netcup; this run has neither the key nor
+cosign, so the signature goes up as an act on netcup (`cosign2 sign --key ~/secrets/cosign/watch-it-burn.key
+--tlog-upload=false` on the `-8` digest, then `cosign2 verify --key policies/cosign/watch-it-burn.pub
+--insecure-ignore-tlog`), as `verify/sign-images.sh` does it.
+
+**What the next run does.** Once `sha256-b81d336c....sig` answers 200 and the dry run above is admitted, replace
+`web-terminal-ttyd-1.7.7@sha256:68004fb5...` with `web-terminal-ttyd-1.7.7-8@sha256:b81d336c...` in both places
+`gitops/ai-layer/resources.yaml` names it (the web-terminal Deployment and the cloud-credential-probe Job) and on
+`images.lock` line 55 (both the reference and its digest column, with the date). Then `verify/test_image_version_tags.py`
+and, after Argo CD syncs, `verify/test_terminal_ws_auth_live.py` against each cluster's web-terminal pod.
+
+**Live check.** The web-terminal pods on both clusters run `@sha256:68004fb5...` (read from `containerStatuses`). The
+dry run above changed nothing on watch-it-burn-private. No file a cluster runs changed.
+
+**Not yet run on a cluster.** `verify/test_terminal_ws_auth_live.py` against a web-terminal pod on `-8`, after the
+signature and the pin.
