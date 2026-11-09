@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-# ABOUTME: The fetch call-site scan of verify/, .github/workflows/ and scripts/ (#1116, part of #1115), and the check of
+# ABOUTME: The fetch call-site scan of verify/, .github/workflows/, scripts/ and images/ (#1116, #1251), and the check of
 # ABOUTME: what it finds against verify/fetch-inventory.yaml, where each site is classed pinned artifact or live check.
-"""Every line under verify/, .github/workflows/ and scripts/ that names a fetch, and what each one is.
+"""Every line under verify/, .github/workflows/, scripts/ and images/ that names a fetch, and what each one is.
 
     python3 verify/fetch_inventory.py check     exit 1 naming each file:line the inventory does not account for
     python3 verify/fetch_inventory.py summary   the counts by class and kind, as decisions.md's #1115 entry gives them
     python3 verify/fetch_inventory.py draft     a YAML stub for each line no entry claims, to classify by hand
 
-The scan reads every file `git ls-files --cached --others --exclude-standard` lists under the three directories, so a
+The scan reads every file `git ls-files --cached --others --exclude-standard` lists under the four directories, so a
 new file is seen before it is committed, and searches each line with the PATTERNS below: curl, wget, urlopen, the Helm
 verbs that read a repository, a Terraform init, the Python installs of pip and uv, the Node fetches of npm, yarn and
 corepack, a Playwright browser install, a Docker or Podman pull, crane, a git clone or submodule update, the setup
 actions a workflow downloads a runtime with, and a get from the host artifact cache (#1117), a chart pull, an image
-layout or a git mirror through it (#1122), which fetch on a miss. It is a line scan, as #1115's `git grep` was: a command built across lines is found on the
+layout (or #1216's platform layout) or a git mirror through it (#1122), which fetch on a miss. It is a line scan, as #1115's `git grep` was: a command built across lines is found on the
 line that names it, and a line that only names a command (a comment, a message, a regex, a stub) is found too.
 
 The inventory, verify/fetch-inventory.yaml, lists by file the entries that claim those lines. An entry's `match` is a
@@ -34,8 +34,14 @@ DRIFT_RULE. Drift on a file last changed before the inventory existed is named, 
 that file again, as scope_tests.owed() does for the scope map (#1190): a run cut before the inventory that lands a call
 site on staging mid-gate cannot fail another run's change. A malformed entry always fails.
 
+images/ is scanned since #1251: its build scripts (images/kyverno-counter-fix/build.sh, images/villains/build.sh and
+build-loopback.sh) run in workflows and tier tests, and its Dockerfiles in workflows, so a fetch added to one is classed
+like one added under verify/. A crane held in a variable is found where the variable is run with a crane verb
+(`"$CR" append`), as build.sh runs it.
+
 The inventory, this file and its test are left out of the scan: they are the scan's own definition, and each names
-every command it looks for. None of them fetches anything.
+every command it looks for. None of them fetches anything. So is VENDORED, third-party code checked in whole: the yarn
+release Backstage's .yarnrc.yml runs, whose own fetches are the `yarn install` call sites classed where they run.
 """
 from __future__ import annotations
 
@@ -49,8 +55,9 @@ import yaml
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 INVENTORY_REL = "verify/fetch-inventory.yaml"
-ROOTS = ("verify", ".github/workflows", "scripts")
+ROOTS = ("verify", ".github/workflows", "scripts", "images")
 SELF = (INVENTORY_REL, "verify/fetch_inventory.py", "verify/test_fetch_inventory.py")
+VENDORED = ("images/watch-it-burn-backstage/.yarn/releases/",)
 
 # Each command family the scan looks for. The words around each are written as \W{1,4} or \s+ so that a list form,
 # ["helm", "pull", ...], is found as well as a shell one.
@@ -68,11 +75,13 @@ PATTERNS = {
             r"|\bcorepack\W{1,4}(?:prepare|install|enable)\b",
     "playwright-install": r"\bplaywright\W{1,4}install\b",
     "image-pull": r"\b(?:docker|podman)\W{1,4}pull\b",
-    "crane": r"(?<![\w./$-])crane(?![\w./-])",
+    "crane": r"(?<![\w./$-])crane(?![\w./-])"
+             r'|"\$\{?CR(?:ANE)?\}?"\s+(?:--?[\w-]+\s+)*(?:append|mutate|push|pull|copy|cp|digest|export|manifest|config'
+             r"|ls|catalog|auth|blob|tag|flatten|rebase|delete)\b",
     "git-clone": r"\bgit\b.*\bclone\b|\bgit\b.*\bsubmodule\W{1,4}update\b",
     "setup-action": r"uses:\s*(?:actions/setup-\w+|astral-sh/setup-uv)",
     "artifact-cache": r"artifact-cache\.sh\W{1,4}get\b|\$\{CACHE\}\W{1,4}get\b|\bartifact_cache\.get(?:_retrying)?\("
-                      r"|\bchart_fetch\.pull\(|\bimage_cache\.layout\(|image_cache\.py\W{1,4}layout\b"
+                      r"|\bchart_fetch\.pull\(|\bimage_cache\.(?:platform_)?layout\(|image_cache\.py\W{1,4}(?:platform-)?layout\b"
                       r"|\bgit_mirror\.(?:ensure|submodules)\(|git_mirror\.py\W{1,4}(?:ensure|submodules)\b",
 }
 SCAN = re.compile("|".join(f"(?:{p})" for p in PATTERNS.values()))
@@ -97,14 +106,15 @@ FIX_HINT = "run `python3 verify/fetch_inventory.py draft`, class each line and c
 
 
 def tracked(root: pathlib.Path | None = None) -> list[str]:
-    """Every file under ROOTS that git tracks or would track, the scan's own three files aside."""
+    """Every file under ROOTS that git tracks or would track, the scan's own three files and VENDORED aside."""
     root = root or REPO
     r = subprocess.run(["git", "-C", str(root), "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--",
                         *ROOTS], capture_output=True)
     if r.returncode != 0:
         raise SystemExit(f"fetch_inventory: git ls-files failed in {root}: {r.stderr.decode(errors='replace').strip()}")
     files = sorted(set(f for f in r.stdout.decode().split("\0") if f))
-    return [f for f in files if f not in SELF and (root / f).is_file() and not (root / f).is_symlink()]
+    return [f for f in files if f not in SELF and not f.startswith(VENDORED) and (root / f).is_file()
+            and not (root / f).is_symlink()]
 
 
 def scan(root: pathlib.Path | None = None, files: list[str] | None = None) -> list[tuple[str, int, str]]:

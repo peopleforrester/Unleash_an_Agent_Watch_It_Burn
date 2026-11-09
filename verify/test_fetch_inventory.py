@@ -1,21 +1,26 @@
 #!/usr/bin/env python3
-# ABOUTME: Re-runs the fetch call-site scan of verify/, .github/workflows/ and scripts/ and fails, naming the file and
-# ABOUTME: line, on a site verify/fetch-inventory.yaml does not list or does not classify (#1116, part of #1115).
+# ABOUTME: Re-runs the fetch call-site scan of verify/, .github/workflows/, scripts/ and images/ and fails, naming the
+# ABOUTME: file and line, on a site verify/fetch-inventory.yaml does not list or does not classify (#1116, #1251).
 """verify/fetch-inventory.yaml accounts for every fetch call site the scan finds (#1116).
 
 #1115 (Michael, 2026-11-07: never download an artifact we already hold a pinned copy of) starts from a list of every
 line under verify/, .github/workflows/ and scripts/ that names a fetch, each classed as a pinned artifact or a live
-check. verify/fetch_inventory.py holds the scan and the check; this test runs them:
+check, and #1251 adds images/, whose build scripts workflows and tier tests run. verify/fetch_inventory.py holds the scan
+and the check; this test runs them:
 
   - on the repo: every line the scan finds is claimed by an entry of its file, each entry claims exactly the number of
     lines it says, and each entry has a class and that class's fields (a pinned site's kind, pin and cached, a live
     site's kind and target, a loopback or none line's why); a pinned site's pin, when it starts with a repo path,
     names a file or directory that is there
+  - images/: the build scripts a workflow or tier test runs (the Kyverno counter-fix build, both Joker builds) and the
+    Dockerfiles are scanned and listed, the vendored yarn release is the one file under it left out, and a call site in
+    an images/ file of a scratch repository fails like one under verify/
   - on a scratch repository: a new call site in a listed file, a call site in a file the inventory does not list (an
     untracked one too), an entry with no class, an entry with a field missing, a count that is off and an entry for a
     file with no call site each fail, naming the file and line or the file and entry
   - each command family's pattern finds a line of its own, and the names that only look like one (a fallback.curl.sh
-    path, the curlimages/curl image, a curl/8 user agent, the CRANE variable) find none
+    path, the curlimages/curl image, a curl/8 user agent, the CRANE variable) find none; a crane held in a variable is
+    found where it runs a crane verb, and an image_cache platform layout is found as a layout is
 
 The fixtures build each command name from pieces, so this file names none whole.
 """
@@ -76,6 +81,26 @@ fetch_tools = [rel for rel in sites if rel == "verify/fetch-e2e-tools.sh"]
 check("the E2E tools fetch is listed, through the artifact cache", fetch_tools == ["verify/fetch-e2e-tools.sh"] and
       all(e.get("class") == "pinned" and e.get("cached") is True for e in sites["verify/fetch-e2e-tools.sh"]))
 
+print("== images/: the build scripts workflows and tier tests run are scanned and classed (#1251) ==")
+scanned = set(fi.tracked())
+BUILD_SCRIPTS = ("images/kyverno-counter-fix/build.sh", "images/villains/build.sh", "images/villains/build-loopback.sh")
+for rel in BUILD_SCRIPTS + ("images/web-terminal/Dockerfile", "images/workshop-mcp/Dockerfile", "images/tool-pin/Dockerfile"):
+    check(f"{rel} is scanned and the inventory lists it", rel in scanned and rel in sites,
+          f"scanned {rel in scanned}, listed {rel in sites}")
+workflows = "".join(p.read_text(encoding="utf-8") for p in sorted((REPO / ".github" / "workflows").glob("*.y*ml")))
+for rel in ("images/kyverno-counter-fix/build.sh", "images/villains/build-loopback.sh"):
+    check(f"a workflow runs {rel}, so its scan is the one #1251 asks for", rel in workflows)
+check("build-loopback.sh runs build.sh, so build.sh's crane calls run in the workflow and the tier test",
+      'bash "${HERE}/build.sh"' in (REPO / "images/villains/build-loopback.sh").read_text(encoding="utf-8"))
+check("the scan leaves out only the vendored yarn release under images/",
+      fi.VENDORED == ("images/watch-it-burn-backstage/.yarn/releases/",) and "images" in fi.ROOTS)
+for rel, want in (("images/kyverno-counter-fix/build.sh", {"git_mirror.py\" ensure", "image_cache.py\" platform-layout"}),
+                  ("images/villains/build-loopback.sh", {"image_cache.py\" layout"}),
+                  ("images/villains/build.sh", {'"$CR" append', '"$CR" mutate'})):
+    found = [line for r, _, line in fi.scan(REPO, [rel])]
+    missing = [w for w in want if not any(w in line for line in found)]
+    check(f"the scan finds {', '.join(sorted(want))} in {rel}", not missing, f"missing {missing}")
+
 print("== the patterns: each command family finds a line of its own ==")
 samples = {
     "curl": f"{CU} -fsS https://example.test/",
@@ -94,13 +119,19 @@ samples = {
 }
 # #1122's two entry points, each in the artifact-cache family: an image layout and a git mirror, by call and by command.
 for line in ("base = image" + "_cache.layout(ref)", 'layout="$(python3 verify/image' + '_cache.py layout "${base}")"',
+             "d = image" + "_cache.platform_layout(ref, out)",
+             'digest="$(python3 "${VERIFY}/image' + '_cache.py" platform-layout "${ref}" "${out}" linux/amd64)"',
              "m = git" + "_mirror.ensure(url, pin)", 'python3 "${REPO_DIR}/verify/git' + '_mirror.py" submodules "${REPO_DIR}"'):
     check(f"artifact-cache: the scan finds {line!r}", "artifact-cache" in fi.families(line), str(fi.families(line)))
 check("every family has a sample", set(samples) == set(fi.PATTERNS), str(set(fi.PATTERNS) ^ set(samples)))
 for fam, line in samples.items():
     check(f"{fam}: the scan finds {line!r}", bool(fi.SCAN.search(line)) and fam in fi.families(line), str(fi.families(line)))
+for line in ('"$CR" append --platform linux/amd64 -b "$JOKER_BASE" -f l.tar -t "${ref}"',
+             '"${CRANE}" --insecure push "${layout}" "${addr}/x"'):
+    check(f"crane: the scan finds a crane held in a variable in {line!r}", "crane" in fi.families(line), str(fi.families(line)))
 for line in (f"challenges/02-sanitization/fallback.{CU}.sh", f"image: {CU}images/{CU}:8.1", f'"User-Agent": "{CU}/8"',
-             'CRANE="${TOOLS_BIN}/' + CR + '"', f"{HE} template . --values v.yaml"):
+             'CRANE="${TOOLS_BIN}/' + CR + '"', f"{HE} template . --values v.yaml", 'CR="${CRANE:-' + CR + '}"',
+             'echo "$CR" is set'):
     check(f"the scan finds nothing in {line!r}", not fi.SCAN.search(line), str(fi.families(line)))
 
 print("== a scratch repository: each way the inventory can fall behind fails by name ==")
@@ -133,6 +164,15 @@ got = scratch({**BASE, "verify/probe.sh": BASE["verify/probe.sh"] + f"{CU} -s ht
 check("a second call site in a listed file fails, naming the entry's count and both lines",
       any("verify/probe.sh: entry 1" in p and "claims 2 lines, the inventory says 1" in p and "verify/probe.sh:4" in p
           for p in got), str(got))
+
+got = scratch({**BASE, "images/app/Dockerfile": f"FROM x\nRUN {CU} -fsSL https://example.test/t.tgz | tar -xz\n",
+              "images/app/.yarn/releases/yarn-9.cjs": f"{CU} https://x/\n",
+              "images/watch-it-burn-backstage/.yarn/releases/yarn-9.cjs": f"{CU} https://x/\n"}, GOOD)
+check("a call site in an images/ Dockerfile the inventory does not list fails, naming its file and line",
+      any(p.startswith("images/app/Dockerfile:2: a fetch call site missing from the inventory") for p in got), str(got))
+check("the vendored yarn release is not scanned, and a .yarn/releases file elsewhere under images/ is",
+      not any(p.startswith("images/watch-it-burn-backstage/") for p in got)
+      and any(p.startswith("images/app/.yarn/releases/yarn-9.cjs:1:") for p in got), str(got))
 
 got = scratch({**BASE, "verify/new.py": f"x = 1\nurllib.request.{UO}(u)\n"}, GOOD)
 check("a call site in a file the inventory does not list fails, naming its file and line",

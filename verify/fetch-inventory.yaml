@@ -1,7 +1,7 @@
-# ABOUTME: Every fetch call site under verify/, .github/workflows/ and scripts/, by file, classed as a pinned artifact,
-# ABOUTME: a live check, a loopback fetch or a line that runs none (#1116, part of #1115). verify/fetch_inventory.py reads it.
+# ABOUTME: Every fetch call site under verify/, .github/workflows/, scripts/ and images/, by file, classed as a pinned artifact,
+# ABOUTME: a live check, a loopback fetch or a line that runs none (#1116, #1251). verify/fetch_inventory.py reads it.
 #
-# verify/fetch_inventory.py scans each line of every file git tracks or would track under those three directories
+# verify/fetch_inventory.py scans each line of every file git tracks or would track under those four directories
 # for the command families its PATTERNS name, and test_fetch_inventory.py fails, naming the file and line, on a line no
 # entry here claims. An entry's `match` is a regular expression searched in the line; a line belongs to the first entry
 # of its file that matches it, and `lines` is how many lines the entry claims, so a new call site always changes a count.
@@ -99,6 +99,146 @@ sites:
     kind: tool
     pin: .github/workflows/weaver-registry-check.yml (WEAVER_SHA256, weaver's archive)
     cached: true
+  images/kyverno-counter-fix/build.sh:
+  - match: git_mirror\.py" ensure
+    lines: 1
+    class: pinned
+    kind: git-commit
+    pin: images/kyverno-counter-fix/build.sh (KYVERNO_COMMIT, from git_mirror.py's bare mirror of KYVERNO_URL; GitHub only on a miss)
+    cached: true
+  - match: git clone --quiet --shared
+    lines: 1
+    class: loopback
+    why: a clone of the host artifact cache's kyverno mirror, a repository on this host, that reads its objects in place
+  - match: image_cache\.py" platform-layout
+    lines: 1
+    class: pinned
+    kind: container-image
+    pin: images/kyverno-counter-fix/build.sh (BASE, the three Kyverno bases by index digest, from image_cache.py's OCI layouts; reg.kyverno.io only on a miss)
+    cached: true
+  - match: '"\$\{crane\}" --insecure (push|append|mutate|digest)'
+    lines: 4
+    class: loopback
+    why: crane's own registry on 127.0.0.1, the caller's (build-kyverno-counter-fix.yml or test_kyverno_counter_fix_cache.py), the only address build.sh accepts
+  - match: .
+    lines: 7
+    class: none
+    why: the usage text, comments, the CRANE variable and its `crane version` check, which reads the binary and fetches nothing
+  images/tool-pin/Dockerfile:
+  - match: pip install
+    lines: 1
+    class: pinned
+    kind: python-package
+    pin: images/tool-pin/Dockerfile (grpcio==1.84.1)
+    cached: false
+  images/villains/README.md:
+  - match: .
+    lines: 3
+    class: none
+    why: prose on how the Jokers are built and pushed; it runs nothing
+  images/villains/build-loopback.sh:
+  - match: image_cache\.py" layout
+    lines: 1
+    class: pinned
+    kind: container-image
+    pin: images/villains/build.sh (JOKER_BASE, the Jokers' base by digest, from image_cache.py's OCI layout; ghcr.io only on a miss)
+    cached: true
+  - match: '"\$\{crane\}" --insecure push'
+    lines: 1
+    class: loopback
+    why: crane's own registry on 127.0.0.1, the caller's (push-jokers.yml or test_joker_build_digest.py), the only address the script accepts
+  - match: .
+    lines: 7
+    class: none
+    why: 'the usage text, comments, the CRANE variable, and the call that hands build.sh a crane wrapper bound to loopback: build.sh''s crane calls are classed there'
+  images/villains/build.sh:
+  - match: '"\$CR" (append|mutate)'
+    lines: 2
+    class: loopback
+    why: 'run through build-loopback.sh, as push-jokers.yml and test_joker_build_digest.py run it, CR is a wrapper that sends JOKER_BASE and the Joker to the caller''s registry on 127.0.0.1, where the base was pushed from image_cache.py''s layout; a hand run without it reads JOKER_BASE from ghcr.io by digest and pushes the Joker there'
+  - match: .
+    lines: 4
+    class: none
+    why: comments that name crane, its auth and its pin; none runs it
+  images/watch-it-burn-backstage/.dockerignore:
+  - match: .
+    lines: 1
+    class: none
+    why: a path in the ignore list (.yarn/install-state.gz), not a command
+  images/watch-it-burn-backstage/README.md:
+  - match: .
+    lines: 3
+    class: none
+    why: build instructions a person reads and runs by hand; no workflow or test runs them from here
+  images/watch-it-burn-backstage/packages/backend/Dockerfile:
+  - match: .
+    lines: 2
+    class: none
+    why: comments on what to run before the build; the Dockerfile itself runs no yarn install
+  images/watch-it-burn-backstage/packages/backend/README.md:
+  - match: .
+    lines: 1
+    class: none
+    why: instructions a person reads; it runs nothing
+  images/watch-it-burn-backstage/playwright.config.ts:
+  - match: .
+    lines: 1
+    class: none
+    why: a comment naming the browser install verify/run-e2e.sh runs, which is classed there
+  images/watch-it-burn-backstage/yarn.lock:
+  - match: .
+    lines: 1
+    class: none
+    why: the lockfile's generated header; it runs nothing
+  images/web-terminal/Dockerfile:
+  - match: ca-certificates curl wget
+    lines: 1
+    class: live
+    kind: upstream-index
+    target: Debian bookworm's apt archive as it stands when build-web-terminal.yml builds the image (curl and wget are packages it installs)
+  - match: ttyd/releases/download/1\.7\.7|release/\$\{KVER\}|code-server/releases/download/v\$
+    lines: 3
+    class: pinned
+    kind: tool
+    pin: images/web-terminal/Dockerfile (ttyd 1.7.7 in its URL, KUBECTL_VERSION, CODE_SERVER_VERSION; a version each, no checksum)
+    cached: false
+  - match: releases/latest/download|get-helm-3
+    lines: 4
+    class: live
+    kind: github
+    target: the latest GitHub release of eksctl, k9s and yq, and helm's get-helm-3 script on its main branch, which installs helm's latest release
+  - match: awscli\.amazonaws\.com|deb\.nodesource\.com
+    lines: 2
+    class: live
+    kind: public-web
+    target: the current AWS CLI v2 build (its URL names no version) and NodeSource's setup_22.x script with the Node 22 release it installs that day
+  - match: pip install
+    lines: 2
+    class: live
+    kind: upstream-index
+    target: PyPI as it stands at build time; pip is upgraded to its latest, and of the notebook stack only jupyterlab and jupyter-collaboration are pinned
+  images/web-terminal/entrypoint.sh:
+  - match: localhost:8080
+    lines: 5
+    class: live
+    kind: cluster
+    target: guard-proxy's control API on localhost:8080, reached from the attendee terminal inside the guard-proxy pod with kubectl exec
+  images/workshop-mcp/Dockerfile:
+  - match: ^RUN pip install
+    lines: 1
+    class: pinned
+    kind: python-package
+    pin: images/workshop-mcp/Dockerfile (mcp==1.29.1 and pyyaml==6.0.2 on the lines after it)
+    cached: false
+  - match: apt-get install
+    lines: 1
+    class: live
+    kind: upstream-index
+    target: Debian's apt archive for the base image's release as it stands at build time (curl is a package it installs)
+  - match: .
+    lines: 3
+    class: none
+    why: comments on the runtime install this image replaced and on why curl is in it; none runs a fetch
   scripts/capture-fallback-screenshots.py:
   - match: urlopen
     lines: 1
@@ -408,7 +548,7 @@ sites:
     pin: the reference's own @sha256 digest (images/villains/build.sh's JOKER_BASE, images/kyverno-counter-fix/build.sh's BASE); each manifest and blob through artifact_cache.get_retrying by its sha256, platform_layout through layout()
     cached: true
   - match: .
-    lines: 5
+    lines: 7
     class: none
     why: the docstring and the command-line usage; none runs a fetch
   verify/input-guard.sh:
@@ -629,7 +769,7 @@ sites:
     why: a docstring, and the list of host tools the test stubs; nothing leaves the host
   verify/test_kyverno_counter_fix.py:
   - match: .
-    lines: 12
+    lines: 13
     class: none
     why: checks on build.sh's and the workflow's text that name crane, git_mirror.py and image_cache.py; nothing leaves the host
   verify/test_kyverno_counter_fix_cache.py:
