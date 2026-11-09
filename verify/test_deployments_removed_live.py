@@ -30,8 +30,8 @@ In order, this:
    unmarked;
 8. reads the page the room sees, https://deployments-<public host>/, and its /deployments.json through the console,
    and runs the page's own script in node against those rows: the public line reads "Someone deployed nginx at <t>,
-   removed at <t>" with the class the page greys, the internal line reads "Someone deployed maintenance-shell at <t>"
-   with no class;
+   removed at <t> <cluster>" with the class the page greys, the internal line reads "Someone deployed maintenance-shell
+   at <t> <cluster>" with no class, <cluster> being the cluster the desk labels the row with (#1157);
 9. always puts both policies back to the actions it read, deletes both Deployments, removes its two rows from the
    page with the desk's /desk-forget, and checks the policies, the names of every Deployment, StatefulSet, DaemonSet,
    Job and CronJob in agent, and the page's rows are as it found them: /deployments.json lists no row of its names.
@@ -352,8 +352,11 @@ def run_checks() -> None:
                   and seen.get(KEPT, {}).get("removed_at") == "", err or json.dumps(seen)[:300])
             if page and seen:
                 lines, err = page_lines(page, [r for r in public_rows if r.get("name") in (GONE, KEPT)])
-                want_gone = f"Someone deployed nginx at {seen[GONE]['at']}, removed at {seen[GONE]['removed_at']}"
-                want_kept = f"Someone deployed maintenance-shell at {seen[KEPT]['at']}"
+                # Since #1157 the page ends each line with the cluster its row names, as the page's script does.
+                label = {n: f" {seen[n]['cluster']}" if seen[n].get("cluster") else "" for n in (GONE, KEPT)}
+                want_gone = (f"Someone deployed nginx at {seen[GONE]['at']}, removed at {seen[GONE]['removed_at']}"
+                             f"{label[GONE]}")
+                want_kept = f"Someone deployed maintenance-shell at {seen[KEPT]['at']}{label[KEPT]}"
                 by_text = {x["text"]: x["cls"] for x in lines}
                 check(f"the page's script renders the public line {want_gone!r}, with the class it greys",
                       by_text.get(want_gone) == "removed" and "li.removed,li.removed b{color:" in page,
