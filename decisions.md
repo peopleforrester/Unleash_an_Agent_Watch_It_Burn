@@ -42316,3 +42316,40 @@ and no re-send, and each run's spend starting where the last one ended; `verify/
 that the probe prints those words. `python3 verify/scope_tests.py write` added the new test's entry alone, and
 `python3 verify/scope_tests.py check` reads 0 problems. The probe's re-send and the persona's `ask_user` and `run_shell` lines are unchanged and stay held by
 `verify/test_kubecon_probe.py`. No dependency was added.
+
+## 2026-11-09 · #1162 · run 19100 · The storefront's Feedback button opens the talk's own form; its thanks page hands on to Sessionize
+
+**What changed.** On Michael's decision of 2026-11-08, the KubeCon NA breakout collects feedback on a short form of
+our own on the existing feedback app (feedback-agenticburn `44060ab`, EVENT_ID `kubecon-na-2026`), and the form's
+thanks page sends people on to rate session 1249553 on Sessionize. This supersedes the 2026-10-28 Sessionize-only
+setup (#451). `gitops/ai-layer/web/event.js` sets `feedbackUrl` to `https://feedback.burritobot.co/?source=burritobot`.
+The page still uses it verbatim, with no cluster or user appended: the talk's room has no cluster or user of its own,
+the form tells the storefront apart from the deck's closing QR (`source=deck`, rounds-agenticburn#107) by its own
+`source=`, and an attendee's email belongs in the form's optional box, not in a query string. The comment that
+called the destination a third party now says that. The phone check's "Feedback opens" column expects our form, and
+a new table has each phone submit once, follow the thanks page's Sessionize link to 1249553 and find the answer in
+`/admin`; the Sessionize-opens-near-the-session check moved to that link, and a wrong link is now feedback-agenticburn's
+to correct, not `event.js`'s. Segment 6 of the run-of-show has a one-line feedback ask at the take-home slide's
+"Rate this session" QR, and the Night Before audience step names the form.
+
+**Tests.** `verify/test_audience_event.py` pins `feedbackUrl` to the form and adds three checks: the Feedback column
+names the form, the submit table has an iPhone and an Android row with the Sessionize and `/admin` checks, and segment
+6 names `?source=deck`. `verify/test_audience_page_e2e.py` runs the page's own init in node and expects the form's URL
+exactly, with no cluster or user. Both green (the E2E one with node and the cached segno). The 42 offline tests that
+read the run-of-show or the phone check, run one by one, are green, after `git submodule update --init
+gitops/ai-layer/guard-proxy` (five of them read `proxy.py`, which this worktree had not checked out). The prose gate
+passes and `scope_tests.py check` finds 0 problems. The scoped Test and tools-tier commands are left to validation.
+
+**Live, read before promotion (2026-11-09 01:41 UTC).** `curl https://attackme.burritobot.co/event.js` still serves
+the Sessionize URL, as expected before promotion. The community cluster's `ai-layer` Application tracks `staging` and
+its console ConfigMap carries a content hash (`console-src-5b245m4t2h`), so the roll is Argo CD's, with no pod delete
+(#252). `https://feedback.burritobot.co/?source=burritobot` returns 200, names the talk, posts a hidden
+`source=burritobot`, and has no link to a lab, Datadog or sponsor. One test submission, marked "TEST submission by
+Unleash_an_Agent_Watch_It_Burn#1162 hecaton run 19100, please set aside" (usefulness 3, anonymous), was posted to
+`/submit`: it answered 302 to `/thanks`, whose one outbound link is
+`https://kubecon-cloudnativecon-north-america-2026.sessionize.com/session/1249553` (200). `/admin` answers 403 to this
+run, so feedback-agenticburn confirms that row under `kubecon-na-2026` with source `burritobot`.
+
+**Not yet run on a cluster.** After promotion: `curl -s https://attackme.burritobot.co/event.js | grep feedbackUrl`
+reads the form's URL, and `verify/test_audience_page_e2e.py`'s check holds for the served copy; the Feedback button
+on attackme.burritobot.co opens the form on a phone (the phone check's "Feedback opens" column and its submit table).
