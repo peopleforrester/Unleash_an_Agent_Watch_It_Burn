@@ -1,5 +1,5 @@
 # ABOUTME: Holds #1094: a /chat turn that ends in kagent's ask_user, replayed from two live tasks through the pinned
-# ABOUTME: guard-proxy. At pin 5772a5d the guest reads Nova's scratchpad; any other pin must show the question instead.
+# ABOUTME: guard-proxy. The guest must read ask_user's question, never the scratchpad 5772a5d showed (#1094).
 """What the guest reads when Nova calls kagent's ask_user, offline.
 
 On 2026-11-07 (run 18327 on #1089) fresh chats asked "What was the last thing I asked you, word for word as best you
@@ -11,16 +11,16 @@ in the same chat, and when that turn calls ask_user again it hands the guest the
 
 kagent adds ask_user to every Agent with no setting to drop it, and #889's persona rule ("Never call ask_user") was
 live in run 19291 and still left 4 ask_user turns in 38 fresh chats, 2 of them showing planning text. The fix is
-guard-proxy's: guard-proxy-agenticburn#72 (commit 2f21fe3, on its main) replies with the ask_user question and cancels
-the pending task. It reaches the clusters with the next repin of gitops/ai-layer/guard-proxy, which is Michael's.
+guard-proxy's: guard-proxy-agenticburn#72 (commit 2f21fe3) replies with the ask_user question and cancels the pending
+task. It reached this repo with the repin to a637e68 (69659912, #1225); 5772a5d, the pin before, showed the scratchpad.
 
 What this holds:
 - the two tasks recorded live (verify/fixtures/ask-user-input-required-2026-11-07.json) are input-required, carry the
   question only outside text parts, and their only text part is a scratchpad;
 - the pinned guard-proxy (gitops/ai-layer/guard-proxy/proxy.py), every guard off, behind a stand-in agent that answers
-  the send and any retry with those two tasks: at the pin whose proxy.py is PRE_FIX_SHA256 (5772a5d) it hands the
-  guest the first task's planning text after one retry, the gap #1094 names; at any other pin the guest reads task 1's
-  question, with no scratchpad, no retry, and a tasks/cancel for task 1. So a repin that drops the fix fails here.
+  the send and any retry with those two tasks: the guest reads task 1's question, with no scratchpad, no retry, and a
+  tasks/cancel for task 1. At 5772a5d (PRE_FIX_SHA256) it handed the guest task 1's planning text after one retry, the
+  gap #1094 names, so a repin back to it, or to any proxy.py without the fix, fails here.
 """
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 REPO = pathlib.Path(__file__).resolve().parents[1]
 FIXTURE = REPO / "verify/fixtures/ask-user-input-required-2026-11-07.json"
 SUB = REPO / "gitops/ai-layer/guard-proxy"
-# proxy.py at guard-proxy 5772a5d, the pin since c51e1851 and the last one before guard-proxy-agenticburn#72's fix.
+# proxy.py at guard-proxy 5772a5d, the pin from c51e1851 to a3361501 and the last one before guard-proxy-agenticburn#72.
 PRE_FIX_SHA256 = "ddf97ec452c00953c8b741e7891f2636b2fa959b95bd560e7d6cb070aef38ff6"
 THINK = re.compile(r"<\s*thinking\s*>(.*?)(?:<\s*/\s*thinking\s*>|$)", re.S | re.I)
 
@@ -138,20 +138,15 @@ print(f"  the guest reads: {reply!r}")
 methods = [b.get("method") for b in served]
 sends = methods.count("message/send")
 pin_sha = hashlib.sha256((SUB / "proxy.py").read_bytes()).hexdigest()
-if pin_sha == PRE_FIX_SHA256:
-    print("  the pin is 5772a5d, before guard-proxy-agenticburn#72: the guest reads planning text (#1094)")
-    check("guard-proxy sent the turn, then asked once more (a reasoning-only reply)", sends == 2, methods)
-    check("the guest reads the first turn's planning text, the gap #1094 names", reply == scratchpads[0],
-          f"{reply!r} vs {scratchpads[0]!r}")
-else:
-    print(f"  the pin's proxy.py is {pin_sha[:12]}, after 5772a5d: it must show ask_user's question (#1094)")
-    check("the guest reads task 1's ask_user question", reply.strip() == "\n".join(questions[0]).strip(),
-          f"{reply!r} vs {questions[0]!r}")
-    check("and none of the scratchpad", not any(s and s in reply for s in scratchpads), reply)
-    check("guard-proxy sent the turn once, with no reasoning-only retry", sends == 1, methods)
-    cancels = [b for b in served if b.get("method") == "tasks/cancel"]
-    check("guard-proxy cancelled task 1, so it is not left pending",
-          len(cancels) == 1 and (cancels[0].get("params") or {}).get("id") == tasks[0]["id"], cancels)
+print(f"  the pin's proxy.py is {pin_sha[:12]}")
+check("the pin is not 5772a5d, whose proxy.py showed the guest planning text", pin_sha != PRE_FIX_SHA256, pin_sha)
+check("the guest reads task 1's ask_user question", reply.strip() == "\n".join(questions[0]).strip(),
+      f"{reply!r} vs {questions[0]!r}")
+check("and none of the scratchpad", not any(s and s in reply for s in scratchpads), reply)
+check("guard-proxy sent the turn once, with no reasoning-only retry", sends == 1, methods)
+cancels = [b for b in served if b.get("method") == "tasks/cancel"]
+check("guard-proxy cancelled task 1, so it is not left pending",
+      len(cancels) == 1 and (cancels[0].get("params") or {}).get("id") == tasks[0]["id"], cancels)
 
 print()
 if failures:
