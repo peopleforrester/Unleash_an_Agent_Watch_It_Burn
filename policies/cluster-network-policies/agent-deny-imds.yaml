@@ -13,7 +13,7 @@
 #      after C1, and after the lab's reset deletes the C1 policies again.
 #
 # What it does NOT break: Pod Identity. Every AWS credential in this namespace (agent-sa, agentgateway,
-# web-terminal) comes from the EKS Pod Identity agent at 169.254.170.23, a different address
+# guard-proxy-reader, web-terminal) comes from the EKS Pod Identity agent at 169.254.170.23, a different address
 # (agent-egress-allowlist.yaml allows it explicitly), and AWS documents that Pod Identity pods do not use IMDS.
 # IMDS is also closed at the node by IMDSv2-required with hop limit 1 (infra/terraform/aws/cluster/main.tf);
 # this is the second, readable layer, not the only one.

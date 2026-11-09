@@ -20,7 +20,7 @@
 #     app.kubernetes.io/name=console.
 #   * Identity. The network must let the in-VPC Bedrock endpoint through, because workshop-agent and
 #     agentgateway call it there. A pod gets Bedrock credentials only through EKS Pod Identity, by running
-#     as a ServiceAccount with an association (agent-sa, agentgateway, web-terminal).
+#     as a ServiceAccount with an association (agent-sa, agentgateway, guard-proxy-reader, web-terminal).
 # restrict-agent-spawned-workloads closes both: a workload the agent's identities create may not run as one
 # of those ServiceAccounts, nor wear the console label. verify/test_llm_bypass_live.py exercises all three
 # shapes above against it on a live cluster.
