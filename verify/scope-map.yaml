@@ -112,6 +112,7 @@ always:
   test_no_presenter_login.py: it runs git ls-files, which reads the tree or history as a whole
   test_observability.py: line 41 builds a path under the repo root from a value it finds at run time
   test_old_2b_attack_retired.py: it runs git grep, ls-files, which reads the tree or history as a whole
+  test_old_tron_ask_retired.py: it runs git grep, ls-files, which reads the tree or history as a whole
   test_otel_trace_id_fix_live_checks.py: 'verify/test_otel_trace_id_fix_live.py: it runs git cat-file, show, which reads the tree or history as a whole'
   test_package_cache.py: 'it runs git ls-files, which reads the tree or history as a whole; verify/test_e2e_toolchain.py: it runs git ls-files, which reads the tree or history as a whole; line 348 builds a path under the repo root from a value it finds at run time; line 364 builds a path under the repo root from a value it finds at run time'
   test_pantry_header_pin.py: it runs git cat-file, ls-tree, which reads the tree or history as a whole
