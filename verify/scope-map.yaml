@@ -29,6 +29,14 @@ unread:
   - prds
   - specs
 bounds:
+  verify/app_render.py:
+    why: source_docs() and helm_render() read each gitops/bootstrap/apps Application source's path, REPO / src["path"], and each $values/ file it names (#1078)
+    paths:
+      - gitops
+      - policies
+      - backstage
+      - observability-idp
+      - security
   verify/bootstrap_chart.py:
     why: source_files() reads each Application source of this repo, REPO / source["path"]
     paths:
@@ -47,14 +55,53 @@ bounds:
       - .gitmodules
       - gitops/ai-layer/guard-proxy
       - images/llm-guard
+  verify/sister_tree.py:
+    why: its git calls clone the sister repo into a temporary directory and run ls-tree in that clone; it reads nothing of this tree (#1078)
+    paths: []
+  verify/test_bootstrap_chart_render.py:
+    why: REPO / f"gitops/manifests/{n}" is built with kustomize for each demo-app-* the burn profile lists (#1078)
+    paths:
+      - gitops/manifests
+  verify/test_datadog_log_services_render.py:
+    why: render_app() reads each gitops/bootstrap/apps Application source's path, REPO / src["path"], and each $values/ file it names (#1078)
+    paths:
+      - gitops
+      - policies
+      - backstage
+      - observability-idp
+      - security
+  verify/test_enforce_floor.py:
+    why: it reads each gitops/bootstrap/apps Application source's path and each $values/ file it names, and REPO / "infra" / values for the two Helm releases infra/deploy-full-idp.sh installs outside Argo CD (#1078)
+    paths:
+      - gitops
+      - policies
+      - backstage
+      - observability-idp
+      - security
+      - infra/argocd-values.yaml
+      - infra/aws-load-balancer-controller-values.yaml
+  verify/test_image_registry_render.py:
+    why: chart_render() and source_render() read each gitops/bootstrap/apps Application source's path, REPO / src["path"], and each $values/ file it names (#1078)
+    paths:
+      - gitops
+      - policies
+      - backstage
+      - observability-idp
+      - security
+  verify/test_kubearmor_config_render.py:
+    why: REPO / config["path"] is the kubearmor Application's local chart source, the one whose path is gitops/kubearmor-config (#1078)
+    paths:
+      - gitops/kubearmor-config
+  verify/test_platform_baseline.py:
+    why: REPO / c["installed_by"] is each platform-baseline.yaml component's installed_by script (#1078)
+    paths:
+      - infra/deploy-full-idp.sh
 always:
   test_agent_tools_sync.py: 'verify/test_fleet_converge_repairs.sh: it runs git on the tree or history as a whole; line 576 builds a path under the repo root from a value it finds at run time'
   test_american_english_gate.py: 'line 37 builds a path under the repo root from a value it finds at run time; line 38 builds a path under the repo root from a value it finds at run time; scripts/compile-design-doc.py: line 62 builds a path under the repo root from a value it finds at run time'
   test_backstage_catalog.py: line 106 builds a path under the repo root from a value it finds at run time
-  test_bootstrap_chart_render.py: line 377 builds a path under the repo root from a value it finds at run time
   test_c6_villain_endpoint.py: it runs git ls-files, which reads the tree or history as a whole
   test_challenge_fallbacks.py: line 189 builds a path under the repo root from a value it finds at run time
-  test_chart_fetch.py: 'verify/app_render.py: line 119 builds a path under the repo root from a value it finds at run time; verify/app_render.py: line 95 builds a path under the repo root from a value it finds at run time; verify/test_datadog_log_services_render.py: line 107 builds a path under the repo root from a value it finds at run time; verify/test_datadog_log_services_render.py: line 92 builds a path under the repo root from a value it finds at run time; verify/test_datadog_log_services_render.py: line 95 builds a path under the repo root from a value it finds at run time; verify/test_datadog_log_services_render.py: line 102 builds a path under the repo root from a value it finds at run time; verify/test_enforce_floor.py: line 106 builds a path under the repo root from a value it finds at run time; verify/test_enforce_floor.py: line 151 builds a path under the repo root from a value it finds at run time; verify/test_enforce_floor.py: line 49 builds a path under the repo root from a value it finds at run time; verify/test_image_registry_render.py: line 185 builds a path under the repo root from a value it finds at run time; verify/test_image_registry_render.py: line 202 builds a path under the repo root from a value it finds at run time; verify/test_image_registry_render.py: line 184 builds a path under the repo root from a value it finds at run time; verify/test_kubearmor_config_render.py: line 76 builds a path under the repo root from a value it finds at run time'
   test_chat_span_token_counts.py: it runs git ls-tree, which reads the tree or history as a whole
   test_chat_turn_cancel.py: it runs git ls-tree, which reads the tree or history as a whole
   test_chat_witch_name.py: it runs git ls-tree, which reads the tree or history as a whole
@@ -62,7 +109,6 @@ always:
   test_claude_md_run_test_scope.py: 'verify/scope_tests.py: it runs git archive, blame, cat-file, diff, diff-tree, grep, log, ls-files, ls-tree, rev-list, shortlog, show, whatchanged, which reads the tree or history as a whole; verify/scope_tests.py: it runs grep -r'
   test_compile_design_doc.py: 'line 44 builds a path under the repo root from a value it finds at run time; scripts/compile-design-doc.py: line 62 builds a path under the repo root from a value it finds at run time'
   test_cost_gauge_unchanged.py: it runs git ls-tree, show, which reads the tree or history as a whole
-  test_datadog_log_services_render.py: line 108 builds a path under the repo root from a value it finds at run time; line 93 builds a path under the repo root from a value it finds at run time; line 96 builds a path under the repo root from a value it finds at run time; line 103 builds a path under the repo root from a value it finds at run time
   test_deck_shift_slide_citations.py: it runs git ls-files, which reads the tree or history as a whole; line 118 builds a path under the repo root from a value it finds at run time; line 114 builds a path under the repo root from a value it finds at run time
   test_demo_app_web_image.py: it runs git ls-files, which reads the tree or history as a whole; line 146 builds a path under the repo root from a value it finds at run time
   test_dispatched_runs.py: 'verify/prose_gate.py: it runs git diff, ls-files, show, which reads the tree or history as a whole'
@@ -71,7 +117,6 @@ always:
   test_e2e_toolchain.py: it runs git ls-files, which reads the tree or history as a whole
   test_e2e_tools_gate_scope.py: 'verify/prose_gate.py: it runs git diff, ls-files, show, which reads the tree or history as a whole; verify/scope_tests.py: it runs git archive, blame, cat-file, diff, diff-tree, grep, log, ls-files, ls-tree, rev-list, shortlog, show, whatchanged, which reads the tree or history as a whole; verify/scope_tests.py: it runs grep -r'
   test_e2e_tools_tier.py: it runs git ls-files, which reads the tree or history as a whole
-  test_enforce_floor.py: line 103 builds a path under the repo root from a value it finds at run time; line 148 builds a path under the repo root from a value it finds at run time; line 47 builds a path under the repo root from a value it finds at run time
   test_event_tag.py: it runs git ls-files, which reads the tree or history as a whole
   test_evil_tools_by_name.py: line 33 builds a path under the repo root from a value it finds at run time; line 122 builds a path under the repo root from a value it finds at run time; line 119 builds a path under the repo root from a value it finds at run time
   test_fetch_inventory.py: line 64 builds a path under the repo root from a value it finds at run time
@@ -91,14 +136,11 @@ always:
   test_iam_policy_coverage.py: it runs git ls-files, which reads the tree or history as a whole; line 124 builds a path under the repo root from a value it finds at run time; line 162 builds a path under the repo root from a value it finds at run time
   test_image_pins.py: it runs git ls-files, which reads the tree or history as a whole; line 46 builds a path under the repo root from a value it finds at run time
   test_image_registry.py: line 59 builds a path under the repo root from a value it finds at run time
-  test_image_registry_render.py: line 188 builds a path under the repo root from a value it finds at run time; line 205 builds a path under the repo root from a value it finds at run time; line 187 builds a path under the repo root from a value it finds at run time
   test_image_signing.py: 'verify/sign-images.sh: it runs grep -r'
   test_images_lock.py: it runs git ls-files, which reads the tree or history as a whole; line 96 builds a path under the repo root from a value it finds at run time; line 136 builds a path under the repo root from a value it finds at run time; line 109 builds a path under the repo root from a value it finds at run time
-  test_images_lock_render.py: 'verify/app_render.py: line 122 builds a path under the repo root from a value it finds at run time; verify/app_render.py: line 98 builds a path under the repo root from a value it finds at run time'
   test_imds_credential_theft.py: it runs git ls-files, which reads the tree or history as a whole; line 125 builds a path under the repo root from a value it finds at run time
   test_istiod_no_hpa.py: it runs git grep, which reads the tree or history as a whole
   test_kube_safety.py: line 41 builds a path under the repo root from a value it finds at run time
-  test_kubearmor_config_render.py: line 72 builds a path under the repo root from a value it finds at run time
   test_kubecon_abstract_readiness.py: line 122 builds a path under the repo root from a value it finds at run time
   test_lab_text_export.py: 'it runs git log, which reads the tree or history as a whole; verify/export-lab-text.sh: it runs git on the tree or history as a whole'
   test_lint.py: it runs git ls-files, which reads the tree or history as a whole; line 23 builds a path under the repo root from a value it finds at run time
@@ -108,7 +150,6 @@ always:
   test_mesh_enrollment.py: line 46 builds a path under the repo root from a value it finds at run time
   test_no_cloud_by_hand.sh: 'verify/test_round_names_retired.py: it runs git ls-files, which reads the tree or history as a whole; verify/test_round_names_retired.py: line 85 builds a path under the repo root from a value it finds at run time'
   test_no_docker_hub.py: 'it runs git grep, ls-files, which reads the tree or history as a whole; verify/test_demo_app_web_image.py: it runs git ls-files, which reads the tree or history as a whole; line 299 builds a path under the repo root from a value it finds at run time; line 92 builds a path under the repo root from a value it finds at run time; verify/test_demo_app_web_image.py: line 146 builds a path under the repo root from a value it finds at run time; verify/app_render.py: line 122 builds a path under the repo root from a value it finds at run time; verify/app_render.py: line 98 builds a path under the repo root from a value it finds at run time'
-  test_no_docker_hub_render.py: 'verify/app_render.py: line 122 builds a path under the repo root from a value it finds at run time; verify/app_render.py: line 98 builds a path under the repo root from a value it finds at run time'
   test_no_presenter_login.py: it runs git ls-files, which reads the tree or history as a whole
   test_observability.py: line 41 builds a path under the repo root from a value it finds at run time
   test_old_2b_attack_retired.py: it runs git grep, ls-files, which reads the tree or history as a whole
@@ -117,14 +158,11 @@ always:
   test_package_cache.py: 'it runs git ls-files, which reads the tree or history as a whole; verify/test_e2e_toolchain.py: it runs git ls-files, which reads the tree or history as a whole; line 348 builds a path under the repo root from a value it finds at run time; line 364 builds a path under the repo root from a value it finds at run time'
   test_pantry_header_pin.py: it runs git cat-file, ls-tree, which reads the tree or history as a whole
   test_pantry_shut_record.py: 'verify/test_pantry_header_pin.py: it runs git cat-file, ls-tree, which reads the tree or history as a whole'
-  test_platform_baseline.py: line 102 builds a path under the repo root from a value it finds at run time
-  test_platform_baseline_sister.py: 'verify/test_platform_baseline.py: line 102 builds a path under the repo root from a value it finds at run time'
   test_platform_version_pins.py: 'line 165 builds a path under the repo root from a value it finds at run time; verify/test_observability.py: line 41 builds a path under the repo root from a value it finds at run time'
   test_prose_gate.py: 'verify/prose_gate.py: it runs git diff, ls-files, show, which reads the tree or history as a whole'
   test_replay_prompts.py: it runs git ls-files, which reads the tree or history as a whole; line 537 builds a path under the repo root from a value it finds at run time
   test_round_names_retired.py: it runs git ls-files, which reads the tree or history as a whole; line 85 builds a path under the repo root from a value it finds at run time
   test_scope_tests.py: it holds this map current with every test and what each reads, so every change runs it
-  test_sister_tree.py: 'verify/sister_tree.py: it runs git ls-tree, which reads the tree or history as a whole; verify/test_platform_baseline.py: line 102 builds a path under the repo root from a value it finds at run time'
   test_spec_copies.py: line 67 builds a path under the repo root from a value it finds at run time
   test_submodule_pins_pushed.sh: 'verify/submodule-pins-pushed.sh: it runs git on the tree or history as a whole'
   test_terminal_login_live.sh: 'verify/terminal-login-live.sh: it runs git on the tree or history as a whole; verify/test_no_presenter_login.py: it runs git ls-files, which reads the tree or history as a whole'
@@ -132,7 +170,6 @@ always:
   test_terraform_module_pins.py: it runs git ls-files, which reads the tree or history as a whole; line 70 builds a path under the repo root from a value it finds at run time
   test_tests_own_inputs.py: it runs git grep, which reads the tree or history as a whole
   test_tf_plugin_cache.py: 'it runs git ls-files, which reads the tree or history as a whole; verify/test_event_tag.py: it runs git ls-files, which reads the tree or history as a whole; verify/test_terraform_module_pins.py: it runs git ls-files, which reads the tree or history as a whole; verify/test_terraform_module_pins.py: line 70 builds a path under the repo root from a value it finds at run time'
-  test_verify_harness.py: 'verify/test_enforce_floor.py: line 103 builds a path under the repo root from a value it finds at run time; verify/test_enforce_floor.py: line 148 builds a path under the repo root from a value it finds at run time; verify/test_enforce_floor.py: line 47 builds a path under the repo root from a value it finds at run time'
   test_verify_suites_workflow.py: 'verify/ci-base-sha.sh: it runs git on the tree or history as a whole'
 reads:
   test_467_live_record.py:
@@ -980,6 +1017,40 @@ reads:
     - policies
     - security
     - verify/bootstrap_chart.py
+  test_bootstrap_chart_render.py:
+    - CLAUDE.md
+    - agent/desk-report-token
+    - backstage
+    - gitops
+    - gitops/ai-layer
+    - gitops/ai-layer/components/desk-remote-reports/desk-remote-report.locations
+    - gitops/ai-layer/components/public-desk/desk_relay.py
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/manifests
+    - images
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - policies/kyverno
+    - policies/kyverno/*.yaml
+    - policies/kyverno/restrict-image-registries.yaml
+    - security
+    - verify/bootstrap_chart.py
+    - verify/registry_allowlist.py
+    - verify/run-e2e-tools.sh
   test_brand_skin.py:
     - gitops/ai-layer/web
     - gitops/ai-layer/web/*.html
@@ -1453,6 +1524,50 @@ reads:
     - verify/kubecon_probe.py
     - verify/stage_traces.py
     - verify/topic_cases.py
+  test_chart_fetch.py:
+    - CLAUDE.md
+    - agent
+    - backstage
+    - gitops
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/kubearmor-config
+    - gitops/manifests/datadog/datadog-agent.yaml
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
+    - infra/terraform/aws/cluster/main.tf
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - policies/kyverno/restrict-image-registries.yaml
+    - security
+    - verify
+    - verify/*.py
+    - verify/app_render.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/bootstrap_chart.py
+    - verify/chart_fetch.py
+    - verify/charts.lock
+    - verify/charts_lock.py
+    - verify/docker_hub.py
+    - verify/mirror_copies.py
+    - verify/registry_allowlist.py
+    - verify/run-e2e-tools.sh
+    - verify/test_datadog_log_services_render.py
+    - verify/test_enforce_floor.py
+    - verify/test_image_registry_render.py
+    - verify/test_kubearmor_config_render.py
   test_chat_coc.py:
     - .gitmodules
     - gitops/ai-layer/guard-proxy
@@ -1970,6 +2085,36 @@ reads:
     - scripts/reload-routes.sh
     - verify/datadog-orgs.sh
     - verify/no-cloud.sh
+  test_datadog_log_services_render.py:
+    - CLAUDE.md
+    - backstage
+    - gitops
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/manifests/datadog/datadog-agent.yaml
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
+    - infra/terraform/aws/cluster/main.tf
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/bootstrap_chart.py
+    - verify/chart_fetch.py
+    - verify/charts.lock
+    - verify/charts_lock.py
   test_datadog_login_visible.py:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
@@ -2673,6 +2818,36 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
+  test_enforce_floor.py:
+    - CLAUDE.md
+    - backstage
+    - gitops
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - policies/kyverno/restrict-image-registries.yaml
+    - security
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/bootstrap_chart.py
+    - verify/chart_fetch.py
+    - verify/charts.lock
+    - verify/charts_lock.py
+    - verify/registry_allowlist.py
   test_enforcement_points.py:
     - docs/CHALLENGE-ASSETS.md
     - gitops/ai-layer/web/active-skin.js
@@ -4359,6 +4534,36 @@ reads:
     - verify/artifact-cache.sh
     - verify/artifact_cache.py
     - verify/image_cache.py
+  test_image_registry_render.py:
+    - CLAUDE.md
+    - backstage
+    - gitops
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/bootstrap_chart.py
+    - verify/chart_fetch.py
+    - verify/charts.lock
+    - verify/charts_lock.py
+    - verify/mirror_copies.py
+    - verify/run-e2e-tools.sh
   test_image_version_tags.py:
     - '**'
     - .github/workflows/build-web-terminal.yml
@@ -4383,6 +4588,39 @@ reads:
     - verify/docker_hub.py
     - verify/images_live.py
     - verify/images_saved.py
+  test_images_lock_render.py:
+    - CLAUDE.md
+    - agent
+    - backstage
+    - gitops
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - images.lock
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/app_render.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/bootstrap_chart.py
+    - verify/chart_fetch.py
+    - verify/charts.lock
+    - verify/charts_lock.py
+    - verify/docker_hub.py
+    - verify/run-e2e-tools.sh
   test_images_saved_judge.py:
     - images.lock
     - verify
@@ -4630,6 +4868,36 @@ reads:
     - verify/gateway_forward.py
     - verify/kube_forward.py
     - verify/test_deployments_page_live.py
+  test_kubearmor_config_render.py:
+    - CLAUDE.md
+    - backstage
+    - gitops
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/kubearmor-config
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/bootstrap_chart.py
+    - verify/chart_fetch.py
+    - verify/charts.lock
+    - verify/charts_lock.py
+    - verify/run-e2e-tools.sh
   test_kubearmor_config_tracked.py:
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/kubearmor-config
@@ -5599,6 +5867,38 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
+  test_no_docker_hub_render.py:
+    - CLAUDE.md
+    - agent
+    - backstage
+    - gitops
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/app_render.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/bootstrap_chart.py
+    - verify/chart_fetch.py
+    - verify/charts.lock
+    - verify/charts_lock.py
+    - verify/docker_hub.py
+    - verify/run-e2e-tools.sh
   test_no_internal_abstractions.py:
     - gitops/ai-layer/web/active-skin.js
     - gitops/ai-layer/web/burritbot.html
@@ -5998,6 +6298,62 @@ reads:
     - infra/terraform/aws/network
     - infra/terraform/aws/network/main.tf
     - infra/terraform/fleet/event.sh
+  test_platform_baseline.py:
+    - CLAUDE.md
+    - backstage
+    - decisions.md
+    - gitops
+    - gitops/apps-disabled
+    - gitops/apps-disabled/*.yaml
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
+    - lab-platform.yaml
+    - observability-idp
+    - platform-baseline.yaml
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+  test_platform_baseline_sister.py:
+    - CLAUDE.md
+    - backstage
+    - decisions.md
+    - gitops
+    - gitops/apps-disabled
+    - gitops/apps-disabled/*.yaml
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
+    - lab-platform.yaml
+    - observability-idp
+    - platform-baseline.yaml
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+    - verify/sister_tree.py
+    - verify/test_platform_baseline.py
   test_platform_floor.sh:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
@@ -7123,6 +7479,38 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/no-cloud.sh
+  test_sister_tree.py:
+    - CLAUDE.md
+    - README.md
+    - backstage
+    - decisions.md
+    - docs
+    - gitops
+    - gitops/apps-disabled
+    - gitops/apps-disabled/*.yaml
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
+    - lab-platform.yaml
+    - observability-idp
+    - platform-baseline.yaml
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+    - verify/sister_tree.py
+    - verify/test_platform_baseline.py
+    - verify/test_platform_baseline_sister.py
   test_sizing_measure.py:
     - backstage
     - gitops
@@ -8335,6 +8723,110 @@ reads:
     - verify/run-e2e.sh
     - verify/test_two_hour_flow_live.py
     - verify/topic_cases.py
+  test_verify_harness.py:
+    - CLAUDE.md
+    - agent
+    - agent/*
+    - agent/desk-report-token
+    - agent/terminal-auth
+    - backstage
+    - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - cost
+    - docs/DESIGN-GLANCE.md
+    - docs/RUN-OF-SHOW-2026-08.md
+    - docs/admin-console.md
+    - gitops
+    - gitops/**.yaml
+    - gitops/ai-layer
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web/active-skin.js
+    - gitops/ai-layer/web/lab-events.js
+    - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/platform.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values-attendee.yaml
+    - gitops/bootstrap/values.yaml
+    - gitops/manifests/demo-app-hedgehog/configmap.yaml
+    - gitops/manifests/demo-app-mantis-shrimp/configmap.yaml
+    - gitops/manifests/demo-app-spider/configmap.yaml
+    - gitops/manifests/demo-app-unicorn/configmap.yaml
+    - gitops/manifests/demo-app-wombat/configmap.yaml
+    - gitops/workshop-agent/agent.yaml
+    - images/watch-it-burn-backstage/playwright.config.ts
+    - images/web-terminal/Dockerfile
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/datadog-fleet
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/org/boundary
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network
+    - infra/terraform/aws/network/main.tf
+    - infra/terraform/aws/teardown/sweep-account.sh
+    - infra/terraform/fleet
+    - infra/terraform/fleet/backups.py
+    - infra/terraform/fleet/backups.tsv
+    - infra/terraform/fleet/check-tls.sh
+    - infra/terraform/fleet/event.sh
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/logs
+    - infra/terraform/fleet/preflight.sh
+    - infra/terraform/fleet/providers/*.sh
+    - infra/terraform/fleet/providers/aws.sh
+    - infra/terraform/fleet/providers/azure.sh
+    - infra/terraform/fleet/providers/gcp.sh
+    - infra/terraform/fleet/providers/local.sh
+    - infra/terraform/fleet/roster.tsv
+    - infra/terraform/fleet/scheduled-up.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - policies/kyverno/restrict-image-registries.yaml
+    - scripts/harvest_cluster_access.sh
+    - scripts/harvest_terminal_credential.sh
+    - scripts/push_vtt_aws_creds.sh
+    - scripts/reload-routes.sh
+    - security
+    - teardown/teardown.sh
+    - verify
+    - verify/*.sh
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/backstage-footprint.sh
+    - verify/backstage_footprint.py
+    - verify/beat-cost.sh
+    - verify/bootstrap_chart.py
+    - verify/chart_fetch.py
+    - verify/charts.lock
+    - verify/charts_lock.py
+    - verify/model_pin_check.py
+    - verify/party-refresh-rate.js
+    - verify/registry_allowlist.py
+    - verify/run-all.sh
+    - verify/run-e2e.sh
+    - verify/run-tests.sh
+    - verify/test_*
+    - verify/test_*.py
+    - verify/test_ai_layer_rollout.py
+    - verify/test_datadog_service_map.py
+    - verify/test_enforce_floor.py
+    - verify/test_fleet_contract.py
+    - verify/test_party_refresh_rate.py
+    - verify/test_service_naming_render.py
   test_villain_app.py:
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - games/villain-apps/deploy-villain.yaml

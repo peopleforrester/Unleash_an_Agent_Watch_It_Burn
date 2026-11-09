@@ -13,7 +13,10 @@
    rebase. A fixture repo holds owed()'s split.
 2. The two bounds hold: every file bootstrap_chart.source_files() reads for an Application source in
    gitops/bootstrap/apps, and every values file collector_render.value_files() names, is inside the paths the map
-   bounds that helper by.
+   bounds that helper by. The render tests' bounds (#1078) hold too: every Application source path and $values/ file
+   is inside the bound of each file that builds paths from them, and the installed_by scripts, the kubearmor chart
+   source, the burn demo apps' manifests and the release value files each sit inside theirs. Each bounded file's
+   count of run-time paths and git reads is pinned, so a new one fails until its bound is reread.
 3. select() on the real map: a change to decisions.md alone runs its offline readers and the always tests and leaves
    the rest, and no tier test (#1190); a change to display.js runs its tier tests, not the whole tier;
    a change to a runner, the map, a shared helper, or a path no entry covers runs everything; a changed test runs.
@@ -29,6 +32,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -144,6 +148,89 @@ check("without the bound, git_mirror.py's git reads send a test that follows it 
       any(w.startswith("verify/git_mirror.py: it runs git") for w in unbounded.why_always), str(unbounded.why_always))
 check("with it, they do not, and the test reads .gitmodules and both submodules", not bounded.why_always
       and set(bound) <= bounded.paths, f"{bounded.why_always} {sorted(bounded.paths)}")
+
+# #1078: the render tests that build paths from what they read at run time, and the helpers they follow, are bounded
+# here, so they move from always to reads. Each bound is held against the repo data the file builds its paths from.
+# The render tests read every Application source in gitops/bootstrap/apps that names a path, whatever its repoURL,
+# and each $values/ file a helm block names: every one of those must sit inside each such file's bound.
+APP_SOURCE_BOUNDED = ("verify/app_render.py", "verify/test_datadog_log_services_render.py",
+                      "verify/test_enforce_floor.py", "verify/test_image_registry_render.py")
+app_paths: list[tuple[str, str]] = []
+for app_file in sorted(bc.APPS.glob("*.yaml")):
+    for app in yaml.safe_load_all(app_file.read_text(encoding="utf-8")):
+        if not app or app.get("kind") != "Application":
+            continue
+        spec = app["spec"]
+        for source in ([spec["source"]] if spec.get("source") else spec.get("sources") or []):
+            if "path" in source:
+                app_paths.append((app_file.name, source["path"]))
+            for vf in (source.get("helm") or {}).get("valueFiles") or []:
+                app_paths.append((app_file.name, vf.removeprefix("$values/")))
+check("the Application sources name more than 20 paths and the otel-collector value files",
+      len(app_paths) > 20 and any(p.startswith("gitops/otel-collector/") for _, p in app_paths), str(len(app_paths)))
+for f in APP_SOURCE_BOUNDED:
+    bound = doc["bounds"][f]["paths"]
+    outside = [f"{a}: {p}" for a, p in app_paths if not any(st.covers(e, st._norm(p) or "..") for e in bound)]
+    check(f"every Application source path and $values/ file is inside {f}'s bound", not outside, "\n".join(outside))
+# test_enforce_floor.py renders the two releases deploy-full-idp.sh installs with REPO / "infra" / <values>, the
+# value files its own release table names.
+ef_values = sorted(set(re.findall(r'"([\w.-]+-values\.yaml)"', (VERIFY / "test_enforce_floor.py").read_text())))
+bound = doc["bounds"]["verify/test_enforce_floor.py"]["paths"]
+check("every infra values file test_enforce_floor.py's release table names is inside its bound",
+      len(ef_values) >= 2 and all(any(st.covers(e, f"infra/{v}") for e in bound) for v in ef_values), str(ef_values))
+# test_kubearmor_config_render.py renders the kubearmor app's source whose path is gitops/kubearmor-config.
+kubearmor = [s.get("path") for d in yaml.safe_load_all((bc.APPS / "kubearmor.yaml").read_text(encoding="utf-8"))
+             if d and d.get("kind") == "Application" for s in d["spec"].get("sources") or [] if "path" in s]
+check("the kubearmor Application's path source is test_kubearmor_config_render.py's bound",
+      kubearmor == doc["bounds"]["verify/test_kubearmor_config_render.py"]["paths"] == ["gitops/kubearmor-config"],
+      str(kubearmor))
+# test_bootstrap_chart_render.py builds REPO / f"gitops/manifests/{n}" for each demo app the burn profile lists.
+demo = [n for n in bc.app_names("burn") if n.startswith("demo-app-")]
+check("each burn demo app is a plain name with a directory in gitops/manifests, test_bootstrap_chart_render.py's bound",
+      len(demo) == 5 and doc["bounds"]["verify/test_bootstrap_chart_render.py"]["paths"] == ["gitops/manifests"]
+      and all("/" not in n and ".." not in n and f"gitops/manifests/{n}" in tree.dirs for n in demo), str(demo))
+# test_platform_baseline.py reads REPO / c["installed_by"] for each component of platform-baseline.yaml.
+baseline = yaml.safe_load((REPO / "platform-baseline.yaml").read_text(encoding="utf-8"))
+installed = sorted({c["installed_by"] for c in baseline.get("components") or []
+                    if isinstance(c, dict) and c.get("installed_by")})
+bound = doc["bounds"]["verify/test_platform_baseline.py"]["paths"]
+check("every installed_by script platform-baseline.yaml names is inside test_platform_baseline.py's bound",
+      bool(installed) and all(any(st.covers(e, s) for e in bound) for s in installed), str(installed))
+# sister_tree.py's git calls are a clone of the sister repo and ls-tree inside that clone (-C), none on this tree.
+git_calls = re.findall(r'\["git",[^\]]*', (VERIFY / "sister_tree.py").read_text())
+check("sister_tree.py runs git only to clone another repo and to read that clone, so its bound names no path",
+      len(git_calls) == 2 and all('"clone"' in c or '"-C"' in c for c in git_calls)
+      and doc["bounds"]["verify/sister_tree.py"]["paths"] == [], str(git_calls))
+# A bound stands in for every run-time path and git read of its file, so one added later would hide behind it. Each
+# bounded file's own count of those is pinned: a new one fails here until its bound is reread against it.
+BOUNDED_READS = {"verify/app_render.py": 2, "verify/bootstrap_chart.py": 1, "verify/collector_render.py": 1,
+                 "verify/git_mirror.py": 1, "verify/sister_tree.py": 1, "verify/test_bootstrap_chart_render.py": 1,
+                 "verify/test_datadog_log_services_render.py": 4, "verify/test_enforce_floor.py": 3,
+                 "verify/test_image_registry_render.py": 3, "verify/test_kubearmor_config_render.py": 1,
+                 "verify/test_platform_baseline.py": 1}
+check("every bound has its file's count of run-time paths and git reads pinned here",
+      sorted(BOUNDED_READS) == sorted(doc["bounds"]), f"{sorted(BOUNDED_READS)} against {sorted(doc['bounds'])}")
+for f, n in BOUNDED_READS.items():
+    own = st._own(f, tree, {})[0].unbounded()
+    check(f"{f} has the {n} run-time path(s) or git read(s) its bound was checked against", len(own) == n,
+          f"{len(own)}: {own}; reread the bound in verify/scope-map.yaml and its check above, then pin the new count")
+MOVED = ("test_bootstrap_chart_render.py", "test_chart_fetch.py", "test_datadog_log_services_render.py",
+         "test_enforce_floor.py", "test_image_registry_render.py", "test_images_lock_render.py",
+         "test_kubearmor_config_render.py", "test_no_docker_hub_render.py", "test_platform_baseline.py",
+         "test_platform_baseline_sister.py", "test_sister_tree.py", "test_verify_harness.py")
+check("with the bounds, the tests that were in always only for those reads are in reads",
+      all(t in doc["reads"] and t not in doc["always"]
+          and not st.extract(f"verify/{t}", tree, doc["bounds"]).unbounded() for t in MOVED),
+      str([t for t in MOVED if t not in doc["reads"]]))
+for suite in ("offline", "tools"):
+    mode, why = st.select(doc, suite, ["scripts/compile-design-doc.py"], tests)
+    check(f"a change to a script none of them reads runs none of them in the {suite} suite", mode == "scoped"
+          and not set(MOVED) & set(why), str(sorted(set(MOVED) & set(why))))
+mode, why = st.select(doc, "tools", ["gitops/bootstrap/apps/kubearmor.yaml"], tests)
+check("a change to an app file runs the tier render tests that read it", mode == "scoped" and {
+    "test_enforce_floor.py", "test_image_registry_render.py", "test_kubearmor_config_render.py",
+    "test_datadog_log_services_render.py", "test_images_lock_render.py", "test_no_docker_hub_render.py"} <= set(why),
+      str(sorted(why)))
 
 print("== select() on the real map ==")
 mode, why = st.select(doc, "offline", ["decisions.md"], tests)
