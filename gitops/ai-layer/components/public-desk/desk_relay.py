@@ -43,6 +43,11 @@ TOKEN_HEADER = "X-Desk-Report-Token"   # the public desk's header (#1157, ticket
 MAX_REPORT = 4 * 1024                  # the public console's client_max_body_size for /remote-landed
 MAX_READ = 512 * 1024                  # the desk's MAX_READ_BODY, and the public console's limit for /remote-cluster-read
 MAX_ID = 40                            # the desk keeps a ticket id to 40 characters
+# An oversize body up to this size is read and dropped before the 413, as nginx discards one before its own 413, so the
+# caller reads the 413 and not a broken pipe: answering before the body is read closed the socket under a sender still
+# writing (#1220 measured 9 of 40 POSTs of 512k + 1 ending in EPIPE). A body declared larger is answered at once and the
+# connection closed unread, so no caller holds the relay reading.
+DRAIN_MAX = 2 * MAX_READ
 TIMEOUT = 5
 
 
@@ -95,6 +100,13 @@ class Handler(BaseHTTPRequestHandler):
     def _body(self, limit: int) -> bytes | None:
         n = int(self.headers.get("Content-Length") or 0)
         if n > limit:
+            left = n if n <= DRAIN_MAX else 0
+            while left > 0:
+                chunk = self.rfile.read(min(left, 64 * 1024))
+                if not chunk:
+                    break
+                left -= len(chunk)
+            self.close_connection = True
             self._json(413, {"error": f"at most {limit} bytes"})
             return None
         return self.rfile.read(n)
