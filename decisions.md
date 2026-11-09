@@ -42612,3 +42612,16 @@ both clusters at the start state, every AI guard off, the rogue tools listed, th
 `deployments.json` read `[]`. The only bot-made Deployment is `joker-ichabod-the-werewolf` on the community cluster,
 which dates from 2026-11-07 (runs 18804 and 18849 saw it). The log is `/var/lib/hecaton/runs/18915/live/probe-community.log`.
 The presenter terminal login was not read, printed or touched. No dependency was added.
+
+**Live, watch-it-burn-private, the admin run from the same branch** (`python3 verify/kubecon_probe.py admin
+burritobot-private.burritobot.co --context watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile accen-dev
+--lock-wait 900`, after waiting on run 18961's lock on the community cluster): `34 beats: 34 PASS, 0 FAIL`,
+`KUBECON PROBE GREEN`, `exit=0`, spend `$0.3474 -> $0.4305 over 14 model calls`. Its beats are unchanged by this
+change. Its Challenge 4 beats, `c7-off` and `c7-on`, passed after `guard-agency-on` and `guard-input-on`, and its final
+beat read "every AI guard off, the rogue tools back, the C7 gateway rule open, the shipped Role back, and AI guards off
+and the four Kubernetes guardrails off on this cluster and watch-it-burn-community: the stage starts clean". Read back
+afterwards, both clusters were at the start state, and there was no probe Deployment on either. The log is
+`/var/lib/hecaton/runs/18915/live/probe-admin.log`.
+
+**Not yet run on a cluster.** Nothing this issue needs: both full runs above ran the merged beats from this branch,
+and the probe is a script the presenters run, not something the clusters take from staging.
