@@ -48711,3 +48711,50 @@ lines (`git grep` for them under verify and scripts found none). No dependency w
 
 **Not yet run on a cluster.** The desk and deployments parts of the floor, #1268 and #1269, are not on staging; the
 probe runs again with them once they land.
+
+## 2026-11-09 · #1289 · run 19700 · one helper finds, checks and rewrites every copy of the code-of-conduct pattern under gitops/
+
+**Why.** #1278 copied `floor.portable_pattern()` into the admission policy at 17:56 and #1277 changed the pattern at
+18:13. Each run passed on its own branch, and `test_coc_admission.py` went red on staging until run 19681 rewrote the
+copy by hand. The collector's `transform/coc_mask` holds a second copy. Each copy had a test of its own and a
+regeneration step of its own (a pasted one-liner for the policy, `coc_mask_cases.py`'s printout for the collector), and
+nothing failed on a copy in a third file.
+
+**What.** `verify/coc_pattern_copies.py` names each place the pattern is written as a Site: the file, the text around
+the copy, and how that place escapes it (a CEL raw string in a block scalar; an OTTL string in collector config, with
+`$$` and doubled backslashes). Run alone it checks every copy against `floor.portable_pattern()`; `write` rewrites
+every copy from it. Its scan also looks for the pattern's own pieces (floor's separator class and each leetspeak
+class, with any number of backslashes or `$`) in every file under `gitops/`, outside a submodule checkout, and reports
+any piece that sits outside a known copy. A copy added in a new file therefore fails until it gets a Site.
+`verify/test_coc_pattern_copies.py` holds that: two copies, both equal to the floor, nothing else under `gitops/`.
+It rebuilds the pre-#1277 copy in each file and checks that the check calls it stale and that `write` restores the
+committed file byte for byte. It checks that the scan finds the pattern JSON-encoded, that it reports a copy in an
+unnamed file, and that it names a reworded anchor. It also reads `verify/scope-map.yaml` as committed: a change to
+`floor.py`, `corpus.py` or `terms-proposed.rot13` selects this test, `test_coc_admission.py` and
+`test_collector_coc_mask.py`, without a full run, and a change to each copy's file selects its test and this one.
+The comments in both gitops files now name the one command; the parsed YAML of both is unchanged (compared against
+HEAD with `yaml.safe_load_all`).
+
+**Already met at base.** The map entries of `test_coc_admission.py` and `test_collector_coc_mask.py` already listed
+the three floor files, so the race of 2026-11-09 was two branches that each lacked the other's half, which no scoped
+selection can see. The new test adds the scan for unknown copies and a single `write` for both.
+
+**Scope map.** The test reads `verify/scope-map.yaml` with PyYAML and its own four-line `covers()`, which copies
+`scope_tests.covers()`. Importing `scope_tests` would have made it an always test, because that module's git calls
+read the whole tree. The helper walks `gitops/` with `rglob` rather than `git ls-files` for the same reason, and names
+the holder tests by stem so that the extractor does not take their reads as its own. `python3 verify/scope_tests.py
+write` added the entry; no rule, full, unread or bounds line changed.
+
+**Not covered.** A copy inside the guard-proxy submodule is that repo's own and is not scanned: a submodule checkout
+is skipped by its `.git` file. A copy written in an escaping the pieces miss (base64, say) would not be found.
+
+**Live check, read only.** `kubectl get validatingadmissionpolicy code-of-conduct-names` on watch-it-burn-community and
+watch-it-burn-private: `variables.floor` equals `r'` + `floor.portable_pattern()` + `'` on both (16,148 characters).
+The `relay` key of `monitoring/otel-collector-opentelemetry-collector-agent` on both: 4 `replace_all_patterns`
+statements, each decoding to `floor.portable_pattern()`. Nothing was changed on either cluster. The change to gitops
+is comments only, so nothing new needs to run there.
+
+**Tests.** `python3 verify/test_coc_pattern_copies.py`, `python3 verify/test_scope_tests.py` (the map changed),
+`python3 verify/test_coc_admission.py` and `python3 verify/test_collector_coc_mask.py` (their copies' files gained
+comment lines), once each, all PASS. `git grep` for the reworded comment lines under verify and scripts found no
+test that reads them. No dependency was added.

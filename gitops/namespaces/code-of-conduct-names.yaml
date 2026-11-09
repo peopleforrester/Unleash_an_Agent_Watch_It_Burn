@@ -17,9 +17,10 @@
 #
 # The pattern is the floor's RE2 form, floor.portable_pattern() over terms-proposed.rot13, written in full: CEL's
 # matches() runs RE2 and cannot fold look-alike letters first, as the README says. verify/test_coc_admission.py holds
-# it equal to floor.portable_pattern(), and holds every name the stage creates against it. After the term list
-# changes, the line after `r'` is replaced with what this prints, from the repo root:
-#   python3 -c 'import sys; sys.path.insert(0, "docs/research/2026-11-09-coc-floor"); import floor; print(floor.portable_pattern())'
+# it equal to floor.portable_pattern(), and holds every name the stage creates against it. After the term list or
+# floor.py changes, one command rewrites this copy and the collector's (#1289), from the repo root:
+#   python3 verify/coc_pattern_copies.py write
+# verify/test_coc_pattern_copies.py fails until every copy of the pattern under gitops/ is the floor's.
 #
 # Whose writes. Every request but those from the cluster's own system identities, and every request from a service
 # account in `agent` (agent-sa, workshop-mcp, web-terminal and the rest): the bot, the room through it, the terminal
