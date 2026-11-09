@@ -16,7 +16,7 @@ the workflows; not the submodules, which are their own repos, nor the vendored Y
   2. Every shell script that calls a bare `mktemp` (no -p, no template with a directory in it) sets
      TMPDIR="${TMPDIR:-<checkout>/tmp}" first, so with no TMPDIR it still writes under the checkout's ignored tmp/.
   3. Every shell script that calls mktemp removes what it made on an EXIT trap, which runs on success and on failure.
-  4. Every Python file that calls tempfile.mkdtemp() removes it (shutil.rmtree, here or through atexit), and every
+  4. Every Python file has an rmtree for each tempfile.mkdtemp() it calls (here or through atexit), and every
      mkstemp() or NamedTemporaryFile(delete=False) is unlinked or renamed into place.
   5. Both runners export the TMPDIR fallback, so every test they start inherits it.
   6. artifact_cache.scratch_dir(), the outside-a-worktree scratch the cache tests use, tries TMPDIR and then the
@@ -167,6 +167,29 @@ check("fleet.sh, run directly, puts every mktemp in one scratch directory it rem
       and 'export TMPDIR="${FLEET_SCRATCH}"' in read("infra/terraform/fleet/fleet.sh")
       and """rm -rf "${FLEET_SCRATCH}"' EXIT""" in read("infra/terraform/fleet/fleet.sh"))
 
+# fleet.sh run for real: start-check's curl is a stub that writes down the TMPDIR it was given and fails, so the verb
+# fails too. Every mktemp fleet.sh makes takes that TMPDIR, so where the stub saw it is where they land.
+import tempfile  # noqa: E402
+with tempfile.TemporaryDirectory(prefix="no-temp-1261-fleet-") as fx:
+    fx = pathlib.Path(fx)
+    (fx / "bin").mkdir()
+    (fx / "tmp").mkdir()
+    (fx / "bin" / "curl").write_text('#!/usr/bin/env bash\nprintf "%s\\n" "$TMPDIR" >>"$SEEN"\n'
+                                     'mktemp >>"$SEEN"\nexit 7\n')
+    (fx / "bin" / "curl").chmod(0o755)
+    env = {"PATH": f"{fx / 'bin'}:{os.environ['PATH']}", "HOME": str(fx), "TMPDIR": str(fx / "tmp"),
+           "SEEN": str(fx / "seen"), "WIB_LOG_DIR": str(fx / "logs"), "WIB_STATE_DIR": str(fx / "states")}
+    r = subprocess.run(["bash", str(REPO / "infra/terraform/fleet/fleet.sh"), "start-check"], capture_output=True,
+                       text=True, env=env, timeout=120)
+    seen = (fx / "seen").read_text().split() if (fx / "seen").exists() else []
+    scratch = pathlib.Path(seen[0]) if seen else None
+    check("fleet.sh hands its verbs a TMPDIR of its own, a fleet.* directory under the caller's",
+          r.returncode == 1 and scratch is not None and scratch.parent == fx / "tmp"
+          and scratch.name.startswith("fleet.") and all(pathlib.Path(s).parent in (scratch,) for s in seen[1::2]),
+          f"rc={r.returncode} seen={seen} {r.stderr[-400:]}")
+    check("and removes it, with what was made in it, when the verb fails", scratch is not None and not scratch.exists()
+          and not any((fx / "tmp").iterdir()), str(list((fx / "tmp").iterdir())))
+
 print("== a Python temp directory or file is removed ==")
 # A helper that hands the directory it made to its caller, who removes it.
 HANDS_BACK = {"verify/artifact_cache.py": "scratch_dir() returns the directory, and each caller removes it"}
@@ -175,14 +198,19 @@ for rel in scripts:
     if not rel.endswith(".py") or rel == SELF or rel in HANDS_BACK:
         continue
     text = read(rel)
-    if "mkdtemp(" in text and "rmtree" not in text:
-        leaky.append(f"{rel}: mkdtemp with no rmtree")
+    # One removal per directory: a file with two mkdtemp calls and one rmtree leaves one behind.
+    made, removed = text.count("mkdtemp("), text.count("rmtree")
+    if made > removed:
+        leaky.append(f"{rel}: {made} mkdtemp call(s), {removed} rmtree")
     if ("mkstemp(" in text or "delete=False" in text) and not re.search(r"unlink|os\.remove|os\.replace|\.rename\(|\.replace\(", text):
         leaky.append(f"{rel}: mkstemp or delete=False with no unlink or rename")
 check("every mkdtemp is removed and every kept temp file unlinked or renamed into place", not leaky, "; ".join(leaky))
 
 print("== both runners hand every test the fallback ==")
-FALLBACK = 'export TMPDIR="${TMPDIR:-$(cd "${SCRIPT_DIR}/.." && pwd)/tmp}"'
+# Only an unset TMPDIR is set here, and only then is mkdir run: a fixture that runs a runner with nothing but its own
+# bin on PATH (test_e2e_tools_tier.py's no-node case) sets TMPDIR and has no mkdir.
+FALLBACK = ('if [[ -z "${TMPDIR:-}" ]]; then\n    TMPDIR="$(cd "${SCRIPT_DIR}/.." && pwd)/tmp"\n    mkdir -p "${TMPDIR}"\n'
+            'fi\nexport TMPDIR\n')
 for runner in ("verify/run-tests.sh", "verify/run-e2e-tools.sh"):
     text = read(runner)
     check(f"{runner} exports TMPDIR, else the checkout's tmp/, before any test runs",

@@ -6009,7 +6009,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     # Every mktemp below (kubeconfigs, renders, attendee key CSVs) lands in one scratch directory of this run's own,
     # under TMPDIR or the checkout's ignored tmp/, never the system's temp directory, which on netcup is RAM, and the
     # directory goes when fleet.sh exits, success or failure (#1261). Sourced, fleet.sh leaves the caller's traps alone.
-    mkdir -p "${TMPDIR:-${REPO_ROOT}/tmp}"
+    [[ -n "${TMPDIR:-}" ]] || mkdir -p "${REPO_ROOT}/tmp"
     FLEET_SCRATCH="$(mktemp -d "${TMPDIR:-${REPO_ROOT}/tmp}/fleet.XXXXXX")"
     export TMPDIR="${FLEET_SCRATCH}"
     trap 'rm -f "${FAIL_FILE}"; rm -rf "${FLEET_SCRATCH}"' EXIT

@@ -34,8 +34,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Scratch goes under TMPDIR, else the checkout's ignored tmp/, never the system's temp directory, which on netcup
 # is a tmpfs, so what a test leaves there is RAM (#1261). Every mktemp and Python tempfile below inherits it.
-export TMPDIR="${TMPDIR:-$(cd "${SCRIPT_DIR}/.." && pwd)/tmp}"
-mkdir -p "${TMPDIR}"
+if [[ -z "${TMPDIR:-}" ]]; then
+    TMPDIR="$(cd "${SCRIPT_DIR}/.." && pwd)/tmp"
+    mkdir -p "${TMPDIR}"
+fi
+export TMPDIR
 TOOLS_BIN="${SCRIPT_DIR}/.tools/bin"
 LOG_DIR="${E2E_TOOLS_LOG_DIR:-${SCRIPT_DIR}/.e2e-logs}"
 
