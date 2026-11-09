@@ -47116,6 +47116,7 @@ both locks. require-resource-limits still reads `["Deny"]`. No policy was patche
 and `test_recipe_block_coverage.py`, each exit 0. The whole Test and E2E commands were not run; this change is
 decisions.md alone.
 ## 2026-11-07 · #1094 · run 18386 · A turn that ends in kagent's ask_user shows the guest Nova's scratchpad; the persona now says never to call ask_user and to ask in its reply
+
 ## 2026-11-07 · #1094 · run 18386 · A turn that ends in kagent's ask_user shows the guest Nova's scratchpad; a draft persona rule against ask_user (dropped by run 19291, below)
 
 **Why this run.** Run 18327 (#1089) asked fresh chats "What was the last thing I asked you, word for word as best you
