@@ -48883,3 +48883,33 @@ is comments only, so nothing new needs to run there.
 `python3 verify/test_coc_admission.py` and `python3 verify/test_collector_coc_mask.py` (their copies' files gained
 comment lines), once each, all PASS. `git grep` for the reworded comment lines under verify and scripts found no
 test that reads them. No dependency was added.
+
+## 2026-11-09 · #1295 · run 19707 · the #1269 deploy check against the deployed workshop-mcp on both KubeCon clusters
+
+**What ran.** `python3 verify/deploy_coc_live.py --context <ctx>`, with no `--source`, on watch-it-burn-community and
+watch-it-burn-private, so the pod ran its own mounted `/app/server.py`. Both clusters' Argo CD `ai-layer` Application
+tracks `staging` and was Synced and Healthy at 627604e4, which holds #1269's a9172f5b. The workshop-mcp and
+fake-ticket pods on both started at 2026-11-09T19:59:19Z, after that sync. The `/app/server.py` sha256 in each
+workshop-mcp pod was 5d50c2ef...97b3ec, the same as `gitops/ai-layer/workshop-mcp-server.py` at a9172f5b. main had not
+yet taken #1269 (it was at 6b57eb9f), but the clusters follow staging, so the code checked is the code deployed.
+
+**Output, watch-it-burn-community** (exit 0):
+
+    context watch-it-burn-community; deploy_app from the deployed /app/server.py; the deploy is named joker-<term 0 of 144>
+    PASS  deploy_app refused the deploy, plainly, naming no term  ({"has_check": true, "refused": true, "type": "RuntimeError", "message": "deploy failed for this manifest: it has words in it that the event's code of conduct rules out, in a name, a label, the image or another field, so the cantina will not deploy it. Tell the person that plainly, and ask them for the deploy again without those words. Nothing was deployed.", "answer_has_term": false})
+    PASS  no Deployment of the test's name, and no floor term in any of the 12 Deployment names  (0 names carry a term)
+    PASS  the deployments page (0 rows) has no row of the test's name and no floor term  (0 terms on the page)
+
+    3 of 3 checks passed
+
+**Output, watch-it-burn-private** (exit 0):
+
+    context watch-it-burn-private; deploy_app from the deployed /app/server.py; the deploy is named joker-<term 0 of 144>
+    PASS  deploy_app refused the deploy, plainly, naming no term  ({"has_check": true, "refused": true, "type": "RuntimeError", "message": "deploy failed for this manifest: it has words in it that the event's code of conduct rules out, in a name, a label, the image or another field, so the cantina will not deploy it. Tell the person that plainly, and ask them for the deploy again without those words. Nothing was deployed.", "answer_has_term": false})
+    PASS  no Deployment of the test's name, and no floor term in any of the 12 Deployment names  (0 names carry a term)
+    PASS  the deployments page (0 rows) has no row of the test's name and no floor term  (0 terms on the page)
+
+    3 of 3 checks passed
+
+**Cluster state.** The refusal is raised before deploy_app calls the API server, so neither cluster changed. No code
+changed in this run, so no test was run beyond the live check; the change is this entry alone.
