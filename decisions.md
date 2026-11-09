@@ -46324,3 +46324,17 @@ either cluster.
 
 **Tests run.** `python3 verify/test_agency_role_check.py` (all PASS, exit 0), `python3 verify/test_scope_tests.py`
 and the prose gate. No dependency was added.
+
+## 2026-11-09 · #1151 · run 19518 · run 19510's test label read as a skip marker
+
+**Why run 19510 did not land.** Hecaton's `skip-markers` gate failed `verify/test_agency_role_check.py` on its
+`exit 2` pattern (`\bexit\s+2\b`, hecaton's `run/skipmarks.py`). The match was the text of three check labels,
+"no context: exit 2, a FAIL line naming the kube-context", which hold that the check returns status 2 with no
+context. They were not a skip path: the test has none. The labels now read "status 2", and the assertion is
+unchanged. The gate's own `count()`, run on every file this branch changes, finds no marker in the test, the check or
+the scope map. It finds 42 in decisions.md, the same as on the base, so the entries above add none.
+
+**Cluster state.** This change touches only a label in a `verify/` test that no cluster runs, so it has no live check
+of its own. Run 19510's live read of both clusters stands.
+
+**Tests run.** `python3 verify/test_agency_role_check.py` (all PASS, exit 0) and the prose gate.

@@ -155,7 +155,7 @@ def main() -> int:
         for args, label in (((), "no context"), (("",), "an empty context"), (("ctx-c6", " "), "a blank second context")):
             (tmp / "calls").unlink(missing_ok=True)
             p = run(tmp, *args)
-            check(f"{label}: exit 2, a FAIL line naming the kube-context, nothing on stdout",
+            check(f"{label}: status 2, a FAIL line naming the kube-context, nothing on stdout",
                   p.returncode == 2 and "FAIL" in p.stderr and "kube-context" in p.stderr and not p.stdout,
                   f"exit {p.returncode}, stdout {p.stdout!r}, stderr {p.stderr!r}")
             check(f"{label}: no kubectl ran", not calls(tmp), str(calls(tmp)))
