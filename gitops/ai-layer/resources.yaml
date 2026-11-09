@@ -882,7 +882,15 @@ spec:
   # on 3001: two targets on one bind get their tool names prefixed, which would rename the tool
   # get_weather's poisoned description points at.
   url: http://agentgateway.agent:3003/mcp
-  timeout: 30s
+  # 12h, not kagent's 30s default (#1303). kagent 0.10.1 makes this the MCP client's whole-request HTTP timeout
+  # (go/adk/pkg/mcp/registry.go, createTransport; sseReadTimeout applies to the SSE protocol only), and that also
+  # cuts the session's standalone GET /mcp stream each time it runs out. Nothing comes on that stream, so go-sdk
+  # counts each cut as a retry without progress and fails the session on the sixth, with any tool call in flight:
+  # at 30s that was every 3 minutes, and it cost the admin probe Challenge 4 on watch-it-burn-private. At 12h the
+  # session lasts about three days. The 3003 bind's 405 for that GET (agentgateway-c7-config) removes the stream
+  # outright, but ai-layer ignores that ConfigMap's content, so it reaches new clusters only and this line is what
+  # holds on one built before it. evil-mcp's tools answer in about a second, so the longer bound costs nothing.
+  timeout: 12h
   sseReadTimeout: 5m0s
   terminateOnClose: true
 ---

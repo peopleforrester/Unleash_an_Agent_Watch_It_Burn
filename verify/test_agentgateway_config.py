@@ -215,7 +215,7 @@ for cm_name, container in (("agentgateway-config", "agentgateway"), ("agentgatew
     check(f"every variable {cm_name} reads is set on the {container} container ({sorted(refs - cenv)} unset)",
           refs <= cenv)
 bedrock_backends = [be["ai"]["provider"]["bedrock"] for b in config["binds"] for l in b["listeners"] for r in l["routes"]
-                    for be in r["backends"] if "bedrock" in (be.get("ai") or {}).get("provider", {})]
+                    for be in r.get("backends", []) if "bedrock" in (be.get("ai") or {}).get("provider", {})]
 check(f"there is one bedrock backend ({len(bedrock_backends)})", len(bedrock_backends) == 1)
 main_env = {e["name"]: e.get("value", "") for e in containers["agentgateway"].get("env", [])}
 tiers = re.search(r"bedrock_tiers\s*=\s*\{(.*?)\}", (REPO / "infra/terraform/aws/cluster/main.tf").read_text(encoding="utf-8"), re.S)

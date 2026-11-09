@@ -759,6 +759,14 @@ reads:
   test_agentgateway_config_checksum.py:
     - gitops/ai-layer/agentgateway.yaml
     - gitops/bootstrap/apps/ai-layer.yaml
+  test_agentgateway_mcp_get_e2e.py:
+    - gitops/ai-layer/agentgateway.yaml
+    - verify/.tools/bin/agentgateway
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/e2e-tools.lock
+    - verify/fetch-e2e-tools.sh
+    - verify/run-e2e-tools.sh
   test_agentgateway_path.py:
     - agent/GATEWAY-NOTES.md
     - challenges/03-bad-mcp-excessive-agency/BUILD-SPIKE.md
@@ -6433,6 +6441,10 @@ reads:
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/workshop-agent/agent.yaml
+  test_mcp_standalone_stream.py:
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/bootstrap/apps/ai-layer.yaml
   test_mcp_vetting_handout.py:
     - docs/mcp-server-vetting-checklist.md
     - facilitation/kubecon-na-2026-run-of-show.md
