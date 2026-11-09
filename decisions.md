@@ -48397,3 +48397,45 @@ the escalated act signs them. Until then the branch must not reach staging: the 
 change to YAML or images.lock, so a red copy on staging would hold the promotion to main red.
 
 **Live check.** None needed: the change is under `verify/` and decisions.md, which no cluster runs.
+
+## 2026-11-09 · #1283 · run 19660 · Heavy gate red on staging at a64689ae: two tier tests, each fixed in the test
+
+The heavy gate ran `bash verify/run-e2e-tools.sh` on staging at a64689ae, scoped from main's c4bd3560, and two tier
+tests failed. Both failures were in the tests, not in what they test. The gate's logs sit in a directory this run cannot
+read, so each test was run alone here first, and each failed the same way.
+
+**`test_bootstrap_chart_render.py`, the front door's certificate (#638).** The check "kustomize applies it: the console
+Service carries the certificate and keeps its own annotations" held the patched Service to `len(ops) + 4` annotations.
+#1258 (360ecac7) gave the console Service a fifth of its own, the NLB's 30 s deregistration delay
+(`aws-load-balancer-target-group-attributes`), so the count read 9 against 8. The check now builds `gitops/ai-layer`
+a second time without the patch and holds the patched annotations equal to the Service's own plus the four the patch
+adds, with none of the four already there and `aws-load-balancer-type: external` kept. A Service annotation added later
+no longer breaks it.
+
+**`test_kagent_service_name_collector.py` (#634).** On every profile "the collector starts on the shipped pipelines"
+failed with an empty log: the collector stayed up and never opened its receiver within 30 s. The cause is the test's
+`stderr=subprocess.PIPE`, read only after a failure. #1277 (00678065) added `transform/coc_mask` to the traces
+pipeline, a replace statement of about 25 KB, and otelcol-contrib v0.160.0 repeats each statement in its start-up
+notice about context prefixes, so the start-up log is about 218 KB, with lines up to 95 KB. On a 64 KB pipe the
+collector blocked writing its own log before it started the receiver. Started by hand on the same pipelines with its
+log in a file, it answered on its receiver in 1.2 s. The test now writes the collector's log to a file in its temporary
+directory and, on a failed start, names whether the collector was still running or had exited, with the log's tail.
+
+`test_agent_otlp_logs_collector.py` and `test_lab_pipeline_collector.py` start the collector with the same unread pipe.
+Neither carries `transform/coc_mask` in the pipeline it starts (the logs pipeline, and `traces/lab`), and the lab test
+passed in the same gate run, so they were left as they are. They block the same way when a statement that large lands
+in their pipelines.
+
+**Tests.** `bash verify/run-e2e-tools.sh test_bootstrap_chart_render.py test_kagent_service_name_collector.py`:
+`ALL E2E TOOLS TIER CHECKS GREEN`, exit 0, in 37 s; before the fix each failed alone on this base. The commits that
+landed on staging after a64689ae (#1278's policy and three records) select 15 more tier tests that the gate did not
+run on them, so they were named and run alone as well:
+`test_467_live_record_comment_e2e.py`, `test_datadog_log_services_render.py`, `test_enforce_floor.py`,
+`test_front_door_tls_live_logic.py`, `test_gateway_api_crds_upstream.py`, `test_iam_policy_structural.py`,
+`test_image_registry_render.py`, `test_image_version_tags.py`, `test_images_lock_render.py`,
+`test_kubearmor_config_render.py`, `test_kyverno_cel_policies.py`, `test_kyverno_counter_fix_cache.py`,
+`test_mirror_copies_public.py`, `test_no_docker_hub_render.py`, `test_platform_baseline_sister.py`: 15 ran in 3m24s,
+`ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. `verify/test_scope_tests.py` and `verify/test_fetch_inventory.py` pass.
+The scoped offline suite and the whole gate are left to validation and the next heavy gate.
+
+**Live check.** None: the change touches only two tests under `verify/` that no cluster runs.
