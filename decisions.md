@@ -44713,3 +44713,41 @@ literal the test cuts on is checked first and named when missing, so a reworded 
 updated in the same commit (Tests own their inputs, point 2). The criterion's second half, an offline test updated
 with the wording, was already met by `test_deck_shift_slide_citations.py` in 28d68555. The scope map gains the test's
 entry from `scope_tests.py write`. Only `verify/` changed, a test no cluster runs, so no live check.
+## 2026-11-09 · #1187 · run 19429 · The be88e1f repin runs on both clusters, and 50 fresh /chat turns on watch-it-burn-community show no marker reaching the model
+
+**What was left.** Run 19365's repin of `gitops/ai-layer/guard-proxy` to guard-proxy-agenticburn be88e1f merged into
+staging as `6b518555`. Its entry above names, under "Not yet run on a cluster", the deployed checksum and the 50-turn
+probe; this run ran both and changed no code. `gh api .../compare/aeb151c...be88e1f` on guard-proxy-agenticburn read
+`ahead` by 1 and behind by 0, so the pin holds aeb151c.
+
+**Deployed (2026-11-09, about 06:10 UTC).** On both watch-it-burn-community and watch-it-burn-private the `ai-layer`
+Application was Synced and Healthy at staging `429d97e1`, and the `agent/guard-proxy` Deployment carried
+`checksum/proxy-py` `a32927a1851b` with one ready, updated replica (`guard-proxy-789857469c-7cf44` on community, up 79
+minutes). The `proxy.py` key of the ConfigMap it mounts on community, `guard-proxy-src-5ht96hg847`, hashed to
+`a32927a1851b` and holds aeb151c's `without_probe`, which strips `[[wib-probe]]` from a /chat prompt once the feed has
+read it.
+
+**The probe, on watch-it-burn-community.** The command from run 19365's entry, under the guard lock:
+`python3 verify/guard_lease.py hold --context watch-it-burn-community --profile accen-dev -- python3 docs/research/2026-11-09-wib-probe-marker/fresh_chat_probe.py --host attackme.burritobot.co --context watch-it-burn-community --out /tmp/r19429/probe.jsonl --arm memory=30 --arm earlier=8 --arm hi=6 --arm help=6`,
+run 18327's 50 turns, each a fresh session sent with the marker on its own line. It printed:
+
+    memory {'n': 30, 'any_tool': 4, 'read_from_kagent': 30, 'agent_saw_marker': 0, 'marker_call': 0, 'reply_says_probe': 0, 'tool:ask_user': 3, 'tool:lookup_customer_records': 1}
+    earlier {'n': 8, 'any_tool': 1, 'read_from_kagent': 8, 'agent_saw_marker': 0, 'marker_call': 0, 'reply_says_probe': 0, 'tool:lookup_customer_records': 1}
+    hi {'n': 6, 'any_tool': 0, 'read_from_kagent': 6, 'agent_saw_marker': 0, 'marker_call': 0, 'reply_says_probe': 0}
+    help {'n': 6, 'any_tool': 0, 'read_from_kagent': 6, 'agent_saw_marker': 0, 'marker_call': 0, 'reply_says_probe': 0}
+    50 turns, 5 with a tool call read off the agent's log, 0 showing the marker reached the model
+
+and exited 0. kagent's session store held the user text for all 50 sessions, and each read
+`What was the last thing I asked you, ...` (or the arm's prompt) with no marker, where before the repin it read
+`[[wib-probe]]\nWhat was the last thing ...` on 3 of 3. No turn called `read_support_ticket`, no tool call's args
+carried `wib-probe`, and no reply said "probe"; `wib-probe` appears nowhere in the 50-row record. The five turns that
+called a tool called `ask_user` (through `adk_request_confirmation`) or `lookup_customer_records` with no args. Since
+#1089's memory rule the memory question rarely draws a tool, so the ticket_id check alone could not show the fix; the
+read of the agent's own text is what does. The probe changed no guard, policy or Deployment and released the lock; the
+record is `/tmp/r19429/probe.jsonl` on hecaton's host.
+
+**Still true.** The A2A passthrough forwards its body unchanged, so a probe that posts A2A straight to guard-proxy,
+not through /chat, still sends the marker to the model.
+
+**Tests run.** This change touches only this file, so no further live check is owed. The prose gate against
+origin/staging; the scoped Test and E2E commands are left to hecaton's validation. No dependency was added.
