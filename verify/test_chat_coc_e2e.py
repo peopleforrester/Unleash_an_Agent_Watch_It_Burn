@@ -22,6 +22,11 @@ the page's function and floor.Floor("proposed"):
    the desk, the tools' data, the agent prompt, the witch names) is flagged by neither, and the abuse set and the hard
    negatives get the same verdict from both; every one of the abuse set's evasions is flagged.
 5. A mutant of the page that skips the folding misses evasions, so check 4 reads the folding.
+6. The page's cocViolation takes time linear in the text (#1300): each run of verify/coc_linear_cases.py (each repeated
+   leetspeak pair, and each term up to two neighbouring letters that share a character, then a run of what they share)
+   is timed at 1,000 and 4,000 characters and held to coc_linear_cases.within(), as
+   verify/test_coc_pattern_linear.py holds floor.py and its other copies; the page built the way it was before #1300
+   fails that on a run of `$`.
 
 A missing node is a failure, not a skip.
 """
@@ -41,6 +46,9 @@ PAGE_PATH = REPO / "gitops/ai-layer/web/burritbot.html"
 SPIKE = REPO / "docs/research/2026-11-09-coc-floor"
 sys.path.insert(0, str(SPIKE))
 
+sys.path.insert(0, str(REPO / "verify"))
+
+import coc_linear_cases as linear  # noqa: E402
 import corpus  # noqa: E402
 import floor  # noqa: E402
 
@@ -219,6 +227,59 @@ unfolded = BLOCK.replace(CALL, "function cocViolation(t){return COC_RE.test(Stri
 missed = [t for t, v in zip(evasions, page(evasions, block=unfolded)["verdicts"]) if not v]
 check(f"without cocFold the page misses evasions the check above requires ({len(missed)} of {len(evasions)})",
       len(missed) > 0)
+
+print("== the page matches every repeated leetspeak run in time linear in its length (#1300) ==")
+# The timer reads [block, texts, runs] on stdin and answers, for each text, the fastest of `runs` calls of the page's
+# cocViolation in ms. The texts take turns within a run, and one call before timing has V8 compile the pattern.
+TIMER = r"""
+const vm = require('vm');
+const [src, texts, runs] = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+const ctx = {};
+vm.createContext(ctx);
+vm.runInContext(src + '\nthis.cocViolation = cocViolation;', ctx);
+ctx.cocViolation('warm up');
+const best = texts.map(() => Infinity);
+for (let r = 0; r < runs; r++) texts.forEach((t, i) => {
+  const t0 = process.hrtime.bigint();
+  ctx.cocViolation(t);
+  best[i] = Math.min(best[i], Number(process.hrtime.bigint() - t0) / 1e6);
+});
+process.stdout.write(JSON.stringify(best));
+"""
+
+
+def timed(runs_of: list[tuple[str, str]], runs: int, block: str = BLOCK) -> list[tuple[float, float]]:
+    """(ms at linear.SHORT, ms at linear.LONG) for each (prefix, unit), the fastest of `runs` calls each."""
+    texts = [linear.text(p, u, n) for p, u in runs_of for n in (linear.SHORT, linear.LONG)]
+    r = subprocess.run(["node", "-e", TIMER], input=json.dumps([block, texts, runs]), capture_output=True, text=True,
+                       timeout=900)
+    if r.returncode != 0:
+        print(f"FAIL: node could not time the page's cocViolation: {(r.stderr or r.stdout).strip()[:400]}")
+        sys.exit(1)
+    ms = json.loads(r.stdout)
+    return list(zip(ms[::2], ms[1::2]))
+
+
+RUNS_OF = linear.cases()
+times = timed([(p, u) for _, p, u in RUNS_OF], linear.RUNS)
+outside = [i for i, (short, long) in enumerate(times) if not linear.within(short, long)]
+for i, again in zip(outside, timed([RUNS_OF[i][1:] for i in outside], linear.CONFIRM_RUNS) if outside else []):
+    times[i] = again
+bad = [f"{RUNS_OF[i][0]}: {short:.1f} ms then {long:.1f} ms" for i, (short, long) in enumerate(times)
+       if not linear.within(short, long)]
+slowest = max(range(len(times)), key=lambda i: times[i][1])
+check(f"each of {len(RUNS_OF)} runs of {linear.LONG:,} characters takes under {linear.LIMIT_MS:.0f} ms and at most "
+      f"{linear.GROWTH:.0f} times its {linear.SHORT:,}-character cost (slowest: {RUNS_OF[slowest][0]}, "
+      f"{times[slowest][0]:.1f} ms then {times[slowest][1]:.1f} ms)", not bad, "; ".join(bad[:5]))
+NOW = "var joined=words.map(cocWord).join(COC_SEP+'+');"
+if BLOCK.count(NOW) != 1:
+    print(f"FAIL: {NOW!r} is not in {PAGE_PATH.relative_to(REPO)} exactly once, so the pre-#1300 page cannot be built")
+    sys.exit(1)
+before = BLOCK.replace(NOW, "var joined=words.map(function(x){return Array.from(x).map(function(c){"
+                            "return cocLetter(c)+'+';}).join('');}).join(COC_SEP+'+');")
+for unit, (short, long) in zip(("$", "5$"), timed([("", "$"), ("", "5$")], 1, block=before)):
+    check(f"the page built as before #1300 fails that on a run of {unit!r} ({short:.0f} ms then {long:.0f} ms)",
+          not linear.within(short, long))
 
 print()
 if failures:
