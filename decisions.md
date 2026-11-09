@@ -48532,3 +48532,44 @@ nothing is built or pulled), which brings the totals to 972 sites in 255 files a
 reads "every call site classed". The whole Test command is left to validation.
 
 **Live check.** None: the change touches only files under verify/ that no cluster runs. No dependency was added.
+## 2026-11-09 · #1267 · run 19672 · guard-proxy repinned to a7a5a36: /chat refuses and masks code-of-conduct terms whatever the toggles say
+
+**What.** Michael asked on #1267 (2026-11-09) for the `gitops/ai-layer/guard-proxy` submodule at
+a7a5a36924e7 (guard-proxy-agenticburn#78) and `checksum/proxy-py` at 5caafc6044af. Both are set in commit a3128dca;
+5caafc6044af is the first 12 hex digits of sha256(proxy.py) at a7a5a36, checked here. With that build, a `/chat` prompt
+carrying a term from the wall's list is answered with a plain refusal that names no term (proxy.py's
+`CONDUCT_REFUSAL`) before any guard, limit or agent, and every such term in the reply is masked, with every `/toggle` guard
+on or off. `/controls` answers `always_on: {"code_of_conduct": true}`. The term list itself is unchanged at the 40
+terms, and so is `moderate()`; a7a5a36 only adds code.
+
+**Why a7a5a36 and not guard-proxy main's tip.** guard-proxy main is at f75aa2f, which also carries 48cc2ca (the
+spike's 144-entry folded list, masked spans on a refused turn, the optional Bedrock check) and the chat-span mask
+(guard-proxy-agenticburn#82). Pinning past a7a5a36 changes `PROFANITY` from 40 terms to 144 and fails
+`verify/test_chat_coc.py`, which holds the chat page's own list to the proxy's term for term. The page's 144-term port
+is #1280, whose run 19662 failed validation and is not on staging. So this run takes the commit Michael named, and the
+repin to 48cc2ca or later lands with #1280's page change, not before it.
+
+**Tests.** New `verify/test_guard_proxy_pin_1267.py` holds the pin at or after a7a5a36 on guard-proxy main, the
+checksum to the pinned build's proxy.py, and the release-notes entry that names a7a5a36; it fails on a637e68 (the old
+pin) with its own checksum and on the new pin with a637e68's checksum. It has a `verify/scope-map.yaml` entry.
+`verify/test_prompt_wall_redaction.py` held the old behaviour, that a prompt with a term still reached the bot; it
+now holds the new one: the wall masks the term, the turn gets the refusal, and the stand-in agent receives nothing.
+Run once each here, all passing: those two, and the 28 other offline tests the scope selects that import or serve
+the pinned proxy.py (test_kubecon_probe.py, test_proxy_guards.py, test_chat_coc.py, test_finale_cap.py,
+test_stream.py and the rest), plus test_guard_proxy_pin_1048.py, test_guard_proxy_pin_1225.py,
+test_proxy_checksum.py, test_guard_proxy_pin_on_main.sh and test_submodule_pins_pushed.sh. The full scoped suites
+(299 offline, 40 tools-tier tests) are left to validation. The two tools-tier tests that load proxy.py
+(test_chat_coc_e2e.py, test_display_masked_prompts_e2e.py) read the list and `moderate()`, which a7a5a36 does not
+change.
+
+**Live check (read-only).** Both clusters run the build before this repin: the guard-proxy Deployment's
+`checksum/proxy-py` reads 5e0c8390277e with one ready replica on watch-it-burn-community and on
+watch-it-burn-private, and `GET /controls` through the API server's service proxy answers keys `ai`, `host`,
+`infra` with no `always_on` on either. The ai-layer Application tracks `staging` on both (community synced at
+a035e02b, private at 7c2703cb).
+
+**Not yet run on a cluster.** Once the repin is on staging and Argo CD has synced it, on both clusters:
+`checksum/proxy-py` reads 5caafc6044af and `/controls` carries `always_on.code_of_conduct: true`; with every guard
+off, a `/chat` prompt carrying a term gets the refusal and the agent's log shows no turn for it; and
+`verify/kubecon_probe.py`'s community and admin runs are green with the check on. That is #1267's criterion on the
+probe, and the next run on the issue runs it.
