@@ -14,6 +14,11 @@ import yaml
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 AI_LAYER = REPO / "gitops/ai-layer"
+# The copy of ai-layer is made under tmp/, the repo's ignored scratch, not at the repo root: test_docs_current.py
+# walks every *.md under the root, skipping tmp/, and in the CI run on staging 00ac68fd it listed this copy's
+# guard-proxy/AGENTS.md, which this test removed before that one opened it, and the offline suite failed (#1272).
+SCRATCH = REPO / "tmp"
+SCRATCH.mkdir(exist_ok=True)
 failures = []
 
 
@@ -74,7 +79,7 @@ dangling = sorted({n for d in workloads for n in references(d) if hashed.match(n
 check("no workload references a hash that is not rendered", not dangling)
 
 print("== a content change changes the workload spec ==")
-with tempfile.TemporaryDirectory(dir=REPO) as tmp:
+with tempfile.TemporaryDirectory(dir=SCRATCH) as tmp:
     copy = pathlib.Path(tmp) / "ai-layer"
     shutil.copytree(AI_LAYER, copy)
     lab = copy / "web/lab.html"
@@ -111,7 +116,7 @@ check(f"evil-mcp-shim mounts evil-mcp-src (mounted by {consumers.get('evil-mcp-s
 check("workshop-mcp-src reads workshop-mcp-server.py and tool_audit.py",
       {"workshop-mcp-server.py", "tool_audit.py"} <= {f for g, f in sources if g == "workshop-mcp-src"})
 check("evil-mcp-src reads server.py", ("evil-mcp-src", "server.py") in sources)
-with tempfile.TemporaryDirectory(dir=REPO) as tmp:
+with tempfile.TemporaryDirectory(dir=SCRATCH) as tmp:
     copy = pathlib.Path(tmp) / "ai-layer"
     shutil.copytree(AI_LAYER, copy, symlinks=True)
     for gen, rel in sources:

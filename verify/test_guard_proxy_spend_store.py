@@ -13,6 +13,11 @@ import yaml
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 AI_LAYER = REPO / "gitops/ai-layer"
+# The copy of ai-layer is made under tmp/, the repo's ignored scratch, not at the repo root: test_docs_current.py
+# walks every *.md under the root, skipping tmp/, and in the CI run on staging 00ac68fd it listed this copy's
+# guard-proxy/AGENTS.md, which this test removed before that one opened it, and the offline suite failed (#1272).
+SCRATCH = REPO / "tmp"
+SCRATCH.mkdir(exist_ok=True)
 COMPONENT = "go-spend-store"
 STORE_PATH = "/var/lib/guard-proxy/spend.db"
 failures = []
@@ -86,7 +91,7 @@ committed = render(AI_LAYER)
 wired = COMPONENT in (yaml.safe_load((AI_LAYER / "kustomization.yaml").read_text()).get("components") or [])
 
 print(f"== the {COMPONENT} Component, rendered into the bundle ==")
-with tempfile.TemporaryDirectory(dir=REPO) as tmp:
+with tempfile.TemporaryDirectory(dir=SCRATCH) as tmp:
     copy = pathlib.Path(tmp) / "ai-layer"
     shutil.copytree(AI_LAYER, copy)
     kfile = copy / "kustomization.yaml"
