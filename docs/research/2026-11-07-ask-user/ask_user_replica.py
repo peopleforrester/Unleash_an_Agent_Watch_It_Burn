@@ -71,6 +71,8 @@ def main() -> int:
     ap.add_argument("--prompt", required=True)
     ap.add_argument("--probe", action="store_true", help="put guard-proxy's [[wib-probe]] line first, as the live "
                                                         "driver does")
+    ap.add_argument("--twice", action="store_true", help="send the guest's message and name twice in the first turn, as "
+                                                        "the live task history lists them (#1094, run 19291)")
     ap.add_argument("--n", type=int, default=30)
     ap.add_argument("--model", default="us.amazon.nova-pro-v1:0")
     ap.add_argument("--out")
@@ -91,6 +93,8 @@ def main() -> int:
         first = ("[[wib-probe]]\n" if a.probe else "") + a.prompt
         msgs = [{"role": "user", "content": [{"text": first},
                                              {"text": f"The person chatting with you gave their name as {witch}."}]}]
+        if a.twice:
+            msgs[0]["content"] += [dict(part) for part in msgs[0]["content"]]
         called: list[str] = []
         asked = ""
         for _ in range(4):
