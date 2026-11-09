@@ -45096,3 +45096,49 @@ and left; it was left again. Both `ai-layer` Applications read Synced and Health
 **Tests (run 19437).** `python3 verify/test_live_check_cleanup.py`, run alone: `All live check cleanup checks
 passed.`, exit 0. The prose gate printed `prose gate: pass`. The whole Test and E2E commands were not
 run; validation runs the tests that read the changed files. No dependency was added.
+
+## 2026-11-09 · #1252 · run 19438 · The heavy gate's CI fails on Tanjiro's fonts and a racy 413 check, and both are fixed
+
+**What failed.** `verify-suites` on staging `429d97e1` (Actions run 42572890407) and on `40ce541f` (run 42570384431)
+ran every tier test, since `verify/python.lock` and `verify/package_cache.py` changed since main's `6b518555`. Four
+checks failed: `test_chat_phone_screen_e2e.py` (the 390 and 412 phones: card header 91px against at most 72, and the
+witch line in two lines), `test_chat_pane_overlap_e2e.py` (the private bot at 761 and 768 scrolls sideways,
+scrollWidth 781), `test_mobile_titles_e2e.py` (`320 wide fonts: no header button runs past the edge`) and the offline
+suite's `test_public_desk.py`. The three browser tests had failed on Tanjiro since #1214's branch run 42533992315;
+the green staging runs after it were scoped and never selected them, and they pass on netcup, where hecaton's gate runs.
+
+**Cause of the three browser failures: Tanjiro's fonts.** On netcup the pinned shell draws the chat page in Liberation
+Sans (the page asks for Arial after the Apple, Segoe and Roboto faces, and Liberation Sans is Arial's metric twin). On
+Tanjiro, with fonts but no Liberation Sans, Arial fell to DejaVu Sans. Measured on netcup with the pinned Playwright:
+"Get a new witch name" is 118.5px in Liberation Sans and 139.2px in DejaVu Sans; CI printed 139.15625. With a
+fonts.conf reading DejaVu alone, all three tests fail here exactly as CI printed them, to the fraction of a pixel
+(witch line 216.546875px, button 139.15625px, scrollWidth 781). With fonts-liberation and fonts-noto-color-emoji
+unpacked beside DejaVu, all three pass.
+
+**The fix.** `verify/ci_chromium_libs.py`, the CI step that unpacks what Chromium lacks on Tanjiro (#1047), now also
+unpacks the font packages the tier is measured in (`MEASURED_FONTS`: fonts-liberation, fonts-dejavu-core,
+fonts-noto-color-emoji) when a host that has fonts lacks one, and writes a FONTCONFIG_FILE reading them beside the
+host's own fonts, the user's directories included, and the host's rules. Then the shell measures one line in Arial,
+in Liberation Sans and in a family no host has, and the step fails unless Arial measures as Liberation Sans and
+Liberation Sans is not a fallback. On netcup the check passes (245.43px both); with DejaVu alone it fails, saying the
+host holds no Liberation Sans. Nothing is installed: the packages are unpacked into the job's temp directory, as
+#1047's libraries are. Rendering in Liberation Sans is also the closer match to the Roboto and San Francisco a phone
+draws the page in. The page's own fit on a DejaVu-wide font was not changed; the followup is in the run's report.
+
+**Cause of the offline failure: a race in the test.** desk-relay answers 413 on an oversized Content-Length without
+reading the body and closes. The test sent the 512 KB body with urllib, so whether it read the 413 or hit
+`BrokenPipeError` while still writing depended on timing; CI got the broken pipe. Both oversized cases (the 4k
+`/landed` report and the 512k `/cluster-read`) now go through `oversized()`, which sends the headers declaring the
+length and no body, then reads the answer, so the relay has everything it reads before it answers. The relay is
+unchanged.
+
+**Tests run.** `python3 verify/test_public_desk.py` exit 0, both 413 checks passing; `python3
+verify/test_ci_chromium_libs.py` exit 0 with the new checks of the measured fonts, the font directories and the Arial
+verdict; `python3 verify/test_verify_suites_workflow.py` and `python3 verify/test_scope_tests.py` pass. The three
+browser tests were run under the two fonts.conf files described above, failing with DejaVu alone and passing with the
+unpacked fonts added. The tools tier was not run in full (CLAUDE.md, Dispatched runs, point 6); validation and the CI
+run on Tanjiro run the scoped tests.
+
+**Not yet run on a cluster.** Nothing: this change touches only `verify/` files no cluster runs, so it has no live
+check (CLAUDE.md, Dispatched runs, point 1). **Not yet run on Tanjiro.** The step's new unpack and Arial check run
+there on the next `verify-suites` job; its log line names the fonts it unpacked.
