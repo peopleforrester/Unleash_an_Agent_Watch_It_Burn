@@ -41642,11 +41642,17 @@ private at the time), and the enforcer started at 23:53:58Z. The probe's guardra
 23:59:00Z (the enforcer's log, `Detected a Security Policy (added/agent/block-recipe-snoop)`), and the read still
 leaked, so the enforcer five minutes old was not yet holding the policy on containers that predated it. At 00:10Z, under the guard lock, the same policy applied by hand blocked the read
 (`ls: cannot open directory '/tmp/burrito-data/config/legacy/': Permission denied`, 0 recipe lines) and was deleted
-again (log `/var/lib/hecaton/runs/18828/kubearmor-diag.log`). The community cluster, where the policy is not at Deny,
-rolled at 23:20Z and its operator logged `Snitch was installed on node ip-10-0-28-179`; its enforcer started 28
+again (log `/var/lib/hecaton/runs/18828/kubearmor-diag.log`). The community cluster, which has no `require-resource-limits`
+policy, rolled at 23:20Z and its operator logged `Snitch was installed on node ip-10-0-28-179`; its enforcer started 28
 seconds after the node. The fix (snitch Jobs past `require-resource-limits` on an armed cluster) is filed as
 a follow-up; until then, any new node on private needs its KubeArmor labels checked, and a node roll on private
 before the Night Before is followed by that probe.
+
+**The admin probe again, with the cause known.** The same command at about 00:12Z (`--lock-wait 1800`): `PASS [3]
+Challenge 2: recipe read blocked and alerted (KubeArmor) KubeArmor denied the read and its block-recipe-snoop alert
+fired`, `34 beats: 34 PASS, 0 FAIL`, `KUBECON PROBE GREEN`, `exit=0`, spend on burritobot-private.burritobot.co
+$0.2649 to $0.3474 over 14 model calls. Log `/var/lib/hecaton/runs/18828/probe-admin-2.log`. Afterwards every AI guard
+read off on both clusters and neither has a KubeArmorPolicy.
 
 **Left on the clusters.** The applied root, on purpose. Every AI guard off, both guard locks free, no KubeArmorPolicy
 in agent, as found. The guard-proxy counters restarted with their pods, which the run-of-show's reset before each run
@@ -41655,3 +41661,9 @@ does anyway.
 **In the repo.** docs/floor.md's "Rebuilding a lost state" now says the apply ran, gives the two commands, and explains
 why private's node group was replaced. No test reads the sentences it changed (`git grep` over `verify` and `scripts`).
 No code changed and no dependency was added.
+
+**Not yet run on a cluster.** Nothing this change owes: the apply is the change, and it is on both clusters now. The
+snitch follow-up's fix will need its own live check on private.
+
+**The tests.** The change is decisions.md and docs/floor.md, prose alone, so no offline or tools tier test was run in
+the run (Dispatched runs point 6); validation runs the scoped ones. The prose gate printed `prose gate: pass`.
