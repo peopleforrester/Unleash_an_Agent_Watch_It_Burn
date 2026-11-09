@@ -44880,3 +44880,27 @@ tier tests, is run 17941's result on its own base `24670870` (with `add3386b` on
 staging, which is 661 commits later. The live results are likewise from 2026-11-06 at the revisions named above.
 This port ran no live check, because it changes only decisions.md, which no cluster runs (CLAUDE.md, Dispatched runs,
 point 1).
+## 2026-11-09 · #1248 · run 19431 · The Gateway API upstream check retries a fetch the network broke
+
+**What was red.** Hecaton's heavy gate on staging b344e331 failed one check, `test_gateway_api_crds_upstream.py` (exit
+1); the other 90 checks passed. The gate's log sits under the gate's own directory, which this run cannot read
+(permission denied), so the error itself is not known. What is known: nothing the test reads changed between b344e331
+and this run's base c7fdcdb1 (`git diff b344e331 origin/staging` on the bundle, `istio.yaml` and the test is empty), main
+6b518555 already passed it on the gate, the GitHub CI job for 429d97e1 (run 42572890407) passed it at 06:29 UTC with all
+three checks green, and run alone here at c7fdcdb1 it passed. The failure did not reach the slowest-checks list
+(under 35 s), so it was not a 60 s timeout either: a quick HTTP error, reset or failed lookup from github.com or
+raw.githubusercontent.com is what fits.
+
+**What changed.** The test's `fetch()` caught only `URLError` and `TimeoutError`, and tried once. It now asks again
+after each wait in `artifact_cache.BACKOFF` (2, 5, 10 s) when the error is one `artifact_cache.transient()` names (an
+HTTP 408, 429 or 5xx, a timeout, a reset or refused connection, a failed lookup, a body cut short), the rule the host
+cache (#1118) and `chart_fetch.py` (#1028) already use, printing a RETRY line for each attempt. A 404, a 403 and any
+other error fail at once, and every failure prints its error's type and the attempt, so a reset in the middle of the
+body is a FAIL line now, not a traceback. The test's checks moved into `main()` so the new offline test,
+`test_gateway_api_crds_upstream_fetch.py`, can import `fetch()` and drive it with a stub reader and a stub sleep: a good
+first read, each of eight transient errors followed by a good read, four transient errors in a row, and a 404, 403 and
+ValueError that fail on the first attempt. What the test checks upstream is unchanged. `scope_tests.py write` added the
+new test's entry and the tier test's two new reads; the fetch inventory still counts one `urlopen` line in the tier test.
+No dependency was added.
+
+**Live check.** Skipped: the change touches only files under `verify/` that no cluster runs.

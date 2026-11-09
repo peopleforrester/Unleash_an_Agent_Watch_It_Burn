@@ -4011,7 +4011,36 @@ reads:
     - observability-idp
     - policies
     - security
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/bootstrap_chart.py
+  test_gateway_api_crds_upstream_fetch.py:
+    - CLAUDE.md
+    - backstage
+    - gitops
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - gitops/bootstrap/apps/istio.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/gateway-api/standard-install.yaml
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/bootstrap_chart.py
+    - verify/test_gateway_api_crds_upstream.py
   test_gateway_forward.py:
     - agent
     - verify/gateway_forward.py
