@@ -46869,3 +46869,18 @@ and check messages that say "yarn install" raised the count of lines the `none` 
 `verify/yarn_pins.py` from 2 to 3. None of these lines runs a fetch, so the counts were raised in the inventory and no
 class changed. `python3 verify/fetch_inventory.py check` and `python3 verify/test_fetch_inventory.py` now pass. The
 other tests the gate ran had passed.
+
+**Run 19540, after run 19529 failed validation.** The tests gate failed on `verify/test_scope_tests.py` alone, and the
+cause was not this change. Run 19529's branch sat on staging f20e8cdb, where `verify/scope-map.yaml` was already behind
+`verify/test_kubearmor_config_tracked.py`: that test reads `policies/kyverno/require-resource-limits.yaml` and its entry
+did not cover it. Checked out at that branch, `python3 verify/test_scope_tests.py` fails on that one place with the
+gate's `HECATON_BASE_SHA` set to main. Staging fixed the entry in 964fa0af. This run cherry-picked fd2b9880 and 6958d41e
+onto staging 53dd40b7 with no conflict (the drift lines were edits in place in `verify/fetch-inventory.yaml` and
+`verify/run-e2e.sh`, and decisions.md was an append on both sides). On that base `python3 verify/test_scope_tests.py`
+passes, with and without `HECATON_BASE_SHA`, as do `python3 verify/scope_tests.py check`, `python3
+verify/test_yarn_pins.py`, `python3 verify/test_fetch_inventory.py` and the prose gate. `python3 verify/scope_tests.py
+write` left the map unchanged. A plain `yarn install --immutable --mode=skip-build` in the app, run again with no
+`YARN_PLUGINS` and package_cache.py node-env's cache, printed `5 platform-conditional package(s) match
+yarn-plugins/conditional-checksums.lock` and ended `exit=0` in 27 s. Its `node_modules` and install state were then
+removed. The live check is still skipped for the reason given above. The scoped Test and E2E commands are left to
+validation.
