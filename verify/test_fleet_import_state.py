@@ -181,9 +181,14 @@ def world(node_sgs: int = 1, ng_subnets=("subnet-a",)) -> dict:
         "sts get-caller-identity": {"Account": ACCOUNT},
         f"eks describe-cluster --name {NAME}": {"cluster": {
             "name": NAME, "version": "1.36", "roleArn": f"arn:aws:iam::{ACCOUNT}:role/{NAME}-cluster-abc",
-            "tags": {"event": "kubecon-na-2026", "hostname": "attackme.agenticburn.com", "role": "community"},
+            "tags": {"event": "kubecon-na-2026", "hostname": "attackme.agenticburn.com", "role": "community",
+                     "project": "watch-it-burn", "Purpose": "attendee-cluster", "ManagedBy": "terraform",
+                     "attendee": NAME},
             "resourcesVpcConfig": {"vpcId": "vpc-1", "subnetIds": ["subnet-b", "subnet-a"],
                                    "securityGroupIds": ["sg-cluster"]}}},
+        # The lab VPC as the network root tags it: the last of the marks `cluster` reads before it imports (#1043).
+        "ec2 describe-vpcs --vpc-ids vpc-1": {"Vpcs": [{"VpcId": "vpc-1", "Tags": [
+            {"Key": "Purpose", "Value": "lab-shared-vpc"}]}]},
         f"eks list-nodegroups --cluster-name {NAME}": {"nodegroups": ["default-ng1"]},
         f"eks describe-nodegroup --cluster-name {NAME} --nodegroup-name default-ng1": {"nodegroup": {
             "nodegroupName": "default-ng1", "nodeRole": f"arn:aws:iam::{ACCOUNT}:role/default-eks-node-group-n1",

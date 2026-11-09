@@ -254,6 +254,17 @@ run that rebuilt the five accen-dev states, and none of them is a write. `--reso
 import ids and stops. Exit 0 means the last plan has no changes, 2 that the state is rebuilt and the plan
 still has some, which it lists with the attributes each one changes, and 1 an error.
 
+Only a cluster the root built is imported; one made any other way goes in the register below instead.
+`python3 infra/terraform/fleet/import-state.py provenance accen-dev <cluster>` shows which, from AWS alone
+(#1043). It reads each mark the root leaves: the `project`, `Purpose=attendee-cluster`, `ManagedBy=terraform`
+and `attendee=<cluster>` tags, a cluster role named `<cluster>-cluster-*`, one node group named `default-*`,
+and a VPC tagged `Purpose=lab-shared-vpc`. With every mark there the cluster was built from the root and the
+choice is import; with any missing it is register. It also reads whether `known-unmanaged.yaml` covers the
+cluster, and exits 0 when that agrees with the choice and 2 when it does not. `cluster` asks the same
+question first and will not import a cluster the root did not build. On 2026-11-09 both KubeCon clusters
+held every mark, no register entry covered either, and both exited 0. `verify/test_cluster_provenance.py`
+holds this against a recording of those answers, and `verify/test_cluster_provenance_live.py` asks AWS again.
+
 Two things in the cluster root needed care. The EKS module passes the cluster's name, endpoint, version and
 CA to the node group and the access entries through a `time_sleep`'s triggers. Terraform imports a
 `time_sleep` with no triggers, after which nothing that reads them evaluates. So the script writes it into

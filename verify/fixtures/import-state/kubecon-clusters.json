@@ -1,0 +1,89 @@
+{
+  "recorded": "2026-11-09T03:05Z",
+  "by": "run 19259 (#1043), profile accen-dev, us-west-2, read-only aws calls",
+  "note": "What stood in AWS for the two KubeCon clusters, as the aws CLI answered the calls import-state.py provenance makes; describe-cluster keeps only the fields it reads (and name, arn, createdAt), describe-vpcs only VpcId and Tags.",
+  "answers": {
+    "eks describe-cluster --name watch-it-burn-community": {
+      "cluster": {
+        "name": "watch-it-burn-community",
+        "arn": "arn:aws:eks:us-west-2:515966504359:cluster/watch-it-burn-community",
+        "createdAt": "2026-10-28T12:39:25.267000+01:00",
+        "roleArn": "arn:aws:iam::515966504359:role/watch-it-burn-community-cluster-54c5a01d18b5a86f0f4df30a15",
+        "tags": {
+          "hostname": "attackme.agenticburn.com",
+          "ManagedBy": "terraform",
+          "attendee": "watch-it-burn-community",
+          "role": "community",
+          "project": "watch-it-burn",
+          "Purpose": "attendee-cluster",
+          "event": "kubecon-na-2026"
+        },
+        "resourcesVpcConfig": {
+          "vpcId": "vpc-0607c27ee51fb233c"
+        }
+      }
+    },
+    "eks list-nodegroups --cluster-name watch-it-burn-community": {
+      "nodegroups": [
+        "default-6eefb129f568d91814a3ca6ecf"
+      ]
+    },
+    "ec2 describe-vpcs --vpc-ids vpc-0607c27ee51fb233c": {
+      "Vpcs": [
+        {
+          "VpcId": "vpc-0607c27ee51fb233c",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "watch-it-burn-lab-vpc"
+            },
+            {
+              "Key": "Purpose",
+              "Value": "lab-shared-vpc"
+            },
+            {
+              "Key": "ManagedBy",
+              "Value": "terraform"
+            },
+            {
+              "Key": "event",
+              "Value": "kubecon-na-2026"
+            },
+            {
+              "Key": "project",
+              "Value": "watch-it-burn"
+            }
+          ]
+        }
+      ]
+    },
+    "eks describe-cluster --name watch-it-burn-private": {
+      "cluster": {
+        "name": "watch-it-burn-private",
+        "arn": "arn:aws:eks:us-west-2:515966504359:cluster/watch-it-burn-private",
+        "createdAt": "2026-10-28T12:39:33.621000+01:00",
+        "roleArn": "arn:aws:iam::515966504359:role/watch-it-burn-private-cluster-48f52af8e76bc504483b643a57",
+        "tags": {
+          "hostname": "burritobot-private.agenticburn.com",
+          "ManagedBy": "terraform",
+          "attendee": "watch-it-burn-private",
+          "role": "admin",
+          "project": "watch-it-burn",
+          "Purpose": "attendee-cluster",
+          "event": "kubecon-na-2026"
+        },
+        "resourcesVpcConfig": {
+          "vpcId": "vpc-0607c27ee51fb233c"
+        }
+      }
+    },
+    "eks list-nodegroups --cluster-name watch-it-burn-private": {
+      "nodegroups": [
+        "default-e40c409ac4adcaac42a983adaa"
+      ]
+    },
+    "sts get-caller-identity": {
+      "Account": "515966504359"
+    }
+  }
+}

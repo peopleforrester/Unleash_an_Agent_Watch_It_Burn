@@ -25,7 +25,15 @@ Imports, a refresh-only apply and a plan only read AWS, so nothing in AWS change
 (it lists them: configuration committed since the resources were built, which the next fleet.sh apply makes), 1 on
 an error. Every AWS call names --profile and --region.
 
+Only a cluster built from aws/cluster is imported; one that was not is registered in drift/known-unmanaged.yaml
+instead (#979). `provenance` answers which (#1043): it reads in AWS each mark the root leaves on a cluster it builds
+(PROVENANCE below), says the cluster was built from the root when every one is there, names the choice that follows,
+import or register, and reads whether the register covers the cluster. It exits 0 when the repo's choice follows
+from what AWS shows (built and in no register entry, or not built and in one), 2 when it does not, 1 on an error.
+`cluster` asks the same question first and refuses to import a cluster that was not built from the root.
+
 Usage (each root initialised first, `terraform -chdir=<root> init`):
+  python3 infra/terraform/fleet/import-state.py provenance <profile> <name>   (reads AWS only, no root needed)
   python3 infra/terraform/fleet/import-state.py boundary <profile>
   python3 infra/terraform/fleet/import-state.py network <profile>
   python3 infra/terraform/fleet/import-state.py cluster <profile> <name>
@@ -38,6 +46,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import importlib.util
 import json
 import pathlib
 import re
@@ -513,6 +522,72 @@ def cluster_vars(aws: AWS, res: ClusterResolver, profile: str) -> list[tuple[str
     return variables
 
 
+# ---------------------------------------------------------------- provenance ------------------------------------
+# What aws/cluster leaves on every cluster it builds, each read in AWS (#1043): the fixed values of main.tf's
+# local.fleet_tags and its `attendee = var.name` on the cluster; the EKS module's cluster role, which it names
+# `<name>-cluster-<suffix>`; its one managed node group, keyed `default`, which it names `default-<suffix>`; and
+# var.vpc_id, the network root's lab VPC, which that root tags Purpose=lab-shared-vpc. A cluster made any other way
+# (by hand, by lab-platform, by a co-tenant) lacks at least one. verify/test_cluster_provenance.py holds these to the
+# two main.tf files, so a root that stops leaving a mark fails there rather than here.
+PROVENANCE_TAGS = {"project": "watch-it-burn", "Purpose": "attendee-cluster", "ManagedBy": "terraform"}
+LAB_VPC_TAG = ("Purpose", "lab-shared-vpc")
+REGISTER = TF_DIR / "drift/known-unmanaged.yaml"
+DRIFT_REPORT = TF_DIR / "drift/drift-report.py"
+
+
+def provenance(res: ClusterResolver) -> list[tuple[str, bool, str]]:
+    """Each mark aws/cluster leaves on a cluster it builds: (the mark, whether AWS shows it, what AWS holds)."""
+    cl = res.cluster
+    tags = cl.get("tags") or {}
+    marks = [(f"tag {k}={v}", tags.get(k) == v, f"{k}={tags[k]}" if k in tags else f"no {k} tag")
+             for k, v in {**PROVENANCE_TAGS, "attendee": res.name}.items()]
+    role = (cl.get("roleArn") or "").rsplit("/", 1)[-1]
+    marks.append((f"cluster role named {res.name}-cluster-*", role.startswith(f"{res.name}-cluster-"), role or "no role"))
+    ngs = res.aws("eks", "list-nodegroups", "--cluster-name", res.name)["nodegroups"]
+    default = [n for n in ngs if n.startswith("default-")]
+    marks.append(("one node group named default-*", len(default) == 1, ", ".join(ngs) or "no node group"))
+    vpc = (cl.get("resourcesVpcConfig") or {}).get("vpcId") or ""
+    k, v = LAB_VPC_TAG
+    vtags = tags_of(res.aws.one(res.aws("ec2", "describe-vpcs", "--vpc-ids", vpc)["Vpcs"], f"VPC {vpc}").get("Tags")) \
+        if vpc else {}
+    marks.append((f"in the lab VPC, tagged {k}={v}", vtags.get(k) == v,
+                  f"{vpc} {k}={vtags[k]}" if k in vtags else f"{vpc or 'no VPC'}, no {k} tag"))
+    return marks
+
+
+def register_entry(profile: str, name: str, tags: dict) -> str:
+    """The register entry covering this cluster, matched by drift-report.py's own reader and matcher, or ""."""
+    spec = importlib.util.spec_from_file_location("drift_report", DRIFT_REPORT)
+    drift = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault(spec.name, drift)   # its dataclasses look their module up there while it loads
+    try:
+        spec.loader.exec_module(drift)
+        entries = drift.load_register(REGISTER)
+    except Exception as e:   # drift.Incomplete for an unreadable register, ImportError without PyYAML
+        raise Stop(f"cannot read the register {REGISTER}: {e}") from e
+    return drift.match_register(entries, profile, "eks-cluster", name, lambda: tags)
+
+
+def report_provenance(res: ClusterResolver, profile: str) -> int:
+    marks = provenance(res)
+    built = all(held for _, held, _ in marks)
+    entry = register_entry(profile, res.name, res.cluster.get("tags") or {})
+    print(f"provenance: {res.name} ({profile}, {res.aws.region})")
+    for mark, held, seen in marks:
+        print(f"  {'held   ' if held else 'MISSING'}  {mark}  ({seen})")
+    print(f"verdict: {'built' if built else 'not built'} from infra/terraform/aws/cluster")
+    print(f"choice: {'import' if built else 'register'}")
+    print(f"register: {entry if entry else 'no entry covers it'}")
+    follows = built != bool(entry)
+    print(f"follows: {'yes' if follows else 'no'}")
+    if not follows:
+        print(f"provenance: {res.name} was built from aws/cluster and a register entry ({entry}) calls it unmanaged; "
+              "import it and drop the entry" if built else
+              f"provenance: {res.name} was not built from aws/cluster and no register entry covers it; register it in "
+              f"{REGISTER.relative_to(TF_DIR.parent.parent)} with who made it and why", file=sys.stderr)
+    return 0 if follows else 2
+
+
 # ---------------------------------------------------------------- the rebuild -----------------------------------
 
 def managed_in(state: pathlib.Path) -> list[str]:
@@ -679,7 +754,7 @@ def written_missing(root: pathlib.Path, state: pathlib.Path, written: list[dict]
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("kind", choices=sorted(ROOTS))
+    ap.add_argument("kind", choices=sorted(ROOTS) + ["provenance"])
     ap.add_argument("profile", help="the fleet account's AWS profile, passed explicitly")
     ap.add_argument("name", nargs="?", help="the cluster's name (cluster only)")
     ap.add_argument("--region", help="default: fleet.sh's WIB_REGION")
@@ -693,8 +768,10 @@ def main(argv: list[str]) -> int:
         region = args.region or setting("WIB_REGION")
         if args.kind == "network" and region != setting("WIB_REGION"):
             raise Stop(f"a lab VPC outside the home region ({setting('WIB_REGION')}) is not rebuilt by this script")
-        if (args.kind == "cluster") != bool(args.name):
-            raise Stop("a cluster name is given with `cluster` and only with it")
+        if (args.kind in ("cluster", "provenance")) != bool(args.name):
+            raise Stop("a cluster name is given with `cluster` or `provenance` and only with them")
+        if args.kind == "provenance" and (args.resume or args.resolve_only):
+            raise Stop("provenance imports nothing: --resume and --resolve-only are for a rebuild")
         aws = AWS(args.profile, region)
         account = aws("sts", "get-caller-identity")["Account"]
         if not re.fullmatch(r"\d{12}", account):
@@ -713,9 +790,16 @@ def main(argv: list[str]) -> int:
             event = one_tag(tags_of(vpc.get("Tags")), "event", f"lab VPC {res.vpc}")
             return rebuild("network", network_state(args.profile),
                            [("profile", args.profile), ("region", region), ("event", event)], res, args.resolve_only, args.resume)
+        if args.kind == "provenance":   # any cluster in the account: one the fleet did not build reads as not built
+            return report_provenance(ClusterResolver(aws, account, args.name), args.profile)
         if not args.name.startswith("watch-it-burn-"):
             raise Stop(f"{args.name} is not a watch-it-burn-* cluster; the fleet builds no other")
         res = ClusterResolver(aws, account, args.name)
+        missing = [f"{mark} ({seen})" for mark, held, seen in provenance(res) if not held]
+        if missing:
+            raise Stop(f"{args.name} was not built from aws/cluster: AWS shows no {'; no '.join(missing)}. A cluster the "
+                       f"root did not build is registered in {REGISTER.relative_to(TF_DIR.parent.parent)}, not imported "
+                       "(docs/floor.md, The unmanaged register; import-state.py provenance)")
         variables = cluster_vars(aws, res, args.profile)
         rc = rebuild("cluster", STATE_DIR / f"{args.name}.tfstate", variables, res, args.resolve_only, args.resume)
         if not args.resolve_only:
