@@ -18,7 +18,8 @@ again on any number outside the room's range. The reserved range is the presente
 is three digits and a room ticket is four, and a mistyped presenter number cannot name a room ticket and run its
 injection on the admin bot. The presenters file with POST /presenter-ticket, a JSON body {"body": "<the ticket's
 text or HTML>", "customer": "<optional name>"}, answered 201 with the ticket, numbered with the lowest free number in
-the range (HC-900 first), or 409 once all 100 are taken. The route is in-cluster only, as /landed is: console.conf
+the range (HC-900 first), or 409 once all 100 are taken. Both routes refuse, 422, a ticket the code-of-conduct check
+flags (#1268, the section of that name below). The route is in-cluster only, as /landed is: console.conf
 refuses it on the desk's public server, and the deployments host answers no POST. A presenter reaches it through the
 cluster API, for example
     kubectl --context <cluster> -n agent port-forward svc/fake-ticket 18080:8080
@@ -30,6 +31,7 @@ calls, clears both kinds and keeps every fixed ticket (FIXED_TICKETS: HC-7731, H
 """
 from __future__ import annotations
 
+import codecs
 import hashlib
 import html
 import json
@@ -236,6 +238,37 @@ def clean(raw: str) -> tuple[str, str]:
     return c.result()
 
 
+# --- the code-of-conduct check (#1268, part of #1267) ---------------------------------------------------------------
+# The presenters open the desk's tickets on stage and the bot reads them, so a ticket whose text, subject or customer
+# name carries a term of the list below is refused and never filed, whatever the guardrails' state: no switch reaches
+# this check. It is for abuse, not attacks: a ticket's injection (white text, a hidden instruction, HC-666's shape) is
+# filed as before, since that is the challenge. The terms are guard-proxy's PROFANITY default (proxy.py's
+# _DEFAULT_PROFANITY), matched as its _profanity_pattern matches them: whole words, an optional plural s, any case.
+# verify/test_desk_coc.py holds the list to guard-proxy's, term for term, and the match to its _PROFANITY_RE. They are
+# kept ROT13-encoded, as the #1267 spike keeps its lists, so the tree and a search of it show no slur. The refusal is
+# one plain sentence that names no term and does not repeat the ticket.
+_COC_TERMS_ROT13 = (
+    "shpx,shpxf,shpxrq,shpxre,shpxvat,shpxva,zbgureshpxre,zbgureshpxvat,"
+    "fuvg,fuvggl,fuvggvat,ohyyfuvg,fuvgurnq,phag,ovgpu,ovgpurf,ovgpuvat,onfgneq,"
+    "qvpx,qvpxurnq,pbpx,chffl,nffubyr,qhzonff,wnpxnff,jnaxre,gjng,"
+    "avttre,snttbg,ergneq,ergneqrq,genaal,fyhg,juber,encr,encrq,encvfg,xvxr,fcvp,puvax"
+)
+COC_TERMS = tuple(codecs.decode(_COC_TERMS_ROT13, "rot13").split(","))
+_COC_RE = re.compile(r"\b(?:" + "|".join(sorted((re.escape(t) for t in COC_TERMS), key=len, reverse=True))
+                     + r")s?\b", re.IGNORECASE)
+COC_REFUSAL = ("The desk did not file this ticket: it breaks the event's code of conduct. "
+               "Please write it again without the abusive language.")
+
+
+class CodeOfConduct(Exception):
+    """A ticket the code-of-conduct check refused; nothing was filed."""
+
+
+def coc_violation(*texts: str) -> bool:
+    """Whether any of the texts carries a term of COC_TERMS, as guard-proxy's _PROFANITY_RE would find it."""
+    return any(_COC_RE.search(str(t or "")) for t in texts)
+
+
 # The two ranges (#1156, the module docstring): the room's draw and the presenters' reserved numbers never overlap.
 ROOM_NUMBERS = range(1000, 10000)
 PRESENTER_NUMBERS = range(900, 1000)
@@ -259,7 +292,10 @@ def _room_draw() -> int:
 
 
 def file_ticket(raw: str, owner: str) -> dict:
+    """A room ticket, owned by the visitor's witch name; CodeOfConduct, with nothing filed, when the check refuses it."""
     shown, text = clean(raw)
+    if coc_violation(text, SUBMITTED_SUBJECT, owner):
+        raise CodeOfConduct(COC_REFUSAL)
     with _lock:
         while True:
             n = _room_draw()
@@ -284,9 +320,12 @@ class RangeFull(Exception):
 
 def file_presenter_ticket(raw: str, customer: str = "") -> dict:
     """A presenter's ticket, numbered with the lowest free number in PRESENTER_NUMBERS. No owner, so it shows on no
-    visitor's /me page; it opens by its number like any other ticket."""
+    visitor's /me page; it opens by its number like any other ticket. CodeOfConduct, with nothing filed, when the
+    code-of-conduct check refuses its text or customer name."""
     shown, text = clean(raw)
     who = " ".join(str(customer or "").split())[:80] or PRESENTER_CUSTOMER
+    if coc_violation(text, SUBMITTED_SUBJECT, who):
+        raise CodeOfConduct(COC_REFUSAL)
     with _lock:
         free = [n for n in PRESENTER_NUMBERS if f"HC-{n}" not in TICKETS and find(f"HC-{n}") is None]
         if not free:
@@ -901,7 +940,13 @@ class Handler(BaseHTTPRequestHandler):
                 self._page(_shell("Empty", "<p>Write something in the ticket first.</p>"), 400)
                 return
             name = self._visitor()
-            t = file_ticket(body, name)
+            try:
+                t = file_ticket(body, name)
+            except CodeOfConduct:
+                # Always on (#1268): the page says why in one sentence and repeats neither the ticket nor a term.
+                self._page(_shell("Not filed", f'<p>{html.escape(COC_REFUSAL)}</p><p><a href="/">Back to the desk'
+                                  "</a></p>"), 422)
+                return
             self._page(_shell("Ticket filed", f"""<div class="you">You are <b id="witch-name">{html.escape(name)}</b>.</div>
 <h2>Your ticket is {html.escape(t['id'])}</h2><p>Ask BurritoBot to read ticket {html.escape(t['id'])}.</p>
 {_article(t)}<p><a href="/">Back to the desk</a> &middot; <a href="/me">Your tickets and deployments</a></p>"""))
@@ -938,6 +983,9 @@ class Handler(BaseHTTPRequestHandler):
                 t = file_presenter_ticket(body, d.get("customer", ""))
             except RangeFull as e:
                 self._send(409, {"error": str(e)})
+                return
+            except CodeOfConduct:
+                self._send(422, {"error": COC_REFUSAL})
                 return
             self._send(201, self._ticket_json(t))
         elif url.path == DESK_RESET_PATH:

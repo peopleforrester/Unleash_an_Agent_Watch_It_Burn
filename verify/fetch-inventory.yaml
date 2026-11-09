@@ -754,6 +754,15 @@ sites:
     lines: 3
     class: none
     why: comments, docstrings or messages that name the command; none runs it
+  verify/test_desk_coc.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
   verify/test_desk_remote_reports.py:
   - match: urlopen
     lines: 2

@@ -2696,6 +2696,17 @@ reads:
     - verify/package_cache.py
     - verify/playwright_browsers.py
     - verify/python.lock
+  test_desk_coc.py:
+    - .gitmodules
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/kubecon.html
+    - images/llm-guard
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/ensure-submodules.sh
+    - verify/git_mirror.py
   test_desk_remote_reports.py:
     - CLAUDE.md
     - backstage
