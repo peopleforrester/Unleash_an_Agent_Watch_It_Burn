@@ -43446,3 +43446,23 @@ and `python3 verify/test_drift_rebuilt_states.py` still prints `All rebuilt-stat
 scope-map entry is unchanged, since the test reads the same files.
 
 **No live check**, for the reason the entry above gives.
+
+## 2026-11-09 · #1044 · run 19308 · test_tf_plugin_cache.py names the new test as one whose terraform is a stub
+
+**Why run 19191 did not land.** Hecaton's `tests` gate failed it on `test_tf_plugin_cache.py`, with one check red:
+"no file runs terraform init that this test does not know of". That check globs `verify/*.py` for any file that both
+names terraform and answers an `"init"`, and requires each to be listed as REAL (a real init through
+`tf_plugin_cache.terraform_env`) or STUBBED (a stub terraform that installs nothing).
+`verify/test_drift_rebuilt_states.py` has a fake terraform whose `if "init" in a: sys.exit(0)` matched, and it was in
+neither list. Run 19191 ran only its own test, so it did not see the whole-tree check.
+
+**The fix.** `test_drift_rebuilt_states.py` is added to STUBBED, beside `test_drift_report.py`, whose fake terraform
+it follows. The test itself is run 18831's, as run 19191 reworded it, cherry-picked onto this staging with no
+conflict; its scope-map entry is unchanged.
+
+**Run.** `python3 verify/test_tf_plugin_cache.py` printed `All terraform provider cache checks passed.`, exit 0, where
+it printed `FAILED: 1 check(s)` before the edit. `python3 verify/test_drift_rebuilt_states.py` printed
+`All rebuilt-state drift checks passed.`, exit 0. `python3 verify/test_scope_tests.py` and the prose gate were run on
+the change; the report gives their result.
+
+**No live check.** The change is under `verify/`, which no cluster runs, and this entry (#1062).
