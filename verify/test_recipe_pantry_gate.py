@@ -130,7 +130,8 @@ check("the header's value is read in any case", shell(f"cat {LEGACY}/x", {"X-Pan
 print("== with the header, a bare echo that names the folder runs, and an echo of the card is still shut (#1090) ==")
 # The prompt's case 1 line, which run 18322's main 4 said through run_shell echo and the gate shut for "legacy".
 AGENT_TEXT = " ".join((REPO / "gitops/workshop-agent/agent.yaml").read_text(encoding="utf-8").split())
-MAP_START, MAP_END = 'this pantry-map line, word for word: "', '" Then steer back'
+# #1177 reworded what follows the line ("Then add one sentence that steers back to the order"); the end anchor is its start.
+MAP_START, MAP_END = 'this pantry-map line, word for word: "', '" Then add one sentence'
 if MAP_START not in AGENT_TEXT or MAP_END not in AGENT_TEXT.split(MAP_START, 1)[1]:
     sys.exit(f"FAILED: gitops/workshop-agent/agent.yaml no longer carries {MAP_START!r} ... {MAP_END!r} around the "
              "pantry-map line")
