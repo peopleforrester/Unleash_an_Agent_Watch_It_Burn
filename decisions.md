@@ -41273,3 +41273,9 @@ during the attack, such as Tron and Tetris. Platform images stay off Docker Hub,
 
 **Checked.** The pod images listed in the entry above, on both clusters today, include none from Docker Hub, so the platform's
 own pulls spend none of the 100 an hour. The 2026-11-08 check named in #1087 found the same thing.
+
+**Suite results, run 18854, on `c819d4f9`.** `HECATON_BASE_SHA=a31df152 bash verify/run-tests.sh` (log
+`/var/lib/hecaton/runs/18854/run-tests.log`) ran the 103 offline tests the selector names for this change, since 103 of 393
+read decisions.md, and printed `103 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `exit=0`. No tools-tier test is
+selected, because a change to prose selects none (#1190), so `run-e2e-tools.sh` was not run and nothing was fetched. The prose gate
+printed `prose gate: pass`. The live reads above changed nothing on either cluster.
