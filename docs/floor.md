@@ -267,14 +267,14 @@ Rebuild a cluster's state as the machine's own operator, the identity that built
 identity, a hecaton run's role for one, plans both as changed, and a copy of that state must not be taken
 to the operator machine.
 
-Exit 2 is what the KubeCon clusters give, and none of their changes replaces the cluster, its node group or
-an access entry. Three security group rules the cluster root has committed since 2026-10-28 were on neither
+Exit 2 is what the KubeCon clusters gave on 2026-11-07, and none of the changes in that plan replaces the
+cluster, its node group or an access entry. Three security group rules the cluster root has committed since 2026-10-28 were on neither
 cluster when the states were rebuilt: #869's node rules for 8080 and 3000, and #906's lab VPC rule to the API
 on 443 (#906's fix was made by hand as a rule from the other cluster's nodes). AWS did not hold them, so they
 were not imported, and the plan creates them. On 2026-11-08 #1171 put #869's two rules on both clusters by
 hand, with the root's own descriptions, so the Service proxy reaches guard-proxy on 8080 before the KubeCon
 run. The states rebuilt before that still lack them, and an apply that creates a rule AWS already holds fails
-as a duplicate. So before the next apply of either cluster, import the two rules into its state:
+as a duplicate. So a state rebuilt before then needs the two rules imported before its next apply:
 
     terraform -chdir=infra/terraform/aws/cluster import \
       'module.eks.aws_security_group_rule.node["ingress_cluster_8080_workshop_apps"]' \
@@ -291,8 +291,29 @@ configuration committed after the build: the launch template's user data
 policies (#203 dropped the `bedrock:Converse` actions), the tutor's inference profile, replaced for #882's
 model, and on watch-it-burn-private the `role` tag on every resource. Then there are settings Terraform keeps
 and AWS has no copy of (`force_destroy`, `force_detach_policies`, `force_update_version`, the addons'
-conflict settings), as after any import. The next `fleet.sh` apply of each cluster makes all of it; until
-then the drift report, which plans refresh-only, reads both states as clean. A cluster's rebuild takes
+conflict settings), as after any import. The drift report, which plans refresh-only, reads a state like that
+as clean; a normal plan does not.
+
+`import-state.py` plans with the node group's subnets as AWS holds them, and `fleet.sh` pins each roster
+node to the zone of its EBS volumes (`roster_zone`: community in a, private in b). watch-it-burn-private's
+node group was built across both zones, so `fleet.sh`'s plan of it replaced the node group (`subnet_ids`
+forces replacement), creating the zone-b group before deleting the old one. An in-place roll across both
+zones could have put the node in zone a, away from its volumes.
+
+On 2026-11-08 #1042 imported #1171's two rules into both states on tanjiro-wsl2 and ran `fleet.sh`'s
+apply of each cluster with the bootstrap left out:
+
+    cd infra/terraform/fleet
+    WIB_FORCE_UP=1 WIB_NO_BOOTSTRAP=1 ./fleet.sh instructors up community
+    WIB_FORCE_UP=1 WIB_NO_BOOTSTRAP=1 ./fleet.sh instructors up admin
+
+`WIB_FORCE_UP=1` re-applies a cluster that passes health, and `WIB_NO_BOOTSTRAP=1` keeps the verb to the
+apply and its settle: no ArgoCD, routes, registration or terminal login. Community's node rolled in place
+in zone a, private's node group was replaced into zone b, and the plan of each afterwards had no changes.
+The addons moved to newer eksbuilds of the same versions in that apply, since the root names no addon
+version and leaves it to the EKS module's version lookup.
+Run it the same way after the next change to the cluster root, at a time chosen around the KubeCon run,
+since the roll restarts every pod and guard-proxy's in-memory counters with them. A cluster's rebuild takes
 about 35 minutes (65 imports, each one refreshing the root's data sources), the lab VPC's 9 and the
 boundary's 1. `verify/test_fleet_import_state.py` holds the import ids to an AWS world of the clusters'
 shape, and holds the script to a rule for each resource type the three roots plan

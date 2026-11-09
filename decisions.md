@@ -41546,3 +41546,112 @@ The change itself touches only decisions.md and PROGRESS.md, which no cluster ru
 
 **Tests.** `python3 verify/test_stage_trace_prompts.py` passed, run here once. The prose gate was run on this entry
 and the PROGRESS.md line. No dependency was added.
+## 2026-11-08 · #1042 · run 18828 · The cluster root applied to both KubeCon clusters with fleet.sh on tanjiro-wsl2; the plan of each afterwards has no changes
+
+**Context.** #979 rebuilt the two KubeCon clusters' states from AWS and #1041 rebuilt them on tanjiro-wsl2 as
+`nwuser`. Both still planned configuration committed after the 2026-10-28 build, and #1171 had since put #869's 8080
+and 3000 node rules on both clusters by hand. `bash verify/prior-drafts.sh 1042 origin/staging` printed NONE, and the
+issue had no comments. Every remote command below ran through
+`sudo -n -u michael /var/lib/hecaton/cli/sources-elevated fleet tanjiro-wsl2 '<command>'`, as `nwuser` in accen-dev.
+
+**Timing, chosen around the KubeCon run.** The session is 2026-11-12T20:50Z (the run-of-show, "Dates to hold"); the
+presenters' two run-throughs were due by 2026-11-08, and the Night Before probe runs on 2026-11-11. The apply ran on
+2026-11-08 between 23:18Z and 23:42Z, three and a half days ahead of the session and before the Night Before, so that
+probe runs on the rolled nodes and a roll that went wrong has days to be put right. Before it, both clusters read
+Synced Healthy on every Application (community 24, private 40), every AI guard off, and the guard lock free.
+
+**The checkout.** It was detached at 18517972, with the guard-proxy submodule modified (#1041). `git fetch origin main`
+and `git checkout --detach origin/main` moved it to 16f8d46c, as docs/floor.md says; 18517972 is an ancestor of it.
+The cluster root is the same at both commits and at staging 6409df1d; only `fleet.sh` and `backups.py` changed. The
+submodules were not touched (`git status` now also lists `images/llm-guard`, whose checkout is older than main's
+pointer). Both states were copied first, to `states/watch-it-burn-<name>.tfstate.pre-1042-run18828` beside them and to
+`/tmp/wib-1042/states-before/` (sha256 `e2bfe438...` community, `5333015f...` private).
+
+**The variables.** `WIB_DRY_RUN=1 WIB_FORCE_UP=1 WIB_NO_BOOTSTRAP=1 ./fleet.sh instructors up` printed what each apply
+passes: `event=kubecon-na-2026`, the hostname, `role=community` or `admin`, `imds_hop_limit` 2 or 1, `max_pods` 250 or
+110, `pod_pids_limit=-1` on community only, and `node_subnet_ids` of the roster zone, a (`subnet-0d80af76b70e4e1cc`) for
+community and b (`subnet-0eb9a64421d4e53f2`) for private. The plans below used exactly those, through a script kept at
+`/tmp/wib-1042/wib1042.sh` on tanjiro. The apply's own command line, read from the process list, matched them.
+
+**#1171's rules imported first.** `terraform import` with the ids floor.md gives:
+`sg-0b7d2a0cfaed6fecd_ingress_tcp_{8080,3000}_..._sg-04130d5989d5c1ab1` on community and
+`sg-011fc555e507cfb40_ingress_tcp_{8080,3000}_..._sg-0ca9886f5a9d4f6d3` on private, each "Import successful".
+
+**The plans before (criterion 1).** Logs `infra/terraform/fleet/logs/watch-it-burn-<name>.1042.before.plan.log` there.
+- watch-it-burn-community: `Plan: 3 to add, 27 to change, 1 to destroy.` Adds: #906's lab VPC rule to the API on 443
+  (`module.eks.aws_security_group_rule.cluster["ingress_lab_vpc_443_api"]`), the node group's
+  `null_resource.validate_cluster_service_cidr`, and the new tutor profile. Destroy: the old tutor profile
+  (`aws_bedrock_inference_profile.tutor`, description now names `us.anthropic.claude-sonnet-4-6`, #882). Changes: the
+  launch template's user data (#714 took out the containerd `hosts.toml` part), so the node group updates in place and
+  rolls its node; the agent and tutor policies (#203); the four agent profiles' `model_source` and tags; three addons to
+  newer eksbuilds (kube-proxy `v1.36.0-eksbuild.58` to `.60`, vpc-cni `v1.23.2-eksbuild.8` to `.10`, coredns
+  `v1.14.7-eksbuild.22` to `.35`); and the settings AWS keeps no copy of (`force_destroy`, `force_detach_policies`,
+  `force_update_version`, the addons' `preserve` and conflict settings, the pod identity associations' tags).
+- watch-it-burn-private: `Plan: 4 to add, 36 to change, 2 to destroy.` The same kinds of change, plus the `role=admin`
+  tag on every resource that carries tags, and all five addons' versions read at apply. The one difference in kind:
+  the node group is replaced (`+/-`, create before destroy), since `subnet_ids` forces replacement and `fleet.sh` pins
+  private's node to zone b, where AWS had its node group across both zones. #979 and #1041 planned with AWS's subnets,
+  which is why they saw no replacement. The replacement is the safer of the two: private's three volumes
+  (kagent-postgresql, student-work, Tempo's) are in us-west-2b, and an in-place roll across both zones could have put
+  the new node in 2a.
+Nothing replaces either cluster or an access entry. Nothing calls the tutor profile today (the root's comment above it).
+No pod on either cluster pulled from Docker Hub before the roll, so taking out the node's Docker Hub `hosts.toml` costs
+the roll nothing; `bedrock:Converse` is not an IAM action, so #203's policy keeps Converse working through
+`bedrock:InvokeModel`.
+
+**The apply (criterion 2).** From `infra/terraform/fleet`, `WIB_FORCE_UP=1 WIB_NO_BOOTSTRAP=1 ./fleet.sh instructors up
+community`, then the same with `admin`, each detached on tanjiro with its log at
+`logs/apply-1042-run18828-<name>.log`; terraform's output is in `logs/watch-it-burn-<name>.apply.log`. `WIB_NO_BOOTSTRAP`
+keeps the verb to the apply and its refresh-only settle: no ArgoCD, routes, registration, guardrails link or terminal
+login, so the presenter terminal login (#1074) was not touched.
+- community, 23:18:58Z to 23:27:51Z, `exit=0`: `Apply complete! Resources: 3 added, 27 changed, 1 destroyed.`, then the
+  settle's `0 added, 0 changed, 0 destroyed`.
+- private, 23:30:45Z to 23:41:35Z, `exit=0`: `Apply complete! Resources: 4 added, 36 changed, 2 destroyed.`, then the
+  settle's `0 added, 0 changed, 0 destroyed`.
+
+**The node roll.** Community's node group `default-6eefb129f568d91814a3ca6ecf` rolled in place to launch template
+version 3: the new node `ip-10-0-28-179` (us-west-2a, created 23:20:12Z) came up while `ip-10-0-31-163` drained, and by
+23:30Z it was the only node, every pod Running and all 24 Applications Synced Healthy. Private's group
+`default-aedde2b7df72fcb8a654102c71` was replaced by `default-e40c409ac4adcaac42a983adaa` on `subnet-0eb9a64421d4e53f2`
+only: the new node `ip-10-0-90-97` (us-west-2b, created 23:32:12Z) took the pods, kagent-postgresql and tempo-0
+attached their volumes there, and by 23:42Z all 40 Applications read Synced Healthy. Both nodes run AMI release
+`1.36.5-20261031`. After the roll, every AI guard read off on both, `https://attackme.agenticburn.com/` and
+`https://burritobot-private.agenticburn.com/` answered 200, both tutor profiles carry the new description, the addons
+read the versions above (private's resolved to the same, with ebs-csi `v1.67.2-eksbuild.1` and pod identity
+`v1.4.1-eksbuild.3` unchanged), and private's cluster carries `role=admin`.
+
+**The plans after (criterion 2).** Same variables, logs `watch-it-burn-<name>.1042.after.plan.log` there:
+community `plan exit=0`, `No changes. Your infrastructure matches the configuration.`; private the same. The
+null_resource the issue expected to remain was created by the apply, so not even it is left.
+
+**The probes after.** `verify/kubecon_probe.py community attackme.burritobot.co --switch-context
+watch-it-burn-private`: `16 beats: 16 PASS, 0 FAIL`, `KUBECON PROBE GREEN`, its guardrails-on reaching the community
+cluster from the private terminal through #869's 8080 rule and #906's 443 rule. The admin probe, run first, was
+`34 beats: 33 PASS, 1 FAIL`, `KUBECON PROBE RED`: `Challenge 2: recipe read blocked and alerted (KubeArmor)` leaked the
+recipe at about 23:59Z. Its last beat put both clusters back at the start state. Logs
+`/var/lib/hecaton/runs/18828/probe-{admin,community}.log`. Run 18805's admin probe, before the roll, passed that beat.
+
+**Why KubeArmor missed it: a bug the replacement exposed.** KubeArmor's enforcer DaemonSet selects only nodes its
+operator has labelled, and the operator labels a node by running a snitch Job on it. On private,
+`require-resource-limits` is Deny (the admin profile arms it), and at 23:36:33Z the operator logged `Cannot run snitch
+on node ip-10-0-90-97 ... Policy require-resource-limits failed: CPU and memory resource limits are required on every
+container.` #1081's LimitRange does not cover this: a LimitRange fills in Pods, and Kyverno's autogen rule refuses the
+Job itself, before any Pod exists. So the new node had no KubeArmor enforcer until `kubectl label` wrote the node's
+`kubearmor.io/*` labels by hand at 23:53:21Z (managedFields manager `kubectl-label`; not this run; run 18849 was probing
+private at the time), and the enforcer started at 23:53:58Z. The probe's guardrails-on applied `block-recipe-snoop` at
+23:59:00Z (the enforcer's log, `Detected a Security Policy (added/agent/block-recipe-snoop)`), and the read still
+leaked, so the enforcer five minutes old was not yet holding the policy on containers that predated it. At 00:10Z, under the guard lock, the same policy applied by hand blocked the read
+(`ls: cannot open directory '/tmp/burrito-data/config/legacy/': Permission denied`, 0 recipe lines) and was deleted
+again (log `/var/lib/hecaton/runs/18828/kubearmor-diag.log`). The community cluster, where the policy is not at Deny,
+rolled at 23:20Z and its operator logged `Snitch was installed on node ip-10-0-28-179`; its enforcer started 28
+seconds after the node. The fix (snitch Jobs past `require-resource-limits` on an armed cluster) is filed as
+a follow-up; until then, any new node on private needs its KubeArmor labels checked, and a node roll on private
+before the Night Before is followed by that probe.
+
+**Left on the clusters.** The applied root, on purpose. Every AI guard off, both guard locks free, no KubeArmorPolicy
+in agent, as found. The guard-proxy counters restarted with their pods, which the run-of-show's reset before each run
+does anyway.
+
+**In the repo.** docs/floor.md's "Rebuilding a lost state" now says the apply ran, gives the two commands, and explains
+why private's node group was replaced. No test reads the sentences it changed (`git grep` over `verify` and `scripts`).
+No code changed and no dependency was added.
