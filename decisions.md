@@ -44825,6 +44825,7 @@ HC-900 was free when the check started and is free again: the cluster is as foun
 which now name the step in words), `test_tests_own_inputs.py`, `test_live_check_cleanup.py` and
 `test_desk_ticket_live.py`. The whole Test and E2E commands were not run here; validation runs the tests that read the
 changed files.
+
 ## 2026-11-06 · #205 · run 17941 · Both acceptance cases pass live again on staging's code, and the issue is closed out
 
 **Context.** Run 17941 is a re-dispatch of #205 after escalation 808 was dropped as run work: drop
@@ -44871,3 +44872,11 @@ log is the expected output of `test_datadog_secret_fields_render.py`'s empty app
 (the offline suite and 16 tier tests) in 23m32s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. So every one of the 72 tier
 tests passed on this commit. The full run took more than twice the 23 to 30 minutes earlier runs took, on a host
 loaded by other runs' suites. No dependency was added.
+
+**Ported by run 19433 (#1217), 2026-11-09.** Run 17941 ended claim-stale, so the two commits above (`add3386b` and
+`bff67bd0` on `origin/agent/205-17941`) never reached staging; #1217 cherry-picked them onto staging `c7fdcdb1` with
+their text unchanged and every staging entry kept. Every suite result quoted above, the 307 offline tests and the 72
+tier tests, is run 17941's result on its own base `24670870` (with `add3386b` on top), not a result for the current
+staging, which is 661 commits later. The live results are likewise from 2026-11-06 at the revisions named above.
+This port ran no live check, because it changes only decisions.md, which no cluster runs (CLAUDE.md, Dispatched runs,
+point 1).
