@@ -45108,3 +45108,46 @@ run on Tanjiro run the scoped tests.
 **Not yet run on a cluster.** Nothing: this change touches only `verify/` files no cluster runs, so it has no live
 check (CLAUDE.md, Dispatched runs, point 1). **Not yet run on Tanjiro.** The step's new unpack and Arial check run
 there on the next `verify-suites` job; its log line names the fonts it unpacked.
+## 2026-11-09 · #1224 · run 19448 · desk_ticket_live.py files on the one desk and removes its Jokers' rows and its tickets from it on every path out
+
+**What changed.** `verify/desk_ticket_live.py` (#1102) predates the one desk (#1145). It filed the admin bot's tickets on
+`support-burritobot-private.burritobot.co`, deleted each Joker's Deployment but left its row on
+deployments.burritobot.co, and its docstring said each desk keeps its own tickets and that a filed ticket cannot be
+removed. A read-only kubectl read this run confirmed the premise: workshop-mcp's `TICKET_SITE_URL` on
+watch-it-burn-private is `http://desk-relay.agent.svc.cluster.local:8080` and on watch-it-burn-community
+`http://fake-ticket.agent.svc.cluster.local:8080`, so the admin bot reads the public desk and would never have seen a
+ticket filed on the private one. Now:
+
+1. Every ticket is filed on the one desk, `kp.PUBLIC_DESK` (support.burritobot.co); `ADMIN_DESK` is gone. `Side.file`
+   keeps each number the desk answers with in `Side.filed`.
+2. `Side` carries `desk`, the community cluster, which `main` hands to both bots (the public bot's own cluster object).
+   `Side.ask`'s finally deletes the Joker with `remove_deployment` and then, in a nested finally so it runs even when
+   the delete raises, calls `desk.forget_on_desk([joker], since)` (#1215): the Joker's rows that landed since the ask
+   began, whichever bot made them, and nothing older. What could not be removed comes back as `left`, and
+   `Side.judged` fails the step on it whatever the judge said, as kubecon_probe's `_c6` does.
+3. `checked` wraps the old body in main: the checks, then, in nested finallys, `restore`, `forget_filed` (the tickets
+   both bots filed off the desk in one `/desk-forget`, a step that fails naming each ticket it could not remove) and the
+   as-found reads. HC-666 is never named; only numbers the desk answered a filing with are kept, so a filing the desk
+   answered with no number stays, and its filing step has already failed.
+4. The docstring describes the one desk as it is and says how the rows and tickets leave it.
+
+**Tests.** `verify/test_desk_ticket_live.py` gains three parts, against the real `ticket_site.py` it already runs on
+localhost, with `forget_on_desk`'s kubectl exec running the in-pod `/desk-forget` script against it and
+`verify/no_cloud.py` in place. `Side.ask` on each bot, for both Jokers, on seven paths (clean, the turn raising, an
+interrupt, the audit read raising, the delete raising, the delete failing, the desk unreachable): the row is asked off
+the community cluster's desk by its name alone, never off the bot's own cluster, the room's older row of the same name
+and another room row stay, and a leftover fails the step. A read-back ask naming no Joker asks nothing of the desk.
+`checked` on five paths (clean, the body raising, an interrupt, restore raising, the desk unreachable) plus a run that
+filed nothing: the filed tickets are gone and HC-666 and a room's ticket stay, or the step fails naming them. `main`
+hands both bots the community cluster as their desk. Two mutations (the row forget outside a finally, the ticket forget
+after a raising restore) each failed the test. `python3 verify/test_desk_ticket_live.py`: 214 PASS, exit 0.
+`python3 verify/test_fetch_inventory.py` passed. `scope_tests.py write` added `no_cloud.py` and `no-cloud.sh` to the
+test's entry. The whole Test and E2E commands were not run; validation runs the tests that read the changed files.
+
+**Live check.** Skipped: the change touches only `verify/` files no cluster runs (the two `TICKET_SITE_URL` reads above
+were read-only). **Not yet run on a cluster:** `python3 verify/desk_ticket_live.py --private-context
+watch-it-burn-private --community-context watch-it-burn-community --kubeconfig "$KUBECONFIG" --profile accen-dev`,
+which spends Bedrock money; the issue asks for the cleanup and its offline test, not a live run.
+
+**Follow-up seen.** `verify/test_deployments_removed_live.py`'s docstring still says the desk has no way to drop a row
+and cites desk_ticket_live.py on its tickets; both are out of date since #1215 and this change.
