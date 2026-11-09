@@ -42316,3 +42316,42 @@ and no re-send, and each run's spend starting where the last one ended; `verify/
 that the probe prints those words. `python3 verify/scope_tests.py write` added the new test's entry alone, and
 `python3 verify/scope_tests.py check` reads 0 problems. The probe's re-send and the persona's `ask_user` and `run_shell` lines are unchanged and stay held by
 `verify/test_kubecon_probe.py`. No dependency was added.
+## 2026-11-09 · #1229 · run 19132 · The beacon reset still has no token route; the Railway act is re-submitted pinned to a commit
+
+**Where the issue stood.** Run 19104's entry above is on staging (`051217f5`): desk-reset ended `done`, both
+deployments pages read `[]`, HC-666 answered, and beacon-reset failed on the unresolvable admin token. Its escalated
+`railway run` on the provisioning service was refused by hecaton's judge because the act cloned whatever staging held at
+run time, not a pinned commit. The coordinator's answer sent the act back to the run, through the `sources-elevated` wrapper.
+`verify/prior-drafts.sh` was not needed: run 19104's one commit has landed and this run reuses it.
+
+**The wrapper's route.** The wrapper's `fleet` verb runs a command on tanjiro-wsl2 or megumi-wsl2, and it has no Railway
+verb. On both hosts `railway whoami` answered "Unauthorized" (please run `railway login`), and neither host has
+`~/secrets/projects/watch-it-burn-provisioning.env`. This host's own `railway whoami` answered the same, the AWS session's
+only secret is `watch-it-burn/datadog`, and no `WIB_ADMIN_TOKEN` is set. So `resolve_admin_token` has nothing to read
+anywhere a run can reach, and `./fleet.sh beacon-reset` was not run again: it would print the same FAIL as before.
+
+**The live state at 2026-11-09T01:47Z.** `./fleet.sh start-check` from `infra/terraform/fleet/`, GETs only:
+
+```
+  PASS  https://deployments.burritobot.co/deployments.json lists 0 deploy rows
+  PASS  https://deployments-burritobot-private.burritobot.co/deployments.json lists 0 deploy rows
+  FAIL  https://beacon.burritobot.co/beacon/view reads 321 beacon(s)
+        run './fleet.sh beacon-reset', which zeroes the count
+start-check: NOT at the start state: https://beacon.burritobot.co/beacon/view 321 beacon(s)
+```
+
+It exited 1, and agenticburn.com/beacon/view read `data-count="321"` too. The desk is still clear from run 19104's reset,
+so desk-reset was not run again.
+
+**Escalated.** The report re-submits the act as a `railway run` on project `859f9db0-bbda-4d3c-8026-767d0b9047a9`,
+environment `ddb7d7e6-9643-4b55-8dd6-3618a0b6cce4`, service `watch-it-burn-provisioning`, that clones this repo, checks
+out staging's commit `1c7f7b49df4f7e8a638009a1105657f03b944439` by its full SHA, fails unless `git rev-parse HEAD` reads
+that SHA, and then runs `./fleet.sh beacon-reset` and `./fleet.sh start-check` with `WIB_ADMIN_TOKEN` set from the
+service's own `ADMIN_TOKEN` inside that process. That commit's fleet.sh holds both verbs as staging and this entry read
+them. No token is on a command line or in the output. #1239 still tracks giving runs their own route to the token.
+
+**Not yet run on a cluster.** `./fleet.sh beacon-reset` ending `beacon-reset: done; the beacon view reads zero`, both
+beacon views at `data-count="0"`, and `./fleet.sh start-check` exiting 0 right after it. Nothing in the repo was changed
+to get past the failure, and the presenter terminal login was not read or touched.
+
+**Tests run.** None besides the prose gate: the change is this entry alone.
