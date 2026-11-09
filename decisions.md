@@ -41768,3 +41768,14 @@ the route is there and refuses without the token. No cluster was read or changed
 **Not yet run on a cluster.** The live reset to zero: `./fleet.sh beacon-reset` on a host holding the admin token
 (Michael's, logged in to Railway, or with the secrets env file), which should print `cleared 273 beacon(s)` or more
 and `beacon-reset: done; the beacon view reads zero`. It is owed before the room, after the last rehearsal.
+
+## 2026-11-09 · #1226 · run 18928 · The beacon-reset test's call sites put in the fetch inventory
+
+Run 18800's validation failed one offline check, `verify/test_fetch_inventory.py`. It named three lines of the new
+`verify/test_fleet_beacon_reset.sh` that matched the scanner's curl pattern and had no entry in
+`verify/fetch-inventory.yaml`: line 95, the curl that seeds the fake beacon on 127.0.0.1, and lines 145 and 147, a
+check that reads `fleet.sh`'s text for how the token reaches curl. The inventory now has an entry for the file: the
+seed line classed `loopback`, the other two `none`. `python3 verify/test_fetch_inventory.py` passes. The
+`FAIL: --context is empty` line in the same gate output comes from `test_burritobot_cluster_live_logic.py`, which
+passes and prints that line on purpose (see the #1008 entry of run 18789). `fleet.sh` and the test are unchanged, so
+the live check stands as run 18800 recorded it: the live reset to zero is still owed on a host holding the admin token.

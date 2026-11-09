@@ -994,6 +994,15 @@ sites:
     lines: 1
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_fleet_beacon_reset.sh:
+  - match: FAKE\}/seed
+    lines: 1
+    class: loopback
+    why: the fake provisioning app on 127.0.0.1 the test starts itself, seeded with its beacon count
+  - match: .
+    lines: 2
+    class: none
+    why: a check on fleet.sh's text, that the token goes to curl on stdin; nothing leaves the host
   verify/test_fleet_pool_reconcile.sh:
   - match: .
     lines: 4
