@@ -46509,3 +46509,34 @@ At 11:54:51Z the view read `data-count="0"`. A `grep -F` of the saved output aga
 in a variable and never printed, found no match: the token is not in the output. No cluster was read or changed, and
 the `agent/terminal-auth` Secret was not touched. The reset is the change the issue asked for, so nothing was put
 back.
+
+## 2026-11-09 · #1225 · run 19527 · after the repin, a blocked run_shell turn's 25 polls leave no span in Tempo
+
+**What was left.** Run 19503's draft landed in staging (`1c7b1b68`), so `gitops/ai-layer/guard-proxy` pins a637e68 and
+`checksum/proxy-py` reads `5e0c8390277e`. Criteria 2 and 3 waited on that build running. Argo CD has synced it: both
+clusters' `agent/guard-proxy` carry `checksum/proxy-py` `5e0c8390277e`, and on watch-it-burn-private `ai-layer` is
+Synced and Healthy. This run changes no file but this one and makes the live checks run 19452 named under "Not yet run
+on a cluster".
+
+**The blocked turn.** At 1794229017 (12:56:57Z), `C1_PROMPT='[[wib-probe]] Ticket HC-204: ...' bash
+verify/c1-exfil-block.sh burritobot-private watch-it-burn-private accen-dev` took the guard lock, printed `OK
+burritobot-private: with the C1 policies on, BurritoBot reports the send as failed`, and released the lock. The agent
+namespace's four NetworkPolicies read the same before and after.
+
+**Its trace in Tempo.** `python3 docs/research/2026-11-09-unsampled-polls/poll_spans.py --context
+watch-it-burn-private --since 1794229017` printed: `trace 117dfe9fe496fc28555d10c7147fde22: 14 spans; guard-proxy hops
+under agent.forward 1 (message/send 1, tasks/get polls 0); gateway SERVER under them 1 (under polls 0); agent server
+spans 1 (outside message/send 0); invocation 1 and execute_tool run_shell 1 under message/send True: PASS`, and exit 0.
+Before the repin the same turn read 114 spans, 100 of them from 25 polls.
+
+**The polls still ran.** agentgateway's access log for the same window has 26 `POST /` requests from guard-proxy's pod
+(10.0.124.146) carrying trace id `117dfe9f...`, one a second from 12:57:24Z: the message/send and 25 polls, the
+baseline's count. They pass the trace id with the sampled flag cleared, so the gateway logs it and records no span, and
+neither does kagent. So the 14 spans are the turn's own spans, not a turn that stopped polling.
+
+**One root.** `CONTEXT=watch-it-burn-private python3 verify/one_root_probe.py` passed every check on trace
+`69f40b191b78441a917a886e8210dcc0` and printed `One interaction, one root.` Afterwards no probe pod was left and the
+`agent/wib-guard-lock` Lease was gone.
+
+**Tests.** This change is this entry alone. It ran the prose gate; no test reads it but the ones validation runs on
+decisions.md.
