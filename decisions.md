@@ -45685,3 +45685,25 @@ and asserts the length is within `DRAIN_MAX`; the body past `DRAIN_MAX` is still
 verify/test_public_desk.py` exit 0 (the 4k and 512k refusals both read 413), `python3 verify/test_scope_tests.py` exit
 0. The scoped Test and E2E commands are left to hecaton's validation. No live check: the change touches only tests
 under `verify/`, its map and decisions.md, which no cluster runs. No dependency was added.
+
+## 2026-11-09 · #1240 · run 19486 · test_audience_event.py reads event.js's comments, not only its feedbackUrl value
+
+Run 19146's test review found that #1162's criterion had a test for half of it. `verify/test_audience_event.py`
+already held that `feedbackUrl` is `https://feedback.burritobot.co/?source=burritobot` and that burritbot.html
+appends no cluster or user to an event URL, but no check read event.js's comments, so one could call the form a
+third party again, or drop the line saying the button goes there verbatim, and every test would still pass.
+
+The test now has a section, "event.js's comments say what feedbackUrl is", that joins every `//` comment in event.js
+into one string, so a phrase wrapped across two lines still reads whole, and checks four things: no comment matches
+"third party" in any spelling (space, hyphen or a line break, any case), the comment still says "When feedbackUrl is
+set, the button goes there VERBATIM. No cluster or user is appended", it still gives the reason (a talk's room has no
+cluster or user and the form is told apart by its own `?source=`), and the comment right above `feedbackUrl` names
+the talk's own short form on our feedback app and `source=burritobot`. A self-check runs the pattern on a phrase
+wrapped across two comment lines first, so a broken pattern reads as that and not as a clean file.
+
+**Tests run.** `python3 verify/test_audience_event.py` exit 0. Each mutation of event.js, made by hand and then
+reverted, failed it: "our feedback app" turned into "a third-party app" failed the third-party and the
+own-app checks, "goes there VERBATIM" reworded failed the verbatim check, and `&cluster=x` added to the URL failed the
+existing `feedbackUrl` check. `python3 verify/test_scope_tests.py` exit 0; the test reads no new file, so the map
+is unchanged. The scoped Test and E2E commands are left to hecaton's validation. No live check: the change touches
+only a test under `verify/` and decisions.md, which no cluster runs. No dependency was added.

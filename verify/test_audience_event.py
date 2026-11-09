@@ -55,6 +55,39 @@ check("fleet.sh publishes the community cluster as attackme",
       "watch-it-burn-community\" ]] && { printf 'attackme.agenticburn.com'"
       in (REPO / "infra/terraform/fleet/fleet.sh").read_text(encoding="utf-8"))
 
+
+
+def comments_of(js: str) -> str:
+    """Every // comment in js, joined with spaces, so a phrase wrapped across two comment lines reads whole."""
+    return " ".join(m.group(1).strip() for m in re.finditer(r"^\s*//\s?(.*)$", js, re.M))
+
+
+print("== event.js's comments say what feedbackUrl is, and do not call it a third party (#1162, #1240) ==")
+COMMENTS = comments_of(EVENT)
+# The comment block right above the feedbackUrl line: the field's own description.
+_fb_line = EVENT.find("  feedbackUrl:")
+_fb_block = EVENT[:_fb_line].rsplit("\n", 1)[0] if _fb_line >= 0 else ""
+_fb_lines: list[str] = []
+for _line in reversed(_fb_block.splitlines()):
+    if not _line.strip().startswith("//"):
+        break
+    _fb_lines.insert(0, _line.strip()[2:].strip())
+FB_COMMENT = " ".join(_fb_lines)
+_THIRD = re.compile(r"third[\s-]*part(?:y|ies)", re.I)
+check("the third-party pattern finds 'third party', 'third-party' and a phrase wrapped across comment lines",
+      all(_THIRD.search(s) for s in ("a third party form", "a Third-Party form",
+                                     comments_of("  // goes to a third\n  // party form\n")))
+      and not _THIRD.search("our feedback app"))
+check("event.js has comments to read", bool(COMMENTS))
+check("no comment in event.js calls the feedback destination a third party", not _THIRD.search(COMMENTS))
+check("the button goes to feedbackUrl VERBATIM, with no cluster or user appended, says the comment",
+      "When feedbackUrl is set, the button goes there VERBATIM. No cluster or user is appended" in COMMENTS)
+check("the comment says why: a talk's room has none, and the form tells sources apart by its own ?source=",
+      "a talk's room has no cluster or user of its own, the event's form is told apart by its own ?source=" in COMMENTS)
+check("feedbackUrl has its own comment above it", bool(FB_COMMENT))
+check("feedbackUrl's comment names the destination as our own feedback app (#1162)",
+      "The talk's own short form on our feedback app" in FB_COMMENT and "source=burritobot" in FB_COMMENT)
+
 print("== the knob ships to the cluster ==")
 console_src = KUST[KUST.index("name: console-src"):KUST.index("name: console-conf")]
 check("console-src carries web/event.js", re.search(r"^\s*- web/event\.js\b", console_src, re.M) is not None)
