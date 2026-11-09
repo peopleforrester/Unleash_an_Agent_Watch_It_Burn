@@ -169,6 +169,7 @@ boot() { src "provider_write_kubeconfig() { :; }; bootstrap_student_aws() { echo
     bootstrap_terminal_auth() { echo \"terminal-auth \$1\" >>'${CALLS}'; }
     arm_infra_guardrails() { echo \"arm \$1\" >>'${CALLS}'; }
     pin_bedrock_profiles() { echo \"pin-bedrock \$1\" >>'${CALLS}'; }  # its own test: test_pin_bedrock_profiles.sh
+    pin_coc_guardrail() { echo \"pin-coc \$1\" >>'${CALLS}'; }  # its own test: test_pin_coc_guardrail.sh
     run_idp_script() { echo \"idp \${CLUSTER_NAME} \$1 api=\${WITB_DD_API_KEY} app=\${WITB_DD_APP_KEY}\" >>'${CALLS}'; }
     load_roster; $1
     cat \"\${FAIL_FILE}\" 2>/dev/null; rm -f \"\${FAIL_FILE}\""; }
@@ -187,6 +188,8 @@ check "bootstrap: each one goes on to its terminal login, and neither KubeCon cl
   '[[ "$(grep -c "^terminal-auth " "${CALLS}")" -eq 2 ]] && [[ "$(grep -c "^arm " "${CALLS}")" -eq 0 ]]'
 check "bootstrap: each one points its Bedrock ModelConfigs at its tagged profiles (#513)" \
   '[[ "$(grep -c "^pin-bedrock " "${CALLS}")" -eq 2 ]]'
+check "bootstrap: each one hands guard-proxy its code-of-conduct guardrail (#1279)" \
+  '[[ "$(grep -c "^pin-coc " "${CALLS}")" -eq 2 ]]'
 check "bootstrap: the gap is a WARN naming the cluster" \
   '[[ "$(grep -c "WARN: watch-it-burn-[a-z-]*: no Datadog keys" "${T}/stderr")" -eq 2 ]] && ! grep -q "BOOTSTRAP FAILED" "${T}/stderr"'
 : >"${CALLS}"; : >"${T}/stderr"
@@ -210,7 +213,7 @@ echo "== converge alone turns Datadog on for clusters whose keys arrived after b
 # watch-it-burn-community watch-it-burn-michael-admin` said CONVERGED 2/2, and no datadog-secret was written.
 # repair_agent_tools read a path relative to the working directory, which from the fleet directory does not
 # exist, and errexit ended each converge_one job before repair_datadog. This runs the real cmd_converge from
-# that directory through every real repair; only the cluster edges and pin_bedrock_profiles are stubbed.
+# that directory through every real repair; only the cluster edges and the two pins (pin_bedrock_profiles, pin_coc_guardrail) are stubbed.
 python3 -c 'import json; print(json.dumps({"items":[{"metadata":{"name":f"app-{i}"},"status":{"sync":{"status":"Synced"},"health":{"status":"Healthy"},"operationState":{"phase":"Succeeded"}}} for i in range(12)]}))' >"${T}/apps.json"
 python3 - "${HERE}/../gitops/workshop-agent/agent.yaml" >"${T}/agent_tools" <<'PY'
 import json, sys, yaml
@@ -224,6 +227,7 @@ rm -f "${T}/live_key" "${T}/admin_present"; : >"${CALLS}"; : >"${T}/stderr"; mkd
 WIB_LOG_DIR="${T}/logs" WIB_CONVERGE_ROUNDS=1 src 'provider_write_kubeconfig() { :; }; require_tools() { :; }
     converge_endpoint() { echo console.example; }
     pin_bedrock_profiles() { echo "pin-bedrock $1" >>"${CALLS}"; }  # its own test: test_pin_bedrock_profiles.sh
+    pin_coc_guardrail() { echo "pin-coc $1" >>"${CALLS}"; }  # its own test: test_pin_coc_guardrail.sh
     cmd_converge watch-it-burn-community watch-it-burn-private'; rc=$?
 check "converge reaches repair_datadog on both clusters and runs the identity script for each" \
   'grep -q "^identity-script CLUSTER_NAME=watch-it-burn-community " "${CALLS}" && grep -q "^identity-script CLUSTER_NAME=watch-it-burn-private " "${CALLS}"'

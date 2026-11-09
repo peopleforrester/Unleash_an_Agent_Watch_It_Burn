@@ -49946,3 +49946,43 @@ for guard-proxy. accen-dev us-west-2 holds no guardrail.
 operator's act, not a run's), then `infra/terraform/fleet/fleet.sh converge instructors`, whose `pin_coc_guardrail`
 writes the ConfigMap. Then, on either cluster, guard-proxy's env names the guardrail, and an ApplyGuardrail call from
 a pod running as `guard-proxy-reader` returns GUARDRAIL_INTERVENED on an insult and NONE on a stage prompt.
+
+## 2026-11-09 · #1279 · run 19648 · The tests gate failure: the admission policy did not list guard-proxy-reader, and two fleet tests did not stub the new pin
+
+**Cause.** Run 19636's tests gate failed on three tests. `verify/test_agent_bypass_shapes.py` found a real gap in the
+change, and the test was right to fail. `restrict-agent-spawned-workloads` refuses an agent-spawned workload that runs as a
+ServiceAccount holding Bedrock credentials, and its list (`modelIdentities`, and the refusal's message) is kept by hand
+beside the Pod Identity associations in `infra/terraform/aws/cluster/main.tf`. #1279 added the association for
+`guard-proxy-reader`, which holds `bedrock:ApplyGuardrail`, and did not add it to the list. So an agent-namespace
+workload could have run as that account. `verify/test_fleet_converge_repairs.sh` and `verify/test_fleet_standbys.sh`
+failed for a second reason: bootstrap and converge now call `pin_coc_guardrail`, which those tests stub for every
+sibling pin (`pin_bedrock_profiles`, "its own test: ..."), but not for the new one. The unstubbed pin read a fake
+state with no `coc_guardrail` output, recorded `<cluster>:coc-guardrail` as failed, and sent unanswered `terraform`
+and `kubectl` calls, which the offline guard reports. The line `FAIL: --context is empty` in the gate's tail came from
+`verify/test_burritobot_cluster_live_logic.py`, which passes (exit 0): it prints that line on purpose for its negative
+check, and the gate's summary read it as a failure. No change to that test.
+
+**Fix.** `guard-proxy-reader` is added to `modelIdentities` and to the refusal's message in
+`policies/kyverno/restrict-agent-spawned-workloads.yaml`, and to the two comments that list those accounts
+(`deny-llm-endpoint-bypass.yaml`, `agent-deny-imds.yaml`). The two shell tests stub `pin_coc_guardrail` the way they
+stub `pin_bedrock_profiles`. The converge test also asserts that bootstrap runs the pin once per roster cluster
+(`pin-coc` twice), the check its `pin-bedrock` line already makes. No product code outside the policy changed.
+
+**Consequence to know.** A cluster whose state predates #1279 has no `coc_guardrail` output, so converge on it now
+records `<cluster>:coc-guardrail` as failed until its cluster root is applied. That is the state it is in: guard-proxy
+has no classifier to call there. It is the same behaviour `pin_bedrock_profiles` has had since #513 for clusters
+applied before the tagged profiles.
+
+**Tests run.** Offline: `test_agent_bypass_shapes.py` (matches its sources), `test_fleet_converge_repairs.sh` (82
+passed), `test_fleet_standbys.sh` (40 passed), `test_policy_spec.py`, `test_student_aws_creds_namespace.py`,
+`test_imds_credential_theft.py`, `test_agent_cloud_credential.py`, `test_c6_villain_endpoint.py`, `test_weather_feed.py`,
+`test_chat_path_ingress.py`, `test_public_desk.py`, `test_student_aws_push.sh`, `test_scope_tests.py`. Tools tier, each run
+alone with `bash verify/run-e2e-tools.sh <test>` (`ALL E2E TOOLS TIER CHECKS GREEN`): `test_kyverno_cel_policies.py`,
+`test_c8_pod_secret_mount.py`, `test_cloud_credential_probe_admission.py`, `test_policy_spec_kustomize.py`. The
+other offline tests that call the bootstrap, repair and up paths (`test_attendee_iam_user.sh`, `test_cluster_roles.sh`,
+`test_fleet_apply_failure_exit.sh`, `test_fleet_exit_codes.sh`, `test_platform_floor.sh`, `test_repair_agent_tools.sh`,
+`test_agent_tools_sync.py`, `test_deploy_full_idp_context.py`, `test_hostname_tag.py`, `test_round_names_retired.py`,
+`test_imds_credential_theft.py`, `test_public_pod_cap.py`) also passed, so no other test reaches the new pin unstubbed.
+
+**Live check.** Skipped: the change touches a policy and tests, and the policy reaches the clusters only through Argo
+CD after promotion. The cluster-side check is the one already written up under "Not yet run on a cluster" above.

@@ -99,7 +99,7 @@ echo "== the bootstrap is told the cluster's region =="
     kubectl() { :; }   # bootstrap_one reads the kubeconfig'"'"'s context; the offline suite runs no kubectl (#857)
     datadog_keys_for() { echo "a b - -"; }
     run_idp_script() { echo "${REGION:-unset}" >"'"${T}"'/idp-region"; }
-    bootstrap_student_aws() { :; }; bootstrap_terminal_auth() { :; }; pin_bedrock_profiles() { :; }; arm_infra_guardrails() { :; }
+    bootstrap_student_aws() { :; }; bootstrap_terminal_auth() { :; }; pin_bedrock_profiles() { :; }; pin_coc_guardrail() { :; }; arm_infra_guardrails() { :; }
     bootstrap_one watch-it-burn-community-b02 burn' >/dev/null 2>&1 )
 check "deploy-full-idp.sh runs with REGION=us-east-1, not its us-west-2 default" '[[ "$(cat "${T}/idp-region" 2>/dev/null)" == us-east-1 ]]'
 
