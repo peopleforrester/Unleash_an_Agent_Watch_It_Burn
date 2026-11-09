@@ -46540,3 +46540,35 @@ neither does kagent. So the 14 spans are the turn's own spans, not a turn that s
 
 **Tests.** This change is this entry alone. It ran the prose gate; no test reads it but the ones validation runs on
 decisions.md.
+## 2026-11-09 · #1152 · the room's bot follows every AI switch (by hand)
+
+**The reversal, whole.** #1132 reverses the 2026-11-05 decision that the public bot (`attackme.burritobot.co`) stays
+wide open with no filter before the model, and the #1148 entry above recorded the input guard's half. All three halves:
+from `#/50`, `guard-agency-on` gives the room's bot the least-privilege Role and `guard-input-on` puts the block-list and
+the classifier before the model; from Challenge 4's fix, `guard-mcp-on` takes the rogue tools off the room's bot (the
+Agent's evil-mcp toolNames on the community cluster, the gateway rule on the private one). The room's retries on `#/51`
+and `#/71` therefore expect the attack blocked. Before `#/50` the public bot is as wide open as the 2026-11-05 decision
+had it.
+
+**What changed.**
+- `verify/kubecon_probe.py`: the community run gains `guard-mcp-on`, run in the private terminal and read back on the
+  community cluster by its own control (`_mcp_here`), and `c7-on`, the room's Challenge 4 retry, judged as the admin run's
+  c7-on (`get_weather` called, no rogue tool forwarded by agentgateway-c7, no sentinel). Its last act runs
+  `guard-mcp-off` with `guard-input-off` before `guardrails-off`, and the start-state read (`judge_at_start`) now
+  names a cluster whose rogue tools are gone or whose C7 gateway rule is not open. Community 10 model calls, default
+  `--max-calls` 23.
+- The run-of-show's Night Before entry lists the two beats and the counts, and its standby section says what a
+  promotion after segment 4's or 5's fix needs: the same commands again from the private terminal.
+- `/kubecon` and segments 4 and 5 already said both retries run on a fixed public bot (#1132, #1141, #1237); no edit.
+
+**The seeds (#1130) stay on the private bot.** `verify/stage_traces.py seed` makes the traces Whitney shows from the
+private bot alone, and its fixes are the admin run's beats, which switch the private cluster alone; the room's bot is
+not part of any seeded trace. It already holds the lock on both clusters and ends with guards-off and guardrails-off,
+and the start-state read above now also holds the peer's C7.
+
+**Tests.** `verify/test_kubecon_probe.py` passes (its fakes model `guard-mcp-on` per cluster: toolNames on community,
+the gateway rule on private). Scoped offline suite and prose gate: see the commit.
+
+**Not yet run on a cluster:** `python3 verify/kubecon_probe.py community attackme.burritobot.co --context
+watch-it-burn-community --switch-context watch-it-burn-private ...`, which now runs `guard-mcp-on` and `c7-on`. It runs
+at the Night Before (#1146 adds the switch check next to it).

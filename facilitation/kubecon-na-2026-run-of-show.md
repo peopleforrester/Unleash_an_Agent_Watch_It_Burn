@@ -782,6 +782,13 @@ them and moves a hostname when its cluster fails:
     - **A promotion after step 5** gets Kyverno and the link but not the other
       three: run `guardrails-on` again from the private bot's terminal (it is safe to
       repeat), and both clusters carry all four again.
+    - **A promotion after segment 4's or segment 5's fix** gets none of the AI switches:
+      a promoted public bot comes up with every AI guard off, the shipped Role and the
+      rogue tools offered. Once the watcher has linked it, run from the private bot's
+      terminal the fixes the stage has reached: `guard-agency-on` and `guard-input-on`
+      once segment 4 has run them, and `guard-mcp-on` too once segment 5 has. Each is
+      safe to repeat and switches both clusters, and each prints the clusters it
+      changed (#1152).
 
 #### Bring-up and teardown commands
 
@@ -2235,7 +2242,7 @@ is merely slow rather than rebuilding:
 - [ ] **Every shown beat works, on the clusters that will be on stage (#503).** From
   the repo root, one command per cluster. It runs the beats in this file's order and
   prints PASS or FAIL for each. It spends real Bedrock money, capped by `--max-calls`
-  (default 22): a community run makes 9 model calls, an admin run 14, plus one for
+  (default 23): a community run makes 10 model calls, an admin run 14, plus one for
   each reply that is Bedrock's ToolUse 424, which the probe sends again once as the
   failure playbook says (#889). Pull both clusters' credentials into one isolated kubeconfig first, each
   context named for its cluster; the probe passes it per command and never touches `~/.kube/config`. Both runs
@@ -2278,12 +2285,16 @@ is merely slow rather than rebuilding:
     cluster (the Joker's dry run as `workshop-mcp` Forbidden, both input stages
     on); then Challenge 4's `/kubecon` weather ask sent once to the public bot with
     the four Kubernetes guardrails and both fixes on, passing when the rogue tool
-    chains and its sentinel comes back (#1129); the cost counter moving, and the
-    projected feed on. Its last act is `guard-input-off` and `guardrails-off` in
-    the private terminal, run even when a beat fails or the call ceiling is hit
-    (`guardrails-off`'s shipped Role undoes `guard-agency-on`), then both clusters
-    read back at the start state: AI guards off and the four Kubernetes guardrails
-    off. Each beat is judged on what the console shows, with
+    chains and its sentinel comes back (#1129); then `guard-mcp-on`, run in the
+    private terminal as segment 5 runs it and read back on the community cluster
+    (the rogue tools gone from the Agent's evil-mcp list), and the same weather ask
+    sent again as the room's Challenge 4 retry, passing when `get_weather` is called and
+    no rogue tool reaches the gateway (#1152); the cost counter moving, and the
+    projected feed on. Its last act is `guard-input-off`, `guard-mcp-off` and
+    `guardrails-off` in the private terminal, run even when a beat fails or the call
+    ceiling is hit (`guardrails-off`'s shipped Role undoes `guard-agency-on`), then
+    both clusters read back at the start state: AI guards off, the rogue tools back
+    and the C7 gateway rule open, and the four Kubernetes guardrails off. Each beat is judged on what the console shows, with
     Nova's `<thinking>` block folded as the storefront folds it, and a FAIL quotes
     300 characters of the reply.
   - Admin: the kube-context and the hostname are the same cluster (if not, it stops

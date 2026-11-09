@@ -1019,6 +1019,10 @@ class Fake:
                 return 1, "⚠️  Switched on this cluster, but not on watch-it-burn-community: it could not be reached\n"
             if cmd == "guard-agency-on":
                 self.role = kp.AGENCY_FIX
+            elif cmd.startswith("guard-mcp-"):
+                # the community cluster's control (#1132): the Agent's evil-mcp toolNames; an admin cluster's is the
+                # gateway rule, which LinkedPrivate sets
+                self.tools = list(kp.EVIL_FIXED if cmd.endswith("-on") else kp.EVIL_ALL)
             else:
                 self.g["input_blocklist"] = self.g["input_classifier"] = cmd.endswith("-on")
             return 0, "Switched on both clusters: this one and watch-it-burn-community.\n"
@@ -1499,15 +1503,16 @@ check("the same cluster driven by its burritobot.co name passes every beat (#651
 check("community beats in order, segment 3's guardrails-on before Challenge 3 (#1134)", [r["key"] for r in res]
       == ["identity", "wide-open", "one-desk", "order", "ceo-leak", "ceo-friendly", "off-topic", "c1-open", "c2-open",
           "c3-open", "c2-lands", "guardrails-on", "armed", "c6-lands", "guard-agency-on", "guard-input-on", "c7-off",
-          "cost", "feed"], str([r["key"] for r in res]))
+          "guard-mcp-on", "c7-on", "cost", "feed"], str([r["key"] for r in res]))
 check("community beats report segments 1 to 5, Challenge 4 in segment 5 (#1129)",
       [r["segment"] for r in res] == ["-", "1", "-", "1", "2", "2", "2", "3", "3", "3", "3", "3", "3", "4", "4", "4",
-                                      "5", "-", "1"],
+                                      "5", "5", "5", "-", "1"],
       str([r["segment"] for r in res]))
-check("community spends 9 model calls, the linked-list ask three times, 2A's ask once (#1135) and Challenge 4's once "
-      "(#1129), and toggles nothing itself: Challenge 3's fixes are the terminal's",
-      f.calls == 9 and kp.OFF_TOPIC_TRIES == 3 and not any(e.startswith(("toggle", "tools", "rule")) for e in f.log)
-      and [e for e in f.log if e.startswith("terminal")] == ["terminal guard-agency-on", "terminal guard-input-on"],
+check("community spends 10 model calls, the linked-list ask three times, 2A's ask once (#1135) and Challenge 4's "
+      "twice, its attempt and its retry (#1129, #1152), and toggles nothing itself: the fixes are the terminal's",
+      f.calls == 10 and kp.OFF_TOPIC_TRIES == 3 and not any(e.startswith(("toggle", "tools", "rule")) for e in f.log)
+      and [e for e in f.log if e.startswith("terminal")] == ["terminal guard-agency-on", "terminal guard-input-on",
+                                                             "terminal guard-mcp-on"],
       str(f.log))
 check("and leaves no stage Joker behind", f.c6 is False)
 check("and leaves no Deployment or page row of 2A's ask behind (#1135)", f.bot_deploys == [] and f.page == []
@@ -1881,7 +1886,7 @@ check("Nova's shapes: the address leak and three answered asks behind <thinking>
 f = NovaCommunity([LINKED_LIST_THINKING, COMMUNITY_OFF_TOPIC, LINKED_LIST_THINKING])
 res = {r["key"]: r for r in kp.Probe(f, 20).run(kp.COMMUNITY)}
 check("one deflection in three fails the off-topic beat, and asks all three",
-      res["off-topic"]["verdict"] == kp.FAIL and res["off-topic"]["note"].startswith("answered 2 of 3") and f.calls == 9,
+      res["off-topic"]["verdict"] == kp.FAIL and res["off-topic"]["note"].startswith("answered 2 of 3") and f.calls == 10,
       res["off-topic"]["note"])
 f = Community()
 f.host = "attackme.agenticburn.com"
@@ -1900,7 +1905,7 @@ f = NovaCommunity([BEDROCK_TOOLUSE_424, LINKED_LIST_THINKING, LINKED_LIST_THINKI
 res = {r["key"]: r for r in kp.Probe(f, 20).run(kp.COMMUNITY)}
 check("a 424 on the first try is re-sent, answered, and the beat passes 3 of 3 naming the re-send",
       res["off-topic"]["verdict"] == kp.PASS and res["off-topic"]["note"].startswith("answered 3 of 3")
-      and "1 of 3 re-sent once after a Bedrock ToolUse 424" in res["off-topic"]["note"] and f.calls == 10
+      and "1 of 3 re-sent once after a Bedrock ToolUse 424" in res["off-topic"]["note"] and f.calls == 11
       and not f.off_topic, f"{res['off-topic']['note']} calls={f.calls}")
 check("...and every other community beat still passes", all(r["verdict"] == kp.PASS for r in res.values()),
       str([(k, r["note"]) for k, r in res.items() if r["verdict"] != kp.PASS]))
@@ -1908,12 +1913,12 @@ f = NovaCommunity([LINKED_LIST_THINKING, BEDROCK_TOOLUSE_424, BEDROCK_TOOLUSE_42
 res = {r["key"]: r for r in kp.Probe(f, 20).run(kp.COMMUNITY)}
 check("a 424 on the re-send too is a miss: one re-send, never a loop",
       res["off-topic"]["verdict"] == kp.FAIL and res["off-topic"]["note"].startswith("answered 2 of 3")
-      and "ModelErrorException" in res["off-topic"]["note"] and f.calls == 10 and not f.off_topic,
+      and "ModelErrorException" in res["off-topic"]["note"] and f.calls == 11 and not f.off_topic,
       f"{res['off-topic']['note']} calls={f.calls}")
 f = NovaCommunity([LINKED_LIST_THINKING, COMMUNITY_OFF_TOPIC, LINKED_LIST_THINKING])
 res = {r["key"]: r for r in kp.Probe(f, 20).run(kp.COMMUNITY)}
 check("a deflection is never re-sent: only the 424 is",
-      res["off-topic"]["verdict"] == kp.FAIL and "re-sent" not in res["off-topic"]["note"] and f.calls == 9,
+      res["off-topic"]["verdict"] == kp.FAIL and "re-sent" not in res["off-topic"]["note"] and f.calls == 10,
       f"{res['off-topic']['note']} calls={f.calls}")
 # Identity 0, order 1, the two CEO asks 2, then the off-topic beat reserves 3: a ceiling of 6 leaves no room to
 # re-send, so the 424 stays the reply and the ceiling holds.
@@ -2018,7 +2023,13 @@ check("community: c7-off, the room's Challenge 4 attempt, runs with the four Kub
       "guard-input-on on, and guard-mcp-on off (#1129)",
       _cat["c7-off"] == {"guardrails-on", "guard-agency-on", "guard-input-on"}
       and _cstage["c7-off"] == (kp.PLAY, "Challenge 4")
-      and {b.key for b in kp.COMMUNITY if b.stage and b.stage[1] == "Challenge 4"} == {"c7-off"}, str(_cat["c7-off"]))
+      and {b.key for b in kp.COMMUNITY if b.stage and b.stage[1] == "Challenge 4"} == {"c7-off", "c7-on"},
+      str(_cat["c7-off"]))
+check("community: guard-mcp-on runs after c7-off in the private terminal, and c7-on, the room's Challenge 4 retry, runs "
+      "with it on (#1152)",
+      _ckeys.index("c7-off") < _ckeys.index("guard-mcp-on") < _ckeys.index("c7-on")
+      and _cstage["c7-on"] == (kp.RETRY, "Challenge 4") and "guard-mcp-on" in _cat["c7-on"]
+      and "_terminal_guard(\"guard-mcp-on\", _mcp_here)" in KP_SRC, str(_ckeys))
 check("community: guard-agency-on and guard-input-on come after c6-lands and before c7-off, as segment 4 runs them",
       _ckeys.index("c6-lands") < _ckeys.index("guard-agency-on") < _ckeys.index("guard-input-on")
       < _ckeys.index("c7-off"), str(_ckeys))
@@ -2028,7 +2039,8 @@ check("community: c7-off sends /kubecon's C7 prompt, once, judged as the admin r
           "Beat(", 1)[0], KP_SRC.split('Beat("c7-off"', 1)[1][:200])
 check("community: both fixes run in the private terminal's own commands, which switch both clusters (#1132)",
       kp.TERMINAL_GUARDS == {n: [*kp.TERMINAL_EXEC, f"/home/student/{n}"]
-                             for n in ("guard-agency-on", "guard-input-on", "guard-input-off")}
+                             for n in ("guard-agency-on", "guard-input-on", "guard-input-off", "guard-mcp-on",
+                                       "guard-mcp-off")}
       and all((pathlib.Path(REPO) / "gitops/ai-layer/web-terminal/entrypoint.sh").read_text().count(
           f'cat > "$HOME/{n}" <<') == 1 for n in kp.TERMINAL_GUARDS))
 _aat = walk(kp.ADMIN)
@@ -2064,6 +2076,11 @@ class LinkedPrivate(Fake):
             if cmd.startswith("guard-input-"):
                 for k in ("input_blocklist", "input_classifier"):
                     self.peer.g[k] = self.g[k]
+            if cmd.startswith("guard-mcp-"):
+                # each cluster by its own control (#1132): the gateway rule on this admin cluster, toolNames on the
+                # community peer
+                self.peer.tools, self.tools = list(self.tools), list(kp.EVIL_ALL)
+                self.rule = kp.C7_NARROWED if cmd.endswith("-on") else kp.C7_OPEN
             self.peer.log.append(f"switched by the private terminal: {cmd}")
         return rc, out
 
@@ -2124,7 +2141,8 @@ check("community: HC-666's ask went out before either fix: the shipped scoped Ro
 check("community: both fixes and guard-input-off ran in the private terminal, in order, and the probe toggled no guard "
       "itself on either cluster",
       [e for e in priv.log if e.startswith("terminal")] == ["terminal guard-agency-on", "terminal guard-input-on",
-                                                            "terminal guard-input-off"]
+                                                            "terminal guard-mcp-on", "terminal guard-input-off",
+                                                            "terminal guard-mcp-off"]
       and not any(e.startswith("toggle") for e in priv.log + pub.log) and "COMMUNITY TERMINAL USED" not in pub.log,
       str(priv.log + pub.log))
 check("community: the final beat runs guard-input-off before guardrails-off",
@@ -2465,8 +2483,8 @@ check("the public cluster is community on both domains (#651)",
 check("community pointed at the burritobot.co admin host exits 2",
       kp.main(["community", "burritobot-private.burritobot.co", "--context", "x"]) == 2)
 src = (REPO / "verify/kubecon_probe.py").read_text()
-check("--max-calls defaults to 22, 20 plus c2-lands' one call (#1135) and the community c7-off's one (#1129)",
-      '"--max-calls", type=int, default=22' in src)
+check("--max-calls defaults to 23, 20 plus c2-lands' one call (#1135), the community c7-off's one (#1129) and its "
+      "c7-on's one (#1152)", '"--max-calls", type=int, default=23' in src)
 check("the probe never mutates kube config", "use-context" not in src and "set-context" not in src)
 
 print("== the Night Before list runs it ==")
@@ -2478,8 +2496,8 @@ check("Night Before runs the probe on the community cluster, with its kube-conte
 check("Night Before runs the probe on the private cluster the presenters share",
       "kubecon_probe.py admin burritobot-private.burritobot.co" in nb and "whitney-admin" not in nb)
 check("Night Before says it must end KUBECON PROBE GREEN", "KUBECON PROBE GREEN" in nb)
-check("Night Before counts the community run's 9 model calls and the admin run's 14, under the default of 22",
-      "(default 22): a community run makes 9 model calls, an admin run 14" in nb)
+check("Night Before counts the community run's 10 model calls and the admin run's 14, under the default of 23",
+      "(default 23): a community run makes 10 model calls, an admin run 14" in nb)
 check("Night Before runs no guard-rbac-on: Challenge 1's retry comes after guardrails-on, probe and seed alike (#855)",
       "guard-rbac-on" not in nb and "C5 asked again and out of reach" in nb
       and "`c1-fixed`, is the CEO ask sent again after\n  `guardrails-on`" in nb)
@@ -3110,9 +3128,10 @@ def c2_lands_checks() -> None:
     default = int(re.search(r'"--max-calls", type=int, default=(\d+)', src).group(1))
     check("the new beat makes one model call, its one prompt", BEAT.calls == 1, str(BEAT.calls))
     c7 = next(b for b in kp.COMMUNITY if b.key == "c7-off")
-    check("the default rose from 20 by exactly c2-lands' calls and the community c7-off's (#1129)",
-          default == 20 + BEAT.calls + c7.calls, str(default))
-    check("community is 9 calls and admin 14, both under the default", (community, admin) == (9, 14)
+    c7on = next(b for b in kp.COMMUNITY if b.key == "c7-on")
+    check("the default rose from 20 by exactly c2-lands' calls and the community c7-off's and c7-on's (#1129, #1152)",
+          default == 20 + BEAT.calls + c7.calls + c7on.calls, str(default))
+    check("community is 10 calls and admin 14, both under the default", (community, admin) == (10, 14)
           and max(community, admin) <= default, f"{community} {admin}")
     doc = re.sub(r"\s+", " ", kp.__doc__)
     check("the docstring gives the default, the admin and community counts, and by how much it rose",
@@ -3188,7 +3207,7 @@ def community_c4_listed_checks() -> None:
     switches = between(doc, "community ceo-leak, ceo-friendly", "admin c5-off with every guardrail off", probe_path)
     wanted = ["guardrails-on", "c6-lands", "guard-agency-on and guard-input-on, run in the private terminal",
               "c7-off, the room's Challenge 4 attempt, with the four Kubernetes guardrails and both fixes on (#1129)",
-              "guard-input-off and guardrails-off"]
+              "guard-input-off, guard-mcp-off and guardrails-off"]
     check("the docstring's community switch entry runs guard-agency-on and guard-input-on before c7-off, Challenge 4, "
           "with both fixes on",
           not out_of_order(switches, wanted), f"missing or out of order: {out_of_order(switches, wanted)}\n        {switches}")
@@ -3207,7 +3226,7 @@ def community_c4_listed_checks() -> None:
     wanted = ["`guardrails-on`", "HC-666", "then `guard-agency-on` and `guard-input-on`, each run in the private terminal",
               "reaching the public bot since #1132",
               "then Challenge 4's `/kubecon` weather ask sent once to the public bot with the four Kubernetes "
-              "guardrails and both fixes on", "(#1129)", "`guard-input-off` and `guardrails-off`"]
+              "guardrails and both fixes on", "(#1129)", "`guard-input-off`, `guard-mcp-off` and `guardrails-off`"]
     check("the Night Before step's community entry lists guard-agency-on and guard-input-on from the private "
           "terminal, then Challenge 4's /kubecon ask with both fixes on, in the run's order",
           not out_of_order(community, wanted), f"missing or out of order: {out_of_order(community, wanted)}\n        {community}")

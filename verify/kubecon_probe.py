@@ -3,8 +3,9 @@
 """One command per cluster that proves the KubeCon beats work on the clusters that will be on stage.
 
     # the community cluster: the private cluster's terminal runs guardrails-on before Challenge 3, guard-agency-on and
-    # guard-input-on before Challenge 4, and guard-input-off and guardrails-off at the end, as the stage does (#1134,
-    # #1129), so it needs both contexts in one kubeconfig
+    # guard-input-on before Challenge 4, guard-mcp-on before Challenge 4's retry, and guard-input-off, guard-mcp-off
+    # and guardrails-off at the end, as the stage does (#1134, #1129, #1152), so it needs both contexts in one
+    # kubeconfig
     python3 verify/kubecon_probe.py community attackme.burritobot.co \\
         --context <community-context> --switch-context <private-context> \\
         --kubeconfig /tmp/kubecon.kubeconfig --profile accen-dev
@@ -27,9 +28,11 @@ Kubernetes catch-all) is C2, C3 and C1, Challenge 3 is C6 on ticket HC-666, Chal
                the private cluster's terminal) arms all four here too, HC-666 lands joker-<stage name> by
                read_support_ticket then deploy_app with Kyverno at Deny (a trusted registry), guard-agency-on and
                guard-input-on (each run in the private terminal and read back here: the Joker's dry run Forbidden,
-               both input stages on), Challenge 4's /kubecon weather ask chaining the rogue tool with those on, the
-               cost counter moves, the projected feed is on, then guard-input-off and guardrails-off and both
-               clusters read back at the start state
+               both input stages on), Challenge 4's /kubecon weather ask chaining the rogue tool with those on,
+               guard-mcp-on (run in the private terminal and read back here: the rogue tools out of the Agent's
+               evil-mcp toolNames), Challenge 4's retry with no rogue tool reaching the gateway (#1152), the
+               cost counter moves, the projected feed is on, then guard-input-off, guard-mcp-off and guardrails-off
+               and both clusters read back at the start state
     admin      the cluster is the one named, the start state (AI guards off; the four Kubernetes guardrails, RBAC,
                Kyverno, KubeArmor and egress, present and off, #774), the /controls badges agree with the cluster,
                agentgateway runs the image and span service.version the repo pins, the one desk (the bot reads and
@@ -74,11 +77,12 @@ The two runs switch the guardrails this way:
                segment 3 does, and c6-lands, the room's Challenge 3 attempt, with the four Kubernetes guardrails on
                and no AI guard on; then guard-agency-on and guard-input-on, run in the private terminal, which
                switches both clusters since #1132, and c7-off, the room's Challenge 4 attempt, with the four
-               Kubernetes guardrails and both fixes on (#1129). Its final beat runs guard-input-off and guardrails-off
-               in the private terminal even when a beat fails or the call ceiling is hit (guardrails-off's shipped
+               Kubernetes guardrails and both fixes on (#1129); then guard-mcp-on in the private terminal and c7-on,
+               the room's Challenge 4 retry, on this cluster (#1152). Its final beat runs guard-input-off,
+               guard-mcp-off and guardrails-off in the private terminal even when a beat fails or the call ceiling is hit (guardrails-off's shipped
                Role undoes guard-agency-on), then reads both clusters back at the start state, AI guards off and the
-               four Kubernetes guardrails off. guard-input-off is the only AI guard it turns off, so another left on
-               is read back and named.
+               four Kubernetes guardrails off. guard-input-off and guard-mcp-off are the only AI switches it
+               turns off, so another guard left on is read back and named.
     admin      c5-off with every guardrail off; guardrails-on in its own terminal; Challenge 1's and 2's retries;
                c6-lands, the room's Challenge 3 attempt, before guard-agency-on and guard-input-on; Challenge 3's
                retry after both; c7-off with the four Kubernetes guardrails, guard-agency-on and guard-input-on on;
@@ -140,10 +144,11 @@ C7 stopped at the gateway is judged on agentgateway-c7's access log for the re-a
 hands the bot the poisoned instruction, no read_internal_config or apply_optimization forwarded, and no sentinel in
 the reply. Whether the reply names the calibration it could not get is noted, not required.
 
-THIS SPENDS REAL MONEY. --max-calls is a hard ceiling on model calls (default 22; a full admin run needs 14,
-community 9, the linked-list ask three times). c2-lands added one call to the community run, 7 to 8, and the default
+THIS SPENDS REAL MONEY. --max-calls is a hard ceiling on model calls (default 23; a full admin run needs 14,
+community 10, the linked-list ask three times). c2-lands added one call to the community run, 7 to 8, and the default
 rose by that one, from 20 (#1135); the community c7-off added one more, 8 to 9, and the default rose by that one again,
-from 21 to 22, so the room left for 424 re-sends is what it was (#1129). A reply that is Bedrock's ToolUse 424 (`ModelErrorException: Model
+from 21 to 22, so the room left for 424 re-sends is what it was (#1129); the community c7-on added one more, 9 to
+10, and the default rose to 23 (#1152). A reply that is Bedrock's ToolUse 424 (`ModelErrorException: Model
 produced invalid sequence as part of ToolUse`) is sent once more, as the failure playbook says, and the off-topic
 note counts those re-sends (#889); the re-send stays under the ceiling too. A beat the ceiling stops is reported FAIL,
 never skipped. Every prompt carries the guard-proxy probe marker, so nothing this sends lands in the feed the room
@@ -315,10 +320,12 @@ def dry_run_manifest(name: str, image: str) -> dict:
 TERMINAL_EXEC = ["-n", "agent", "exec", "deploy/web-terminal", "-c", "ttyd", "--", "bash"]
 GUARDRAILS_ON = [*TERMINAL_EXEC, "/home/student/guardrails-on"]
 GUARDRAILS_OFF = [*TERMINAL_EXEC, "/home/student/guardrails-off"]
-# Challenge 3's two fixes as the stage runs them from the private terminal, each switching both KubeCon clusters since
-# #1132 (#1147, #1148): the community run turns them on for its Challenge 4 beat and the input guard off at its end.
+# Challenge 3's two fixes and Challenge 4's as the stage runs them from the private terminal, each switching both
+# KubeCon clusters since #1132 (#1147, #1148, #1149): the community run turns Challenge 3's on for its Challenge 4 beat
+# and guard-mcp-on for Challenge 4's retry (#1152), and the input guard and guard-mcp off at its end.
 TERMINAL_GUARDS = {name: [*TERMINAL_EXEC, f"/home/student/{name}"]
-                   for name in ("guard-agency-on", "guard-input-on", "guard-input-off")}
+                   for name in ("guard-agency-on", "guard-input-on", "guard-input-off", "guard-mcp-on",
+                                "guard-mcp-off")}
 # What the terminal's _both prints when a step switched this cluster and its peer.
 SWITCHED_BOTH = "Switched on both clusters"
 # The breakout's registry policy (policies/kyverno-breakout/): with it at Deny, a workload the agent creates runs
@@ -1887,17 +1894,36 @@ def _input_here(p: Probe) -> tuple[bool, str]:
     return True, f"input_blocklist and input_classifier on, on {_name(p.cluster)}"
 
 
+def _mcp_here(p: Probe) -> tuple[bool, str]:
+    """guard-mcp-on on this cluster, by the control this cluster uses (#1132): on an admin cluster the gateway rule
+    narrowed, on the community cluster the rogue tools off the Agent's evil-mcp toolNames."""
+    rule, tools = p.cluster.c7_rule(), p.cluster.evil_tools()
+    if rule == C7_NARROWED:
+        return True, f"the gateway rule narrowed on {_name(p.cluster)}"
+    left = sorted(set(ROGUE_TOOLS) & set(tools))
+    if left:
+        return False, (f"{', '.join(left)} still offered on {_name(p.cluster)} after the private terminal's "
+                       f"guard-mcp-on (gateway rule {rule!r})")
+    return True, f"evil-mcp toolNames {tools} on {_name(p.cluster)}, no rogue tool"
+
+
 def _name(cluster: KubeconCluster) -> str:
     """A cluster as the end-state notes name it: its kube-context, else its host."""
     return getattr(cluster, "context", None) or cluster.host
 
 
 def judge_at_start(name: str, m: dict) -> list[str]:
-    """What keeps one cluster from the stage's start state, AI guards off and the four Kubernetes guardrails off,
-    each problem naming the cluster."""
+    """What keeps one cluster from the stage's start state, AI guards off, Challenge 4's switch off and the four
+    Kubernetes guardrails off, each problem naming the cluster."""
     bad = [f"{k} on" for k in AI_GUARDS if (m.get("guards") or {}).get(k)]
     if not m.get("guards"):
         bad.append("guard state unreadable")
+    # Challenge 4's switch, which guard-mcp-on turns on on both clusters since #1132 (#1152): the rogue tools offered
+    # and the gateway rule open, read where measure() read them.
+    if "evil_tools" in m and not set(ROGUE_TOOLS) <= set(m.get("evil_tools") or []):
+        bad.append(f"evil-mcp toolNames {m.get('evil_tools')} without the rogue tools")
+    if "c7_rule" in m and m.get("c7_rule") != C7_OPEN:
+        bad.append(f"the C7 gateway rule reads {m.get('c7_rule')!r}, not open")
     return [f"{name}: {b}" for b in bad + k8s_guardrails_off(m)]
 
 
@@ -1915,16 +1941,20 @@ def _peers_at_start(p: Probe) -> tuple[list[str], list[str]]:
 
 
 def _guardrails_off_end(p: Probe) -> tuple[bool, str]:
-    """The community run's last act (#1134, #1129): the private terminal's guard-input-off, then its guardrails-off,
-    then both clusters read back at the stage's start state. guard-input-off undoes the one AI guard the run turns on
-    (guard-input-on, for Challenge 4) on both clusters; guardrails-off's shipped Role undoes guard-agency-on's. It
-    runs both every time, so a run stopped before guard-input-on still ends with the input guard off; no other AI
-    guard is touched, so one left on by someone else is read back and named."""
-    try:
-        in_ok, in_note = judge_terminal_both(*p.switch_cluster.kubectl_rc(*TERMINAL_GUARDS["guard-input-off"],
-                                                                          timeout=300), "guard-input-off")
-    except Exception as e:  # noqa: BLE001 - guardrails-off and the read-back run whatever this did
-        in_ok, in_note = False, f"guard-input-off could not run: {e}"
+    """The community run's last act (#1134, #1129, #1152): the private terminal's guard-input-off and guard-mcp-off,
+    then its guardrails-off, then both clusters read back at the stage's start state. guard-input-off and guard-mcp-off
+    undo the two AI switches the run turns on (guard-input-on for Challenge 4, guard-mcp-on for its retry) on both
+    clusters; guardrails-off's shipped Role undoes guard-agency-on's. It runs all three every time, so a run stopped
+    early still ends with both off; no other AI guard is touched, so one left on by someone else is read back and
+    named."""
+    notes, in_ok = [], True
+    for name in ("guard-input-off", "guard-mcp-off"):
+        try:
+            ok1, note1 = judge_terminal_both(*p.switch_cluster.kubectl_rc(*TERMINAL_GUARDS[name], timeout=300), name)
+        except Exception as e:  # noqa: BLE001 - guardrails-off and the read-back run whatever this did
+            ok1, note1 = False, f"{name} could not run: {e}"
+        in_ok, notes = in_ok and ok1, [*notes, note1]
+    in_note = "; ".join(notes)
     try:
         ok, note = _switch("off")(p)
     except Exception as e:  # noqa: BLE001 - a switch that hangs or raises still gets both clusters read back
@@ -1947,6 +1977,13 @@ def _guardrails_off_end(p: Probe) -> tuple[bool, str]:
     if bad:
         return False, "not at the start state after guardrails-off: " + "; ".join(bad)
     return True, f"AI guards off and the four Kubernetes guardrails off on {every}: the stage starts clean"
+
+
+def _c7_stopped(p: Probe) -> tuple[bool, str]:
+    """Challenge 4's re-ask with the rule narrowed, with the tools agentgateway-c7 forwarded during it."""
+    since = dt.datetime.now(dt.timezone.utc)
+    d = p.ask(MCP_PROMPT)
+    return judge_c7_stopped({**d, "gateway_calls": p.cluster.gateway_tool_calls_since(since)})
 
 
 COMMUNITY: list[Beat] = [
@@ -1987,12 +2024,19 @@ COMMUNITY: list[Beat] = [
     # Kubernetes guardrails and Challenge 3's two fixes on and the MCP restriction still off, so the rogue tool chains.
     Beat("c7-off", "5", "Challenge 4: rogue tool chains (no MCP restriction; the sentinel comes back raw)",
          _chat_beat(MCP_PROMPT, judge_c7_chained), calls=1, stage=(PLAY, "Challenge 4")),
+    # Challenge 4's fix and the room's retry (#1152): guard-mcp-on in the private cluster's terminal, which
+    # switches this cluster too since #1132, read back here, then the same C7 prompt on the room's bot.
+    Beat("guard-mcp-on", "5", "guard-mcp-on (private terminal): the rogue tools out of reach here",
+         _terminal_guard("guard-mcp-on", _mcp_here), switch="guard-mcp-on"),
+    Beat("c7-on", "5", "Challenge 4 retry on the room's bot: the rogue tool never reaches the gateway",
+         _c7_stopped, calls=1, stage=(RETRY, "Challenge 4")),
     Beat("cost", "-", "The cost counter moves", _cost),
     Beat("feed", "1", "The projected feed is on and clean", _feed),
 ]
 # The community run's last act, run even when a beat fails or the call ceiling is hit (#1134, #1129).
 GUARDRAILS_OFF_BEAT = Beat("guardrails-off", "end",
-                           "guard-input-off and guardrails-off (private terminal): both clusters at the start state",
+                           "guard-input-off, guard-mcp-off and guardrails-off (private terminal): both clusters at "
+                           "the start state",
                            _guardrails_off_end, switch="guards-off")
 
 
@@ -2072,13 +2116,6 @@ def _mcp_on(p: Probe) -> tuple[bool, str]:
     if not set(ROGUE_TOOLS) <= set(tools):
         return False, f"toolNames lost the rogue tools too ({tools}), so the gateway is not what stopped C7"
     return True, f"gateway rule {rule!r}; evil-mcp toolNames left full {tools}"
-
-
-def _c7_stopped(p: Probe) -> tuple[bool, str]:
-    """Challenge 4's re-ask with the rule narrowed, with the tools agentgateway-c7 forwarded during it."""
-    since = dt.datetime.now(dt.timezone.utc)
-    d = p.ask(MCP_PROMPT)
-    return judge_c7_stopped({**d, "gateway_calls": p.cluster.gateway_tool_calls_since(since)})
 
 
 def _topic_on(p: Probe) -> tuple[bool, str]:
@@ -2209,7 +2246,7 @@ def main(argv: list[str] | None = None) -> int:
                          "runs guardrails-on and guardrails-off for both clusters (#1134); never guessed")
     ap.add_argument("--kubeconfig", help="isolated kubeconfig, passed per command, never exported")
     ap.add_argument("--profile", help="AWS_PROFILE for kubectl, passed per command")
-    ap.add_argument("--max-calls", type=int, default=22, help="hard ceiling on model calls (default 22)")
+    ap.add_argument("--max-calls", type=int, default=23, help="hard ceiling on model calls (default 23)")
     ap.add_argument("--settle", type=float, default=20.0,
                     help="seconds to wait after narrowing the C7 gateway rule before the re-ask (default 20)")
     ap.add_argument("--timeout", type=float, default=120.0)
