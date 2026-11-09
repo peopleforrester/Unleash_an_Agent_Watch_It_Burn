@@ -42566,3 +42566,18 @@ entry in `verify/scope-map.yaml` is the one `python3 verify/scope_tests.py write
 **No live check.** The change is a test under `verify/` that no cluster runs and this entry, so by the 2026-11-07
 ruling (#1062) it skips the live check. The live output it holds is run 18049's, and #1041's entry records the same
 report clean on tanjiro-wsl2.
+
+## 2026-11-09 · #1044 · run 19191 · Run 18831's test kept, with two check labels reworded for the skip-markers gate
+
+**Why run 18831 did not land.** Hecaton's `skip-markers` gate failed it: "adds exit 2 in
+verify/test_drift_rebuilt_states.py". The gate (`hecaton/run/skipmarks.py`) counts every non-comment line of a test
+file that matches `\bexit\s+2\b`, which is meant to catch a test that exits 2 as a skip. The test has no such exit. Two
+of its `check` labels described the report's own exit as prose, "unmanaged, exit 2, and the checker fails" and "a
+finding, exit 2, and the checker fails", and those two lines matched.
+
+**The fix.** Both labels now read "exit code 2". What the checks test is unchanged: the report must still return 2
+with private's state removed and with community drifted. The gate's own `count()` on the file now finds no markers,
+and `python3 verify/test_drift_rebuilt_states.py` still prints `All rebuilt-state drift checks passed.`, exit 0. The
+scope-map entry is unchanged, since the test reads the same files.
+
+**No live check**, for the reason the entry above gives.
