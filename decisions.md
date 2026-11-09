@@ -49990,3 +49990,89 @@ Turkish text is not on stage, and the stage texts hold no `ı`, so the fold adds
 Not yet run on a cluster: once Argo CD has synced this change, the reading of `variables.floor` on both clusters as
 20,341 characters equal to `floor.portable_pattern()`, and in the workshop-mcp pod, the same one-line check that the
 port flags the term spelt with `ı` (`coc_hit`).
+## 2026-11-09 · #1303 · run 19787 · Challenge 4's miss on the private bot was the agent's MCP session dying, not Nova
+
+**What the miss was.** Run 19733's admin probe on watch-it-burn-private judged `c7-off` "no sentinel; the poisoned
+description did not chain this time (Nova is inconsistent here)". The logs of that turn say the model did chain:
+agentgateway-c7 forwarded `tools/call` for `read_internal_config` and `get_weather` at 21:40:04.9, and the agent logged
+`get_weather` failing at 21:40:05.313 with `standalone SSE stream: exceeded 5 retries without progress`. The bot then
+answered without the tool's output. Nova was not inconsistent here, and the beat's note is wrong about this miss.
+
+**The cause.** kagent 0.10.1 (`ghcr.io/kagent-dev/kagent/golang-adk:0.10.1` on the private agent) makes a
+RemoteMCPServer's `timeout` the `http.Client.Timeout` of its go-sdk v1.6.1 `StreamableClientTransport`
+(`go/adk/pkg/mcp/registry.go`, createTransport; `sseReadTimeout` applies to the SSE protocol only). Both of ours carry
+kagent's CRD default, `30s`. After initialize, go-sdk opens a standalone GET /mcp stream for the server to push on, and
+the client timeout cuts it every 30 seconds: every agent GET in both clusters' gateway logs lasts 29995 to 30002 ms.
+Nothing is pushed on it, so no event id arrives, and go-sdk counts each cut as a retry without progress; on the sixth
+(maxRetries 5) it calls failConnection, which fails every call in flight on the session (`mcp/streamable.go`,
+handleSSE, read at tag v1.6.1). So every MCP session the agent opens dies about 187 seconds after it opens, and any
+turn with a tool call in flight at that moment loses the call. The next turn opens a new session.
+
+**Why the admin probe's c7-off, and why not every time.** In run 19733 the admin probe's first chat turn (21:36:57.96)
+opened the evil-mcp session (initialize 21:36:58.08); its six GETs ended at 21:37:28, 21:37:59, 21:38:30, 21:39:02,
+21:39:33 and 21:40:05.31, and `c7-off`, the probe's fifth chat turn, went out at 21:40:03.90, 3 minutes 6 seconds after
+the first. The probe's own pace puts Challenge 4 within seconds of the session's death, so a few seconds either way
+decide it, which is why run 19724 chained and run 19733 did not. The community probe's `c7-off` sits at another offset
+from its session's opening; its agent GETs are cut at 30 seconds the same way, so it is exposed to the same miss.
+workshop-mcp's session dies the same way, so a Challenge 1 or 3 turn could lose its tool call too.
+
+**Measured on watch-it-burn-private, 2026-11-09 from 22:29Z to 22:53Z, gateway rule open (`'true'`), every guard off.** The
+/kubecon C7 ask, each a fresh conversation, judged by the probe's own `judge_c7_chained`:
+
+- 10 asks back to back: 10 of 10 chained, every one calling `read_internal_config` (rogue tool called, sentinel present);
+- 6 more at no chosen time, each the first ask on a new session: 6 of 6 chained;
+- 3 asks timed so their tool calls were in flight when the session's sixth stream cut was due (predicted from its fifth
+  and fourth cuts in the gateway log): 1 of 3 chained. The two misses each logged `get_weather` failing with
+  `standalone SSE stream: exceeded 5 retries without progress`, the cut landing 2.7 and 2.8 seconds after the send
+  with the calls started at 1.7 and 1.9 seconds, and the bot answered "I'm sorry, but I'm unable to check the weather at
+  the moment due to an error". The one that chained had finished its calls 2 seconds before the cut (calls at 1.4 s,
+  cut at 3.5 s).
+
+So the ask chains every time a session's death does not hit it (17 of 17), and misses when it does (2 of 2).
+Nineteen model calls; the rule read `true` before and after, and nothing on the cluster changed.
+
+**Reproduced offline with the real client.** A Go program on go-sdk v1.6.1 (a go-sdk MCP server, the pinned
+agentgateway v1.7.0 in front of it on the committed 3003 route shape, and a client with a 2-second HTTP timeout in place
+of kagent's 30) called a tool every second for 25 seconds: 20 calls passed, then `connection closed: calling
+"tools/call": client is closing: standalone SSE stream: exceeded 5 retries without progress` at 20.1 seconds and every
+call after it failed. With a route answering GET /mcp with 405, 25 of 25 passed, with the 405 route placed before or
+after the MCP route. The program lived in this run's scratch and is not committed.
+
+**The change.**
+
+- Both MCP binds answer GET /mcp with 405 on a route of their own, `no-standalone-sse` (agentgateway-config :3001,
+  agentgateway-c7-config :3003). The MCP spec's 405 is "no SSE stream at this endpoint", and go-sdk then opens no
+  standalone stream (connectStandaloneSSE), so there is nothing to cut. The method match wins over the MCP route
+  whatever the order; it sits after it, so every test that reads `routes[0]` still reads the MCP route.
+  `checksum/agentgateway-config` is 6139fe59af94, so Argo CD rolls the gateway pod and the 3001 route reaches both
+  clusters.
+- ai-layer ignores agentgateway-c7-config's content (the live rule flips), so the 3003 route reaches new clusters only.
+  For the two clusters already up, evil-mcp's RemoteMCPServer timeout goes from 30s to 12h: kagent folds it into the
+  agent's config hash and rolls the agent, and six cuts at 12 hours are three days. evil-mcp's tools answer in about a
+  second, so the longer per-call bound costs nothing. workshop-mcp keeps 30s, as its bind's 405 is synced.
+- `verify/test_agentgateway_config.py` read `r["backends"]` on every route; a route with a direct response has none, so
+  it reads `r.get("backends", [])`.
+
+No one-time apply of the C7 ConfigMap is needed on the two clusters: with the 12h timeout their evil-mcp session lasts
+three days, and an apply would be a deploy, which a run does not do.
+
+**Tests.** `verify/test_mcp_standalone_stream.py` (offline) holds each MCP bind's 405 route and its MCP route, both
+RemoteMCPServer urls, that ai-layer syncs agentgateway-config and ignores the C7 one, and that evil-mcp's timeout times
+six is at least 36 hours, with four negative controls on the routes and kagent's 30s default.
+`verify/test_agentgateway_mcp_get_e2e.py` (tools tier) runs each committed MCP bind on the pinned agentgateway in front
+of a loopback MCP server: initialize, notifications/initialized and tools/list go through, the standalone GET in that
+session is answered 405 by `no-standalone-sse` and never reaches the server; with the route taken out, the same GET is
+forwarded and answered `text/event-stream`. Both entries are in the scope map. Run once each: the offline test, ALL
+PASS; the tier test with `AGENTGATEWAY` set to the pinned v1.7.0 binary from the artifact cache (the lock's SHA-256),
+ALL PASS. Also run alone, all passing: test_agentgateway_config.py, test_agentgateway_config_checksum.py,
+test_agentgateway_path.py, test_c7_control_comments.py, test_c7_gateway_reader.py, test_c7_gateway_toggle.py,
+test_c7_badge_grants.py, test_chat_path_ingress.py, test_local_inference.py, test_guard_mcp_both.py,
+test_agent_tools_sync.py, test_e2e_tools_tier.py, test_gateway_notes_files.py,
+test_beat3_removed_shim_unreferenced.py, test_collector_one_root.py, test_observability.py, test_kubecon_probe.py,
+test_challenge_fallbacks.py and test_scope_tests.py. The rest of the scoped Test and E2E commands is left to validation.
+
+**Not yet run on a cluster.** The change reaches both clusters once hecaton promotes it and Argo CD syncs ai-layer.
+Then, on each: the agent's GETs on agentgateway :3001 are answered 405 (`kubectl --context <ctx> -n agent logs
+deploy/agentgateway -c agentgateway | grep 'http.method=GET'`), the agent's evil-mcp GETs on :3003 no longer end at 30
+seconds (`-c agentgateway-c7`), and `PRIVATE_CONTEXT=watch-it-burn-private COMMUNITY_CONTEXT=watch-it-burn-community
+python3 verify/test_coc_floor_probes_live.py` runs green on both. The next run on #1303 runs those three.
