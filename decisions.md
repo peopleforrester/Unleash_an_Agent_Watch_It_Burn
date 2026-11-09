@@ -42840,3 +42840,13 @@ check fail; the anchors they edit on are checked first.
 
 Tests: `python3 verify/test_floor_rebuild_state.py` passed (12 of 12), and `python3 verify/test_scope_tests.py` with
 the new scope-map entry. No live check: the change adds a test under `verify/` that no cluster runs.
+
+## 2026-11-09 · #1045 · run 19250 · The rebuild test's terraform init lines are classed in the fetch inventory
+
+Run 18803's commit failed the tests gate on `verify/test_fetch_inventory.py` alone. The scanner read four lines of
+`verify/test_floor_rebuild_state.py` (its docstring and the checks that match docs/floor.md's
+`terraform -chdir=infra/$r init` loop as text) as fetch call sites with no inventory entry. None of them runs
+terraform, so `verify/fetch-inventory.yaml` now classes them `none`, 4 lines, as it does other tests that only read a
+command's text. The `--context is empty` line in that gate's output is the expected message of a check that passed,
+not a failure. Tests run: `python3 verify/test_fetch_inventory.py`, `python3 verify/test_floor_rebuild_state.py` and
+`python3 verify/test_scope_tests.py`, all passing. No live check: the change is under `verify/` and no cluster runs it.

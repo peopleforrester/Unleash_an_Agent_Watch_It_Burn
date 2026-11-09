@@ -1042,6 +1042,11 @@ sites:
     lines: 2
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_floor_rebuild_state.py:
+  - match: .
+    lines: 4
+    class: none
+    why: the docstring and the checks that read docs/floor.md's terraform init loop as text; none runs terraform
   verify/test_friendly_hostnames.py:
   - match: .
     lines: 1
