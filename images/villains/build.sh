@@ -3,6 +3,7 @@
 # ABOUTME: Daemon-less via crane (the box's docker.sock is permission-denied). The image is harmless (echo loop
 # ABOUTME: and a static page); the LESSON is the untrusted source.
 set -euo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 
 # The ten C2 villains (M and V below) are lab-platform's build, promo/<name>:v1 on ghcr.io (#653): lab-platform's
 # deploy/images/build-promo.sh reads these lines from this file at 45e62f0. Nothing here pushes them, and nothing
@@ -54,9 +55,11 @@ JOKER_INTERNAL_REF="${JOKER_REF}-internal"
 # The files go in as a layer under /villain rather than through --cmd, which crane splits on commas.
 # amd64 only: the cluster nodes are AL2023_x86_64 (infra/terraform/aws/cluster/main.tf).
 # build_joker_web <ref> [<overlay dir>]: the overlay's files replace joker-web/'s before the layer is made.
+# The layer's scratch directory goes on exit too, so a failed crane push leaves nothing behind (#1261).
+JOKER_TMP=""; trap 'rm -rf "${JOKER_TMP}"' EXIT
 build_joker_web() {
   local ref="$1" overlay="${2:-}" tmp src layer
-  tmp="$(mktemp -d)"
+  tmp="$(mktemp -d)"; JOKER_TMP="${tmp}"
   src="${HERE}"
   layer="${tmp}/joker-web.tar"
   if [[ -n "${overlay}" ]]; then

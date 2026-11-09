@@ -5,7 +5,9 @@ import os, json, os, re, subprocess, sys, urllib.request, concurrent.futures, pa
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 OUT = REPO / ".harvest" / os.environ.get("WIB_EVENT", "devopsdays-portland")
-SCRATCH = pathlib.Path(os.environ.get("WIB_SCRATCH", "/tmp/wib-harvest")); SCRATCH.mkdir(parents=True, exist_ok=True)
+SCRATCH = pathlib.Path(os.environ.get("WIB_SCRATCH") or sys.exit(
+    "WIB_SCRATCH is not set: run scripts/harvest/run.sh, which makes the scratch directory and removes it (#1261)"))
+SCRATCH.mkdir(parents=True, exist_ok=True)
 ACCOUNTS = ["accen-dev", "aws1-student31", "aws1-student32", "aws1-student33", "aws1-student34"]
 REGION = "us-west-2"
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")

@@ -18,6 +18,7 @@
 # that fails is named and the script exits 1. Not part of either tier, because the gate host has no go, no Postgres
 # server and no access to the private repo.
 set -euo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FLEET="${HERE}/../infra/terraform/fleet/fleet.sh"

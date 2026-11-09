@@ -9,6 +9,7 @@
 # tell an open terminal from a closed one. The second probe asks for `tty`, the protocol the shell is on: with no
 # credential a credentialed ttyd never answers 101 there, so a 101 is a terminal open to anyone.
 set -uo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CHECK_TLS="${HERE}/../infra/terraform/fleet/check-tls.sh"
 T="$(mktemp -d)"; trap 'rm -rf "${T}"' EXIT

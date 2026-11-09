@@ -13,6 +13,7 @@
 # mirror image sat in _provision_spec_fleet, whose final `cmd_verify ... || log ...` swallowed the
 # acceptance result, so `up <names>` returned 0 no matter what verify found.
 set -uo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FLEET="${HERE}/../infra/terraform/fleet/fleet.sh"
 fail=0; pass=0

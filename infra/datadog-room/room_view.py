@@ -31,7 +31,7 @@ variables, and a share that lets the viewer select neither a time nor a variable
 
 Usage:
     python3 infra/datadog-room/room_view.py                                    # dry run
-    python3 infra/datadog-room/room_view.py --json > /tmp/room-view.json        # for the UI
+    python3 infra/datadog-room/room_view.py --json > "$TMPDIR/room-view.json"   # for the UI
     WIB_ROOM_VIEW_APP_KEY=<key> python3 infra/datadog-room/room_view.py --profile accen-dev --region us-west-2 --apply
     python3 infra/datadog-room/room_view.py --profile accen-dev --region us-west-2 --check
 """

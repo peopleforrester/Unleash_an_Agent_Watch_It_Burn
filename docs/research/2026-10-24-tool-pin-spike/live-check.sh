@@ -43,7 +43,7 @@ PINNED_URL="http://agentgateway.agent:3004/mcp"
 ASK_URL="http://kagent-controller.kagent:8083/api/a2a/${NS}/workshop-agent/"
 SETTLE="${SETTLE:-75}"
 # Everything setup changes is saved here first, per context, so restore never guesses what the cluster looked like.
-STATE="${STATE:-${TMPDIR:-/tmp}/tool-pin-live.${CONTEXT//[^A-Za-z0-9._-]/_}}"
+STATE="${STATE:-${TMPDIR:-${REPO}/tmp}/tool-pin-live.${CONTEXT//[^A-Za-z0-9._-]/_}}"
 
 # The root that renders ai-layer, which deploy-full-idp.sh and lab-platform both name lab-bootstrap since #609. Its
 # selfHeal would put ai-layer's auto-sync back within seconds, so setup refuses to go on without it.

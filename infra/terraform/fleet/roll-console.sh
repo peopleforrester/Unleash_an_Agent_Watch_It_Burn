@@ -8,6 +8,7 @@
 # restarted on the OLD content and the cluster looked rolled-out while serving stale config. That is
 # exactly how r1-1 ended up running a reverted nginx gate while r2-2 ran the current one.
 set -uo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 PROFILE=accen-dev; REGION=us-west-2
 MARKER="${1:-}"   # a string that MUST appear in the console ConfigMap before we cycle
 if [[ -z "${MARKER}" ]]; then

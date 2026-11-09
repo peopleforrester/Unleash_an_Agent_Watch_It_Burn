@@ -5,6 +5,7 @@
 # Usage: verify/test_fleet_wall_reset.sh      (offline: curl and railway are stubbed with the wall's and feeds' replies,
 #                                             and remote stands in for the command WIB_WALL_RAILWAY names)
 set -uo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FLEET="${HERE}/../infra/terraform/fleet/fleet.sh"
 T="$(mktemp -d)"; trap 'rm -rf "${T}"' EXIT

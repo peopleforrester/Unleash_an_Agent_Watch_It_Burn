@@ -12,6 +12,15 @@ ${XDG_CACHE_HOME:-$HOME/.cache}/wib-artifacts), which is outside every git workt
   <root>/terraform-providers/terraformrc                the CLI config (TF_CLI_CONFIG_FILE)
   <root>/terraform-plugin-cache                         Terraform's unpacked copies (TF_PLUGIN_CACHE_DIR)
 
+The plugin cache is the one named Terraform plugin directory every run on the host reuses (#1261). Before #1119 each
+IAM render test made a new `wib-tf-plugins-*` under the system temp directory and never removed it, about 840 MB
+each, and on netcup that directory is a tmpfs, so they were RAM. Its size: about 870 MB a registry host for the
+providers the committed locks pin, almost all of it the aws provider (798 MB for 6.71.0 unpacked), so about 1.7 GB
+once a tofu test has filled registry.opentofu.org as well (1,744,861,827 bytes on netcup, 2026-11-09). It grows by
+one unpacked copy each time a lock moves a provider to a new version, since terraform never prunes it.
+`tf_plugin_cache.py size` prints what it holds now, and `tf_plugin_cache.py clear` empties it: the next init unpacks
+again from the mirror's zips, with no download.
+
 fill() reads each `.terraform.lock.hcl` and, for every provider it pins, finds this platform's zip: from the index, or
 on a first sight from the registry's download API, whose answer is used only when its SHA-256 is one of the zh: hashes
 the lock records. The lock is the root of trust, as it is for terraform: a package the lock does not vouch for is
@@ -39,6 +48,9 @@ Command line:
   tf_plugin_cache.py prepare   fill the mirror for every committed lock's registry.terraform.io providers and print
                                TF_CLI_CONFIG_FILE= and TF_PLUGIN_CACHE_DIR= lines, for "$GITHUB_ENV" or `env`
   tf_plugin_cache.py prepare --opentofu   the same, with the registry.opentofu.org providers too, for a job running tofu
+  tf_plugin_cache.py size      print the plugin cache's path and the bytes it holds
+  tf_plugin_cache.py clear     empty the plugin cache, under the lock run-e2e-tools.sh holds while a terraform test
+                               runs; while a run holds it, clear fails, naming the lock, and removes nothing
 Any failure prints one line starting TERRAFORM PROVIDER CACHE UNUSABLE to stderr and exits 1.
 """
 from __future__ import annotations
@@ -204,6 +216,40 @@ def writable_dir(path: pathlib.Path, what: str) -> pathlib.Path:
 def ensure(env: Mapping[str, str]) -> pathlib.Path:
     """The plugin cache in env's artifact root, created and checked writable."""
     return writable_dir(plugin_cache(root_of(env)), "Terraform plugin cache")
+
+
+def size_of(path: pathlib.Path) -> int:
+    """The bytes the files under path hold, symlinks not followed; 0 when path does not exist."""
+    total = 0
+    for d, _, files in os.walk(path):
+        for f in files:
+            try:
+                total += os.lstat(os.path.join(d, f)).st_size
+            except FileNotFoundError:
+                pass
+    return total
+
+
+def clear(env: Mapping[str, str]) -> tuple[pathlib.Path, int]:
+    """Empty the plugin cache in env's artifact root and return it with the bytes freed. It takes, without waiting, the
+    lock run-e2e-tools.sh holds around each terraform test (<plugin cache>.lock), so a cache a run is installing from is
+    never pulled from under it: a held lock is a CacheError naming it, and nothing is removed."""
+    import fcntl
+    import shutil
+    cache = ensure(env)
+    with open(f"{cache}.lock", "a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise CacheError(f"{cache}.lock is held: a terraform test is using the plugin cache; clear it once that "
+                             "run ends") from None
+        freed = size_of(cache)
+        for child in list(cache.iterdir()):
+            if child.is_dir() and not child.is_symlink():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+    return cache, freed
 
 
 def registry_url(p: Locked, plat: str) -> str:
@@ -404,7 +450,15 @@ def main(argv: list[str]) -> int:
             print(f"TF_CLI_CONFIG_FILE={write_config(root)}")
             print(f"TF_PLUGIN_CACHE_DIR={writable_dir(plugin_cache(root), 'Terraform plugin cache')}")
             return 0
-        raise CacheError("usage: tf_plugin_cache.py [prepare [--opentofu]]")
+        if argv == ["size"]:
+            cache = ensure(os.environ)
+            print(f"{cache}: {size_of(cache)} bytes")
+            return 0
+        if argv == ["clear"]:
+            cache, freed = clear(os.environ)
+            print(f"{cache}: cleared, {freed} bytes freed")
+            return 0
+        raise CacheError("usage: tf_plugin_cache.py [prepare [--opentofu] | size | clear]")
     except CacheError as e:
         print(f"TERRAFORM PROVIDER CACHE UNUSABLE: {e}", file=sys.stderr)
         return 1

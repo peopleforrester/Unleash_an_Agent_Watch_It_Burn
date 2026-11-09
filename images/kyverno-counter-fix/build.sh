@@ -40,6 +40,7 @@
 # both. On a warm cache the build reaches no registry but its own on loopback; the Go toolchain and modules still come
 # through the go command's own proxy and checksum database.
 set -euo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VERIFY="$(cd "${HERE}/../../verify" && pwd)"
 addr="${1:-}"

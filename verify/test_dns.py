@@ -5,7 +5,7 @@ EmailType, and agenticburn.com's mail is Namecheap forwarding, which an omitted 
 MXPref, wrote with a GET query string, kept no backup, never diffed, and left a same-name A or TXT beside the
 CNAME it upserted. The fake zone below behaves the way dns-safety.md says Namecheap does: setHosts replaces
 every record, and an omitted EmailType resets mail to plain MX with no MX records."""
-import contextlib, importlib.util, io, os, pathlib, stat, sys, tempfile, urllib.parse
+import atexit, contextlib, importlib.util, io, os, pathlib, shutil, stat, sys, tempfile, urllib.parse
 from xml.sax.saxutils import quoteattr
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
@@ -92,6 +92,7 @@ def sets(fake):
 
 
 tmp = tempfile.mkdtemp()
+atexit.register(shutil.rmtree, tmp, ignore_errors=True)
 
 # Dry run: reads, prints, writes nothing.
 fake = FakeNamecheap(zone())

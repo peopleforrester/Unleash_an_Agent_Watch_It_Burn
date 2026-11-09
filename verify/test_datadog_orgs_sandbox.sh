@@ -8,6 +8,7 @@
 # fleet.sh's own run_datadog_orgs_verify runs verify/datadog-orgs.sh against shims: kubectl answers with an
 # instructor cluster's secret and identity, curl answers /api/v2/current_user with the org the test names.
 set -uo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ORGS="${HERE}/datadog-orgs.sh"
 FLEET="${HERE}/../infra/terraform/fleet/fleet.sh"

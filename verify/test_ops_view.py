@@ -14,6 +14,7 @@ What is held:
 from __future__ import annotations
 
 import datetime as dt
+import atexit
 import io
 import json
 import os
@@ -23,6 +24,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import shutil
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 FLEET = REPO / "infra/terraform/fleet/fleet.sh"
@@ -150,6 +152,7 @@ def keys(profile, region):
 
 def run(*extra, get=None, dd=None, env_token=TOKEN, keys_fn=keys):
     tmp = pathlib.Path(tempfile.mkdtemp())
+    atexit.register(shutil.rmtree, tmp, ignore_errors=True)
     (tmp / "hosts.tsv").write_text(HOSTS_TSV)
     page = tmp / "out" / "ops.html"
     argv = ["--hosts", str(tmp / "hosts.tsv"), "--provisioning-url", "https://prov.test",
@@ -278,6 +281,7 @@ def one_sleep(s):
 
 
 tmp = pathlib.Path(tempfile.mkdtemp())
+atexit.register(shutil.rmtree, tmp, ignore_errors=True)
 (tmp / "h.tsv").write_text(HOSTS_TSV)
 os.environ["WIB_ADMIN_TOKEN"] = TOKEN
 try:
@@ -294,6 +298,7 @@ check("--watch sleeps its interval and the page reloads on it",
 
 print("== fleet.sh ops: resolves the token, states the account, fails loudly ==")
 fake_bin = pathlib.Path(tempfile.mkdtemp())
+atexit.register(shutil.rmtree, fake_bin, ignore_errors=True)
 (fake_bin / "railway").write_text("#!/bin/sh\nexit 1\n")
 # The Secrets Manager copy of the token (#1239) is fleet.sh's last source: a fake aws answers as the CLI does for a
 # secret that is not there, so the no-token case reaches no AWS account.
@@ -302,12 +307,14 @@ fake_bin = pathlib.Path(tempfile.mkdtemp())
 for f in fake_bin.iterdir():
     f.chmod(0o755)
 empty_home = tempfile.mkdtemp()
+atexit.register(shutil.rmtree, empty_home, ignore_errors=True)
 path = f"{fake_bin}:{os.environ['PATH']}"
 r = fleet("ops", env={"PATH": path, "HOME": empty_home})
 check("no resolvable token: exit 1 naming the ways to supply one, the Secrets Manager secret included",
       r.returncode == 1 and "cannot resolve the provisioning admin token" in r.stderr
       and "watch-it-burn/provisioning-admin-token" in r.stderr and "ResourceNotFoundException" not in r.stderr)
 logs = pathlib.Path(tempfile.mkdtemp())
+atexit.register(shutil.rmtree, logs, ignore_errors=True)
 r = fleet("ops", "sabrina", "--watch", "30",
           env={"PATH": path, "HOME": empty_home, "WIB_ADMIN_TOKEN": TOKEN, "WIB_OPS_HTML": str(logs / "v.html"),
                "WIB_DEFAULT_ACCOUNT": "accen-dev", "WIB_REGION": "us-west-2"})

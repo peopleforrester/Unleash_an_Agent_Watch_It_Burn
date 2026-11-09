@@ -17,6 +17,7 @@ Needs uv and the network to fetch mcp. A missing uv or a failed fetch is a failu
 """
 from __future__ import annotations
 
+import atexit
 import json
 import os
 import pathlib
@@ -67,6 +68,7 @@ asyncio.run(main())
 """
 
 data = tempfile.mkdtemp(prefix="check-inventory-e2e-")
+atexit.register(shutil.rmtree, data, ignore_errors=True)
 r = subprocess.run([*package_cache.run_cmd("mcp"), "python", "-I", "-c", PROBE, str(AI)],
                    capture_output=True, text=True, cwd="/", timeout=600,
                    env={"PATH": os.environ["PATH"], "HOME": os.environ["HOME"], "WORKSHOP_DATA_DIR": data})

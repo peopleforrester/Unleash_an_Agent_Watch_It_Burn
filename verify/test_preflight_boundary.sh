@@ -13,6 +13,7 @@
 #
 # Usage: verify/test_preflight_boundary.sh      (no cloud access)
 set -uo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="${HERE}/../infra/terraform/fleet"
 T="$(mktemp -d)"; trap 'rm -rf "${T}"' EXIT

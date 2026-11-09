@@ -12,7 +12,8 @@
 #     <name>          collaborator handle, e.g. whitney  (becomes the SA name: collab-<name>)
 #     <kube-context>  the cluster's kube-context (must already be in your KUBECONFIG)
 #     [role]          cluster-admin (default; full bang-on access) | edit (no RBAC/secret-escalation)
-#     [out-file]      where to write the kubeconfig (default: /tmp/<name>-<cluster>.kubeconfig)
+#     [out-file]      where to write the kubeconfig (default: $TMPDIR, else the checkout's ignored tmp/,
+#                     <name>-<cluster>-collab.kubeconfig; never the system temp dir, #1261)
 #
 # REVOKE
 #   kubectl --context <ctx> -n collaborators delete sa collab-<name>
@@ -30,7 +31,8 @@ CTX="$2"
 ROLE="${3:-cluster-admin}"
 SA="collab-${NAME}"
 NS="collaborators"
-OUT="${4:-/tmp/${NAME}-$(echo "$CTX" | sed 's#.*/##')-collab.kubeconfig}"
+_OUTDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"
+OUT="${4:-${_OUTDIR}/${NAME}-$(echo "$CTX" | sed 's#.*/##')-collab.kubeconfig}"
 
 case "$ROLE" in cluster-admin|edit) : ;; *) err "role must be cluster-admin or edit, got: $ROLE" ;; esac
 command -v kubectl >/dev/null || err "kubectl not found"
@@ -77,6 +79,7 @@ CA_B64="$(K -n "$NS" get secret "${SA}-token" -o jsonpath='{.data.ca\.crt}')"
 CLUSTER_NAME="$(echo "$CTX" | sed 's#.*/##')"
 
 # 5. Emit a self-contained kubeconfig (no exec plugins, no AWS) the collaborator can use directly.
+mkdir -p "$(dirname "$OUT")"
 cat > "$OUT" <<EOF
 apiVersion: v1
 kind: Config

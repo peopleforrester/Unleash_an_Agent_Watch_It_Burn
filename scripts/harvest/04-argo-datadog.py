@@ -1,9 +1,11 @@
 # ABOUTME: Fourth pass: ArgoCD application sync history per surviving cluster (dies at teardown) and the
 # ABOUTME: per-org Datadog metric series, exported for post-event analysis.
 from __future__ import annotations
-import os, json,os,subprocess,pathlib,concurrent.futures,urllib.request,time
+import os, json,os,subprocess,pathlib,concurrent.futures,urllib.request,time,sys
 REPO=pathlib.Path(__file__).resolve().parent.parent
-OUT=REPO/".harvest"/os.environ.get("WIB_EVENT","devopsdays-portland"); SCRATCH=pathlib.Path(os.environ.get("WIB_SCRATCH","/tmp/wib-harvest"))
+OUT=REPO/".harvest"/os.environ.get("WIB_EVENT","devopsdays-portland"); 
+SCRATCH = pathlib.Path(os.environ.get("WIB_SCRATCH") or sys.exit(
+    "WIB_SCRATCH is not set: run scripts/harvest/run.sh, which makes the scratch directory and removes it (#1261)"))
 def sh(c,env=None,t=120):
     p=subprocess.run(c,capture_output=True,text=True,timeout=t,env={**os.environ,**(env or {})})
     return p.returncode,p.stdout,p.stderr

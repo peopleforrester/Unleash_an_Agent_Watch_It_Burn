@@ -18,6 +18,7 @@
 # Requires the `gog` CLI authenticated for michaelrishiforrester@gmail.com. Never use a claude.ai
 # Google connector for this: it binds to whatever account the browser session holds.
 set -euo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 
 # The doc id is stable; the file id of a Google DOC changes only if the doc is recreated, which would
 # be a deliberate act. If this 404s, ask Michael for the current link rather than searching for a

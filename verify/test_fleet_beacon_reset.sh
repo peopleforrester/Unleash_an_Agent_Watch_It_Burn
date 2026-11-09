@@ -4,6 +4,7 @@
 #
 # Usage: verify/test_fleet_beacon_reset.sh      (offline: the beacon is a fake on 127.0.0.1, railway and aws are stubs)
 set -uo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FLEET="${HERE}/../infra/terraform/fleet/fleet.sh"
 T="$(mktemp -d)"

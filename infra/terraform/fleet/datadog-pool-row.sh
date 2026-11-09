@@ -23,6 +23,7 @@
 # Keys never reach a command line: the secrets are read into a private temporary directory and written back with
 # --secret-string file://, and jq reads them from those files. The output names a key only by its last four characters.
 set -euo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 
 PROFILE="${WIB_DEFAULT_ACCOUNT:-accen-dev}"
 REGION="${WIB_SECRETS_REGION:-${WIB_HOME_REGION:-us-west-2}}"

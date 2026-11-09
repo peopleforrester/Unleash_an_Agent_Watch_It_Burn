@@ -7,6 +7,7 @@ on PATH for the CLI and the shell scripts. The clock is a counter the fake sleep
 """
 from __future__ import annotations
 
+import atexit
 import contextlib
 import functools
 import io
@@ -17,6 +18,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import shutil
 import time
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
@@ -206,6 +208,7 @@ check("after hold the Lease is gone and WIB_GUARD_LEASE is unset", api.lease is 
 
 # --- the CLI, behind a fake kubectl first on PATH -----------------------------------------------------------------
 work = pathlib.Path(tempfile.mkdtemp())
+atexit.register(shutil.rmtree, work, ignore_errors=True)
 (work / "bin").mkdir()
 (work / "bin/kubectl").write_text(f'#!/usr/bin/env bash\nexec {sys.executable} {VERIFY / "fake_lease_kubectl.py"} "$@"\n')
 (work / "bin/kubectl").chmod(0o755)
@@ -400,14 +403,14 @@ try:
     kp.guard_lease.hold, kp.guard_lease.hold_switch = fake_hold(), fake_hold(kind="hold_switch")
     with contextlib.redirect_stdout(io.StringIO()) as out:
         rc = kp.main(["admin", "burritobot-private.burritobot.co", "--context", "watch-it-burn-private",
-                      "--kubeconfig", "/tmp/k", "--profile", "accen-dev"])
+                      "--kubeconfig", "/fake/k", "--profile", "accen-dev"])
     check("kubecon_probe admin runs its beats inside the lock, guards-off included",
           rc == 0 and seen.get("ran_inside") is True and seen["final"] is kp.GUARDS_OFF_BEAT and not seen["inside"],
           str(seen))
     check("kubecon_probe admin holds it on both KubeCon clusters (hold_switch), since its guardrails-on switches both",
           seen.get("kind") == "hold_switch", str(seen))
     check("it takes the lock on --context with the probe's kubeconfig and profile",
-          (seen["context"], seen["kubeconfig"], seen["profile"]) == ("watch-it-burn-private", "/tmp/k", "accen-dev")
+          (seen["context"], seen["kubeconfig"], seen["profile"]) == ("watch-it-burn-private", "/fake/k", "accen-dev")
           and seen["what"] == "kubecon_probe.py admin burritobot-private.burritobot.co"
           and seen["wait"] == gl.WAIT_S, str(seen))
     seen.clear()
@@ -605,7 +608,7 @@ def kubecon_fleet(private: fk.FakeLeaseApi | None = None, community: bool = True
     return fleet
 
 
-ADMIN = ["admin", "burritobot-private.burritobot.co", "--context", PRIV, "--kubeconfig", "/tmp/k", "--lock-wait", "0"]
+ADMIN = ["admin", "burritobot-private.burritobot.co", "--context", PRIV, "--kubeconfig", "/fake/k", "--lock-wait", "0"]
 fleet = kubecon_fleet()
 rc, during, said = probe_through(fleet, ADMIN)
 check("the admin probe runs its beats holding the lock on the community cluster and the private one, one holder on both",

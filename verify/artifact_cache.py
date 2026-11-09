@@ -228,23 +228,40 @@ def get_retrying(sha256: str, url: str, *, backoff: Sequence[float] = BACKOFF,
     raise AssertionError("unreachable")
 
 
-def scratch_dir(prefix: str) -> pathlib.Path:
-    """A new temp directory outside every git worktree, for a test's cache root: the first of TMPDIR, /tmp, /var/tmp
-    and /dev/shm that is outside one and takes a new directory. Hecaton points TMPDIR inside the run's worktree, where
-    resolve_root() rightly refuses a root, and in run 18422 the dispatcher's private /tmp and /var/tmp were deleted
-    while the run was going (findmnt read both as `//deleted`), so a mkdir there failed with ENOENT though the path was
-    still a directory. With none usable it raises, naming each one and why."""
+SCRATCH_SUBDIR = "unleash-watch-it-burn"
+
+
+def scratch_parents(env: Mapping[str, str] | None = None) -> list[pathlib.Path]:
+    """Where scratch_dir() may make a directory, in order: TMPDIR when it is set, then SCRATCH_SUBDIR under
+    ${XDG_CACHE_HOME:-$HOME/.cache}. Never the system's temp directories (#1261): on netcup the system temp directory is a
+    tmpfs, so what a test leaves there is RAM, and in run 18422 the dispatcher's private one was deleted mid-run."""
+    env = os.environ if env is None else env
+    out = [pathlib.Path(env["TMPDIR"])] if env.get("TMPDIR") else []
+    if env.get("XDG_CACHE_HOME"):
+        out.append(pathlib.Path(env["XDG_CACHE_HOME"]) / SCRATCH_SUBDIR)
+    elif env.get("HOME"):
+        out.append(pathlib.Path(env["HOME"]) / ".cache" / SCRATCH_SUBDIR)
+    return out
+
+
+def scratch_dir(prefix: str, env: Mapping[str, str] | None = None) -> pathlib.Path:
+    """A new directory outside every git worktree, for a test's cache root, which the caller removes when it is done:
+    in the first of scratch_parents() that is outside a worktree and takes a new directory. Hecaton points TMPDIR
+    inside the run's worktree (<worktree>/tmp/hecaton), where resolve_root() rightly refuses a root, so in a run it is
+    the user's cache directory. With none usable it raises, naming each one and why."""
     why = []
-    for cand in dict.fromkeys(map(pathlib.Path, (tempfile.gettempdir(), "/tmp", "/var/tmp", "/dev/shm"))):
+    for cand in dict.fromkeys(scratch_parents(env)):
         tree = worktree_of(cand)
         if tree is not None:
             why.append(f"{cand} is inside the git worktree {tree}")
             continue
         try:
+            cand.mkdir(parents=True, exist_ok=True)
             return pathlib.Path(tempfile.mkdtemp(prefix=prefix, dir=cand))
         except OSError as e:
             why.append(f"{cand}: {e}")
-    raise ArtifactCacheError("no temp directory outside a git worktree takes a new directory: " + "; ".join(why))
+    raise ArtifactCacheError("no scratch directory outside a git worktree takes a new directory: "
+                             + ("; ".join(why) or "neither TMPDIR, XDG_CACHE_HOME nor HOME is set"))
 
 
 def main(argv: list[str]) -> int:

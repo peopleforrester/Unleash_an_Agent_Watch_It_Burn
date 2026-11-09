@@ -36,7 +36,14 @@ if [[ -z "${EVENT}" ]]; then
     exit 2
 fi
 export WIB_EVENT="${EVENT}"
-export WIB_SCRATCH="${WIB_SCRATCH:-/tmp/wib-harvest}"
+# The passes share one scratch directory for the clusters' kubeconfigs: WIB_SCRATCH when the caller names one, else a
+# new one under TMPDIR or the checkout's ignored tmp/, never the system's temp directory, removed on exit (#1261).
+if [[ -z "${WIB_SCRATCH:-}" ]]; then
+    _base="${TMPDIR:-$(cd "${HERE}/../.." && pwd)/tmp}"; mkdir -p "${_base}"
+    WIB_SCRATCH="$(mktemp -d "${_base}/wib-harvest.XXXXXX")"
+    trap 'rm -rf "${WIB_SCRATCH}"' EXIT
+fi
+export WIB_SCRATCH
 mkdir -p "${WIB_SCRATCH}"
 OUT="$(cd "${HERE}/../.." && pwd)/.harvest/${EVENT}"
 mkdir -p "${OUT}"/{per-cluster,prompts,terminal,raw}

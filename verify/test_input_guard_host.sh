@@ -7,6 +7,7 @@
 # empty and the JSON read died before any prompt was sent. The fakes here record every URL and kubectl call, and
 # answer /controls and /chat the way guard-proxy does, so no network and no cluster is reached.
 set -euo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT="${HERE}/input-guard.sh"
 fails=0

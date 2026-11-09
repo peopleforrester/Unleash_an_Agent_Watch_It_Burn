@@ -8,6 +8,7 @@
 # community cluster for an hour. So each offline test that sources or runs fleet.sh guards itself. This holds the
 # two per-test entry points to what they promise and every such test to calling them.
 set -uo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 T="$(mktemp -d -t no-cloud-by-hand.XXXX)"; trap 'rm -rf "${T}"' EXIT
 fail=0; pass=0

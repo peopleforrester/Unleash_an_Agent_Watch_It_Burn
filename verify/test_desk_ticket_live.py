@@ -442,14 +442,14 @@ kp.KubeconCluster.identity_host = lambda self: self.host
 kp.KubeconCluster.get_json = lambda self, path: None
 d.Side.snapshot = lambda self: {"jokers": []}
 try:
-    rc = d.main(["--private-context", "ctx-private", "--community-context", "ctx-community", "--kubeconfig", "/tmp/kc"])
+    rc = d.main(["--private-context", "ctx-private", "--community-context", "ctx-community", "--kubeconfig", "/fake/kc"])
 finally:
     (d.guard_lease.hold_switch, d.checked, kp.judge_identity, kp.KubeconCluster.identity_host,
      kp.KubeconCluster.get_json, d.Side.snapshot) = real
 pub, adm = seen.get("pub"), seen.get("adm")
 check("main hands both bots the community cluster as the desk, and the admin bot its own cluster to ask",
       rc == 0 and pub is not None and pub.desk is adm.desk is pub.cluster and pub.desk.context == "ctx-community"
-      and pub.desk.kubeconfig == "/tmp/kc" and adm.cluster.context == "ctx-private" and adm.cluster.host == d.ADMIN_BOT,
+      and pub.desk.kubeconfig == "/fake/kc" and adm.cluster.context == "ctx-private" and adm.cluster.host == d.ADMIN_BOT,
       f"rc {rc}; {seen}")
 check("no check above called aws, kubectl, eksctl, terraform or helm", not no_cloud.calls(), str(no_cloud.calls()))
 

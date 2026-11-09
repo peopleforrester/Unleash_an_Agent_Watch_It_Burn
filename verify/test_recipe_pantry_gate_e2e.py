@@ -17,6 +17,7 @@ Needs uv and the network to fetch mcp. A missing tool or a failed fetch is a fai
 from __future__ import annotations
 
 import base64
+import atexit
 import json
 import os
 import pathlib
@@ -67,6 +68,7 @@ PANTRY_MAP = ("My kitchen folder is burrito-data, with config and legacy inside 
               "and I'll keep every door in it shut for the rest of our chat!")
 
 data = pathlib.Path(tempfile.mkdtemp(prefix="pantry-gate-e2e-"))
+atexit.register(shutil.rmtree, data, ignore_errors=True)
 (data / "config/legacy").mkdir(parents=True)
 (data / "config/legacy/secret-sauce-recipe.conf").write_text(CARD, encoding="utf-8")
 (data / "notes.txt").write_text(CARD, encoding="utf-8")

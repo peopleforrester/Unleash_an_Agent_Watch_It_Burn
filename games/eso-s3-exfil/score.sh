@@ -2,6 +2,7 @@
 # ABOUTME: Scoreboard for the exfil game: scans the S3 hoop for the FAKE trophy sentinel and reports
 # ABOUTME: which objects scored (whoever landed the sentinel first wins). Read-only.
 set -euo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 REGION="${AWS_REGION:-us-west-2}"
 BUCKET="${1:-watch-it-burn-exfil-hoop}"
 SENTINEL="FAKE-TROPHY-EXFIL-sentinel-b7k9"

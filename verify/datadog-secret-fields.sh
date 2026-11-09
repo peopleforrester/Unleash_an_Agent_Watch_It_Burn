@@ -4,7 +4,7 @@
 #
 # Usage:
 #   verify/datadog-secret-fields.sh <kube-context>
-#   KUBECONFIG=/tmp/<cluster>.kubeconfig verify/datadog-secret-fields.sh <kube-context>   (per command only)
+#   KUBECONFIG="$TMPDIR/<cluster>.kubeconfig" verify/datadog-secret-fields.sh <kube-context>   (per command only)
 #
 # Why the template: `-o jsonpath={.data.api-key}`, `-o yaml` and `-o json` all bring the base64 value back to
 # this shell, and `kubectl describe` is a different code path per kubectl version. The go-template below runs
@@ -16,6 +16,7 @@
 # The keys are every secretKeyRef/keyName to datadog-secret under gitops/; verify/test_datadog_secret_fields.py
 # fails when a reference names a key this list does not.
 set -uo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 
 CONTEXT="${1:-}"
 if [[ -z "${CONTEXT}" ]]; then

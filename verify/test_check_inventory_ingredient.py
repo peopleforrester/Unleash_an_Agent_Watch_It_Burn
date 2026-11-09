@@ -13,11 +13,13 @@ as test_deploy_app_errors.py loads it.
 from __future__ import annotations
 
 import importlib.util
+import atexit
 import inspect
 import json
 import pathlib
 import sys
 import tempfile
+import shutil
 import types
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
@@ -56,6 +58,7 @@ server = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(server)
 # The seeded data directory is the pod's /tmp/burrito-data; here it is a directory of the test's own.
 server._DATA = tempfile.mkdtemp(prefix="check-inventory-")
+atexit.register(shutil.rmtree, server._DATA, ignore_errors=True)
 
 print("== the signature declares the ingredient (FastMCP's input schema is built from it) ==")
 params = inspect.signature(server.check_inventory).parameters

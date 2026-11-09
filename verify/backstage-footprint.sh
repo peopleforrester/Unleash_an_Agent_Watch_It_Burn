@@ -19,6 +19,7 @@
 # lists at least one pod and no errors for both unicorn-party and workshop-agent. The numbers themselves are
 # reported, not judged: they are what #484 asks to see.
 set -euo pipefail
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 : "${CONTEXT:?CONTEXT is required: name the kube-context of the attendee cluster to measure}"
