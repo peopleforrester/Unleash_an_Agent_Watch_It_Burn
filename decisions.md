@@ -44896,7 +44896,7 @@ after each wait in `artifact_cache.BACKOFF` (2, 5, 10 s) when the error is one `
 HTTP 408, 429 or 5xx, a timeout, a reset or refused connection, a failed lookup, a body cut short), the rule the host
 cache (#1118) and `chart_fetch.py` (#1028) already use, printing a RETRY line for each attempt. A 404, a 403 and any
 other error fail at once, and every failure prints its error's type and the attempt, so a reset in the middle of the
-body is a FAIL line now, not a traceback. The test's checks moved into `main()` so the new offline test,
+body prints a FAIL line where it used to print a traceback. The test's checks moved into `main()` so the new offline test,
 `test_gateway_api_crds_upstream_fetch.py`, can import `fetch()` and drive it with a stub reader and a stub sleep: a good
 first read, each of eight transient errors followed by a good read, four transient errors in a row, and a 404, 403 and
 ValueError that fail on the first attempt. What the test checks upstream is unchanged. `scope_tests.py write` added the
@@ -44904,3 +44904,12 @@ new test's entry and the tier test's two new reads; the fetch inventory still co
 No dependency was added.
 
 **Live check.** Skipped: the change touches only files under `verify/` that no cluster runs.
+
+**Tests (run 19431).** `bash verify/run-e2e-tools.sh test_gateway_api_crds_upstream.py` (the tier test alone, pinned
+tools, no offline suite) printed all three checks PASS, `1 checks ran ... in 0m14s` and `ALL E2E TOOLS TIER CHECKS
+GREEN`, exit 0 (log `/var/lib/hecaton/runs/19431/tier-gateway.log`). Each run alone, exit 0:
+`test_gateway_api_crds_upstream_fetch.py` (29 checks), `test_gateway_api_crds.py`, `test_scope_tests.py` and
+`test_fetch_inventory.py`. The whole Test and E2E commands were not run here; validation runs the tests that read the
+changed files. The CI job above also failed three tier tests this one does not touch (`test_chat_pane_overlap_e2e.py`,
+`test_chat_phone_screen_e2e.py`, `test_mobile_titles_e2e.py`); those are #1252's, and the heavy gate's own run on
+b344e331 passed them.
