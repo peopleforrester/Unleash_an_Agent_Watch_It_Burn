@@ -73,6 +73,7 @@ config:
           - transform/http_server_error
           - transform/adk_model_content
           - transform/llmobs_apm_off
+          - transform/coc_mask # #1277: on every profile, so burn's list restates it
           - transform/scrub_pii
         exporters:
           - span_metrics # feed the connector so it can derive metrics from these spans
