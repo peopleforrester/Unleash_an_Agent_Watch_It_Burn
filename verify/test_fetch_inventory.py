@@ -21,6 +21,11 @@ and the check; this test runs them:
   - each command family's pattern finds a line of its own, and the names that only look like one (a fallback.curl.sh
     path, the curlimages/curl image, a curl/8 user agent, the CRANE variable) find none; a crane held in a variable is
     found where it runs a crane verb, and an image_cache platform layout is found as a layout is
+  - a Dockerfile's base and its apt installs (#1274): a FROM line in any case, with flags and an AS name, or opening a
+    string, COPY --from and `buildah from` are found, and so is apt or apt-get with an archive verb after its options,
+    in a shell line or a list; a Python import, prose that opens with "from", and apt as a path (/var/lib/apt/lists)
+    are not. Every FROM line of every Dockerfile under images/ is found and claimed by a pinned container-image entry,
+    and a new Dockerfile with an unpinned FROM and an apt-get install of other packages fails on both lines
 
 The fixtures build each command name from pieces, so this file names none whole.
 """
@@ -47,6 +52,7 @@ def check(name: str, ok: bool, detail: str = "") -> None:
 
 
 CU, UO, HE, CR, GC = "cu" + "rl", "url" + "open", "he" + "lm", "cr" + "ane", "git " + "clone"
+FR, AG = "FR" + "OM", "ap" + "t-get"
 
 print("== the repo: every call site the scan finds is listed and classified ==")
 problems, before_rule = fi.check_split()
@@ -116,6 +122,8 @@ samples = {
     "git-clone": f"{GC} --depth 1 https://github.com/x/y",
     "setup-action": "- uses: actions/" + "setup-node@abc",
     "artifact-cache": 'archive="$(bash verify/artifact' + '-cache.sh get "${sha}" "${url}")"',
+    "dockerfile-from": f"{FR} python:3.12-slim",
+    "apt": f"RUN {AG} update && {AG} install -y --no-install-recommends jq",
 }
 # #1122's two entry points, each in the artifact-cache family: an image layout and a git mirror, by call and by command.
 for line in ("base = image" + "_cache.layout(ref)", 'layout="$(python3 verify/image' + '_cache.py layout "${base}")"',
@@ -133,6 +141,36 @@ for line in (f"challenges/02-sanitization/fallback.{CU}.sh", f"image: {CU}images
              'CRANE="${TOOLS_BIN}/' + CR + '"', f"{HE} template . --values v.yaml", 'CR="${CRANE:-' + CR + '}"',
              'echo "$CR" is set'):
     check(f"the scan finds nothing in {line!r}", not fi.SCAN.search(line), str(fi.families(line)))
+
+print("== a Dockerfile's FROM and apt-get (#1274) ==")
+for fam, line in (("dockerfile-from", f"{FR} --platform=$BUILDPLATFORM ghcr.io/x/y:1@sha256:0 AS build"),
+                  ("dockerfile-from", f"{FR.lower()} debian:bookworm-slim"),
+                  ("dockerfile-from", f"{FR} build \\"),
+                  ("dockerfile-from", f'ok = parse("{FR} scratch\\n{FR.lower()} debian:bookworm-slim\\n")'),
+                  ("dockerfile-from", "COPY --chown=1000 --from=ghcr.io/x/tools:1 /bin/t /bin/t"),
+                  ("dockerfile-from", "ctr=$(buil" + "dah from ghcr.io/x/node:24@sha256:0)"),
+                  ("apt", f"{AG} -o Acquire::Check-Valid-Until=false -o Acquire::Retries=3 update; \\"),
+                  ("apt", f"    {AG} install -y --no-install-recommends libsqlite3-dev && \\"),
+                  ("apt", f'run(["{AG}", *opts, "-q", "download", *pkgs], "download")'),
+                  ("apt", "sudo ap" + "t install -y jq"),
+                  ("apt", f"/usr/bin/{AG} -qq upgrade")):
+    check(f"{fam}: the scan finds {line!r}", fam in fi.families(line), str(fi.families(line)))
+for line in ("from __future__ import annotations", "from lab-platform's build (lab-platform#372).",
+             'and "from v1.37.0" not in line]', f'{FR}, TO = "2026-11-12", "2026-11-13"', "    rm -rf /var/lib/ap" + "t/lists/*",
+             "RUN --mount=type=cache,target=/var/cache/ap" + "t,sharing=locked \\", "buil" + "dah, from this directory:",
+             "    rm -f /etc/ap" + "t/sources.list; \\"):
+    check(f"the scan finds nothing in {line!r}", not fi.SCAN.search(line), str(fi.families(line)))
+dockerfiles = [rel for rel in scanned if rel.startswith("images/") and pathlib.PurePath(rel).name == "Dockerfile"]
+check("the scan reads the Dockerfiles under images/", len(dockerfiles) >= 5, str(dockerfiles))
+_, claimed = fi.assign(sites, fi.scan(REPO, dockerfiles))
+by_line = {(rel, n): sites[rel][i] for (rel, i), got in claimed.items() for n, _ in got}
+for rel in dockerfiles:
+    lines = (REPO / rel).read_text(encoding="utf-8").splitlines()
+    froms = [n for n, line in enumerate(lines, 1) if line.lstrip().upper().startswith(FR + " ")]
+    bad = [f"{rel}:{n} is claimed by {by_line.get((rel, n))}" for n in froms
+           if (by_line.get((rel, n)) or {}).get("kind") != "container-image"]
+    check(f"{rel}: each of its {len(froms)} {FR} lines is found and classed a pinned container-image", froms and not bad,
+          "; ".join(bad))
 
 print("== a scratch repository: each way the inventory can fall behind fails by name ==")
 
@@ -173,6 +211,12 @@ check("a call site in an images/ Dockerfile the inventory does not list fails, n
 check("the vendored yarn release is not scanned, and a .yarn/releases file elsewhere under images/ is",
       not any(p.startswith("images/watch-it-burn-backstage/") for p in got)
       and any(p.startswith("images/app/.yarn/releases/yarn-9.cjs:1:") for p in got), str(got))
+
+got = scratch({**BASE, "images/new/Dockerfile": f"# a new image\n{FR} python:3.12\nRUN {AG} update \\\n"
+                                                 f" && {AG} install -y --no-install-recommends jq\n"}, GOOD)
+check(f"a new Dockerfile's unpinned {FR} and its {AG} lines fail, naming each, though none names another command",
+      [p.split(": a fetch")[0] for p in got] == ["images/new/Dockerfile:2", "images/new/Dockerfile:3",
+                                                 "images/new/Dockerfile:4"], str(got))
 
 got = scratch({**BASE, "verify/new.py": f"x = 1\nurllib.request.{UO}(u)\n"}, GOOD)
 check("a call site in a file the inventory does not list fails, naming its file and line",
