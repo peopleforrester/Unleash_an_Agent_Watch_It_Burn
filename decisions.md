@@ -43990,3 +43990,14 @@ wording.
 recon ask live on each bot as above, with `python3 docs/research/2026-11-09-recon-card/live_recon.py <context> 16`, and
 `PRIVATE_CONTEXT=watch-it-burn-private python3 verify/test_two_hour_flow_live.py`, whose first check holds the live
 systemMessage equal to git's and whose recon beat keeps its hold.
+
+**Run 19380, the same issue, after run 19296's validation.** Run 19296's tests gate failed on one test,
+`verify/test_recipe_pantry_gate.py`, which exited naming its anchors: it cuts the pantry-map line out of `agent.yaml`
+between `this pantry-map line, word for word: "` and `" Then steer back`, and the rewording above made the text after
+the line `" Then add one sentence that steers back`. Run 19296's grep for the changed words searched for "steer back to
+the order" whole, so it missed this shorter literal. The test's end anchor is now `" Then add one sentence`, with a
+comment naming #1177; the wording in `agent.yaml` is unchanged. A grep of `verify/` and `scripts/` for each fragment of
+the three changed sentences ("lost-card story", "changes none", "map, not the", "steer back", "Then steer", "nudge
+first") finds no other test that reads them; the remaining hits are the CEO and C8 rules' own words and a guard-proxy
+answer. Rerun alone: `python3 verify/test_recipe_pantry_gate.py` and `python3 verify/test_recipe_persona.py`, each
+exit 0. The live counts above stand; nothing a cluster runs changed in this run, so no live check was run again.
