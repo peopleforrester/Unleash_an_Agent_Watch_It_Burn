@@ -21,8 +21,10 @@ import sys
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parent
 sys.path.insert(0, str(HERE))
-import kubecon_probe as kp  # noqa: E402
 import test_coc_floor_probes_live as live  # noqa: E402
+
+# The probe, read through the live test, which runs it: this test has no reason to import it on its own.
+kp = live.kp
 
 failures: list[str] = []
 
