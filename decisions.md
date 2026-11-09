@@ -46672,3 +46672,10 @@ by name (exit 1).
 **Tests run.** The new test, as above. The test is live-only, which neither scoped runner selects, so
 `scope_tests.py write` added no map entry. The scoped Test command is left to hecaton's validation. No dependency was
 added.
+
+**Run 19523, after run 19489's validation failed.** The `tests` gate failed on `verify/test_fetch_inventory.py` alone:
+the new test's `urlopen` was a fetch call site with no entry in `verify/fetch-inventory.yaml` (#1116). The gate's
+`--context is empty` line was the expected output of a passing test, as the coordinator's note on #1241 says. The
+inventory now lists the line as `live`, kind `lab-endpoint`, reading attackme's storefront and the feedback form.
+`python3 verify/test_fetch_inventory.py` passes, as do the 9 other offline tests that read the inventory or the new
+test, and `test_scope_tests.py`. The live test, run again on watch-it-burn-community, passed 21 of 21.
