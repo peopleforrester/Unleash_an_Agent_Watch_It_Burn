@@ -13,7 +13,7 @@ Three spans go in, shaped as guard-proxy's chat span, kagent's model call and ka
 
   - the chat span's prompt (gen_ai.input.messages) and a gen_ai.input.messages span-event attribute carry
     coc_mask_cases.term_cases(), each spelling of a term the RE2 form reads, one per line, JSON-encoded as guard-proxy
-    writes it (\n and \uXXXX escapes right before a term); the model call's prompt carries them as kagent writes it
+    writes it (a newline or a non-ASCII escape right before a term); the model call's prompt carries them as kagent writes it
     (UTF-8). All come out masked, as Python's re masks them, and session.id, which is not conversation, holding a
     term comes out whole;
   - the model call's reply (gen_ai.output.messages) carries HC-666's ticket, its injection included, and comes out
