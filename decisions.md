@@ -47991,3 +47991,49 @@ ran only the new test, so it did not see this. The fix lists `verify/test_ros_ov
 the way #1270 listed `test_ros_deck_live.py`. The new test reads segment 5 and its row, so its hashes cite the
 127-slide deck. `python3 verify/test_deck_shift_slide_citations.py` now prints `All #1099 deck-shift
 slide citation checks passed.`, exit 0.
+## 2026-11-09 · #1268 · run 19632 · The support desk refuses a ticket with a code-of-conduct term, whatever the guardrails' state
+
+**What changed.** `gitops/ai-layer/ticket_site.py` refuses, before anything is filed, a ticket whose text, subject or
+customer name carries a term of its `COC_TERMS`. Both ways in are covered: the room's `POST /submit` answers 422 with
+a page holding one sentence (`COC_REFUSAL`: the desk did not file it, it breaks the event's code of conduct) that
+repeats neither the ticket nor the term, and the presenters' in-cluster `POST /presenter-ticket` answers 422 with the
+same sentence as JSON. The check sits in `file_ticket` and `file_presenter_ticket`, so any later route that files a
+ticket goes through it. No toggle reads or sets it. It reads the ticket's plain text, the text the bot reads and the
+desk shows, so a term split by a tag (a letter in bold) is caught, and an injection is filed as before: white text,
+a hidden instruction, HC-666 and HC-7731 are the challenge the room plays.
+
+**The list.** #1267's spike chose a 144-term list with spelling folding, and its README says guard-proxy's list and
+folding move to it in a guard-proxy follow-up. Until then the desk holds guard-proxy's own 40-term `PROFANITY`
+default (proxy.py's `_DEFAULT_PROFANITY`), matched as `_profanity_pattern` matches it: whole words, an optional plural
+s, any case. When guard-proxy moves to the spike's list, `verify/test_desk_coc.py` fails on the drift, and the desk's
+list moves with it. The terms are kept ROT13-encoded in the source, as the spike keeps its lists, so the tree and a
+search of it show no slur; the test fails if the source ever shows one.
+
+**Test.** `verify/test_desk_coc.py` (new) runs the real desk on localhost. It holds `COC_TERMS` to proxy.py's
+`PROFANITY` term for term (with `PROFANITY_LIST` unset, as `resources.yaml` deploys it) and the desk's match to proxy.py's
+`_PROFANITY_RE` on 372 texts. It submits each of the 40 terms as plain text, in white text and split by a tag, and
+each is refused with 422, nothing filed. It files HC-666's HTML and text, HC-7731's text, both payloads, and each of
+the 11 distinct `.prompt` blocks on `/kubecon`, plain and as the white-text paragraph of an HC-666-shaped ticket,
+each with its text whole. It also checks the subject and the customer name are read, on both routes, that no witch
+name the desk hands out is refused, and that words holding a term (cocktail, Dickens, Scunthorpe) are filed. It
+passed, and so did `verify/test_fetch_inventory.py` after the new test's loopback call was added to
+`verify/fetch-inventory.yaml`. `python3 verify/scope_tests.py check` reports 0 problems with the new test's entry.
+The whole Test and E2E commands were not run; validation runs the tests the scope map selects for the change.
+
+**Live, before the change is deployed.** The desk on watch-it-burn-community runs staging's `ticket_site.py` (the
+`ai-layer` Application tracks `staging`), which has no check: `grep -c COC_TERMS` in its pod read 0. The new
+`verify/desk_coc_live.py --context watch-it-burn-community` was run against support.burritobot.co to prove its
+submit and clean-up path and record the state before. It printed:
+
+    FAIL  refused: COC_TERMS[0] in white text: HTTP 200, filed as HC-8173, the refusal not shown
+    PASS  accepted: HC-666's shape: HTTP 200, filed as HC-4644; GET /ticket?id=HC-4644: HTTP 200, its text carries the injection
+    PASS  as found: removed ['HC-8173', 'HC-4644']: /desk-forget answered {'rows_removed': 0, 'tickets_removed': 2, 'rows_left': 0, 'named_left': 0, 'tickets_left': 0, 'fixed_kept': []}; GET /ticket afterwards: {'HC-8173': 404, 'HC-4644': 404}
+
+The refused half failing is the desk as it stands. Both test tickets were removed through the desk pod's loopback
+`/desk-forget` and answer 404; no fixed ticket was named, no deploy row was touched, and no Secret was read.
+
+**Not yet run on a cluster.** The refused half with the change deployed, once hecaton promotes this run and Argo CD
+syncs `ai-layer` from staging: `python3 verify/desk_coc_live.py --context watch-it-burn-community`, which must print
+PASS on all three lines. The next run on #1268 runs it and records the output here.
+
+**No dependency was added.**
