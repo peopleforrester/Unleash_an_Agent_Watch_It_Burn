@@ -49191,3 +49191,29 @@ commits were cherry-picked onto 8b5764a0 with no conflict. `test_coc_pattern_cop
 `test_console_rollout_drain.py` and `test_scope_tests.py` each exit 0, and `scope_tests.py write` changed no entry.
 The live check this run's own fix needs is none, since it touches only files under verify/ that no cluster runs. The
 console change's live rollout, named above, still waits on its promotion.
+
+## 2026-11-09 · #1298 · run 19713 · A test for #1040's choice: open until the rehearsal, then one of three, with both tables agreeing
+
+**What #1298 asks.** Test review run 19710 found no check on #1040's criterion "They settle it: take the cut, change
+the deck's waits, or move time from another segment." `verify/test_seg3_timing.py` reads only the beat table's sums,
+the paragraph's totals and the deck commits. `verify/prior-drafts.sh 1298 origin/staging` printed NONE.
+
+**The choice is still open** (question 1146, run 19708: the rehearsal has not run), so a test that wanted a choice
+on record would fail on staging today. `verify/test_seg3_choice.py` holds both states instead. While no choice is
+written, the "settles one of three" sentence must still offer the cut, the deck's waits and a minute from another
+segment, the paragraph must still say to write the choice there, no beat in the Rehearsal column may be filled (times
+with no choice mean the rehearsal ran and the criterion was not met), and segment 3 keeps its 5 minutes. Once a
+choice is written, there is one, it names exactly one of the three, a minute moved comes from segment 1, 2, 5 or 6
+and sets segment 3's row to 6 (the other two keep 5), every Rehearsal beat is an m:ss time, and the Run-through
+record's Segment 3 row has a time. In both states the segments table adds to the 30-minute slot.
+
+**What changed in the run-of-show.** The paragraph said "write the choice here" with no form a test could read. One
+added passage now says the choice goes in its own paragraph after the beat table, opening `**Settled (YYYY-MM-DD).**`
+and naming one option in the paragraph's own words, and what each option does to segment 3's row. It points at the
+test. Nothing else moved: the options, the table and the Rehearsal column are as they were.
+
+**Test.** `python3 verify/test_seg3_choice.py` printed `SEGMENT 3 CHOICE GREEN`: 7 checks on the real file, a
+settled copy for each of the three options passing, and 13 broken copies each failing its check.
+`verify/test_seg3_timing.py` and `verify/test_ros_segments_table_seg3.py`, which read the same paragraph and table,
+stay green. `verify/scope_tests.py write` added the new test's entry. No live check: the change is the run-of-show's
+prose and an offline test, which no cluster runs.

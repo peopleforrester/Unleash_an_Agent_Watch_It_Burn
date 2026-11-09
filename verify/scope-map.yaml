@@ -8022,6 +8022,8 @@ reads:
     - verify/kubecon_probe.py
     - verify/stage_traces.py
     - verify/topic_cases.py
+  test_seg3_choice.py:
+    - facilitation/kubecon-na-2026-run-of-show.md
   test_seg3_timing.py:
     - facilitation/kubecon-na-2026-run-of-show.md
   test_service_links.py:

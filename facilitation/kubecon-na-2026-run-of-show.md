@@ -1293,7 +1293,13 @@ as the minute after the prompt wall or the hint slides 21 to 26 left to slide 27
 which takes from play time, the beat Whitney's rule keeps first; or drop slides from the
 guardrail sets in the deck. Michael and Whitney time each beat in the Rehearsal column,
 then write the choice here, set segment 3's row in the segments table, and put the time
-in the Run-through record's Segment 3 row.
+in the Run-through record's Segment 3 row. The choice goes in its own paragraph after
+the table, opening `**Settled (YYYY-MM-DD).**` with the rehearsal's date and naming one
+of the three in the words above: "take the cut and move about a minute in from segment
+N" with the segment that gives it, "change the deck's waits", or "drop slides from the
+guardrail sets". The first sets segment 3's row to 6 minutes and the giving segment's
+one lower; the other two keep it at 5. `verify/test_seg3_choice.py` holds the choice,
+the Rehearsal column, both tables and this paragraph together (#1298).
 
 1. **The pre-AI questions (slides 14 and 15).** After the OWASP page, the slide "It is
    time for Challenge 2!" ("Which brings us to challenge two..."). Then the slide reads:
