@@ -17,6 +17,7 @@ verify/test_fleet_standbys.sh holds where desk-reset and the watcher's desk-link
 """
 from __future__ import annotations
 
+import http.client
 import importlib.util
 import json
 import os
@@ -151,17 +152,42 @@ def filed() -> list[str]:
     return sorted(k for k in ts.TICKETS if k not in ts.FIXED_TICKETS)
 
 
+def post_from(source: str, path: str, body: bytes) -> int:
+    """A POST to the desk from another address on this host (127.0.0.2 is on the loopback interface but is not the
+    pod's loopback address), as a request from another pod or the console reaches the desk on its pod address."""
+    conn = http.client.HTTPConnection("127.0.0.1", server.server_address[1], timeout=10, source_address=(source, 0))
+    try:
+        conn.request("POST", path, body=body, headers={"Host": "support.burritobot.co", "Content-Type": "application/json"})
+        return conn.getresponse().status
+    finally:
+        conn.close()
+
+
+def fixed() -> dict:
+    """Every fixed ticket as it is now, each field, so a reset that rewrote one reads as changed."""
+    return {k: dict(ts.TICKETS[k]) for k in ts.FIXED_TICKETS if k in ts.TICKETS}
+
+
+FIXED_AT_START = fixed()
+check("HC-666, the room's ticket, is a fixed ticket", "HC-666" in ts.FIXED_TICKETS and ts.ROOM_TICKET_ID == "HC-666",
+      str(ts.FIXED_TICKETS))
 stock()
 check("the practice run left two room tickets, a presenter HC-9xx and a row from each cluster",
       len(filed()) == 3 and any(ts.is_presenter_ticket(k) for k in filed()) and len(ts.LANDINGS) == 2,
       f"{filed()} {len(ts.LANDINGS)}")
 before = (filed(), len(ts.LANDINGS))
-for why, headers, host in (("through a proxy that names a client (the console's X-Forwarded-For)",
-                            {"X-Forwarded-For": "203.0.113.9"}, "support.burritobot.co"),
-                           ("on the deployments host", {}, "deployments.burritobot.co")):
-    code, _ = post(ts.DESK_RESET_PATH, b"{}", {"Content-Type": "application/json", **headers}, host)
-    check(f"a reset {why} is refused and changes nothing", code in (403, 404) and (filed(), len(ts.LANDINGS)) == before,
-          str(code))
+for body in (b"{}", json.dumps({"tickets": True}).encode()):
+    for why, headers, host in (("through a proxy that names a client (the console's X-Forwarded-For)",
+                                {"X-Forwarded-For": "203.0.113.9"}, "support.burritobot.co"),
+                               ("through a proxy that names the loopback itself",
+                                {"X-Forwarded-For": "127.0.0.1"}, "support.burritobot.co"),
+                               ("on the deployments host", {}, "deployments.burritobot.co")):
+        code, _ = post(ts.DESK_RESET_PATH, body, {"Content-Type": "application/json", **headers}, host)
+        check(f"a reset {why}, body {body!r}, is refused and changes nothing",
+              code in (403, 404) and (filed(), len(ts.LANDINGS)) == before and fixed() == FIXED_AT_START, str(code))
+    code = post_from("127.0.0.2", ts.DESK_RESET_PATH, body)
+    check(f"a reset from off the pod's loopback (127.0.0.2), body {body!r}, is a 403 and changes nothing",
+          code == 403 and (filed(), len(ts.LANDINGS)) == before and fixed() == FIXED_AT_START, str(code))
 check("a pod address, the bot's tool pod or the console's, may not reset; only the pod's own loopback, unproxied",
       not ts.reset_allowed("10.0.3.7", None) and not ts.reset_allowed("127.0.0.1", "10.0.3.7")
       and ts.reset_allowed("127.0.0.1", None) and ts.reset_allowed("::1", ""))
@@ -174,10 +200,15 @@ check("from the loopback, the reset clears both clusters' rows and keeps every t
       code == 200 and got == {"rows_cleared": 2, "tickets_cleared": 0, "rows_left": 0, "filed_left": 3,
                               "fixed_kept": len(ts.FIXED_TICKETS)} and ts.LANDINGS == [] and filed() == before[0], str(got))
 check("so the deployments page reads empty", ts.deployments() == [])
+check("and the default reset left every fixed ticket, HC-666 included, as it was", fixed() == FIXED_AT_START
+      and "HC-666" in ts.TICKETS, str(sorted(fixed())))
 code, got = post(ts.DESK_RESET_PATH, json.dumps({"tickets": True}).encode(), {"Content-Type": "application/json"})
 check("with tickets, it clears every filed ticket, the presenters' HC-9xx included, and keeps every fixed one",
       code == 200 and got["tickets_cleared"] == 3 and got["filed_left"] == 0 and filed() == []
       and all(k in ts.TICKETS for k in ts.FIXED_TICKETS) and ts.ROOM_TICKET_ID in ts.TICKETS, str(got))
+check("  each FIXED_TICKETS entry, HC-666 included, unchanged, and the count it reports is all of them",
+      fixed() == FIXED_AT_START and len(FIXED_AT_START) == len(ts.FIXED_TICKETS) and "HC-666" in FIXED_AT_START
+      and got["fixed_kept"] == len(ts.FIXED_TICKETS), str(got))
 _, again = post("/presenter-ticket", json.dumps({"body": "the next run's demo ticket"}).encode(),
                 {"Content-Type": "application/json"})
 check("and the presenter range starts again at HC-900", isinstance(again, dict) and again.get("id") == "HC-900", str(again))
@@ -237,7 +268,8 @@ with tempfile.TemporaryDirectory() as t:
     out = r.stdout + r.stderr
     check("desk-reset clears the one page on watch-it-burn-community, from inside its desk's pod, keeping tickets",
           r.returncode == 0 and fetches.read_text().split() == ["watch-it-burn-community"] and ts.LANDINGS == []
-          and len(filed()) == 3 and "cleared 2 deploy row(s) and 0 filed ticket(s)" in out, out)
+          and len(filed()) == 3 and fixed() == FIXED_AT_START and "cleared 2 deploy row(s) and 0 filed ticket(s)" in out,
+          out)
     every = [json.loads(line) for line in calls.read_text().splitlines()]
     execs = [c for c in every if "exec" in c]
     check("with one exec, into fake-ticket's site container in agent, on the cluster's own context",
@@ -248,8 +280,8 @@ with tempfile.TemporaryDirectory() as t:
     stock()
     r = desk_reset("--tickets")
     check("desk-reset --tickets clears the filed tickets too, and keeps every fixed one",
-          r.returncode == 0 and filed() == [] and ts.LANDINGS == [] and all(k in ts.TICKETS for k in ts.FIXED_TICKETS),
-          r.stdout + r.stderr)
+          r.returncode == 0 and filed() == [] and ts.LANDINGS == [] and fixed() == FIXED_AT_START
+          and "HC-666" in ts.TICKETS, r.stdout + r.stderr)
     for name in ("watch-it-burn-private", "watch-it-burn-private-b01", "watch-it-burn-007"):
         stock()
         r = desk_reset(name)

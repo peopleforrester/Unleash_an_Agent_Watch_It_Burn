@@ -1017,6 +1017,11 @@ sites:
     lines: 1
     class: none
     why: comments, docstrings or messages that name the command; none runs it
+  verify/test_fleet_start_check.sh:
+  - match: .
+    lines: 8
+    class: loopback
+    why: the two desks (ticket_site.py) and the fake beacon on 127.0.0.1 the test starts itself, which it seeds, resets and reads
   verify/test_fleet_teardown_hooks.sh:
   - match: .
     lines: 1
