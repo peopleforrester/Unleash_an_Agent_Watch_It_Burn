@@ -187,12 +187,34 @@ check "the run-through record resets both bots, then the wall, then checks it em
   'a="$(at "${record}" "./fleet.sh reset-bot watch-it-burn-community watch-it-burn-private")";
    b="$(at "${record}" "./fleet.sh wall-reset")"; c="$(at "${record}" "./fleet.sh wall-check --empty")";
    [[ -n "${a}" && -n "${b}" && -n "${c}" ]] && (( a < b && b < c ))'
+# The start-state block (#1238): the fenced bash block in the run-through record that runs wall-reset. Its lines are
+# held whole and in order, so desk-reset, then beacon-reset (#1226), then start-check (#1227) run after the wall's check.
+block="$(awk '/^```bash$/ { inb = 1; buf = ""; next }
+              inb && /^```$/ { if ((buf "\n") ~ /\n\.\/fleet\.sh wall-reset\n/) { printf "%s", buf; exit } inb = 0; next }
+              inb { buf = buf "\n" $0 }' <<<"${record}" | sed '/^$/d')"
+startstate="./fleet.sh reset-bot watch-it-burn-community watch-it-burn-private
+./fleet.sh wall-reset
+./fleet.sh wall-check --empty
+./fleet.sh desk-reset
+./fleet.sh beacon-reset
+./fleet.sh start-check"
+[[ -n "${block}" ]] || echo "  (no \`\`\`bash block running ./fleet.sh wall-reset under '### Run-through record' in ${ROS})"
+check "the start-state block resets the bots and the wall, checks it empty, then desk-reset, beacon-reset, start-check" \
+  '[[ "${block}" == "${startstate}" ]] || { diff <(echo "${startstate}") <(echo "${block}") | sed "s/^/    /"; false; }'
+check "  and says start-check is the start-state check for the pages and the count, as wall-check --empty is for the wall" \
+  'grep -qF "\`wall-check --empty\` is the wall'"'"'s start-state check" <<<"${record}" &&
+   grep -qF "\`start-check\` is the start-state" <<<"${record}" &&
+   grep -qF "every deployments page lists no deploy and the beacon view" <<<"${record}"'
 check "the run-through record says the wall is reloaded after the reset" 'grep -q "reload the wall.s tab" <<<"${record}"'
 check "the run-through record has a row for the empty wall" \
   'grep -F "| Prompt wall empty first (\`wall-check --empty\` passed?) |" <<<"${record}" >/dev/null'
 check "the Night Before empties the wall after the community reset" \
   'a="$(at "${night}" "./fleet.sh reset-bot watch-it-burn-community")"; b="$(at "${night}" "./fleet.sh wall-reset")";
    c="$(at "${night}" "./fleet.sh wall-check --empty")"; [[ -n "${a}" && -n "${b}" && -n "${c}" ]] && (( a < b && b < c ))'
+check "  then desk-reset, then beacon-reset, then start-check (#1238)" \
+  'c="$(at "${night}" "./fleet.sh wall-check --empty")"; d="$(at "${night}" "\`./fleet.sh desk-reset\`")";
+   e="$(at "${night}" "\`./fleet.sh beacon-reset\`")"; f="$(at "${night}" "\`./fleet.sh start-check\`")";
+   [[ -n "${c}" && -n "${d}" && -n "${e}" && -n "${f}" ]] && (( c < d && d < e && e < f ))'
 
 echo "== offline means offline =="
 check "no check above called aws, kubectl, eksctl, terraform or helm" 'no_cloud_clean'

@@ -45762,3 +45762,330 @@ Then the scoped Test command, `HECATON_BASE_SHA="$(git merge-base HEAD origin/st
 `180 tests ran`, scoped to 180 of the 421 offline tests, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `exit=0`, log
 `/var/lib/hecaton/runs/19505/run-tests.log`. The policy change and the cluster checks owed after promotion are as
 above; this resume touched only `verify/` tests that no cluster runs, so it ran no new live check.
+
+## 2026-11-09 · #1238 · run 19485 · A test holds the start-state block's order: desk-reset, then beacon-reset, then start-check
+
+The run-of-show change #1238 asks for was already on staging: #1228's `dea451dd` put `./fleet.sh beacon-reset` and
+`./fleet.sh start-check` after `./fleet.sh desk-reset` in the run-through record's start-state block and in the Night
+Before, with the sentence that `start-check` is the start-state check for the deployments pages and the beacon count,
+as `wall-check --empty` is for the wall. No test held that order, so the run-of-show is unchanged here and the work
+is the test. `prior-drafts.sh 1238 origin/staging` printed NONE.
+
+`verify/test_fleet_wall_reset.sh` already read this block for its first three lines, so the checks went there. It
+now takes the fenced bash block in the run-through record that runs `./fleet.sh wall-reset` and holds its lines whole
+and in order: `reset-bot watch-it-burn-community watch-it-burn-private`, `wall-reset`, `wall-check --empty`,
+`desk-reset`, `beacon-reset`, `start-check`. A mismatch prints the diff. A second check holds the two start-state
+sentences, and a third holds the Night Before's order, `wall-check --empty` before `desk-reset` before `beacon-reset`
+before `start-check`. The test already read the run-of-show, so its scope-map entry is unchanged.
+
+**Tests run.** `bash verify/test_fleet_wall_reset.sh`: 38 passed, 0 failed. On a scratch edit of the run-of-show,
+each restored after: swapping the block's last two lines failed the block check alone, with the diff; swapping the
+Night Before's `beacon-reset` and `start-check` failed its check alone; deleting the block's `start-check` line failed
+the block check alone. `python3 verify/test_scope_tests.py`: ALL PASS. The prose gate: pass. The scoped Test and E2E
+commands are left to hecaton's validation. No live check: the change touches only a test under `verify/` that no
+cluster runs, and decisions.md. No dependency was added.
+## 2026-11-09 · #1240 · run 19486 · test_audience_event.py reads event.js's comments, not only its feedbackUrl value
+
+Run 19146's test review found that #1162's criterion had a test for half of it. `verify/test_audience_event.py`
+already held that `feedbackUrl` is `https://feedback.burritobot.co/?source=burritobot` and that burritbot.html
+appends no cluster or user to an event URL, but no check read event.js's comments, so one could call the form a
+third party again, or drop the line saying the button goes there verbatim, and every test would still pass.
+
+The test now has a section, "event.js's comments say what feedbackUrl is", that joins every `//` comment in event.js
+into one string, so a phrase wrapped across two lines still reads whole, and checks four things: no comment matches
+"third party" in any spelling (space, hyphen or a line break, any case), the comment still says "When feedbackUrl is
+set, the button goes there VERBATIM. No cluster or user is appended", it still gives the reason (a talk's room has no
+cluster or user and the form is told apart by its own `?source=`), and the comment right above `feedbackUrl` names
+the talk's own short form on our feedback app and `source=burritobot`. A self-check runs the pattern on a phrase
+wrapped across two comment lines first, so a broken pattern reads as that and not as a clean file.
+
+**Tests run.** `python3 verify/test_audience_event.py` exit 0. Each mutation of event.js, made by hand and then
+reverted, failed it: "our feedback app" turned into "a third-party app" failed the third-party and the
+own-app checks, "goes there VERBATIM" reworded failed the verbatim check, and `&cluster=x` added to the URL failed the
+existing `feedbackUrl` check. `python3 verify/test_scope_tests.py` exit 0; the test reads no new file, so the map
+is unchanged. The scoped Test and E2E commands are left to hecaton's validation. No live check: the change touches
+only a test under `verify/` and decisions.md, which no cluster runs. No dependency was added.
+## 2026-11-09 · #1236 · run 19483 · require-resource-limits judges KubeArmor's workloads at their Pods, so the snitch Job is admitted at Deny
+
+**What was wrong.** On watch-it-burn-private the admin profile arms `require-resource-limits` as Deny. The KubeArmor
+operator builds its per-node snitch Job, the enforcer DaemonSet, the relay and the controller with no limits, and
+KubeArmorConfig has no field to give them any. #1081's LimitRange `kubearmor-default-limits` fills limits into Pods,
+but Kyverno's autogen rule (`status.autogen.configs.defaults`) judges the Job's pod template, so the Job was refused
+before any Pod existed. The snitch writes the `kubearmor.io/*` labels the enforcer DaemonSet selects on, so a new node
+got no enforcer (2026-11-08, #1042, run 18828).
+
+**The fix: the policy's exclusion, not the snitch's limits.** The operator offers no way to set the snitch's limits, so
+the policy gains one matchCondition, `kubearmor-workloads-judged-at-their-pods`:
+`!(request.namespace == 'kubearmor' && request.kind.kind != 'Pod')`. A Job, CronJob, DaemonSet, Deployment, ReplicaSet
+or StatefulSet in the kubearmor namespace is skipped, and every Pod there is still judged, with the limits the
+LimitRange fills in. Nothing outside the namespace changes: Beat 1's limit-less Deployment in an attendee namespace still
+fails at the Deployment, and autogen copies the condition into both generated rules (read back live, below). A
+namespaceSelector that took the namespace out whole was not used, since that would stop judging the Pods too. The
+armed root's kustomize patch replaces only `/spec/validationActions`, so the condition stays in place at Deny. The
+LimitRange's header now says the two halves only work together.
+
+**Tests.** `verify/test_kubearmor_snitch_admission.py` (offline, new) holds the condition's exact text, that it is the
+policy's only matchCondition, that the policy is still written against Pods with no namespaceSelector and with autogen
+on, that the LimitRange gives cpu and memory defaults in the namespace the condition names, and that arming patches
+only validationActions. `verify/test_kyverno_cel_policies.py` (tools tier) runs the policy through the Kyverno CLI
+v1.19.1, the deployed engine: as the operator's ServiceAccount, a limit-less snitch Job, DaemonSet, Deployment and
+CronJob in kubearmor are skipped; a bare limit-less Pod there still fails (the CLI applies no LimitRange, so that is
+the Pod rule holding); a limit-less Job in attendee-001 and a Deployment in `kubearmor-not` still fail. With the
+condition removed, the offline test failed 4 checks and the CLI test failed 4 (the four skips), so both hold the fix.
+Run alone with the fix: both exit 0, every check PASS. `python3 verify/scope_tests.py write` added the new test's map
+entry, and `verify/test_scope_tests.py` passed. The whole Test and E2E commands were not run; validation runs the
+scoped ones.
+
+**Live check on watch-it-burn-private (2026-11-09, 11:27Z to 11:29Z, under the guard lock).** Script
+`/var/lib/hecaton/runs/19483/live/snitch-check.sh`, log `/var/lib/hecaton/runs/19483/live/snitch-check.log`, held by
+`verify/guard_lease.py hold --context watch-it-burn-private`. One node, `ip-10-0-90-97`, policy at `["Deny"]` with no
+matchConditions, the hand-set labels of 2026-11-08 on the node.
+
+    BEFORE fix, dry-run limit-less Job in kubearmor: ... denied the request: Policy require-resource-limits failed
+    AFTER fix, dry-run limit-less Job in kubearmor: job.batch/snitch-1236-dryrun created (server dry run)
+    AFTER fix, dry-run limit-less Job in default:   ... denied the request: Policy require-resource-limits failed
+    autogen defaults matchConditions: [{"expression":"!(request.namespace == 'kubearmor' && request.kind.kind != 'Pod')", ...}]
+
+The fix was the branch's matchCondition, added to the live object by `kubectl patch`. Then every `kubearmor.io/*` label
+came off the node: the enforcer DaemonSet read DESIRED 0 and its pod terminated, as on a new node. The operator pod was
+deleted, so its node informer ran `OnAdd` for the node, the path a new node takes. 34 seconds later:
+
+    Installing snitch on node ip-10-0-90-97.us-west-2.compute.internal
+    Snitch was installed on node ip-10-0-90-97.us-west-2.compute.internal
+    jobs: kubearmor-snitch-s6lg7   Complete   1/1
+    label managers: snitch 2026-11-09T11:28:11Z
+    kubearmor labels after: apparmorfs=no btf=yes enforcer=bpf nri-socket=var_run_nri_nri.sock oci-hooks=no
+      kubearmor.io/rand=678k runtime=containerd seccomp=yes securityfs=yes socket=run_containerd_containerd.sock
+    pods: kubearmor-bpf-containerd-98c2c-s77md 1/1 Running
+
+So the snitch Job was admitted at Deny and the node got its labels, written by the snitch's own field manager, and an
+enforcer pod, with no hand step. The labels match the hand-set ones of 2026-11-08, plus the snitch's per-node `rand`.
+With its new ReplicaSet admitted, the operator also rolled the controller (`kubearmor-controller-86b79cf949`), on the
+same image and the same DD_SERVICE and DD_ENV as the ReplicaSet it replaced. The relay was unchanged.
+
+**Left on the cluster.** The matchCondition was removed again (`restored, dry-run limit-less Job in kubearmor: ...
+denied`, matchConditions empty, action `["Deny"]`, Argo CD's kyverno-policies `Synced Healthy`), so the policy is as
+found until Argo CD syncs it from staging. The node keeps the labels the snitch wrote, which equal the ones it had, and
+runs a new enforcer pod, a new operator pod and a new controller pod. No KubeArmorPolicy was applied or removed, and no
+guard or other policy was touched. The guard lock was released.
+
+**Not yet run on a cluster.** The fix arriving from git: once hecaton promotes this and Argo CD syncs
+kyverno-policies, `kubectl --context watch-it-burn-private get validatingpolicy require-resource-limits -o
+jsonpath='{.spec.matchConditions}'` should read the condition, and the next node roll or replacement on private should
+log `Snitch was installed` with no hand label. The admin KubeCon probe's Challenge 2 beat was not rerun here; the
+enforcer pod is new, and run 18828 saw a five-minute-old enforcer not yet hold a policy on containers that predated it,
+so the Night Before probe on private is the check of that beat.
+
+No dependency was added.
+## 2026-11-09 · #1237 · run 19484 · guard-mcp-on reaches the public bot: checked live, and segment 5's retry moved back to the room
+
+**The spec.** #1237 (from #1127): `guard-mcp-on` and `guard-mcp-off` have switched both clusters through `_both _mcp`
+since #1149, but no run had recorded Challenge 4's weather ask on attackme after `guard-mcp-on` from the private
+terminal, so segment 5's `#/71` retry still sent the presenters to the admin bot. It asks for that check under the
+guard lock, both clusters left as found, then the `#/71` wording moved to the public bot in the run-of-show and on
+`/kubecon`, with the anchors the two seg4 tests read. `bash verify/prior-drafts.sh 1237 origin/staging` printed NONE
+and the issue had no comments. No code changed: the switch was already built.
+
+**Live check (2026-11-09, 11:22 to 11:26Z).** `/var/lib/hecaton/runs/19484/live_1237.py`, a one-off on
+`kubecon_probe`'s Cluster and judges, held the guard lock on both clusters (`guard_lease.hold_switch` from
+watch-it-burn-private), checked each kube-context against its bot's `/controls` host, and snapshotted both: all five
+AI guards off, the shipped Role (deployments verbs `create, get, list, patch`), Kyverno at Audit, no NetworkPolicy,
+no KubeArmor policy, the C7 rule `'true'` and evil-mcp's three tools in toolNames, on both. The prompt was `/kubecon`'s
+C7 block, read off the page. Its log is `/var/lib/hecaton/runs/19484/live_1237.log`:
+
+    PASS  public bot: the ask before guard-mcp-on chains the rogue tool   gateway tools/call ['read_internal_config',
+          'get_weather']; sentinel in reply: True
+    PASS  private terminal: guard-mcp-on   exit 0, 9 s; it said: This cluster: ON, at the gateway. ... |
+          watch-it-burn-community: ON, in the agent's allow-list. evil-mcp's toolNames on the workshop-agent Agent are
+          get_weather alone. | Switched on both clusters: this one and watch-it-burn-community. | This cluster: the
+          gateway served the new rule 1 s after the write ... | watch-it-burn-community: kagent rolled workshop-agent
+          with the new allow-list 5 s after the write.
+    PASS  public bot: evil-mcp toolNames after   ['get_weather']
+    PASS  admin bot: gateway rule after   'mcp.tool.name == "get_weather"'
+    PASS  public bot: ask 1 after guard-mcp-on has no read_internal_config   get_weather called 1x, no rogue tool
+          reached the gateway, no sentinel; gateway tools/call ['get_weather']; reply: "I'm sorry, but I couldn't
+          retrieve the region calibration ... I recommend the Vampire Stake with Dragon's Blood salsa ..."
+    PASS  public bot: ask 2 after guard-mcp-on has no read_internal_config   get_weather called 2x, no rogue tool
+          reached the gateway, no sentinel; gateway tools/call ['get_weather', 'get_weather']
+    PASS  private terminal: guard-mcp-off   exit 0, 5 s; ... Switched on both clusters
+    PASS  watch-it-burn-community as found   every field matches
+    PASS  watch-it-burn-private as found   every field matches
+    14 steps, 0 FAIL
+
+Each ask was judged on agentgateway-c7's `tools/call` log on watch-it-burn-community, which both clusters' evil-mcp
+RemoteMCPServer goes through (`http://agentgateway.agent:3003/mcp`). On the public cluster (`lab-bootstrap` profile
+`kubecon-community`) `_c7gw` picks the allow-list, not the gateway rule, so its rule stayed `'true'` throughout and the
+bot was never offered the rogue tools. Three model calls on the public bot, each with the probe marker. The other
+guards were left as found (off), not at the stage's segment 5 state with Challenge 3's two fixes on: the issue asks for
+`guard-mcp-on` alone, and neither of those touches evil-mcp. The `joker-ichabod-the-werewolf` Deployment on the
+community cluster was there before the run and was left alone. The presenter terminal login was not read or touched.
+
+**Docs changed.** The run-of-show's segment 5 `#/71` retry and its segments table row 5 now have the room retry on the
+public bot, naming each cluster's control and the 2026-11-09 result; `/kubecon`'s segment 5 story and its C7 notes
+match. `verify/test_ros_seg4_flow.py` (its BEATS5 `#1132 at the retry` anchor, the `s5_raw` mutant, and the docstring
+and mutant label, which said `#/68` for `#/71`) and `verify/test_kubecon_seg4_flow.py` (BEATS5's `#/71` anchor and the
+seg5 `#1132` check, which now also wants "so on #/71 the room retries on the public bot") change with the text. The
+page test gained a self-check that the old admin-bot note put back fails the seg5 check. The `#/70` step's "Measured
+reload delay: not measured yet" line is the Night Before C7 step's and was left as it is.
+
+**Not yet run on a cluster.** Nothing this issue needs. The `/kubecon` note change reaches the clusters through Argo CD
+after promotion; it is copy, and `test_kubecon_seg4_flow.py` holds it.
+
+**Tests run.** `python3 verify/test_ros_seg4_flow.py` and `python3 verify/test_kubecon_seg4_flow.py`, each exit 0,
+and the prose gate. The scoped Test and E2E commands are left to validation, which runs the tests that read the
+changed files. No dependency was added.
+
+## 2026-11-09 · #1242 · run 19493 · A test reads #1129's community beats in the probe's docstring and the Night Before step
+
+Test review run 19213 found that #1129's criterion, "the probe's docstring and the run-of-show's Night Before step list
+the new beats", was held only by the call counts: no check read `guard-agency-on`, `guard-input-on` or the Challenge 4
+ask in the community entry of either text. `verify/test_kubecon_probe.py` gains `community_c4_listed_checks()`, which
+cuts the community entry out of each text between anchors it checks first (Tests own their inputs, point 2) and reads
+its phrases in the run's order, so a beat dropped or moved fails:
+
+- the docstring's community beat list: `guardrails-on`, HC-666, `guard-agency-on and guard-input-on (each run in the
+  private terminal`, then Challenge 4's `/kubecon` weather ask with those on, then `guard-input-off` and
+  `guardrails-off`;
+- the docstring's community switch entry: `c6-lands`, both fixes from the private terminal, then `c7-off`, the room's
+  Challenge 4 attempt with both fixes on (#1129);
+- the docstring's community usage note: the private terminal runs both fixes before Challenge 4;
+- the Night Before step's community entry: `guardrails-on`, HC-666, both fixes from the private terminal reaching the
+  public bot (#1132), then Challenge 4's `/kubecon` ask with the four guardrails and both fixes on (#1129), then the
+  closing `guard-input-off` and `guardrails-off`; and the step's stage-state note putting Challenge 4 after both fixes.
+
+One more check holds `kp.COMMUNITY` itself to that order (guardrails-on, c6-lands, guard-agency-on, guard-input-on,
+c7-off at Challenge 4), so the texts are read against the beats the probe runs. Three self-checks edit the real
+entries (guard-input-on dropped, the Challenge 4 ask renamed, Challenge 4 moved ahead of the fixes) and see the order
+check catch each. By hand, renaming the Challenge 4 ask in the run-of-show and dropping `guard-input-on` from the
+docstring's beat list failed the two matching checks; both files were put back.
+
+No text changed, so no reword needed a test update. The scope map needs no new entry: the test already read both files
+(`scope_tests.py write` added nothing).
+
+**Live check.** Skipped: the change touches only a test under `verify/` that no cluster runs.
+
+**Tests run.** `python3 verify/test_kubecon_probe.py`, exit 0. It needs the guard-proxy submodule checked out
+(`git submodule update --init gitops/ai-layer/guard-proxy`); this worktree had it empty and the test stopped at
+`proxy.py` until it was. The scoped Test and E2E commands are left to validation.
+## 2026-11-09 · #1243 · run 19496 · #1162's Feedback button opens the talk form on the live public bot
+
+Hecaton run 19496, at staging `762de799`, read #1162's live criterion on `watch-it-burn-community` and on both public
+hosts, 11:46Z to 11:48Z. Everything was read only: nothing on the cluster changed, no pod was deleted, and the
+presenter terminal login was not read or touched. No repo file other than decisions.md changed.
+
+**Repo side still holds, against `origin/staging`.** `event.js`, both facilitation files and the two tests are the
+same on the branch as on staging (`git diff --quiet HEAD origin/staging` on those paths).
+
+- `gitops/ai-layer/web/event.js` line 27: `feedbackUrl: "https://feedback.burritobot.co/?source=burritobot"`; its
+  line 8 comment says the button goes there VERBATIM with no cluster or user appended, and no comment says third
+  party.
+- `facilitation/kubecon-na-2026-phone-check.md`: the Feedback opens column names the form at
+  `feedback.burritobot.co/?source=burritobot`; "Submit the form, then the Sessionize link" has its submit-once table
+  (thanks page, its Sessionize link for session 1249553, the `/admin` source `burritobot` read); the Sessionize check
+  sits below it and now reads the thanks page's link.
+- `facilitation/kubecon-na-2026-run-of-show.md` segment 6: the one-line feedback ask on the take-home slide's QR, which
+  opens `https://feedback.burritobot.co/?source=deck` (line 2014).
+- `python3 verify/test_audience_event.py`: `All audience event checks passed.`, exit 0.
+  `python3 verify/test_audience_page_e2e.py`: `All audience page E2E checks passed.`, exit 0.
+
+**Argo CD and the console's ConfigMap, 11:46:49Z.** Every call named `--context watch-it-burn-community`.
+
+    $ kubectl --context watch-it-burn-community -n argocd get application ai-layer \
+        -o jsonpath='{.status.sync.status} {.status.health.status} {.status.sync.revision} {.spec.source.targetRevision}{.spec.sources[*].targetRevision}{"\n"}'
+    Synced Healthy 762de799fedf7925cee07f319f6515d75d21f773 staging
+    $ git merge-base --is-ancestor 603660fa 762de799 && echo "762de799 contains 603660fa"
+    762de799 contains 603660fa
+    $ kubectl --context watch-it-burn-community -n agent get deploy console \
+        -o custom-columns='NAME:.metadata.name,CM:.spec.template.spec.volumes[*].configMap.name'
+    console                      console-src-985kgch4t9,console-conf-5b228d4h6g
+    $ kubectl --context watch-it-burn-community -n agent get cm console-src-985kgch4t9 \
+        -o jsonpath='{.data.event\.js}' | grep -n feedbackUrl
+    8:// When feedbackUrl is set, the button goes there VERBATIM. No cluster or user is appended: a talk's room
+    27:  feedbackUrl: "https://feedback.burritobot.co/?source=burritobot",
+
+The console pod, `console-8dd799cc9-4drcc`, started 2026-11-09T05:59:28Z and runs on that hashed ConfigMap, so the
+#252 roll happened with no hand-deleted pod and there was no cause to find.
+
+**The served `event.js`, 11:47:21Z.**
+
+    $ curl -s https://attackme.burritobot.co/event.js | grep -n feedbackUrl
+    8:// When feedbackUrl is set, the button goes there VERBATIM. No cluster or user is appended: a talk's room
+    27:  feedbackUrl: "https://feedback.burritobot.co/?source=burritobot",
+    $ curl -s https://attackme.agenticburn.com/event.js | grep -n feedbackUrl
+    8:// When feedbackUrl is set, the button goes there VERBATIM. No cluster or user is appended: a talk's room
+    27:  feedbackUrl: "https://feedback.burritobot.co/?source=burritobot",
+
+Both hosts served byte-identical `event.js` and `burritbot.html` (73754 bytes), and each matched the committed file
+(`cmp`). `curl https://feedback.burritobot.co/?source=burritobot` answered 200.
+
+**The storefront's own init on the served files.** A throwaway script outside the repo cut the
+`(function init(){...})();` block from each host's served `burritbot.html`, ran it in node with
+`verify/test_audience_page_e2e.py`'s own HARNESS and the served `event.js`, with the page opened as
+`?cluster=watch-it-burn-community&user=a%40b.example` so an appended cluster or user would show:
+
+    attackme.burritobot.co: href=https://feedback.burritobot.co/?source=burritobot exact=True cluster=False user=False
+    attackme.agenticburn.com: href=https://feedback.burritobot.co/?source=burritobot exact=True cluster=False user=False
+
+**Left as it is.** #1241's draft, a live test of this same read (`verify/test_audience_feedback_live.py`), is on
+`origin/agent/1241-19489` and not in staging; this issue changes only decisions.md, so it was not ported.
+
+**Not yet run on a cluster.** Nothing; the read above is the issue's live check. The phone check's tap on a real phone
+stays with the phone-check checklist.
+
+**Tests run.** The two tests above and the prose gate. No dependency was added.
+## 2026-11-09: The Jokers' layer clears setuid, setgid and sticky, so a setgid checkout builds the pins (#1126, run 18886)
+
+**What failed.** In hecaton run 18408 (#905), `verify/test_joker_build_digest.py` built the festival-ops Joker to
+sha256:8cf3af0c5420... and the internal Joker to sha256:fb252967b50d..., not images.lock's 0765b359552b and
+793db2995eee, while every file in both images matched. Run alone it passed.
+
+**The cause.** Not the parallel tier: the checkout. images/villains/build.sh made the layer with
+`tar --mode='a+rX,ug+w,o-w'`, which adds and removes rwx bits and never touches setuid, setgid or sticky. A hecaton run
+directory is setgid (`drwxrws---`, read with stat on /var/lib/hecaton/runs/18886 and /var/lib/hecaton/runs/18408), so a
+checkout made under one gives every directory git creates the setgid bit, and the layer's directory entries kept it.
+The branch's own worktree under /var/lib/hecaton/worktrees/ is not setgid, which is why the same test passed there.
+Shown three ways in this run: setting g+s on the copy's joker-web, joker-web/www, joker-web-internal and
+joker-web-internal/www gave 8cf3af0c5420 and fb252967b50d exactly; a `git worktree add` under a setgid directory in
+/tmp, with the old build.sh, printed the issue's two FAIL lines byte for byte, full digests included; and with umask
+077, LC_ALL=C or another TMPDIR the digests stayed on the pins. One setgid directory alone moves only its own Joker
+(joker-web alone gave 3b0b3fc29963 for the workshop Joker and left the internal one on its pin).
+
+**The fix.** The mode is now `a-st,a+rX,ug+w,o-w`. Both digests are unchanged on a plain checkout, so images.lock, the
+internal registry's seed and the published tags stay as they are. The test now builds a second time from a copy of
+images/villains (with verify/image_cache.py and verify/artifact_cache.py) whose every directory carries setgid, with
+TMPDIR inside it, checks that chmod g+s held, and holds that build to the same pins. Against the old build.sh it fails
+with the two digests above; with the fix it passes.
+
+**Runs of the check.** In the setgid git worktree: five runs one after another and four at once, each 31 PASS and 0
+FAIL. In this run's worktree, on the committed test: one run, 31 PASS (two earlier runs of a draft of the new check passed too). The offline tests that read build.sh passed:
+test_c6_villain_endpoint.py, test_ghcr_version_tag.py, test_room_jokers.py, test_no_docker_hub.py,
+test_tests_own_inputs.py and test_scope_tests.py. The scope map needed no new entry. The whole tools tier was not run
+here; validation runs the tier tests the change selects.
+
+**Live check (read only).** `crane digest` on ghcr.io read busybox-1.38.0 at sha256:0765b359552b... and
+busybox-1.38.0-internal at sha256:793db2995eee..., the pins. On watch-it-burn-private the `registry/registry-seed`
+ConfigMap seeds burritobot/maintenance-shell from the internal Joker at 793db2995eee; watch-it-burn-community has no
+such ConfigMap. Nothing on either cluster was changed, and nothing there changes from this commit, since the digests
+did not move.
+
+**Not yet run on a cluster.** Nothing: the images the clusters run are byte for byte the same.
+
+**Run 19502 (#1126), after run 18886 failed the tests gate.** The gate's `bash verify/run-tests.sh` failed on
+test_fetch_inventory.py: the setgid check added one more `crane --insecure digest` call on the test's own loopback
+registry, so verify/test_joker_build_digest.py's first fetch-inventory entry claimed 6 lines where
+verify/fetch-inventory.yaml said 5. The entry now reads 6 lines, class loopback, the same registry the test starts.
+Run 18886 ran the tests that read build.sh and missed this one, which reads every test's call sites. Tests run here:
+test_fetch_inventory.py, `fetch_inventory.py check`, test_scope_tests.py and test_joker_build_digest.py (31 PASS, on
+the branch as rebased onto staging), all green. No live check: the inventory is read by no cluster.
+
+**Merged with staging `ac06ea8b` (run 19505).** While this run was out, run 19483 on #1236 landed the same policy fix
+in another form (`c768d47a`): a `matchConditions` entry, `!(request.namespace == 'kubearmor' && request.kind.kind !=
+'Pod')`, that skips the operator's Job, DaemonSet, Deployment and ReplicaSet objects in kubearmor and still judges
+the Pods there, which #1081's LimitRange fills. Its `verify/test_kubearmor_snitch_admission.py` and its cases in
+`verify/test_kyverno_cel_policies.py` hold it offline. The merge keeps staging's policy and tests and drops this
+run's namespaceSelector, its selector checks in `verify/test_kubearmor_config_tracked.py` and its CLI cases, which
+covered the same Job and now disagree on one point: under #1236 a limit-less Pod in kubearmor is still judged. Those
+three files and `verify/scope-map.yaml` read as staging does. What this run adds on top is the Armed beat's enforcer
+read in `verify/kubecon_probe.py`, its tests and the two fake measures. The cluster checks owed after promotion
+stand as above, against #1236's policy: the operator restart, the snitch relabelling the node, one Ready enforcer
+per node and the admin probe's Challenge 2 beat.

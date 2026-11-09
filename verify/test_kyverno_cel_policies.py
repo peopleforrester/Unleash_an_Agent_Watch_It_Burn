@@ -69,7 +69,7 @@ USERS = {
                           ["system:serviceaccounts", "system:serviceaccounts:guardrails-switch", "system:authenticated"]),
     "replicaset-controller": ("system:serviceaccount:kube-system:replicaset-controller",
                               ["system:serviceaccounts", "system:serviceaccounts:kube-system", "system:authenticated"]),
-    # KubeArmor's operator, which creates the snitch Job on each node (#1235).
+    # The KubeArmor operator, which builds the snitch Jobs, the enforcer DaemonSet, the relay and the controller (#1236).
     "kubearmor-operator": ("system:serviceaccount:kubearmor:kubearmor-operator",
                            ["system:serviceaccounts", "system:serviceaccounts:kubearmor", "system:authenticated"]),
 }
@@ -115,11 +115,6 @@ def deploy(name, ns, containers, labels=None, annotations=None):
     return {"apiVersion": "apps/v1", "kind": "Deployment", "metadata": md,
             "spec": {"selector": {"matchLabels": {"app": name}},
                      "template": {"metadata": {"labels": labels or {"app": name}}, "spec": {"containers": containers}}}}
-
-
-def job(name, ns, containers):
-    return {"apiVersion": "batch/v1", "kind": "Job", "metadata": {"name": name, "namespace": ns},
-            "spec": {"template": {"spec": {"restartPolicy": "Never", "containers": containers}}}}
 
 
 def c(image="ghcr.io/peopleforrester/watch-it-burn:x", **kw):
@@ -230,13 +225,34 @@ expect("cpu without memory fails", g, "cpu-only", "fail", LIM_MSG)
 expect("cpu and memory limits pass", g, "limited", "pass")
 g = run(LIM, [pod("no-limits", "monitoring", [c("x")])], operation="UPDATE")
 expect("an UPDATE to a Pod that already lacked limits passes", g, "no-limits", "pass")
-# #1235: KubeArmor's operator labels each node through a limit-less snitch Job; refused, the node runs no enforcer.
-g = run(LIM, [job("kubearmor-snitch", "kubearmor", [c("x")]), job("agent-job", "agent", [c("x")]),
-              pod("kubearmor-pod", "kubearmor", [c("x")])],
-        user="kubearmor-operator")
-expect("the operator's limit-less snitch Job in kubearmor is out of scope", g, "kubearmor-snitch", "ignored")
-expect("and so is a limit-less Pod there", g, "kubearmor-pod", "ignored")
-expect("the same Job in agent still fails (the autogen Job rule)", g, "agent-job", "fail", LIM_MSG)
+
+# #1236: the KubeArmor operator's per-node snitch Job carries no limits (KubeArmorConfig has no field for them), and on
+# watch-it-burn-private, where this policy is Deny, autogen refused the Job itself, so a new node got no kubearmor.io
+# labels and no enforcer. The kubearmor namespace's LimitRange fills limits into Pods only, so the policy skips the
+# workload objects there and judges their Pods. The CLI applies no LimitRange, so the bare Pod below still fails: that
+# is the Pod rule still holding in kubearmor, which the LimitRange answers on a cluster.
+SNITCH = {"apiVersion": "batch/v1", "kind": "Job",
+          "metadata": {"name": "kubearmor-snitch-1236", "namespace": "kubearmor"},
+          "spec": {"template": {"metadata": {"labels": {"kubearmor-app": "kubearmor-snitch"}},
+                                "spec": {"restartPolicy": "Never", "containers": [c("snitch", name="snitch")]}}}}
+other_job = json.loads(json.dumps(SNITCH))
+other_job["metadata"] = {"name": "limitless-job", "namespace": "attendee-001"}
+ka_ds = deploy("kubearmor-bpf-containerd", "kubearmor", [c("enforcer")])
+ka_ds["kind"] = "DaemonSet"
+ka_cron = {"apiVersion": "batch/v1", "kind": "CronJob", "metadata": {"name": "ka-cron", "namespace": "kubearmor"},
+           "spec": {"schedule": "* * * * *", "jobTemplate": {"spec": SNITCH["spec"]}}}
+g = run(LIM, [SNITCH, ka_ds, deploy("kubearmor-controller", "kubearmor", [c("controller")]), ka_cron,
+              pod("kubearmor-bare-pod", "kubearmor", [c("x")]), other_job], user="kubearmor-operator")
+expect("the operator's snitch Job in kubearmor is admitted (skipped), so a new node gets its labels",
+       g, "kubearmor-snitch-1236", "ignored")
+expect("and its enforcer DaemonSet", g, "kubearmor-bpf-containerd", "ignored")
+expect("and its controller Deployment", g, "kubearmor-controller", "ignored")
+expect("and a CronJob there (autogen's other rule)", g, "ka-cron", "ignored")
+expect("a limit-less Pod in kubearmor is still judged: the LimitRange, not the policy, answers it",
+       g, "kubearmor-bare-pod", "fail", LIM_MSG)
+expect("a limit-less Job in any other namespace still fails at the Job", g, "limitless-job", "fail", LIM_MSG)
+g = run(LIM, [deploy("sample-web", "kubearmor-not", [c(WEB)])], user="student")
+expect("the skip is the kubearmor namespace by name, not a prefix", g, "sample-web", "fail", LIM_MSG)
 
 # #529: each ValidatingPolicy is its own webhook and the first to answer is the deny message, so the probe's C2
 # Deployment must break the registry allow-list and nothing else.

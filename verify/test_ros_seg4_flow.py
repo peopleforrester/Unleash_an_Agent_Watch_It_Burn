@@ -15,7 +15,7 @@ holds:
      gives it (DECK_LINES below, copied from that issue and checked against the built attendee.html on 2026-11-08).
   4. Segment 4 shows the white text live on `#/47`, links the public deployments page on `#/46` and the same one on
      `#/47`, the one page both bots deploy to since #1145 (#1160), and names #1132 at `#/51`'s retry; segment 5 names
-     #1132 at `#/68`'s retry.
+     #1132 at `#/71`'s retry, where the room retries on the public bot.
   5. No "Joker" and no desk wall; Challenge 4's room-facing lines never tell the room to try each tool, and the
      old "The setup" framing is gone.
   6. The facts that still hold are still stated.
@@ -69,7 +69,7 @@ BEATS5 = [
     ("LLM03 (#/69)", "**LLM03 (`#/69`).**"),
     ("guard-mcp-on (#/70)", "The presenter types `guard-mcp-on`"),
     ("the retry (#/71)", "**The retry (`#/71`).**"),
-    ("#1132 at the retry", "The room's retry works only once #1132 is built"),
+    ("#1132 at the retry", "The room's retry runs on the public bot: since #1132, `guard-mcp-on`"),
     ("the gateway (#/72 and #/73)", "\"This attack was prevented with an MCP gateway.\""),
     ("the fix slide's notes end on the walk", "Let's walk through it.\" - **The two diagrams (`#/74` to `#/96`).**"),
     ("the rule is asked for on #/96", "`#/96`: \"So the human gets the weather and nothing else."),
@@ -317,9 +317,9 @@ check("telling the room to try each tool fails the solve check",
 need(s5_raw, "**The tee-up (`#/65` and `#/66`).**")
 setup = ros.replace("**The tee-up (`#/65` and `#/66`).**", "**The tee-up (`#/65` and `#/66`).** The setup:", 1)
 check("the old \"The setup\" put back fails its check", bool(problems(setup)["segment 5 drops the old \"The setup\" framing"]))
-need(s5_raw, "The room's retry works only once #1132 is built")
-no1132 = ros.replace(s5_raw, s5_raw.replace("The room's retry works only once #1132 is built", "The room retries", 1), 1)
-check("dropping #1132 from #/68's retry fails the order check",
+need(s5_raw, "The room's retry runs on the public bot: since #1132")
+no1132 = ros.replace(s5_raw, s5_raw.replace("The room's retry runs on the public bot: since #1132", "The room retries", 1), 1)
+check("dropping #1132 from #/71's retry fails the order check",
       bool(problems(no1132)["segment 5's beats come in the deck's order"]))
 old_row = ("| 4 | 7 | W+M | Challenge 3: the support desk and its Joker wall, the prompt wall optional during play | "
            "Asks BurritoBot about HC-666 | 4, 5, 6, 7 |")

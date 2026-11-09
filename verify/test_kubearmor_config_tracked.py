@@ -88,28 +88,6 @@ defaults = (yaml.safe_load((CHART / "values.yaml").read_text(encoding="utf-8")) 
 check("values.yaml holds the operator chart's kubearmorConfig defaults, with stdout process logs off",
       defaults.get("enableStdOutLogs") is False and defaults.get("defaultFilePosture") == "audit")
 
-print("== require-resource-limits leaves the operator's namespace out (#1235) ==")
-# The operator labels a node by running a snitch Job on it, and the enforcer DaemonSet selects only labelled nodes.
-# On watch-it-burn-private, with the policy at Deny, autogen's Job rule refused the snitch, which the LimitRange above
-# cannot fill (it fills Pods, and the Job is refused first), so a replaced node ran no enforcer and block-recipe-snoop
-# blocked nothing (run 18849). Kyverno copies the policy's namespaceSelector onto its webhook, which covers every
-# autogen kind, so a kubearmor Job never reaches the policy. test_kyverno_cel_policies.py holds the CLI's verdict.
-LIMITS_POLICY = REPO / "policies/kyverno/require-resource-limits.yaml"
-pol = yaml.safe_load(LIMITS_POLICY.read_text(encoding="utf-8"))
-mc = (pol.get("spec") or {}).get("matchConstraints") or {}
-ns_dest = (app["spec"].get("destination") or {}).get("namespace")
-exprs = ((mc.get("namespaceSelector") or {}).get("matchExpressions")) or []
-check(f"the kubearmor Application installs the operator in namespace kubearmor (got {ns_dest!r})", ns_dest == "kubearmor")
-check("require-resource-limits' namespaceSelector is one NotIn on the namespace name, naming only kubearmor",
-      exprs == [{"key": "kubernetes.io/metadata.name", "operator": "NotIn", "values": [ns_dest]}], str(exprs))
-check("its namespaceSelector has no matchLabels, so every other namespace stays in scope",
-      not (mc.get("namespaceSelector") or {}).get("matchLabels"))
-check("it carries no objectSelector or matchConditions that could narrow it further",
-      "objectSelector" not in mc and "matchConditions" not in (pol.get("spec") or {}))
-rules = mc.get("resourceRules") or []
-check("it is still written against Pods alone, so autogen keeps the Deployment and Job rules Beat 1 needs",
-      [r.get("resources") for r in rules] == [["pods"]])
-
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")

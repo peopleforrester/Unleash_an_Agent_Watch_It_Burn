@@ -1163,7 +1163,7 @@ sites:
     why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
   verify/test_joker_build_digest.py:
   - match: '"registry", "serve"|urlopen|"--insecure"'
-    lines: 5
+    lines: 6
     class: loopback
     why: crane's own registry on 127.0.0.1, which the test starts
   - match: image_cache\.layout\(|"CRANE":\ crane
