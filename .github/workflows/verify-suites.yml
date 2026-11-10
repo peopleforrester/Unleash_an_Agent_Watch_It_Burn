@@ -153,13 +153,6 @@ jobs:
           "$RUNNER_TEMP/venv/bin/python" verify/package_cache.py install pyyaml --python "$RUNNER_TEMP/venv/bin/python"
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
 
-      # The tier's mcp and llm-guard environments run on Python 3.12, which package_cache.py only finds, never fetches.
-      # hecaton#475 moved the runners' UV_PYTHON_INSTALL_DIR to a new, empty directory, and four tier tests failed on
-      # "uv finds no Python 3.12" (Actions run 42866956234, #1314). This has uv install every Python verify/python.lock's
-      # environments are locked for, a no-op once it has them, and fails the job when it cannot.
-      - name: Every Python the package cache's environments are locked for
-        run: python3 verify/package_cache.py ensure-pythons
-
       # The node harnesses run on the Node on PATH, 24 or later, which run-e2e-tools.sh checks before any test; the job
       # installs the current major, 26 (#1200).
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0

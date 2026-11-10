@@ -320,29 +320,45 @@ try:
     check("an interpreter on another Python is refused before any install",
           f"fx is locked for Python {other}, and {sys.executable} is Python {PY}" in err and len(uv_calls(log)) == n, err)
 
-    print("== ensure_pythons(): uv installs each Python the environments are locked for, then finds it (#1314) ==")
-    check("pythons() is each version ENVS is locked for, once", pc.pythons() == sorted({e.python for e in pc.ENVS.values()})
-          and "3.12" in pc.pythons(), str(pc.pythons()))
-    finds = [["python", "find", "--no-config", v] for v in pc.pythons()]
+    print("== a Python uv finds none of is installed on the miss, then found (#1314) ==")
+    find = lambda v: ["python", "find", "--no-config", v]  # noqa: E731
+    installed = pathlib.Path(str(log) + ".installed")
     n = len(uv_calls(log))
-    got = pc.ensure_pythons()
+    got = pc._find_python(PY, os.environ)
     new = [c["args"] for c in uv_calls(log)[n:]]
-    check("with every version found, nothing is installed", new == finds and got == [], str(new))
-    n = len(uv_calls(log))
-    got = pc.ensure_pythons(ienv={**os.environ, "STUB_UV_MISSING": "3.12"})
-    new = [c["args"] for c in uv_calls(log)[n:]]
-    check("a version uv finds no interpreter for (3.12, as on Tanjiro in run 42866956234) is installed, alone, "
-          "then found", new == finds + [["python", "install", "--no-config", "3.12"], finds[0]] and got == ["3.12"],
+    check("with the version found, uv is asked once and nothing is installed", new == [find(PY)] and got == sys.executable,
           str(new))
-    err = refusal(lambda: pc.ensure_pythons(ienv={**os.environ, "STUB_UV_MISSING": "3.11 3.13",
-                                                  "STUB_UV_INSTALL_FAILS": "1"},
-                                            envs={"a": pc.Env("3.11", ()), "b": pc.Env("3.13", ())}))
-    check("an install uv cannot do fails, naming the missing versions and uv's answer",
-          "uv could not install Python 3.11, 3.13 (exit 2)" in err and "no download found" in err, err)
-    r = subprocess.run([sys.executable, str(VERIFY / "package_cache.py"), "ensure-pythons"], capture_output=True,
-                       text=True, env={**os.environ, "STUB_UV_MISSING": "3.12 3.13", "STUB_UV_INSTALL_FAILS": "1"})
-    check("the ensure-pythons verb exits 1 on it, so the CI step fails", r.returncode == 1
-          and r.stderr.startswith("PACKAGE CACHE FAILED: uv could not install Python"), r.stderr)
+    n = len(uv_calls(log))
+    got = pc._find_python("3.12", {**os.environ, "STUB_UV_MISSING": "3.12"})
+    new = [c["args"] for c in uv_calls(log)[n:]]
+    check("a version uv finds no interpreter for (3.12, as on Tanjiro in run 42866956234) is installed alone, then found",
+          new == [find("3.12"), ["python", "install", "--no-config", "3.12"], find("3.12")] and got == sys.executable,
+          str(new))
+    n = len(uv_calls(log))
+    pc._find_python("3.12", {**os.environ, "STUB_UV_MISSING": "3.12"})
+    new = [c["args"] for c in uv_calls(log)[n:]]
+    check("once installed, the next find reuses it and installs nothing", new == [find("3.12")], str(new))
+    n = len(uv_calls(log))
+    err = refusal(lambda: pc._find_python("3.11", {**os.environ, "STUB_UV_MISSING": "3.11",
+                                                    "STUB_UV_INSTALL_FAILS": "1"}))
+    new = [c["args"] for c in uv_calls(log)[n:]]
+    check("an install uv cannot do fails, naming the version and uv's answer, with no second find",
+          "uv finds no Python 3.11 (exit 2), and could not install it (exit 2)" in err and "no download found" in err
+          and new == [find("3.11"), ["python", "install", "--no-config", "3.11"]], err + " " + str(new))
+    installed.unlink(missing_ok=True)
+    os.environ["STUB_UV_MISSING"] = PY
+    try:
+        n = len(uv_calls(log))
+        venv = pc.environment("fx", root=SCRATCH / "root-1314", lock=FIXTURE_LOCK, fetch=fetch)
+        new = uv_calls(log)[n:]
+    finally:
+        del os.environ["STUB_UV_MISSING"]
+    check("environment() on a runner whose uv has no Python for the lock installs it, then builds the venv",
+          [c["args"][:2] for c in new] == [["python", "find"], ["python", "install"], ["python", "find"],
+                                           ["venv", "--no-config"], ["pip", "install"]]
+          and new[1]["args"] == ["python", "install", "--no-config", PY]
+          and new[1]["uv_cache"] == str(SCRATCH / "root-1314" / "packages" / "uv-cache")
+          and (venv / "bin" / "python").exists(), str([c["args"] for c in new]))
 finally:
     os.environ["PATH"] = PATH
     subprocess.run(["chmod", "-R", "u+w", str(SCRATCH)], check=False)

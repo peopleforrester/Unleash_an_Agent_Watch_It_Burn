@@ -50998,7 +50998,7 @@ login was not touched. The desk is as found.
 **Tests.** No file a test reads changed besides this one; no test was run beyond the live script and the prose gate.
 **No dependency was added.**
 
-## 2026-11-10 · #1314 · run 20143 · CI on staging after hecaton#475: a linked TMPDIR, an empty uv Python directory, a cut layer stream
+## 2026-11-10 · #1314 · runs 20143 and 20146 · CI on staging after hecaton#475: a linked TMPDIR, an empty uv Python directory, a cut layer stream
 
 Tanjiro's runners came back at 19:02Z with hecaton#475 live, and verify-suites on staging 78209675 (Actions run
 42866956234) ran both jobs and failed both. This run read both job logs and the run before it (42863038669) and fixed
@@ -51025,12 +51025,11 @@ them here, and each is fixed where the path first differs:
 
 - Four tests on the mcp and llm-guard environments failed on "uv finds no Python 3.12". The job log shows
   `UV_PYTHON_INSTALL_DIR` moved from `/srv/gha-agent/.local/share/uv/python` (run 42863038669) to the new, empty
-  `/srv/gha-agent/cache/uv-python`, and `package_cache.py` only finds an interpreter. New
-  `package_cache.ensure_pythons()` and its verb `ensure-pythons` have uv install each version `ENVS` is locked for
-  that `uv python find` lacks, then find it, and fail by name when uv cannot. The e2e job runs
-  `python3 verify/package_cache.py ensure-pythons` before the suite, and `test_verify_suites_workflow.py` fails a
-  workflow without it or with it after the suite. A version already found is not installed, so the system Python
-  3.13 the jobs' venvs use is left alone.
+  `/srv/gha-agent/cache/uv-python`, and `package_cache.py` only found an interpreter. As Michael settled with hecaton
+  on the issue, `package_cache._find_python()` now runs `uv python install --no-config <version>` on a miss, into
+  `UV_PYTHON_INSTALL_DIR` (uv checks the build's sha256), and finds it again, so the first job on a runner fills the
+  directory and later jobs reuse it. An install uv cannot do fails, naming the version and uv's answer. A version
+  already found is never installed.
 - `test_image_version_tags.py` stopped on tarfile's "unexpected end of data" in both runs, after 887 s and 1061 s,
   streaming a web-terminal layer (about 680 MB in all). http.client returns an empty read when a connection closes
   before Content-Length, so a cut stream looks like the end. New `ghcr_pull.open_blob()` reads a blob of the size the
@@ -51045,18 +51044,31 @@ them here, and each is fixed where the path first differs:
 before. It is not changed: #964's criteria, held by an offline test, say the feed is asked once with no retry. If it
 fails again, that ruling is the thing to revisit.
 
+**Run 20146.** Run 20143's draft did the Python install as a new `package_cache.py ensure-pythons` verb and a step
+in `verify-suites.yml` before the suite, with `test_verify_suites_workflow.py` requiring the step. Michael's comment
+on the issue asked for the install inside the find, and for `verify-suites.yml` to stay as it is until hecaton's
+runner change is on Tanjiro, so this run moved the install into `_find_python()`, dropped the verb, and put the
+workflow and its test back as staging has them. Everything else in the draft is kept as it was.
+
 **Tests run here, each once.** With TMPDIR a link outside the worktree: `test_artifact_cache.py`,
 `test_git_mirror.py`, `test_tf_module_cache.py`, `test_image_cache.py` and `test_prompts_wall_suite.py` exit 0;
 `test_e2e_tools_tier.py`, `test_submodule_pins_pushed.sh` and `test_guard_proxy_pin_on_main.sh` pass every case but
 the ones that run git on this checkout, whose `.git` names a worktree that does not exist here (they passed on CI).
-`test_ghcr_pull.py` and `test_verify_suites_workflow.py` exit 0. `test_package_cache.py` passes every check up to
-its `git ls-files` scan, which cannot run here; that scan's pattern finds no install line in the changed files.
+`test_ghcr_pull.py` exits 0. Run 20146's checkout has git, and there the git cases pass too:
+`test_no_system_temp_paths.py`, `test_e2e_tools_tier.py`, `test_submodule_pins_pushed.sh` and
+`test_guard_proxy_pin_on_main.sh` exit 0, and with TMPDIR a 54-byte link outside the worktree the last three exit 0
+as well (492 checks in the tier test; a 94-byte link is refused by the runner's 90-byte limit, as it should be).
 `test_no_system_temp_paths.py` also needs git; its 91- and 200-byte cases were run against `run-e2e-tools.sh` alone
 and pass. Live: `test_image_version_tags.py` exits 0 (28 checks), `test_delivered_tags_github_e2e.py` passes from
-outside the checkout, `package_cache.py ensure-pythons` prints "uv finds Python 3.12, 3.13, none installed", and two
+outside the checkout, and two
 real web-terminal layers, each cut twice at 700 bytes, were resumed through ghcr.io's redirect to their exact
-digests. `artifact_cache.py` and `package_cache.py` are in the scope map's full list, so validation runs everything.
+digests. In run 20146, `test_package_cache.py` exits 0 with its five new checks on the install (found: no install; a
+miss: install alone, then found; next call: reuse; a failed install: named, no second find; `environment()` on a
+runner with no Python for the lock: install, then the venv), and `test_verify_suites_workflow.py` exits 0 on
+staging's workflow. Live, with uv 0.13.0 and `UV_PYTHON_INSTALL_DIR` an empty directory under HOME,
+`_find_python("3.12")` installed CPython 3.12.15 and returned its interpreter, and a second call reused it; the
+directory was removed after. `artifact_cache.py` and `package_cache.py` are in the scope map's full list, so validation runs everything.
 
-**No live cluster check.** The change touches only `verify/` files no cluster runs and the CI workflow.
+**No live cluster check.** The change touches only `verify/` files no cluster runs.
 
 **No dependency was added.**
