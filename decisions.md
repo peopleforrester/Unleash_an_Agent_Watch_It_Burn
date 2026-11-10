@@ -50743,3 +50743,33 @@ so it changes with them; its comment names the deck commit they were read from.
 `python3 verify/test_ros_seg4_flow.py`: PASS. The prose gate was run on the change.
 
 **Live check.** Skipped: the change touches the run-of-show, decisions.md and a test no cluster runs.
+
+## 2026-11-10 · #1209 · run 19996 · The third criterion's live check, run on the clusters at staging aa2c7dcd: a private deploy Kyverno removes reads greyed on deployments.burritobot.co
+
+**What.** Run 19400's change (`334bc8fa`, merged to staging as `1e81979d`, now in main) carries the private cluster's
+reads to the public desk's `/remote-cluster-read`. Its report was partial: the third criterion waited on the change
+reaching the clusters. `verify/prior-drafts.sh 1209 origin/staging` printed LANDED for `agent/1209-19400` and NONE for
+anything else, so nothing was ported. Run 19530 (#1250) wrote `verify/test_private_removed_row_live.py` for that
+criterion and ran it green on 2026-11-09. This run reran it, on the clusters as they are today, as #1209's own evidence.
+
+**Live check.** Both clusters' ai-layer Application read Synced at `aa2c7dcd` (targetRevision staging). Both clusters'
+registry policies read Audit at the start, and no Secret was read.
+`PRIVATE_CONTEXT=watch-it-burn-private COMMUNITY_CONTEXT=watch-it-burn-community python3
+verify/test_private_removed_row_live.py` printed `PRIVATE REMOVED-ROW LIVE CHECK GREEN`, exit 0:
+
+```
+  ..    marked 75 s after the arm: {"name": "wib-1250-public-070118", ..., "at": "06:03:03", "removed_at": "06:05:14", "cluster": "private"}
+  PASS  in that same read the private internal row is unmarked
+  PASS  and the community row of the removed name is unmarked: a private read greys no community row
+  PASS  the page's script renders 'Someone deployed nginx at 06:03:03, removed at 06:05:14 private' with the class it greys
+  PASS  the page's script renders 'Someone deployed maintenance-shell at 06:03:06 private' ungreyed
+  PASS  the page's script renders 'Someone deployed nginx at 06:03:10 community' ungreyed
+  PASS  https://deployments.burritobot.co/deployments.json lists no row of this check's names
+  PASS  every Deployment, StatefulSet, DaemonSet, Job and CronJob in agent on watch-it-burn-private is as found
+  PASS  every Deployment, StatefulSet, DaemonSet, Job and CronJob in agent on watch-it-burn-community is as found
+```
+
+It left both private registry policies back at Audit, none of its Deployments on either cluster, and none of its rows on
+the page. `agent/terminal-auth` was not touched. No code changed in this run, so no test was rerun beyond the live check;
+the offline tests for the first two criteria (`verify/test_desk_remote_reports.py`, `verify/test_public_desk.py`) passed
+in run 19400 and on the gates that merged it.
