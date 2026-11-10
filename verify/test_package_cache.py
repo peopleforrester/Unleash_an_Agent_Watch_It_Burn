@@ -186,14 +186,14 @@ have = pathlib.Path({str(log)!r} + ".installed")
 if a[:2] == ["python", "install"]:
     if os.environ.get("STUB_UV_INSTALL_FAILS"):
         print("error: no download found for the request", file=sys.stderr)
-        sys.exit(2)
+        sys.exit(1)
     with open(have, "a") as f:
         f.write("".join(v + "\\n" for v in a[3:]))
 if a[:2] == ["python", "find"]:
     got = set(have.read_text().split()) if have.exists() else set()
     if a[-1] in missing and a[-1] not in got:
         print(f"error: No interpreter found for Python {{a[-1]}}", file=sys.stderr)
-        sys.exit(2)
+        sys.exit(1)
     print({sys.executable!r})
 elif a[:1] == ["venv"]:
     b = pathlib.Path(a[-1]) / "bin"
@@ -343,7 +343,7 @@ try:
                                                     "STUB_UV_INSTALL_FAILS": "1"}))
     new = [c["args"] for c in uv_calls(log)[n:]]
     check("an install uv cannot do fails, naming the version and uv's answer, with no second find",
-          "uv finds no Python 3.11 (exit 2), and could not install it (exit 2)" in err and "no download found" in err
+          "uv finds no Python 3.11 (exit 1), and could not install it (exit 1)" in err and "no download found" in err
           and new == [find("3.11"), ["python", "install", "--no-config", "3.11"]], err + " " + str(new))
     installed.unlink(missing_ok=True)
     os.environ["STUB_UV_MISSING"] = PY

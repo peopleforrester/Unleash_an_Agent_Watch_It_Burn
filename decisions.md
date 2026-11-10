@@ -51050,6 +51050,12 @@ on the issue asked for the install inside the find, and for `verify-suites.yml` 
 runner change is on Tanjiro, so this run moved the install into `_find_python()`, dropped the verb, and put the
 workflow and its test back as staging has them. Everything else in the draft is kept as it was.
 
+**Run 20149.** Hecaton's skip-markers gate failed run 20146 on `exit 2` in `test_package_cache.py`: the gate reads
+`exit(2)` and the text `exit 2` in a test as an exit-as-skip, and the stub uv's two failures, and the message the
+failed-install check expects, said exactly that. Nothing was skipped; the code was uv's own for "no interpreter". The
+stub now fails with code 1, the check expects `(exit 1)`, `test_package_cache.py` exits 0 (137 checks), and the gate's
+own `skipmarks.count()` finds nothing in the lines this branch adds.
+
 **Tests run here, each once.** With TMPDIR a link outside the worktree: `test_artifact_cache.py`,
 `test_git_mirror.py`, `test_tf_module_cache.py`, `test_image_cache.py` and `test_prompts_wall_suite.py` exit 0;
 `test_e2e_tools_tier.py`, `test_submodule_pins_pushed.sh` and `test_guard_proxy_pin_on_main.sh` pass every case but
