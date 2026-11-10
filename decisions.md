@@ -50860,3 +50860,11 @@ both runners, which are in the scope map's full list, so validation runs everyth
 path is the pod's, as the waiver says. Not yet run on a cluster: the ConfigMap generator gives the new file a new
 hash, so workshop-mcp restarts once Argo CD syncs the promoted change. The same `kubectl exec` read, run after that
 sync on both clusters, is the check that the restarted pod seeds `/tmp/burrito-data` again.
+
+**Run 20073.** Run 20059 ended claim-stale with the commit above unmerged. `verify/prior-drafts.sh 1315
+origin/staging` read its branch as CLEAN on the same base, `71c9b650`, so this run cherry-picked it unchanged and
+checked it again. `sk-tmp-check` reports 36 literal findings on `71c9b650` and 0 on the port. The twelve offline
+tests above each exit 0 once more, the two live tests compile, and `bash -n` reads the three shell scripts. The
+same `kubectl -n agent exec deploy/workshop-mcp` read on watch-it-burn-community and watch-it-burn-private printed
+line 41's `/tmp/burrito-data` default, `WORKSHOP_DATA_DIR` unset, and the five seeded entries. The check after the
+Argo CD sync, named above, is still not yet run on a cluster.
