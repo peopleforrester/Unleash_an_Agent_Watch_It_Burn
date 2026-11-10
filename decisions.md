@@ -50172,3 +50172,56 @@ built before #1300 in all ten: a run of `'$'` at 122 to 159 ms on 1,000 characte
 and `'5$'` at 64 to 91 ms and 1,007 to 1,177 ms. At idle it passes in 20 s, as before.
 
 **Live check.** None: the change is to a `verify/` file no cluster runs.
+
+## 2026-11-10 · #1222 · run 19848 · The patched agent runtime runs on both clusters, and a Challenge 1 turn's gateway tools/call pair now hangs under execute_tool
+
+**What was owed.** Run 19476's entry above named three steps under "Not yet run on a cluster": the workflow's push and
+the digest's cosign signature, the Pod on watch-it-burn-private running the pinned digest, and one Challenge 1 turn read
+from Tempo. The first is done: `build-kagent-mcp-traceparent` pushed the digest on staging and main (runs 42704638019,
+42708084639 and 42711738723, each green), and #1302's runs 19761 and 19773 record its signature and a server-side dry
+run that verify-image-signatures now admits on watch-it-burn-private. This run did the other two. It changed no file but
+this one.
+
+**The Pods (read live, 2026-11-10 about 00:14Z).** The workshop-agent Pod in namespace agent runs
+`ghcr.io/peopleforrester/watch-it-burn:golang-adk-0.10.1-mcptrace@sha256:59bc5777ae74609446fde57324f4e33e606c819dd32fffc543243c0e7940f6c5`
+on watch-it-burn-private (Pod `workshop-agent-6ffd5cbc78-hkxwk`, created 2026-11-09 23:21:18Z) and on
+watch-it-burn-community (`workshop-agent-6c886c8fd5-wxzm9`, 23:19:52Z). The controller is still kagent's own
+`controller:0.10.1`.
+
+**Before (Tempo on watch-it-burn-private).** A TraceQL search for
+`{ resource.service.name = "burritobot-gateway" && name =~ "tools/call.*" }` from 2026-11-09 22:40Z to the Pod's start
+returned only 2-span traces rooted at the gateway's `tools/call` server span, each holding one
+`tools/call evil-mcp_<tool>` child. Trace `4b5749b8937c6909bde5987745849df2` (22:53:09Z, `evil-mcp_read_internal_config`)
+is one. From 23:21Z to 00:15Z the same search returned none, since no turn called a tool.
+
+**The Challenge 1 turn.** `bash verify/c1-exfil-block.sh burritobot-private watch-it-burn-private accen-dev`, started
+00:17:02Z, took the guard lock, applied the C1 policies, sent the resend prompt, printed
+`OK    burritobot-private: with the C1 policies on, BurritoBot reports the send as failed`, put the policies back as it
+found them, released the lock and exited 0. The same search over 00:17:02Z to 00:20:10Z returned one trace, the turn's
+own, `5c2f477caa99948704036b04ecbe9364`: 14 spans, one root, burritobot's `POST /chat`. Each gateway `tools/call` span
+in it, read up to the root:
+
+    burritobot-gateway tools/call [deb0574a] <- burritobot-agent execute_tool run_shell [7dd843bd]
+        <- invoke_agent workshop_agent <- invocation <- POST / <- burritobot-gateway POST workshop-agent...:8080
+        <- burritobot-gateway POST /* <- burritobot POST <- agent.forward <- chat <- POST /chat
+    burritobot-gateway tools/call workshop-mcp_run_shell [fe8759ea] <- burritobot-gateway tools/call [deb0574a] <- (as above)
+
+So the pair hangs under the turn's `execute_tool run_shell`, not under the gateway's A2A hop as it did after #885, and
+there is no trace rooted at the gateway's `tools/call` for that call.
+
+**evil-mcp too.** The issue's parentless traces were evil-mcp's, which no allowedHeaders forward reached. One chat on
+burritobot-private at 00:22:48Z asked for Portland's weather, and the agent called `get_weather` and
+`read_internal_config`. Its trace `174bb04a6f02b8d781a2c1fb57f68a56` has 18 spans and one root, burritobot's
+`POST /chat`, and both gateway pairs (`tools/call evil-mcp_get_weather`, `tools/call evil-mcp_read_internal_config`)
+hang under their own `execute_tool get_weather` and `execute_tool read_internal_config` spans. The search over that
+window returned that trace alone.
+
+**APM.** Read with the `watch-it-burn/datadog` read pair (the APM spans API, env `burritobot-kubecon-na-26`, service
+`burritobot-gateway`, at 00:24Z). The turn's gateway spans are in trace `5c2f477caa99948704036b04ecbe9364`. The gateway
+`POST` for the call has parent 9068072328771049381 (hex 7dd843bd..., the `execute_tool run_shell` span), and
+`tools/call workshop-mcp_run_shell` has parent 16046421451485955004 (hex deb0574a..., that POST). Before the patch, the
+newest gateway spans in APM (22:53:09Z) were a `POST` with parent 0 and its `tools/call evil-mcp_<tool>` child, one trace
+each. watch-it-burn-community runs no Tempo, so it was not read there.
+
+**Live check.** The two chats above, each one model call, and c1-exfil-block.sh, which left the C1 policies as it found
+them. Nothing else on either cluster was changed. No live check is owed on this issue now.
