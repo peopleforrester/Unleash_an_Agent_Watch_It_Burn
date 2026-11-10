@@ -51144,3 +51144,52 @@ as it is. The tier fixes of runs 20143 to 20151 (uv installing Python 3.12 on a 
 ls-remote tries) are therefore not yet shown on CI. This entry changes no code. Its promotion starts verify-suites on
 a new staging tip, and the next run on the issue reads that run. No cluster runs this file, so there is no live
 cluster check.
+## 2026-11-10 · #1276 · run 20161 · The live test passes on the -8 pod, and two tests now hold the pin to #1273's build
+
+**Where it stood.** Run 19675's pin, rebased by run 19747, merged into staging as `c475c0d5`: both pins in
+`gitops/ai-layer/resources.yaml` and images.lock row 55 read `web-terminal-ttyd-1.7.7-8@sha256:b81d336c...`. Test
+review run 19758 then found that no test checks the criterion: test_image_version_tags.py checked only that a `-<n>`
+build carries a 40-hex source-tree label, and test_terminal_ws_auth_live.py never read the pod's digest.
+
+**The pods.** Argo CD has both clusters' ai-layer Application Synced and Healthy at `3f001681`. Each web-terminal pod
+runs `sha256:b81d336c6a71cf98889ab6815269af7b0cb9cb1e7b3a3e0464435dcdcbc77386`, read from its ttyd container's
+`imageID`: `web-terminal-59d7b58f4-8hrxh` on watch-it-burn-community and `web-terminal-558b49d9f6-c4gv8` on
+watch-it-burn-private.
+
+**What changed.**
+- `verify/test_terminal_ws_auth_live.py` now fails unless the web-terminal pod's ttyd container runs the one digest
+  resources.yaml pins, read from the container's `imageID`, so a pass is a pass on the pinned build.
+- `verify/test_image_version_tags.py` checks that images.lock pins the web-terminal tag at the digest resources.yaml
+  does, and reads two of #1273's pins out of the pinned image itself. Its `/etc/apt/sources.list.d/debian.sources`
+  must name a fixed `snapshot.debian.org` time for both debian and debian-security, with no `deb.debian.org`. Its
+  `/opt/jupyter-requirements.txt` must give every package a version and a sha256, pip included. A new
+  `find_files()` reads both files in one pass over the layers.
+- The check reads the image, not git. Comparing the source-tree label to `git rev-parse HEAD:images/web-terminal`
+  would fail every change under images/web-terminal, which the workflow builds only once it is promoted. Listing the
+  trees since #1273's commit needs `git rev-list`, which `scope_tests.py` reads as the whole history, and would put
+  this network test on every scoped run (#1191).
+
+**The negative control.** The same two reads on the old floating-fetch pin `sha256:68004fb5ed2d...` find
+`deb.debian.org` in its apt sources and no `--hash=sha256` line in any lock, so both checks would fail on it.
+
+**Live check.**
+```
+$ CONTEXT=watch-it-burn-private python3 verify/test_terminal_ws_auth_live.py
+  PASS  resources.yaml pins one web-terminal digest (['sha256:b81d336c6a71'])
+  PASS  the pod's ttyd container runs that pinned digest (sha256:b81d336c6a71)
+  ... 16 more PASS, among them: 101 and output from the shell; ttyd logged exactly that one start (0 -> 1)
+All live terminal websocket auth checks passed.
+```
+On watch-it-burn-community the prerequisites pass, including both digest checks, and the probes without a Basic
+credential pass. Every probe that carries the right Basic credential gets 404, the positive control included (5
+FAIL). That 404 is apex-agenticburn's router: it closes `/terminal` on attackme by design (apex#43, #44, and the
+2026-11-05 #651 entry above), and `fleet.sh check-tls --closed-terminal` holds it closed. The console load balancer
+behind the router serves a self-signed certificate, so the test cannot reach the community pod past the router
+either. No shell started on either cluster beyond the private positive control, which ttyd ended when its socket
+closed. The test reads the terminal login from the `terminal-auth` Secret and prints none of it. Neither cluster
+was changed.
+
+**Tests.** `bash verify/run-e2e-tools.sh test_image_version_tags.py` passed in 1m17s, with the three new checks green.
+`python3 verify/test_scope_tests.py`, `test_ghcr_pull.py`, `test_verify_harness.py` and `test_tests_own_inputs.py`
+passed, and `scope_tests.py check` reports 0 problems with the map unchanged. The rest of the scoped offline
+selection is left to validation.
