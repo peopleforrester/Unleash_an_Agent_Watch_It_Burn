@@ -53468,7 +53468,9 @@ nothing in `TMPDIR`, the bad-SHA run included, and without `TMPDIR` it leaves on
 
 **Checked in this run.** Each passed alone: `python3 verify/test_no_system_temp_paths.py`,
 `python3 verify/test_e2e_image.py`, `python3 verify/test_gh_relay.py`, `python3 verify/test_workflow_artifact_cache.py`,
-`python3 verify/test_scope_tests.py` and `python3 verify/scope_tests.py check`. The image was not built again: the
+`python3 verify/test_scope_tests.py` and `python3 verify/scope_tests.py check`. The 97 offline tests that name a
+file this branch changes, `decisions.md` among them, each ran once, and all passed: 12 first failed only because
+this worktree had no submodules, and passed after `bash verify/ensure-submodules.sh`. The image was not built again: the
 change is to where `install.sh` puts its downloads, which `test_e2e_image.py` runs for real, and run 19536 built the
 rest. The workflow builds the new tag once these commits reach staging.
 
