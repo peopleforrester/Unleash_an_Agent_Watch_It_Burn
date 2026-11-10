@@ -50922,3 +50922,58 @@ lands on the long text alone. It now times by `time.thread_time()`, this thread'
 the 24,800-character reply 34.59 ms against 20 times 3.99 ms.
 
 **Live check.** Skipped: the change touches the run-of-show and a test under `verify/` that no cluster runs.
+
+## 2026-11-10 · #1268 · run 20112 · The support desk refuses a ticket with a term of the #1267 spike's floor, whatever the guardrails' state
+
+**What changed.** `gitops/ai-layer/ticket_site.py` refuses, before anything is filed, a ticket whose text after
+`clean()`, its HTML as sent, its subject or its customer name carries a term of the code-of-conduct floor the desk
+already holds (`coc_hit`, the #1267 spike's proposed list, ported for #1269's deploy masking). The room's
+`POST /submit` answers 422 with a page holding one sentence, `COC_REFUSAL`: "Keep it kind: this ticket has words the
+code of conduct rules out, so it was not filed.", which names no term and repeats nothing of the ticket. The
+presenters' in-cluster `POST /presenter-ticket` answers 422 with the same sentence as JSON. The check
+(`coc_ticket`) sits in `file_ticket` and `file_presenter_ticket`, so any later route that files a ticket goes through
+it, and no toggle reads it. An injection is filed as before: white text, a hidden instruction, HC-666 and HC-7731
+are the challenge the room plays.
+
+**What differs from run 19632's draft.** That draft (`origin/agent/1268-19632`, e466cf4a and 22c27661) held
+guard-proxy's 40-term `PROFANITY` list and failed hecaton's `tests` gate, whose output was not quoted. Michael's
+comment on the issue then set the floor: the spike's proposed list, which caught 111 of the spike's 155 abuse texts
+against 37 for the 40 terms, with the refusal sentence above. Staging had meanwhile gained that list in
+`ticket_site.py` (#1269, #1300, #1301), so the draft's own list and pattern were dropped and the check calls the
+existing `coc_hit`, leaving the block `verify/test_deploy_coc.py` holds equal to workshop-mcp's untouched. The check
+now also reads the raw HTML, so a term in an attribute is refused. The draft's test no longer imports guard-proxy
+and needs no submodule: it holds the desk's list to `corpus.terms("proposed")` and its match to floor.py's
+`Floor("proposed")`. `verify/desk_coc_live.py` is the draft's, unchanged.
+
+**Test.** `verify/test_desk_coc.py` (new) runs the real desk on 127.0.0.1. The desk's `COC_TERMS` equal
+terms-proposed.rot13's 144 terms, and `coc_hit` agrees with `Floor("proposed")` on 1,021 texts. Each term is refused
+in the text, in an HTML attribute and in the customer name on both filing functions, and in the subject on both;
+each is refused on `/submit` as plain text, in white text and split by a tag, with 422, the refusal and nothing
+filed; `/presenter-ticket` refuses a term in its text and in its customer name. `/submit` files 28 injection and
+stage texts with their text whole: HC-666's HTML and text, HC-7731's text, both payloads, and the 11 `.prompt`
+blocks on `/kubecon`, plain and as the white-text paragraph of an HC-666-shaped ticket. It passed in 1.5 s of CPU.
+`test_fetch_inventory.py` passed with the new loopback and live entries, and `scope_tests.py check` reports 0
+problems with the new test's map entry. `test_deploy_coc.py`, `test_coc_floor_spike.py` (which reads every string
+literal in `ticket_site.py`, the refusal among them), `test_coc_pattern_copies.py`, `test_coc_floor_note.py`,
+`test_desk_ticket_live.py`, `test_desk_remote_reports.py` and `test_desk_removed_rows.py` also pass. The whole Test
+and E2E commands were not run; validation runs what the scope map selects.
+
+**Live, before the change is deployed.** The desk on watch-it-burn-community runs staging's `ticket_site.py`, which
+has no ticket check yet. `python3 verify/desk_coc_live.py --context watch-it-burn-community` printed:
+
+    FAIL  refused: COC_TERMS[0] in white text: HTTP 200, filed as HC-8762, the refusal not shown
+    PASS  accepted: HC-666's shape: HTTP 200, filed as HC-2596; GET /ticket?id=HC-2596: HTTP 200, its text carries the injection
+    PASS  as found: removed ['HC-8762', 'HC-2596']: /desk-forget answered {'rows_removed': 0, 'tickets_removed': 2, 'rows_left': 0, 'named_left': 0, 'tickets_left': 0, 'fixed_kept': []}; GET /ticket afterwards: {'HC-8762': 404, 'HC-2596': 404}
+
+The refused half failing is the desk as it stands. Both test tickets were removed through the pod's loopback
+`/desk-forget` and answer 404; no fixed ticket was named and no Secret was read. The changed file was then run inside
+that pod (`kubectl exec -i deploy/fake-ticket -c site -- python3 -c ...`, the file on stdin), as a second desk on a
+loopback port of its own with its own in-memory tickets, which exited after: a white-text ticket with
+`COC_TERMS[0]` was answered 422 with the refusal and no number, and HC-666's HTML was filed as HC-5764, on the pod's
+Python 3.12.14. The live desk's tickets were not touched by it.
+
+**Not yet run on a cluster.** The refused half with the change deployed, once hecaton promotes this run and Argo CD
+syncs `ai-layer` from staging: `python3 verify/desk_coc_live.py --context watch-it-burn-community`, which must print
+PASS on all three lines. The next run on #1268 runs it and records the output here.
+
+**No dependency was added.**
