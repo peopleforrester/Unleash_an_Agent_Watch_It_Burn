@@ -1561,6 +1561,11 @@ sites:
     lines: 1
     class: none
     why: a container named wget in a fixture Pod
+  verify/test_no_system_temp_paths.py:
+  - match: .
+    lines: 6
+    class: none
+    why: 'exception entries and checks that quote a pod''s curl, a comment, and a stub curl that fleet.sh start-check calls; nothing leaves the host'
   verify/test_otelcol_local.py:
   - match: urlopen
     lines: 1

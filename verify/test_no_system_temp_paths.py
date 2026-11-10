@@ -36,6 +36,10 @@ REPO = HERE.parent
 sys.path.insert(0, str(HERE))
 import artifact_cache  # noqa: E402
 
+# It runs fleet.sh, so the cloud tools are stubs and the credentials cleared, even run by hand (#859, no_cloud.py).
+import no_cloud  # noqa: E402
+no_cloud.setup()
+
 failures: list[str] = []
 
 
@@ -245,6 +249,10 @@ finally:
 check("no scratch candidate is a system temp directory",
       not any(str(p) in ("/tmp", "/var/tmp", "/dev/shm")
               for p in artifact_cache.scratch_parents({"HOME": os.environ.get("HOME", "/")})))
+
+print("== offline means offline ==")
+_calls = no_cloud.calls()
+check("no check above called aws, kubectl, eksctl, terraform or helm", not _calls, _calls)
 
 if failures:
     print(f"\nFAILED: {len(failures)} check(s)")
