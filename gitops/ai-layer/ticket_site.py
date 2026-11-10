@@ -18,7 +18,8 @@ again on any number outside the room's range. The reserved range is the presente
 is three digits and a room ticket is four, and a mistyped presenter number cannot name a room ticket and run its
 injection on the admin bot. The presenters file with POST /presenter-ticket, a JSON body {"body": "<the ticket's
 text or HTML>", "customer": "<optional name>"}, answered 201 with the ticket, numbered with the lowest free number in
-the range (HC-900 first), or 409 once all 100 are taken. The route is in-cluster only, as /landed is: console.conf
+the range (HC-900 first), or 409 once all 100 are taken. Both routes refuse, 422, a ticket the code-of-conduct
+check flags (#1268, coc_ticket below), and file nothing. The route is in-cluster only, as /landed is: console.conf
 refuses it on the desk's public server, and the deployments host answers no POST. A presenter reaches it through the
 cluster API, for example
     kubectl --context <cluster> -n agent port-forward svc/fake-ticket 18080:8080
@@ -260,8 +261,31 @@ def _room_draw() -> int:
     return ROOM_NUMBERS.start + secrets.randbelow(len(ROOM_NUMBERS))
 
 
+# --- the desk's code-of-conduct check (#1268, part of #1267) ----------------------------------------------------------
+# The presenters open the desk's tickets on stage and the bot reads them, so a ticket that carries a term of the
+# code-of-conduct floor above (coc_hit, the #1267 spike's proposed list) is refused whole and never filed, whatever the
+# guardrails' state: no switch reaches this check. It reads the ticket's text after clean(), the HTML as it was sent
+# (so a term in an attribute or split by a tag is read too), the subject and the customer name. It is for abuse, not
+# attacks: a ticket's injection (white text, a hidden instruction, HC-666's shape) is filed as before, since that is
+# the challenge. The refusal is one plain sentence that names no term and does not repeat the ticket.
+# verify/test_desk_coc.py drives /submit and /presenter-ticket with both kinds.
+COC_REFUSAL = "Keep it kind: this ticket has words the code of conduct rules out, so it was not filed."
+
+
+class CodeOfConduct(Exception):
+    """A ticket the code-of-conduct check refused; nothing was filed."""
+
+
+def coc_ticket(raw: str, text: str, customer: str) -> None:
+    """Raise CodeOfConduct when the ticket's HTML, its cleaned text, the subject or the customer name holds a term."""
+    if coc_hit(text, raw, SUBMITTED_SUBJECT, customer):
+        raise CodeOfConduct(COC_REFUSAL)
+
+
 def file_ticket(raw: str, owner: str) -> dict:
+    """A room ticket, owned by the visitor's witch name; CodeOfConduct, with nothing filed, when the check refuses it."""
     shown, text = clean(raw)
+    coc_ticket(raw, text, owner)
     with _lock:
         while True:
             n = _room_draw()
@@ -286,8 +310,11 @@ class RangeFull(Exception):
 
 def file_presenter_ticket(raw: str, customer: str = "") -> dict:
     """A presenter's ticket, numbered with the lowest free number in PRESENTER_NUMBERS. No owner, so it shows on no
-    visitor's /me page; it opens by its number like any other ticket."""
+    visitor's /me page; it opens by its number like any other ticket. CodeOfConduct, with nothing filed, when the
+    code-of-conduct check refuses it."""
     shown, text = clean(raw)
+    # The name as given is read, not only the 80 characters kept, so a term past the cut still refuses the ticket.
+    coc_ticket(raw, text, str(customer or ""))
     who = " ".join(str(customer or "").split())[:80] or PRESENTER_CUSTOMER
     with _lock:
         free = [n for n in PRESENTER_NUMBERS if f"HC-{n}" not in TICKETS and find(f"HC-{n}") is None]
@@ -1006,7 +1033,13 @@ class Handler(BaseHTTPRequestHandler):
                 self._page(_shell("Empty", "<p>Write something in the ticket first.</p>"), 400)
                 return
             name = self._visitor()
-            t = file_ticket(body, name)
+            try:
+                t = file_ticket(body, name)
+            except CodeOfConduct:
+                # Always on (#1268): the page says why in one sentence and repeats neither the ticket nor a term.
+                self._page(_shell("Not filed", f'<p>{html.escape(COC_REFUSAL)}</p><p><a href="/">Back to the desk'
+                                  "</a></p>"), 422)
+                return
             self._page(_shell("Ticket filed", f"""<div class="you">You are <b id="witch-name">{html.escape(name)}</b>.</div>
 <h2>Your ticket is {html.escape(t['id'])}</h2><p>Ask BurritoBot to read ticket {html.escape(t['id'])}.</p>
 {_article(t)}<p><a href="/">Back to the desk</a> &middot; <a href="/me">Your tickets and deployments</a></p>"""))
@@ -1043,6 +1076,9 @@ class Handler(BaseHTTPRequestHandler):
                 t = file_presenter_ticket(body, d.get("customer", ""))
             except RangeFull as e:
                 self._send(409, {"error": str(e)})
+                return
+            except CodeOfConduct:
+                self._send(422, {"error": COC_REFUSAL})
                 return
             self._send(201, self._ticket_json(t))
         elif url.path == DESK_RESET_PATH:

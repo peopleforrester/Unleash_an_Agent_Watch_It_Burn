@@ -3055,6 +3055,24 @@ reads:
     - verify/package_cache.py
     - verify/playwright_browsers.py
     - verify/python.lock
+  test_desk_coc.py:
+    - challenges/PROMPT-CATALOG.md
+    - docs/research/2026-11-09-coc-floor
+    - docs/research/2026-11-09-coc-floor/abuse-set.rot13.tsv
+    - docs/research/2026-11-09-coc-floor/corpus.py
+    - docs/research/2026-11-09-coc-floor/floor.py
+    - docs/research/2026-11-09-coc-floor/hard-negatives.txt
+    - docs/research/2026-11-09-coc-floor/pull_turns.py
+    - docs/research/2026-11-09-coc-floor/terms-proposed.rot13
+    - facilitation/kubecon-na-2026/fallback/prompts.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/server.py
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/workshop-agent/agent.yaml
+    - verify/topic_cases.py
   test_desk_remote_reports.py:
     - CLAUDE.md
     - backstage
