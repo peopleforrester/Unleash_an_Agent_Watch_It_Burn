@@ -6,7 +6,7 @@ Run it inside the guard-proxy pod, which reaches agentgateway, with the standard
 
     . "$HECATON_CLUSTER_ENV"
     kubectl --context watch-it-burn-community -n agent exec -i deploy/guard-proxy -c proxy -- \\
-        python - 20 < docs/research/2026-11-07-ask-user/a2a_raw.py > /tmp/a2a-raw.jsonl
+        python - 20 < docs/research/2026-11-07-ask-user/a2a_raw.py > "$TMPDIR/a2a-raw.jsonl"
 
 Each trial is a fresh contextId, with the question and the witch-name part /chat adds. It goes straight to the agent,
 past every AI guard, so it needs no guard lock, but each turn is a real Nova Pro call (about $0.008).
