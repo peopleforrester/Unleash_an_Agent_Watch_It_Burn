@@ -2294,8 +2294,8 @@ is merely slow rather than rebuilding:
   the repo root, one command per cluster. It runs the beats in this file's order and
   prints PASS or FAIL for each. It spends real Bedrock money, capped by `--max-calls`
   (default 23): a community run makes 10 model calls, an admin run 14, plus one for
-  each reply that is Bedrock's ToolUse 424, which the probe sends again once as the
-  failure playbook says (#889). Pull both clusters' credentials into one isolated kubeconfig first, each
+  each reply that is Bedrock's ToolUse 424 or its content-filter block ("The generated text has been
+  blocked by our content filters."), which the probe sends again once as the failure playbook says (#889, #1303). Pull both clusters' credentials into one isolated kubeconfig first, each
   context named for its cluster; the probe passes it per command and never touches `~/.kube/config`. Both runs
   need the kube-context: C6 is judged on the `joker-agatha-the-banshee` Deployment HC-666 asks for, not on the
   reply. Both runs also switch the four Kubernetes guardrails through the private cluster's terminal, so both need

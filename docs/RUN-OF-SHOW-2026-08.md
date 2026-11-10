@@ -668,6 +668,7 @@ none is a stage risk, but a technical room reads the abstract and someone will a
 | BurritoBot replies **empty** (only shows "thinking") | MCP servers down | `kubectl -n agent rollout restart deploy/workshop-mcp deploy/workshop-agent`; wait 90s |
 | A beat does not fire, then works on retry | Nova is nondeterministic on tool prompts | Just re-send. Not a platform problem |
 | `ModelErrorException ... invalid sequence as part of ToolUse` | transient Bedrock/Nova error | Re-send once |
+| "The generated text has been blocked by our content filters." | Bedrock's content filter blocked the model's reply, after its tool calls (#1303) | Re-send once |
 | A URL is 404 | router table not applied | `infra/terraform/fleet/fleet.sh routes` (it applies via reload now) |
 | Round 2 exfil still lands | the #108 regression is back | check the egress NetworkPolicy covers the whole namespace, not just `workshop-agent` |
 | Terminal asks for login and the presenter login fails | ingest did not run | `fleet.sh ingest-instructors`; the login is `WIB_TERMINAL_USER` / `WIB_TERMINAL_PASSWORD` in mrf-secrets (`projects/watch-it-burn-terminal.env`) |
