@@ -51193,3 +51193,44 @@ was changed.
 `python3 verify/test_scope_tests.py`, `test_ghcr_pull.py`, `test_verify_harness.py` and `test_tests_own_inputs.py`
 passed, and `scope_tests.py check` reports 0 problems with the map unchanged. The rest of the scoped offline
 selection is left to validation.
+
+## 2026-11-11 · #1320 · run 20176 · test_image_version_tags.py reads image layers from the host artifact cache
+
+**What failed.** CI run 42913497804 on staging 9eced71f: the offline job passed, and the e2e tools job, scoped to 3
+tier tests, failed on one, `test_image_version_tags.py`, after 1847 s. It had streamed the pinned web-terminal image's
+layers from ghcr.io (645 MiB in ten layers, 283 MiB the largest) for 30 minutes, and `ghcr_pull.open_blob()` then
+tried to resume a cut layer. The TLS handshake to the blob host timed out on all 3 tries:
+`URLError: <urlopen error _ssl.c:1012: The handshake operation timed out>`, `after 3 tries`. #1314's resume covered
+a stream that ends early. It cannot cover a layer whose download takes longer than the network stays up, and the
+test downloaded every layer again on every run, twice for the web-terminal image (once for ttyd, once for #1276's
+two files). A resume also reused the blob host's signed URL, which ghcr.io gives an expiry about 7 minutes out
+(`se=` in its query, read live today), so a resume on a slow layer could not have worked even with the network up.
+
+**The change.**
+- `verify/test_image_version_tags.py` reads every layer from the image's OCI layout in the host artifact cache,
+  `image_cache.layout(ghcr.io/<package>@<digest>)` (#1122), as `test_joker_web_busybox.py` already reads its base.
+  Each blob is checked against its digest before it is kept, so what the test reads is still exactly the pinned
+  image. The first run on a host fetches each blob once; every later run on that host reads the files from disk and
+  asks ghcr.io only for the token, the tags' digests and the two config blobs. On the CI runner the root is
+  `WIB_ARTIFACT_CACHE`, outside the workspace, so it survives between jobs. The layout is hashed once per run
+  and reused for each file looked for.
+- `image_cache.registry_fetch()` now resumes a blob cut short. It reads the first answer's Content-Length and, when
+  the body ends or drops before it, asks the registry again for a new redirect and the blob host for the rest with
+  `Range: bytes=<next>-`, up to 8 times, 5 s times the resume apart. An answer that is not a 206 from that byte is
+  refused, never spliced in (`RangeRefused`, a ConnectionError, so `get_retrying()` fetches the blob again whole).
+  Before this, a cut blob in the cache failed its hash check as a mismatch, which is never retried.
+- `ghcr_pull.open_blob()` and `BlobBody` had no caller left and are removed, with their section of
+  `test_ghcr_pull.py`. That test now also checks that `test_image_version_tags.py` reads layers from
+  `image_cache.layout()` and streams none from ghcr.io. `verify/fetch-inventory.yaml` classes the new call site as
+  a pinned container-image fetch through the cache, and `verify/scope-map.yaml` is rewritten for the new import.
+
+**Tests, each once.** `python3 verify/test_image_cache.py` passes, with five new checks on a fake registry whose
+blob host cuts its answers: a blob cut twice is kept whole; each resume asks the registry for a new redirect and the
+host from the next byte; a 200 to a Range ask is refused, naming the byte; that refusal is one `get_retrying()`
+retries; and a body still short after 8 resumes fails, naming where it ended. `python3 verify/test_ghcr_pull.py`
+passes. `python3 verify/fetch_inventory.py check`: every call site classed. Live, `python3
+verify/test_image_version_tags.py` with a cold cache under HOME: 31 PASS, 0 FAIL, exit 0 in 90 s, no resume needed,
+four layouts cached (workshop-mcp, web-terminal, sample-app and the Joker). The scoped offline suite and tools tier
+are left to validation and to CI on staging.
+
+**Live check.** Skipped: the change touches only `verify/` files that no cluster runs.
