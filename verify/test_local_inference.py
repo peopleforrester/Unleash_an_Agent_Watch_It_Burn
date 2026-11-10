@@ -76,7 +76,7 @@ check("non-root at a numeric uid, every capability dropped but SYS_NICE",
       and sc["allowPrivilegeEscalation"] is False)
 dshm = next((v for v in pod["volumes"] if v["name"] == "dshm"), {})
 check("a memory-backed /dev/shm, without which it crash-loops",
-      dshm.get("emptyDir", {}).get("medium") == "Memory" and {"name": "dshm", "mountPath": "/dev/shm"} in c["volumeMounts"])
+      dshm.get("emptyDir", {}).get("medium") == "Memory" and {"name": "dshm", "mountPath": "/dev/shm"} in c["volumeMounts"])  # tmp-ok: the vLLM pod's shared-memory mount the manifest must carry
 check("the image is pinned by digest", re.search(r"@sha256:[0-9a-f]{64}$", c["image"]) is not None)
 check("startup, readiness and liveness probes, the startup one wide enough for a CPU model load",
       all(k in c for k in ("startupProbe", "readinessProbe", "livenessProbe"))

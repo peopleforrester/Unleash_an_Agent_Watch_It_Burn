@@ -50826,3 +50826,37 @@ enables what is not running, and the registration of the Megumi runner the runbo
 the queued run on staging's tip runs, and CI's verdict on `dc9cb247` is the remaining criterion.
 
 **Live check.** Skipped: no change touches what the clusters run.
+
+## 2026-11-10 · #1315 · run 20059 · Each line that names a system temp directory says why with `tmp-ok`
+
+**What.** PRD 526 (llm-coding-workflow#526) asks every repo to keep its temp files in its own ignored `tmp/` and
+checks it with scripts-knowledge's `sk-tmp-check`. On base `71c9b650` it reported 36 lines that name a system temp
+directory as a literal path. The issue's six were from an older scan: the five in
+`challenges/02-sanitization/fallback.curl.sh` were already gone (#1261), and `workshop-mcp-server.py` had moved
+from line 30 to 41. None of the 36 writes on the host. 33 name the workshop-mcp pod's `/tmp/burrito-data` (the C1 to
+C3 bait, inside the container), the vLLM pod's `/dev/shm`, or are tests that compare or forbid such a path. The other
+two are the runners' fallback, `TMPDIR="$(cd "${SCRIPT_DIR}/.." && pwd)/tmp"`, the checkout's own `tmp/`, which the
+checker reads as `/tmp`.
+
+**Change.** Each of the 36 lines gets a trailing `tmp-ok: <reason>` comment, the waiver the checker honours, and
+no path moves. `verify/test_no_system_temp_paths.py` holds the runners' fallback block as a literal, so its
+`FALLBACK` carries the runners' new comment. `.gitignore` already ignores `/tmp/`. `sk-tmp-check` then reports
+no literal findings. It still reports about 290 bare `mktemp` and `tempfile` calls with no directory. Each of
+those follows `TMPDIR`, which both runners and every script set to the checkout's `tmp/` when it is unset
+(#1261), and the issue's done line names literal findings only, so they stay as they are.
+
+**Tests.** Run once each, all PASS: `test_no_system_temp_paths.py`, `test_c3_bait_baked.py`,
+`test_c3_fallback.py`, `test_challenge_assets.py`, `test_challenge_fallbacks.py` (these two after
+`git submodule update --init gitops/ai-layer/guard-proxy`), `test_kubecon_c3_recipe_block.py`,
+`test_local_inference.py`, `test_marketing_send_route.py`, `test_recipe_block_coverage.py`,
+`test_recipe_persona.py`, `test_stage_traces.py` and `test_scope_tests.py`. The live tests
+`test_recipe_block_live.py` and `test_two_hour_flow_live.py` take only a comment and compile. The change touches
+both runners, which are in the scope map's full list, so validation runs everything; this run did not.
+
+**Live check.** The comment lands in `gitops/ai-layer/workshop-mcp-server.py`, so it was read on both clusters:
+`kubectl -n agent exec deploy/workshop-mcp` on watch-it-burn-community and watch-it-burn-private prints line 41
+`_DATA = os.environ.get("WORKSHOP_DATA_DIR", "/tmp/burrito-data")`, `WORKSHOP_DATA_DIR` unset, and
+`/tmp/burrito-data` holding `config`, `customers.json`, `inventory.json`, `marketing.json` and `orders.json`: the
+path is the pod's, as the waiver says. Not yet run on a cluster: the ConfigMap generator gives the new file a new
+hash, so workshop-mcp restarts once Argo CD syncs the promoted change. The same `kubectl exec` read, run after that
+sync on both clusters, is the check that the restarted pod seeds `/tmp/burrito-data` again.

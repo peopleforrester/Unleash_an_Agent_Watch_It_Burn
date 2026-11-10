@@ -35,7 +35,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Scratch goes under TMPDIR, else the checkout's ignored tmp/, never the system's temp directory, which on netcup
 # is a tmpfs, so what a test leaves there is RAM (#1261). Every mktemp and Python tempfile below inherits it.
 if [[ -z "${TMPDIR:-}" ]]; then
-    TMPDIR="$(cd "${SCRIPT_DIR}/.." && pwd)/tmp"
+    TMPDIR="$(cd "${SCRIPT_DIR}/.." && pwd)/tmp"  # tmp-ok: the checkout's own tmp/, not the system one
     mkdir -p "${TMPDIR}"
 fi
 export TMPDIR

@@ -20,7 +20,7 @@ def check(name, cond):
 # The image must bake the bait so it pre-exists as a read-only layer: the C3 policy then denies the
 # agent's READ (EPERM) instead of blocking the pod's own runtime WRITE (which failed to ENOENT, #137).
 check("Dockerfile bakes the bait dir",
-      "/tmp/burrito-data/config/legacy" in DOCKERFILE)
+      "/tmp/burrito-data/config/legacy" in DOCKERFILE)  # tmp-ok: reads the pod's bait path from the Dockerfile
 check("Dockerfile bakes the bait file",
       "secret-sauce-recipe.conf" in DOCKERFILE)
 check("baked bait carries the C3 signature",

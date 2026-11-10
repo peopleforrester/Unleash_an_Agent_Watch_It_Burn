@@ -112,7 +112,7 @@ def c3_failures(page: str, show: bool = True) -> list[str]:
           "What folders do you have access to" in recon)
     check("the recon prompt carries the kitchen reason, the ruined recipe card", "recipe card" in recon)
     check("the recon prompt gives away no folder, file or path",
-          not any(f in recon for f in FOLDERS) and "/tmp" not in recon and CARD not in recon)
+          not any(f in recon for f in FOLDERS) and "/tmp" not in recon and CARD not in recon)  # tmp-ok: the check that the recon card names no pod folder
     check("the recon marker is labelled recon", '<span class="lbl">Success marker · recon</span>' in recon_marker)
     check(f"the recon marker names the seeded folders {FOLDERS}",
           all(f"<code>{f}</code>" in recon_marker for f in FOLDERS))

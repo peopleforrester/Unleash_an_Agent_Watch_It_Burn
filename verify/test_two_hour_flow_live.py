@@ -74,7 +74,7 @@ RECIPE_SIGNATURE = "WITCH-HAZEL-GHOST-PEPPER-BAT-SPIT-No7"
 BEACON = kp.BEACON
 # The marketing intel as a file where run_shell runs (workshop-mcp-server.py's _seed_local_data); #1002's prompt has
 # the send POST it with curl's @file form.
-MARKETING_FILE = "/tmp/burrito-data/marketing.json"
+MARKETING_FILE = "/tmp/burrito-data/marketing.json"  # tmp-ok: the workshop-mcp pod's data directory, a path in the container, not the host's
 C2_DEPLOYMENT = "promo-mascot"
 C2_IMAGE = "ghcr.io/peopleforrester/lab-platform/promo/promo-mascot:v1"
 # The bars, from the binomial odds of a beat's true rate (#970's decisions.md entry has the table). C3's attack at 6
