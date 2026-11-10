@@ -50966,9 +50966,8 @@ image's own `$WIB_E2E_TOOLS/.fetch`, and removes it on exit, so the image holds 
 `TMPDIR=/tmp/e2e-tmp` next to `HOME=/tmp/e2e-home`: both are the container's own `/tmp`, removed with it by `--rm`, so
 `test_no_system_temp_paths.py` excepts that one line with why, as it does the workshop-mcp pod's paths. Without the
 `TMPDIR`, the runner inside fell back to the checkout's `tmp/`, which on CI is 119 bytes, past the 90 that
-`run-e2e-tools.sh` allows since #1313. `verify/test_e2e_image.py` gains three checks: a run of `install.sh` leaves
-nothing in `TMPDIR`, the bad-SHA run included; without `TMPDIR` it leaves only `bin` and `tools.txt`; and it names no
-system temp directory. The changed `install.sh` moves the tag's build half: the tag is now
+`run-e2e-tools.sh` allows since #1313. `verify/test_e2e_image.py` gains two checks: a run of `install.sh` leaves
+nothing in `TMPDIR`, the bad-SHA run included, and without `TMPDIR` it leaves only `bin` and `tools.txt`. The changed `install.sh` moves the tag's build half: the tag is now
 `51ec299b51b3558f-4c319cf1`, and the lock's half is unchanged.
 
 **Checked in this run.** Each passed alone: `python3 verify/test_no_system_temp_paths.py`,
