@@ -61,21 +61,21 @@ SELF = "verify/test_no_system_temp_paths.py"
 
 # Lines that name a system temp directory on purpose: (file, or "*" for any file; words on the line; why).
 EXCEPTIONS: list[tuple[str, str, str]] = [
-    ("*", "/tmp/burrito-data",
+    ("*", "/tmp/burrito-data",  # tmp-ok: an exception this check allows, with its reason
      "the workshop-mcp pod's seeded data directory, baked by images/workshop-mcp/Dockerfile; the C2 and C3 beats read "
      "it inside the pod, so the path is the container's, not the host's"),
     ("gitops/ai-layer/workshop-mcp-server.py", "/tmp is writable",
      "the server runs in the workshop-mcp pod, whose /tmp is the pod's own and the one writable path there"),
-    ("gitops/ai-layer/workshop-mcp-server.py", "/tmp/body.json",
+    ("gitops/ai-layer/workshop-mcp-server.py", "/tmp/body.json",  # tmp-ok: an exception this check allows, with its reason
      "the hint run_shell gives the agent, for a file in the pod"),
-    ("verify/test_turn_guard.py", "/tmp/body.json", "reads that hint from workshop-mcp-server.py"),
+    ("verify/test_turn_guard.py", "/tmp/body.json", "reads that hint from workshop-mcp-server.py"),  # tmp-ok: an exception this check allows, with its reason
     ("verify/test_trace_shape_e2e.py", "@/tmp/customers.json", "an agent's curl in a recorded trace, run in the pod"),
     ("verify/test_pantry_shut_record.py", '"ls /tmp"', "an agent's command in a fake audit record, run in the pod"),
     ("verify/test_stage_traces.py", 'command="ls /tmp"', "an agent's command in a fake audit record, run in the pod"),
     ("verify/test_reset_bot.sh", '"mountPath":"/tmp"', "the guard-proxy pod's emptyDir mount in a fake pod spec"),
-    ("verify/test_local_inference.py", "/dev/shm", "the vLLM pod's memory-backed mount the manifest must carry"),
-    ("verify/test_vllm_fit_probe.py", "/dev/shm", "the vLLM pod's shared memory, named in the probe's docstring"),
-    ("verify/test_challenge_fallbacks.py", "/tmp", "the check that the fallback scripts write nothing there"),
+    ("verify/test_local_inference.py", "/dev/shm", "the vLLM pod's memory-backed mount the manifest must carry"),  # tmp-ok: an exception this check allows, with its reason
+    ("verify/test_vllm_fit_probe.py", "/dev/shm", "the vLLM pod's shared memory, named in the probe's docstring"),  # tmp-ok: an exception this check allows, with its reason
+    ("verify/test_challenge_fallbacks.py", "/tmp", "the check that the fallback scripts write nothing there"),  # tmp-ok: an exception this check allows, with its reason
     ("verify/test_kubecon_c3_recipe_block.py", "mkdir -p (/tmp/",
      "reads the pod's data directories from images/workshop-mcp/Dockerfile"),
     ("verify/test_kubecon_c3_recipe_block.py", '"/tmp" not in recon',
@@ -213,13 +213,14 @@ check("every mkdtemp is removed and every kept temp file unlinked or renamed int
 print("== both runners hand every test the fallback ==")
 # Only an unset TMPDIR is set here, and only then is mkdir run: a fixture that runs a runner with nothing but its own
 # bin on PATH (test_e2e_tools_tier.py's no-node case) sets TMPDIR and has no mkdir.
-FALLBACK = ('if [[ -z "${TMPDIR:-}" ]]; then\n    TMPDIR="$(cd "${SCRIPT_DIR}/.." && pwd)/tmp"\n    mkdir -p "${TMPDIR}"\n'
-            'fi\nexport TMPDIR\n')
+FALLBACK = ('if [[ -z "${TMPDIR:-}" ]]; then\n'
+            '    TMPDIR="$(cd "${SCRIPT_DIR}/.." && pwd)/tmp"  # tmp-ok: the checkout\'s own tmp/, not the system one\n'
+            '    mkdir -p "${TMPDIR}"\nfi\nexport TMPDIR\n')
 for runner in ("verify/run-tests.sh", "verify/run-e2e-tools.sh"):
     text = read(runner)
     check(f"{runner} exports TMPDIR, else the checkout's tmp/, before any test runs",
           FALLBACK in text and text.index(FALLBACK) < text.index("$(mktemp"))
-check("the checkout's tmp/ is ignored", "/tmp/" in read(".gitignore").splitlines())
+check("the checkout's tmp/ is ignored", "/tmp/" in read(".gitignore").splitlines())  # tmp-ok: reads the .gitignore entry for the checkout's tmp/
 
 print("== run-e2e-tools.sh refuses a TMPDIR too long for a Terraform provider's socket (#1313) ==")
 # A provider listens on $TMPDIR/plugin<up to 10 digits>, and Linux caps a socket path at 107 bytes, so 90 is the
@@ -267,7 +268,7 @@ try:
 finally:
     got.rmdir()
 check("no scratch candidate is a system temp directory",
-      not any(str(p) in ("/tmp", "/var/tmp", "/dev/shm")
+      not any(str(p) in ("/tmp", "/var/tmp", "/dev/shm")  # tmp-ok: the check that no scratch candidate is a system temp dir
               for p in artifact_cache.scratch_parents({"HOME": os.environ.get("HOME", "/")})))
 
 print("== offline means offline ==")

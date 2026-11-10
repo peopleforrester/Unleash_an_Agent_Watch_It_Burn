@@ -38,7 +38,7 @@ def check(name: str, cond: bool, detail: str = "") -> None:
         failures.append(name)
 
 
-LEGACY = "/tmp/burrito-data/config/legacy/"
+LEGACY = "/tmp/burrito-data/config/legacy/"  # tmp-ok: the workshop-mcp pod's data directory, a path in the container, not the host's
 AGENT_YAML = (REPO / "gitops/workshop-agent/agent.yaml").read_text(encoding="utf-8")
 DOCKERFILE = (REPO / "images/workshop-mcp/Dockerfile").read_text(encoding="utf-8")
 RESOURCES = [d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")) if d]
@@ -84,15 +84,15 @@ def with_dirs(*dirs: dict, paths: tuple = ()) -> dict:
 
 
 check("a recursive parent covers a card two folders down",
-      live.covering_dirs(with_dirs({"dir": "/tmp/burrito-data/", "recursive": True}), PATH) == ["/tmp/burrito-data/"])
-check("a non-recursive parent does not", not live.covering_dirs(with_dirs({"dir": "/tmp/burrito-data/"}), PATH))
+      live.covering_dirs(with_dirs({"dir": "/tmp/burrito-data/", "recursive": True}), PATH) == ["/tmp/burrito-data/"])  # tmp-ok: pod paths in a fake KubeArmor policy, only compared
+check("a non-recursive parent does not", not live.covering_dirs(with_dirs({"dir": "/tmp/burrito-data/"}), PATH))  # tmp-ok: pod paths in a fake KubeArmor policy, only compared
 check("a non-recursive dir covers its direct child", bool(live.covering_dirs(with_dirs({"dir": LEGACY}), PATH)))
 check("a sibling with a shared prefix does not (/tmp/burrito-data/config/leg/)",
-      not live.covering_dirs(with_dirs({"dir": "/tmp/burrito-data/config/leg", "recursive": True}), PATH))
+      not live.covering_dirs(with_dirs({"dir": "/tmp/burrito-data/config/leg", "recursive": True}), PATH))  # tmp-ok: pod paths in a fake KubeArmor policy, only compared
 check("a matchPaths entry equal to the card covers it",
       bool(live.covering_dirs(with_dirs(paths=({"path": PATH},)), PATH)))
 check("a card moved out of legacy is not covered",
-      not live.covering_dirs(pol, "/tmp/burrito-data/config/secret-sauce-recipe.conf"))
+      not live.covering_dirs(pol, "/tmp/burrito-data/config/secret-sauce-recipe.conf"))  # tmp-ok: pod paths in a fake KubeArmor policy, only compared
 try:
     live.rule_path(AGENT_YAML.replace(PATH, f"{PATH} or /tmp/burrito-data/x.conf", 1))
     check("rule_path raises on two cards", False)
@@ -176,7 +176,7 @@ check("it asks #925's attack once, marked for the probe filter",
       len(healthy.chats) == 1 and live.ATTACK in healthy.chats[0] and "[[wib-probe]]" in healthy.chats[0])
 
 uncovered = copy.deepcopy(pol)
-uncovered["spec"]["file"]["matchDirectories"] = [{"dir": "/tmp/burrito-data/config/old/", "recursive": True}]
+uncovered["spec"]["file"]["matchDirectories"] = [{"dir": "/tmp/burrito-data/config/old/", "recursive": True}]  # tmp-ok: pod paths in a fake KubeArmor policy, only compared
 audit = copy.deepcopy(pol)
 audit["spec"]["action"] = "Audit"
 for why, fake, want in (
@@ -202,7 +202,7 @@ check("a Block alert for the card is found behind a log prefix", len(live.block_
 check("an Audit alert is not a block", not live.block_alerts(BLOCK_ALERT.replace('"Block"', '"Audit"'), PATH))
 check("another policy's alert is not this one", not live.block_alerts(BLOCK_ALERT.replace(live.POLICY, "other"), PATH))
 check("an alert for another file is not the card's",
-      not live.block_alerts(BLOCK_ALERT.replace(PATH, "/tmp/burrito-data/customers.json"), PATH))
+      not live.block_alerts(BLOCK_ALERT.replace(PATH, "/tmp/burrito-data/customers.json"), PATH))  # tmp-ok: pod paths in a fake KubeArmor alert, only compared
 
 print()
 if failures:

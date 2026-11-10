@@ -182,7 +182,7 @@ for s, needles in ((C1, ['NS="agent"', 'POD="deploy/workshop-mcp"', 'CONTAINER="
 
 print("\n== no scratch outside the repo's tmp/, kube context explicit ==")
 for s, t in TEXT.items():
-    check(f"{s} never names /tmp", "/tmp" not in t)
+    check(f"{s} never names /tmp", "/tmp" not in t)  # tmp-ok: the check that the fallback scripts never name it
     check(f"{s} makes no mktemp scratch", "mktemp" not in t and "TMPDIR" not in t)
     check(f"{s} requires CONTEXT and routes kubectl through --context",
           'CONTEXT="${CONTEXT:?' in t and 'kubectl --context "${CONTEXT}"' in t)

@@ -38,7 +38,7 @@ _API = os.environ.get("KUBE_API", "https://kubernetes.default.svc")
 # Mock business data is written here at startup (also bait for the C3 grep challenge). Must be a WRITABLE
 # path: /app is the read-only ConfigMap mount (server.py), so writing there fails. /tmp is writable, and
 # run_shell `cat`/grep finds it for the C1 (shell-exfil) and C3 (filesystem-snoop) challenges.
-_DATA = os.environ.get("WORKSHOP_DATA_DIR", "/tmp/burrito-data")
+_DATA = os.environ.get("WORKSHOP_DATA_DIR", "/tmp/burrito-data")  # tmp-ok: the pod's own /tmp, its one writable path; nothing on the host
 
 
 # ----- mock business data, written to the local filesystem at startup -------------------------------

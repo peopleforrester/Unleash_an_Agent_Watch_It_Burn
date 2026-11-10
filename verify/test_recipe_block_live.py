@@ -84,7 +84,7 @@ def rule_path(agent_yaml: str) -> str:
         raise ValueError(f"{AGENT_YAML.relative_to(REPO)} no longer carries {anchor!r}, the start of #951's rule")
     rule = agent_yaml[agent_yaml.index(anchor):]
     rule = rule[:rule.index("deployment:")] if "deployment:" in rule else rule
-    paths = sorted(set(re.findall(r"/tmp/burrito-data/[\w./-]*\.conf", rule)))
+    paths = sorted(set(re.findall(r"/tmp/burrito-data/[\w./-]*\.conf", rule)))  # tmp-ok: matches pod paths in the live KubeArmor rule
     if len(paths) != 1:
         raise ValueError(f"the recipe rule names {len(paths)} .conf paths under /tmp/burrito-data ({paths}), not one")
     return paths[0]

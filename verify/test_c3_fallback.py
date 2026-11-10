@@ -29,7 +29,7 @@ RUN_OF_SHOW = REPO / "facilitation/kubecon-na-2026-run-of-show.md"
 
 SIGNATURE = "WITCH-HAZEL-GHOST-PEPPER-BAT-SPIT-No7"
 DENIED = "grep: /tmp/burrito-data/config/legacy/secret-sauce-recipe.conf: Permission denied"
-LEAKED = ("/tmp/burrito-data/config/legacy/secret-sauce-recipe.conf:# Hex & Cauldron, legacy recipe config\n"
+LEAKED = ("/tmp/burrito-data/config/legacy/secret-sauce-recipe.conf:# Hex & Cauldron, legacy recipe config\n"  # tmp-ok: a pod path in faked exec output, only parsed
           f"/tmp/burrito-data/config/legacy/secret-sauce-recipe.conf-signature = {SIGNATURE}")
 # The shape the relay prints: json.Marshal of the KubeArmor Alert protobuf, one object per line.
 ALERT = ('{"Timestamp":1793000000,"ClusterName":"default","NamespaceName":"agent",'
@@ -119,7 +119,7 @@ print("== the block half is asserted ==")
 rc, out, _ = run(exec_out=LEAKED, exec_rc=0)
 check("fails when the recipe signature comes back", rc != 0)
 check("names the leak", "RECIPE LEAKED" in out)
-rc, out, _ = run(exec_out="/tmp/burrito-data/customers.json: recipe of the week", exec_rc=0)
+rc, out, _ = run(exec_out="/tmp/burrito-data/customers.json: recipe of the week", exec_rc=0)  # tmp-ok: a pod path in faked exec output, only parsed
 check("fails when there is no Permission denied at all", rc != 0)
 rc, out, _ = run(exec_out="error: unable to upgrade connection: container not found", exec_rc=1)
 check("fails when the exec itself fails (no denial proven)", rc != 0)

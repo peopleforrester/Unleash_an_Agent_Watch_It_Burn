@@ -60,6 +60,6 @@ ok brief "$(kubectl -n agent exec deploy/console -- sh -c 'test -f /usr/share/ng
 ok tetragon_apps "$(kubectl -n argocd get applications -o name 2>/dev/null|grep -c tetragon)"
 ok ka_annot "$(kubectl -n agent get pod -l app=workshop-mcp -o jsonpath='{.items[0].metadata.annotations.kubearmor-policy}' 2>/dev/null)"
 # 6 C3 bait (baked): burn=readable, enforced=denied
-bait=$(kubectl -n agent exec deploy/workshop-mcp -- sh -c 'cat /tmp/burrito-data/config/legacy/secret-sauce-recipe.conf 2>&1|head -1' 2>/dev/null|tail -1)
+bait=$(kubectl -n agent exec deploy/workshop-mcp -- sh -c 'cat /tmp/burrito-data/config/legacy/secret-sauce-recipe.conf 2>&1|head -1' 2>/dev/null|tail -1)  # tmp-ok: reads the bait file inside the workshop-mcp pod over kubectl exec
 case "$bait" in *"Permission denied"*) ok c3 DENIED;; *"Hex & Cauldron"*) ok c3 READABLE;; *) ok c3 "OTHER";; esac
 echo "$c$f"

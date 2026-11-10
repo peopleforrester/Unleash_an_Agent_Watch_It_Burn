@@ -138,7 +138,7 @@ work = pathlib.Path(tempfile.mkdtemp(prefix="send-route-curl-"))
 atexit.register(shutil.rmtree, work, ignore_errors=True)
 body = work / "marketing.json"
 body.write_text('{"q4_campaign": "x"}', encoding="utf-8")
-form = server.MARKETING_SEND.replace("/tmp/burrito-data/marketing.json", str(body))
+form = server.MARKETING_SEND.replace("/tmp/burrito-data/marketing.json", str(body))  # tmp-ok: the pod path in the tool's text, swapped for a test file
 # file:// takes no POST, so the clean case reads a local file with the same flags; the failing one names a missing file.
 target = work / "reply.txt"
 target.write_text("beacon received by the status collector (HC-204 OK)\n", encoding="utf-8")

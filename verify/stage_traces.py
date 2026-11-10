@@ -145,7 +145,7 @@ SEED_BEATS = {
 # Not on /kubecon (#1137): the presenters send no PII prompt from the page; c3-pii's is this script's own, PII_PROMPT.
 OFF_PAGE_SEEDS = ("c3-pii",)
 # The directory Challenge 2's read touches.
-RECIPE_DIR = "/tmp/burrito-data"
+RECIPE_DIR = "/tmp/burrito-data"  # tmp-ok: the workshop-mcp pod's data directory, a path in the container, not the host's
 # What says the recipe card came back in a reply: its signature and its two made-up lines, workshop-mcp's own
 # RECIPE_MARKS (gitops/ai-layer/workshop-mcp-server.py). Not the sauce's name (kp.RECIPE_MARK): since #952 the C3
 # beat's attack prompt names the sauce itself, so a refusal echoes it, and run 18722's c2-fixed, KubeArmor's
