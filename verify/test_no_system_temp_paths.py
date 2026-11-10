@@ -76,6 +76,8 @@ EXCEPTIONS: list[tuple[str, str, str]] = [
     ("verify/test_local_inference.py", "/dev/shm", "the vLLM pod's memory-backed mount the manifest must carry"),
     ("verify/test_vllm_fit_probe.py", "/dev/shm", "the vLLM pod's shared memory, named in the probe's docstring"),
     ("verify/test_challenge_fallbacks.py", "/tmp", "the check that the fallback scripts write nothing there"),
+    ("verify/e2e-image.sh", "-e HOME=/tmp/e2e-home -e TMPDIR=/tmp/e2e-tmp",
+     "HOME and TMPDIR inside the wib-e2e-tools container (#1188), whose /tmp is its own and removed with it by --rm"),
     ("verify/test_kubecon_c3_recipe_block.py", "mkdir -p (/tmp/",
      "reads the pod's data directories from images/workshop-mcp/Dockerfile"),
     ("verify/test_kubecon_c3_recipe_block.py", '"/tmp" not in recon',

@@ -14,10 +14,22 @@ set -euo pipefail
 
 die() { printf 'E2E IMAGE BUILD FAILED: %s\n' "$*" >&2; exit 1; }
 
+# Each download goes to a scratch directory removed on exit, under TMPDIR, else under the image's own tool directory,
+# never a system temp directory (#1261). The tool directory's .fetch is removed with it, so the image holds neither.
+own_tmp=0
+if [[ -z "${TMPDIR:-}" ]]; then
+    TMPDIR="${WIB_E2E_TOOLS:?the Containerfile sets WIB_E2E_TOOLS}/.fetch"
+    own_tmp=1
+fi
+mkdir -p "${TMPDIR}"
+export TMPDIR
+scratch="$(mktemp -d)"
+trap 'rm -rf "${scratch}"; [[ "${own_tmp}" -eq 0 ]] || rmdir "${TMPDIR}" 2>/dev/null || true' EXIT
+
 fetch() { # url sha256 -> path of the verified download
     local url="$1" want="$2" file got
     [[ "${want}" =~ ^[0-9a-f]{64}$ ]] || die "${url}: '${want}' is not a SHA-256"
-    file="$(mktemp /tmp/wib-e2e-fetch.XXXXXX)"
+    file="$(mktemp -p "${scratch}" fetch.XXXXXX)"
     curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 -o "${file}" "${url}" || die "could not fetch ${url}"
     got="$(sha256sum "${file}" | awk '{print $1}')"
     [[ "${got}" == "${want}" ]] || die "${url} has SHA-256 ${got}, and the pin is ${want}"

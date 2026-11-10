@@ -20,6 +20,10 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+# The host's scratch (the gh relay's socket) goes under TMPDIR, else the checkout's ignored tmp/ (#1261).
+TMPDIR="${TMPDIR:-${REPO_DIR}/tmp}"
+mkdir -p "${TMPDIR}"
+export TMPDIR
 
 die() { printf 'E2E IMAGE FAILED: %s\n' "$*" >&2; exit 1; }
 
@@ -92,9 +96,12 @@ case "${cmd}" in
         done
         [[ -S "${relay_dir}/gh.sock" ]] || die "the gh relay made no socket at ${relay_dir}/gh.sock"
 
+        # HOME and TMPDIR inside are under the container's own temp directory, which --rm throws away and no host process shares
+        # (#1261). The checkout's tmp/ would be the fallback otherwise, and on CI that path is too long for a Terraform
+        # provider's socket (#1313).
         args=(run --rm --pull=never -i --security-opt label=disable -w "${REPO_DIR}"
               -v "${REPO_DIR}:${REPO_DIR}" -v "${root}:${root}" -v "${relay_dir}:/run/wib-gh"
-              -e HOME=/tmp/e2e-home -e "WIB_ARTIFACT_CACHE=${root}" -e "WIB_E2E_IMAGE=${ref}")
+              -e HOME=/tmp/e2e-home -e TMPDIR=/tmp/e2e-tmp -e "WIB_ARTIFACT_CACHE=${root}" -e "WIB_E2E_IMAGE=${ref}")
         case "${common}/" in
             "${REPO_DIR}/"*) ;;
             *) args+=(-v "${common}:${common}") ;;
@@ -114,7 +121,7 @@ case "${cmd}" in
         trap 'forward INT' INT
         trap 'forward TERM' TERM
         shift
-        "${rt}" "${args[@]}" "${ref}" bash -c 'mkdir -p "${HOME}" && exec bash verify/run-e2e-tools.sh "$@"' tier "$@" &
+        "${rt}" "${args[@]}" "${ref}" bash -c 'mkdir -p "${HOME}" "${TMPDIR}" && exec bash verify/run-e2e-tools.sh "$@"' tier "$@" &
         container_pid=$!
         rc=0
         while true; do
