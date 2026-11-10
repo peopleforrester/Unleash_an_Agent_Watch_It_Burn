@@ -50608,3 +50608,28 @@ commands are left to validation.
 
 **Live check skipped.** This fix touches only files under `verify/` that no cluster runs, a docstring under `docs/`,
 and decisions.md. Run 19569's live check of `fleet.sh` stands.
+## 2026-11-10 · #1261 · run 19979 · run 19963's tests gate failure: staging's new temp paths and a crane comment
+
+**Why run 19963 did not land.** Its `tests` gate failed on `test_fetch_inventory.py` and
+`test_no_system_temp_paths.py`. Run 19979 picked the five draft commits (`origin/agent/1261-19569`) onto staging
+84545b01 and ran both alone: each failed the same way, on work staging gained after the draft was cut.
+- `test_fetch_inventory.py`: since #1251 the scan reads `images/villains/build.sh`, and the draft's new EXIT-trap
+  comment there named crane, a fifth `none` line where the inventory lists four. The comment now says "a failed push"
+  and names no tool, so the inventory stands as it is.
+- `test_no_system_temp_paths.py`, four checks, each a staging commit the test caught as designed:
+  `verify/test_kubecon_probe.py` gained a fake `/tmp/admin.kubeconfig` (c5377d86, #1305), now `/fake/admin.kubeconfig`
+  as the draft made the file's other two; `images/kagent-mcp-traceparent/build.sh` (#1222) calls a bare `mktemp -d`
+  and now sets `TMPDIR` to the checkout's `tmp/` when unset, as the other build scripts do;
+  `verify/test_private_chat_deployments.py` (#1256) made a `mkdtemp` it never removed and now removes it through
+  `atexit`; and #1273 rewrote `images/web-terminal/Dockerfile` with no system temp path left, so its `awscli`
+  exception, which now matched nothing, is gone.
+
+**Tests run.** Alone, each exited 0: `test_no_system_temp_paths.py`, `test_fetch_inventory.py`,
+`test_private_chat_deployments.py`, `test_kubecon_probe.py` (after `git submodule update --init` of guard-proxy, which
+it reads), `test_kagent_mcp_traceparent.py`, `test_villain_app.py`, `test_room_jokers.py`, `test_no_docker_hub.py`,
+`test_c6_villain_endpoint.py`, `test_workflow_artifact_cache.py`, `test_scope_tests.py` and `test_no_cloud_by_hand.sh`.
+`scope_tests.py select offline` returns FULL for this change (it touches both runners and `artifact_cache.py`), so the
+whole Test command and the scoped E2E command are left to validation.
+
+**Live check skipped.** The new edits touch a comment and the scratch line of two image build scripts, which no
+cluster runs, and files under `verify/` that no cluster runs. No image was built or pushed.
