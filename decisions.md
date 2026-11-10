@@ -51770,3 +51770,38 @@ test reads no new path, so the scope map is unchanged.
 cluster runs either. Running the script against the real Actions API from this run stopped at "GH_TOKEN is not set",
 since the run's gh hands out no token. The read is checked by the next `verify-suites` run on staging once hecaton
 promotes this branch.
+## 2026-11-10 · #1316 · run 20084 · No repin yet: 0a3ca16 is on guard-proxy staging, not main, and the page and the desk read the spike's floor, not the proxy's list
+
+**Pin.** guard-proxy-agenticburn#84's commit `0a3ca16` (the code-of-conduct list from 144 to 1,253 terms) is on
+guard-proxy-agenticburn's `staging` only: the compare API reads `main...0a3ca16` as ahead 1, behind 0, and main's tip
+is still `0627502`. The issue repins once it is on main, and `verify/test_guard_proxy_pin_on_main.sh` holds the pin to
+guard-proxy main, so this run does not repin. #1288 (the repin past `48cc2ca`) is open as well, with its runs' commits
+on hecaton's mirror branch `agent/1288-19749` and not on staging. A pin at `0a3ca16` carries `48cc2ca` too, so this
+issue's repin lands after #1288's or takes over its work.
+
+**What the issue assumed.** The issue reads as if the chat page's saved-prompts rail (#1280) and the support desk
+(#1268, built in #1269) read guard-proxy's list, so that a repin alone would carry the longer list to them. They do
+not. Both carry `docs/research/2026-11-09-coc-floor/floor.py` over `terms-proposed.rot13` (the spike's 144 terms):
+the page as `COC_TERMS` and `COC_RE` in `gitops/ai-layer/web/burritbot.html`, the desk as the port block in
+`ticket_site.py` that `workshop-mcp-server.py` shares. Under #1289, the collector and the admission policy on names
+are generated from the same floor too (`verify/coc_pattern_copies.py`).
+
+**Measured, offline, in this run's scratch directory** (nothing committed): `proxy.py` at `0a3ca16` loaded as a
+module, against `floor.py` from this tree, on guard-proxy's `conformance/coc_floor/slang-set.rot13.tsv` (70 texts
+refused, 17 passed).
+- guard-proxy `conduct_matches`: right on all 87.
+- `floor.proposed_pattern()` with its 144 terms, which the page and the desk run today: differs from the proxy on 69
+  of the 70 refused texts and on none of the passed ones.
+- `floor.proposed_pattern()` given the proxy's 1,253 terms: differs on none of the 87.
+- `floor.portable_pattern()`, the RE2 form written into the admission policy and the collector: 20,341 characters
+  with 144 terms, 212,409 with 1,253.
+- With 1,253 terms, `floor.py`'s single alternation spends 0.17 s of CPU on a 4,000-character run of `$`, the case
+  `0a3ca16` fixed in the proxy by grouping alternatives by first character. The page's and the desk's ports would
+  need the same grouping.
+
+**So** criterion 2 needs a code change here: the floor and every copy it feeds take the longer list and the grouped
+pattern. This run does not start it, because it changes what the cluster's admission policy and collector run and
+rewrites the spike's measured floor, and it is asked as a question in the run's report. `verify/test_coc_floor_spike.py`
+reads the spike's own files, which nothing here changed.
+
+**Live check.** Skipped: this entry is the only file the run changes, and no cluster runs it.
