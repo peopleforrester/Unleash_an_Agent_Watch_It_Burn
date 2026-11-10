@@ -50488,3 +50488,22 @@ watch-it-burn-private. No Datadog setting was changed, and the presenter termina
 
 **Not yet run on a cluster.** Nothing. The logs are `/var/lib/hecaton/runs/19920/sandbox-1.log`, `read-2.log` and
 `a2a-watch-it-burn-*/ask0.json`. No test changed, so no suite ran; the prose gate ran on this entry.
+
+## 2026-11-10: #1279 resumed (run 19969): run 19832's tests gate failure was the linear-time test's wall clock
+
+**Cause.** Run 19832's tests gate failed on `verify/test_coc_pattern_linear.py` alone ("FAIL: 4 checks failed"). The
+test is selected because it reads `gitops/ai-layer/resources.yaml`, and the guardrail change adds only three env
+entries there, nothing in the code-of-conduct pattern it times. At base 0abba686 the test timed each case on the wall
+clock, so preemption at the host's load average read as quadratic growth. Staging's f686f2f6 (#1307) moved it to the
+thread's CPU time after this branch was cut. The gate's first line, `--context is empty`, is
+`test_burritobot_cluster_live.py`'s own message, a live test the offline suite does not run; it is not a failure.
+
+**Fix.** Merged origin/staging (94dea467, which holds f686f2f6) into the branch, with no conflict. Nothing in the
+guardrail change differs from run 19832's commits.
+
+**Tests run,** each once, alone, both exit 0: `test_coc_pattern_linear.py` (PASS on floor.py's pattern and its 4
+copies) and `test_scope_tests.py`. `scope_tests.py write` adds nothing to the merged map. The rest of the scoped Test
+and E2E commands is left to validation.
+
+**Live check.** Skipped: the merge brings in only staging's own commits, and run 19832's read-only dry run of the
+guard-proxy Deployment on both clusters stands for this change.
