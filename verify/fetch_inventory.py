@@ -9,7 +9,7 @@
 
 The scan reads every file `git ls-files --cached --others --exclude-standard` lists under the four directories, so a
 new file is seen before it is committed, and searches each line with the PATTERNS below: curl, wget, urlopen, the Helm
-verbs that read a repository, a Terraform init, the Python installs of pip and uv, the Node fetches of npm, yarn and
+verbs that read a repository, a Terraform init, the Python installs of pip and uv (and uv's install of a Python itself, #1314), the Node fetches of npm, yarn and
 corepack, a Playwright browser install, a Docker or Podman pull, crane, a git clone or submodule update, the setup
 actions a workflow downloads a runtime with, and a get from the host artifact cache (#1117), a chart pull, an image
 layout (or #1216's platform layout) or a git mirror through it (#1122), which fetch on a miss, a Dockerfile's FROM (with
@@ -71,7 +71,7 @@ PATTERNS = {
     "terraform-init": r"\bterraform\b\W{1,4}(?:-chdir=\S+\s+)?init\b"
                       r"""|["']init["'],\s*["']-(?:input|lockfile|backend|no-color|upgrade|plugin-dir)""",
     "pip-uv": r"\bpip3?\W{1,4}install\b|\buv\W{1,4}(?:pip\W{1,4}(?:install|sync|compile)|sync|run|venv"
-              r"|tool\W{1,4}install)\b|\buvx\b|\bpipx\b",
+              r"|tool\W{1,4}install|python\W{1,4}install)\b|\buvx\b|\bpipx\b",
     "node": r"\bnpm\W{1,4}(?:ci|install|i|exec)\b|\bnpx\b|\byarn\W{1,4}(?:install|add|dlx)\b"
             r"|\bcorepack\W{1,4}(?:prepare|install|enable)\b",
     "playwright-install": r"\bplaywright\W{1,4}install\b",

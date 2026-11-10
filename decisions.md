@@ -51078,3 +51078,18 @@ directory was removed after. `artifact_cache.py` and `package_cache.py` are in t
 **No live cluster check.** The change touches only `verify/` files no cluster runs.
 
 **No dependency was added.**
+
+**Run 20151.** Run 20149's branch failed the `tests` gate on one test, `test_fetch_inventory.py`. The fetch inventory
+(#1116) holds a count of the scanned lines each entry claims, and the draft added lines the scan finds to two tests
+without changing those counts: 11 to `test_ghcr_pull.py` (its stub `urlopen` serving a cut blob) and 1 to
+`test_package_cache.py` (the stub uv's comment). The gate's other lines, such as "--context is empty", are messages
+a passing test checks for. Updating the two counts was not the whole fix: the scan's pip-uv pattern did not know
+`uv python install`, so the CPython download `package_cache._find_python` now runs on a miss was a fetch the
+inventory could not see. The pattern now finds it, in shell and list form, `test_fetch_inventory.py` holds both
+forms, and the inventory classes `package_cache.py`'s install line as a pinned tool fetch. Its pin is setup-uv's
+0.13.7 in verify-suites.yml, whose table names each CPython build and its sha256, and it is not cached. The comment
+in `test_package_cache.py` that names the command makes that file's count 18. `fetch_inventory.py check` reads every
+call site classed, and `test_fetch_inventory.py`, `test_package_cache.py` and `test_scope_tests.py` exit 0, each run once.
+`test_fleet_contract.py`, which reads the inventory for the web-terminal entry only, stops here on the guard-proxy
+submodule this checkout does not have, before that check; the entry is unchanged. No cluster runs these files, so
+there is no live cluster check.

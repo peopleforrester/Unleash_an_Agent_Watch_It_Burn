@@ -126,6 +126,9 @@ samples = {
     "apt": f"RUN {AG} update && {AG} install -y --no-install-recommends jq",
 }
 # #1122's two entry points, each in the artifact-cache family: an image layout and a git mirror, by call and by command.
+# #1314: uv installing a Python itself downloads a CPython build, in shell and in list form.
+for line in ("u" + "v python install 3.12", 'subprocess.run(["u' + 'v", "python", "install", "--no-config", version])'):
+    check(f"pip-uv: the scan finds {line!r}", "pip-uv" in fi.families(line), str(fi.families(line)))
 for line in ("base = image" + "_cache.layout(ref)", 'layout="$(python3 verify/image' + '_cache.py layout "${base}")"',
              "d = image" + "_cache.platform_layout(ref, out)",
              'digest="$(python3 "${VERIFY}/image' + '_cache.py" platform-layout "${ref}" "${out}" linux/amd64)"',

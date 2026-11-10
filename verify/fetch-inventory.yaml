@@ -735,6 +735,12 @@ sites:
     class: live
     kind: upstream-index
     target: PyPI, resolved to write python.lock
+  - match: '"uv",\s"python",\s"install"'
+    lines: 1
+    class: pinned
+    kind: tool
+    pin: .github/workflows/verify-suites.yml (setup-uv's version 0.13.7, whose table names each CPython build and its sha256) and package_cache.ENVS's Python version; run only when uv finds none on the host (#1314)
+    cached: false
   - match: .
     lines: 9
     class: none
@@ -1414,7 +1420,7 @@ sites:
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   verify/test_ghcr_pull.py:
   - match: .
-    lines: 33
+    lines: 44
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   verify/test_ghcr_version_tag.py:
@@ -1584,7 +1590,7 @@ sites:
     why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
   verify/test_package_cache.py:
   - match: .
-    lines: 16
+    lines: 18
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text, and the install lines the scan's pattern is held against (#1185); nothing leaves the host
   verify/test_package_cache_e2e.py:
