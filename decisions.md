@@ -50773,3 +50773,34 @@ It left both private registry policies back at Audit, none of its Deployments on
 the page. `agent/terminal-auth` was not touched. No code changed in this run, so no test was rerun beyond the live check;
 the offline tests for the first two criteria (`verify/test_desk_remote_reports.py`, `verify/test_public_desk.py`) passed
 in run 19400 and on the gates that merged it.
+
+## 2026-11-10 · #1313 · run 20000 · The tools tier gets a TMPDIR short enough for a Terraform provider's socket
+
+**What.** CI's `e2e tools suite` failed on staging `aa2c7dcd` (Actions run 42763616410) with three tier tests red:
+`test_control_plane_app_ports_module.py`, `test_iam_policy_structural.py` and `test_lab_platform_operator_entry.py`.
+The same three failed on staging `4cc279ef` and `4924185d` (runs 42758457224 and 42761168979), beside
+`test_ros_deck_live.py`, which `aa2c7dcd` (#1312) fixed. Each failed with the same terraform error
+on every provider: `Failed to read any lines from plugin's stdout`. The cause is #1261's TMPDIR fallback
+(`790df923`, `3ee07d81`). CI sets no TMPDIR, so `run-e2e-tools.sh` now takes the checkout's `tmp/`, which on Tanjiro
+is 119 bytes. A Terraform provider listens on a unix socket it makes at `$TMPDIR/plugin` and up to 10 digits, Linux
+caps a socket path at 107 bytes, and so the provider cannot bind and exits before its handshake. Before #1261 the
+same tests ran under the system temp directory and passed.
+
+**Reproduced here.** `bash verify/run-e2e-tools.sh test_control_plane_app_ports_module.py` with a 127-byte TMPDIR
+failed `terraform validate` with the CI error, word for word; with this run's 52-byte TMPDIR it printed
+`ALL CONTROL-PLANE APP-PORT MODULE CHECKS GREEN` and exit 0.
+
+**Change.** `.github/workflows/verify-suites.yml`: the e2e job writes `TMPDIR=$RUNNER_TEMP` to `GITHUB_ENV` before
+the suite. That is the job's temp directory, 59 bytes on Tanjiro, which the runner empties for each job, so scratch
+still stays out of the system temp directory, as #1261 wants. `verify/run-e2e-tools.sh` refuses a TMPDIR over 90 bytes
+right after exporting it, naming the length, so a long TMPDIR fails at once by name and not deep in a terraform test.
+90 is 107 less `/plugin` and 10 digits. A fixture's TMPDIR is its own `TemporaryDirectory`, 12 bytes under the
+caller's, so it stays under 90 on Tanjiro (71) and in a hecaton run (64).
+
+**Tests.** `verify/test_verify_suites_workflow.py` holds the TMPDIR step before the suite, with two broken copies (no
+step, the step after the suite). `verify/test_no_system_temp_paths.py` holds the limit and its place in the runner,
+and runs the runner with 91-byte and 200-byte TMPDIRs: exit 1, the message, nothing else run. Both PASS, and
+`verify/test_scope_tests.py` PASS with `scope_tests.py write` changing nothing. The change touches
+`verify/run-e2e-tools.sh`, in the scope map's full list, so CI runs the whole tier on it; this run did not.
+
+**Live check.** Skipped: the change touches the CI workflow, a test runner and two tests, none of which a cluster runs.

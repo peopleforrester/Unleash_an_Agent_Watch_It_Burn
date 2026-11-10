@@ -172,5 +172,12 @@ jobs:
       - name: Chromium's libraries and fonts, unpacked for this job
         run: python3 verify/ci_chromium_libs.py "$RUNNER_TEMP/chromium-libs"
 
+      # The suite's scratch goes in the job's temp directory, which the runner empties for each job. Unset, TMPDIR
+      # would be the checkout's tmp/, 119 bytes on Tanjiro, and a Terraform provider's socket there passes Linux's
+      # 107-byte limit on a socket path, so no provider starts (#1313); run-e2e-tools.sh refuses a TMPDIR over 90.
+      # Set through GITHUB_ENV, since the suite's own step takes no env.
+      - name: TMPDIR, the job's temp directory, short enough for a provider's socket
+        run: echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
+
       - name: bash verify/run-e2e-tools.sh
         run: bash verify/run-e2e-tools.sh

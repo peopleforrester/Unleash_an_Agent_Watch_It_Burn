@@ -39,6 +39,16 @@ if [[ -z "${TMPDIR:-}" ]]; then
     mkdir -p "${TMPDIR}"
 fi
 export TMPDIR
+# A Terraform provider listens on a unix socket it makes in TMPDIR, $TMPDIR/plugin and up to 10 digits, and Linux
+# caps a socket path at 107 bytes, so under a TMPDIR longer than 90 no provider starts and every terraform validate,
+# plan or test fails with "Failed to read any lines from plugin's stdout". The CI checkout's tmp/ is 119 bytes, which
+# failed the tier's three terraform tests on staging aa2c7dcd (#1313); the workflow sets TMPDIR to $RUNNER_TEMP.
+TMPDIR_MAX=90
+if (( ${#TMPDIR} > TMPDIR_MAX )); then
+    printf 'E2E TOOLS TIER CANNOT RUN: TMPDIR is %d bytes, over %d: a Terraform provider'\''s socket under it would pass the 107-byte limit on a unix socket path, and no provider would start. Set TMPDIR to a shorter directory: %s\n' \
+        "${#TMPDIR}" "${TMPDIR_MAX}" "${TMPDIR}" >&2
+    exit 1
+fi
 TOOLS_BIN="${SCRIPT_DIR}/.tools/bin"
 LOG_DIR="${E2E_TOOLS_LOG_DIR:-${SCRIPT_DIR}/.e2e-logs}"
 

@@ -16,6 +16,10 @@ verify/ci_chromium_libs.py, which unpacks the libraries and fonts Playwright's C
 #1200: the e2e job installs Node with actions/setup-node before the suite, at a major run-e2e-tools.sh accepts (24 or
 later; 26 since #1200), so the node harnesses never run on a Node the tier refuses.
 
+#1313: before the suite, the e2e job writes TMPDIR=$RUNNER_TEMP to GITHUB_ENV. Unset, run-e2e-tools.sh takes the
+checkout's tmp/, 119 bytes on Tanjiro, and a Terraform provider's socket under it passes Linux's 107-byte limit, so no
+provider started and the tier's three terraform tests failed on staging aa2c7dcd.
+
 #1113: staging tests only its newest tip. The workflow-level concurrency group is the workflow and the ref, and on a
 staging push `cancel-in-progress` is true, so a newer push cancels the queued and running run before it. On an
 agent/** push the group carries the run id and `cancel-in-progress` is false, so no candidate's checks are cancelled
@@ -63,6 +67,8 @@ BASE_ENV = {"GH_TOKEN": GH_TOKEN}
 WORKFLOW_PERMISSIONS = {"contents": "read", "actions": "read"}
 E2E_PERMISSIONS = {"contents": "read", "issues": "read", "actions": "read"}
 CHROMIUM_STEP = 'python3 verify/ci_chromium_libs.py "$RUNNER_TEMP/chromium-libs"'
+# #1313: the e2e job's TMPDIR is the job's temp directory; the checkout's tmp/ is too long for a provider's socket.
+TMPDIR_STEP = 'echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"'
 STAGING_REF = "refs/heads/staging"
 AGENT_REF = "refs/heads/agent/1113-1"
 
@@ -218,6 +224,12 @@ def problems(doc: dict, text: str) -> list[str]:
         found.append(f"e2e-tools: no step runs `{CHROMIUM_STEP}`, so Chromium cannot start on Tanjiro (#1047)")
     elif SUITES["e2e-tools"] in e2e_runs and e2e_runs.index(CHROMIUM_STEP) > e2e_runs.index(SUITES["e2e-tools"]):
         found.append(f"e2e-tools: `{CHROMIUM_STEP}` runs after the suite")
+    # #1313: unset, TMPDIR is the checkout's tmp/, 119 bytes on Tanjiro, where no Terraform provider can start.
+    if TMPDIR_STEP not in e2e_runs:
+        found.append(f"e2e-tools: no step runs `{TMPDIR_STEP}`, so the suite's TMPDIR is the checkout's tmp/, too long "
+                     "for a Terraform provider's socket (#1313)")
+    elif SUITES["e2e-tools"] in e2e_runs and e2e_runs.index(TMPDIR_STEP) > e2e_runs.index(SUITES["e2e-tools"]):
+        found.append(f"e2e-tools: `{TMPDIR_STEP}` runs after the suite (#1313)")
     # #1200: the node harnesses run on the Node on PATH, which run-e2e-tools.sh refuses only below 24, so the e2e job
     # installs a Node major of 24 or later (26 today) before the suite.
     e2e_steps = e2e.get("steps") or []
@@ -359,6 +371,11 @@ cases = {
     "the Chromium libraries step after the suite": lambda d: d["jobs"]["e2e-tools"].update(
         {"steps": [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() != CHROMIUM_STEP]
          + [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() == CHROMIUM_STEP]}),
+    "no TMPDIR step on the e2e job (#1313)": lambda d: d["jobs"]["e2e-tools"].update(
+        {"steps": [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() != TMPDIR_STEP]}),
+    "the TMPDIR step after the suite (#1313)": lambda d: d["jobs"]["e2e-tools"].update(
+        {"steps": [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() != TMPDIR_STEP]
+         + [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() == TMPDIR_STEP]}),
 }
 for what, edit in cases.items():
     got = problems(broken(edit), text)

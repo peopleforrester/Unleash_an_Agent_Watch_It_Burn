@@ -19,6 +19,8 @@ the workflows; not the submodules, which are their own repos, nor the vendored Y
   4. Every Python file has an rmtree for each tempfile.mkdtemp() it calls (here or through atexit), and every
      mkstemp() or NamedTemporaryFile(delete=False) is unlinked or renamed into place.
   5. Both runners export the TMPDIR fallback, so every test they start inherits it.
+     run-e2e-tools.sh then refuses a TMPDIR over 90 bytes: a Terraform provider's socket under it passes Linux's
+     107-byte limit, and no provider starts (#1313).
   6. artifact_cache.scratch_dir(), the outside-a-worktree scratch the cache tests use, tries TMPDIR and then the
      user's cache directory, never a system temp directory; before #1261 it fell through to /tmp whenever hecaton's
      TMPDIR sat inside the worktree, which is every run.
@@ -218,6 +220,26 @@ for runner in ("verify/run-tests.sh", "verify/run-e2e-tools.sh"):
     check(f"{runner} exports TMPDIR, else the checkout's tmp/, before any test runs",
           FALLBACK in text and text.index(FALLBACK) < text.index("$(mktemp"))
 check("the checkout's tmp/ is ignored", "/tmp/" in read(".gitignore").splitlines())
+
+print("== run-e2e-tools.sh refuses a TMPDIR too long for a Terraform provider's socket (#1313) ==")
+# A provider listens on $TMPDIR/plugin<up to 10 digits>, and Linux caps a socket path at 107 bytes, so 90 is the
+# longest TMPDIR every provider starts under. On staging aa2c7dcd the CI checkout's tmp/ (119 bytes) failed the tier's
+# three terraform tests with "Failed to read any lines from plugin's stdout".
+e2e_runner = read("verify/run-e2e-tools.sh")
+check("the runner's limit is 90, the 107-byte socket path less /plugin and 10 digits",
+      "TMPDIR_MAX=90\n" in e2e_runner and 90 + len("/plugin") + 10 == 107)
+check("the limit is checked right after TMPDIR is exported, before any test or fetch",
+      e2e_runner.index("TMPDIR_MAX=90") > e2e_runner.index(FALLBACK)
+      and e2e_runner.index("TMPDIR_MAX=90") < e2e_runner.index("TOOLS_BIN="))
+for size in (91, 200):
+    # Never made: the runner exits on the length before it writes anything.
+    long_tmp = str(REPO / "tmp" / "t1313-")
+    long_tmp += "x" * (size - len(long_tmp))
+    r = subprocess.run(["bash", str(REPO / "verify" / "run-e2e-tools.sh")], cwd=REPO, capture_output=True, text=True,
+                       env={**os.environ, "TMPDIR": long_tmp}, timeout=60)
+    check(f"a {size}-byte TMPDIR: exit 1, naming its length and the limit, with nothing else run",
+          r.returncode == 1 and f"TMPDIR is {size} bytes, over 90" in r.stderr and not r.stdout
+          and not pathlib.Path(long_tmp).exists(), f"exit {r.returncode}: {r.stdout[-300:]} {r.stderr[-300:]}")
 
 print("== the cache tests' scratch tries TMPDIR, then the user's cache directory, never a system temp directory ==")
 home = REPO / "tmp" / "no-such-home"
