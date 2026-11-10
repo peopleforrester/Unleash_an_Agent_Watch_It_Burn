@@ -51289,3 +51289,27 @@ the gate's detail, needs hecaton#623 on the gate. The release hecaton runs now (
 `HECATON_TEST_FILES` and scopes only a plain pytest Test command, so it runs this suite whole until #623 deploys. The
 first candidate after that which changes one config file shows it; for `platform-baseline.yaml` it should read
 `ran 86 of 613 test files`, M being every file the `Test files:` globs match, the 159 e2e ones among them.
+
+## 2026-11-11 · #1321 · run 20180 · Staging 39614971 went red where #1319 and #1320 crossed: a stale Test map and a setgid copy short one module
+
+**What failed.** The tools tier on staging 39614971 failed two checks, and both came from #1320 and #1319 landing
+side by side. #1320 moved `verify/ghcr_pull.py` under `verify/image_cache.py` (`import ghcr_pull`), and the scope
+map's entries for `test_image_cache.py` and `test_ghcr_version_tag.py` gained it as a read. #1319 wrote
+`verify/test-map.yaml` from the scope map before #1320's change was on its base, so `test_test_map.py` found the file
+two lines behind (`first difference at line 4094: have verify/image_cache.py, want verify/ghcr_pull.py`).
+`test_joker_build_digest.py` builds both Jokers a second time from a setgid copy of `images/villains/` (#1126) and
+copied only `image_cache.py` and `artifact_cache.py` into it, so that copy's `image_cache.py layout` died on
+`import ghcr_pull` and the build exited non-zero. Its first build, from the checkout, still passed.
+
+**What changed.** `python3 verify/scope_tests.py write` brought `verify/test-map.yaml` current (two added lines). The
+Joker test copies `verify/ghcr_pull.py` too, and a new check holds its literal list of copied modules to the
+`verify/` modules `image_cache` loaded in the test's own process, walked through each module's imports, so the next
+import added to `image_cache.py` fails by naming the module that is not copied rather than as a failed build. The list
+stays a literal: building each path from an import name made the scope selector put the test on its always list,
+and comparing against `REPO / "verify"` made it read all of `verify/`. As written the scope map is unchanged.
+
+**Tests.** `python3 verify/test_test_map.py`: passes. `python3 verify/test_scope_tests.py`: `ALL PASS`.
+`bash verify/run-e2e-tools.sh test_joker_build_digest.py`: every check passes, the setgid build included, at both
+pinned digests (`sha256:0765b359552b...` and `sha256:793db2995eee...`), `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`.
+The whole tools tier on staging is left to the gate. The change touches only `verify/` files no cluster runs, so there
+is no live check.
