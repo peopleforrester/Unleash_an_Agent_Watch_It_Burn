@@ -363,6 +363,40 @@ def _find_python(version: str, ienv: Mapping[str, str]) -> str:
     return found
 
 
+def pythons(envs: Mapping[str, Env] | None = None) -> list[str]:
+    """Each Python version the environments are locked for, once, in order."""
+    return sorted({e.python for e in (ENVS if envs is None else envs).values()})
+
+
+def ensure_pythons(envs: Mapping[str, Env] | None = None, ienv: Mapping[str, str] | None = None) -> list[str]:
+    """Installs with uv each Python pythons() names, then finds each as environment() will. environment() only finds
+    an interpreter, never fetches one, so a runner whose uv has none of a version fails every test on that version:
+    hecaton#475 moved Tanjiro's UV_PYTHON_INSTALL_DIR to a new, empty /srv/gha-agent/cache/uv-python, and the four
+    tier tests on the mcp and llm-guard environments failed on "uv finds no Python 3.12" (CI run 42866956234, #1314).
+    The CI e2e job runs it before the suite. Only a version uv finds no interpreter for is installed, so the system
+    Python 3.13 that the jobs' venvs already run on is left as it is; it returns the versions it installed."""
+    ienv = dict(os.environ if ienv is None else ienv)
+    missing = []
+    for v in pythons(envs):
+        try:
+            _find_python(v, ienv)
+        except PackageCacheError:
+            missing.append(v)
+    if not missing:
+        return []
+    try:
+        r = subprocess.run(["uv", "python", "install", "--no-config", *missing], capture_output=True, text=True,
+                           env=ienv)
+    except OSError as e:
+        raise PackageCacheError(f"cannot run uv to install Python {', '.join(missing)}: {e}") from e
+    if r.returncode != 0:
+        raise PackageCacheError(f"uv could not install Python {', '.join(missing)} (exit {r.returncode}): "
+                                f"{(r.stdout + r.stderr).strip()}")
+    for v in missing:
+        _find_python(v, ienv)
+    return missing
+
+
 def environment(env: str, *, root: pathlib.Path | None = None, lock: Mapping[str, list[Wheel]] | None = None,
                 cache_env: Mapping[str, str] | None = None,
                 fetch: artifact_cache.Fetcher = artifact_cache.url_fetch) -> pathlib.Path:
@@ -470,7 +504,7 @@ def write(names: Sequence[str] = ()) -> None:
 # ------------------------------------------------------------------------------------------------ command line
 
 USAGE = ("usage: package_cache.py run <env> [--root <dir>] -- <program> [args...] | python <env> | wheelhouse <env> | "
-         "install <env> --python <interpreter> [--pip] | node-env | write [env...]")
+         "install <env> --python <interpreter> [--pip] | ensure-pythons | node-env | write [env...]")
 
 
 def main(argv: list[str]) -> int:
@@ -503,6 +537,11 @@ def main(argv: list[str]) -> int:
             return 0
         if len(argv) in (4, 5) and argv[0] == "install" and argv[2] == "--python" and argv[4:] in ([], ["--pip"]):
             install(argv[1], argv[3], pip=argv[4:] == ["--pip"])
+            return 0
+        if argv == ["ensure-pythons"]:
+            installed = ensure_pythons()
+            print(f"package cache: uv finds Python {', '.join(pythons())}"
+                  + (f"; installed {', '.join(installed)}" if installed else ", none installed"))
             return 0
         if argv == ["node-env"]:
             for k, v in node_env().items():

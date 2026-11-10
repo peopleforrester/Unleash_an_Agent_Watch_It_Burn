@@ -10,7 +10,9 @@
 # Here "pushed" means reachable from a refs/remotes/ ref as of the submodule's last fetch; a commit pushed
 # since then reads as unpushed until `git -C <submodule> fetch` updates those refs.
 set -uo pipefail
-REPO_DIR="$(cd "${1:-$(dirname "${BASH_SOURCE[0]}")/..}" && pwd)"
+# pwd -P: the top-level check below compares with git's --show-toplevel, which resolves links, so a repo reached
+# through one (a TMPDIR that is a link, as on Tanjiro's runners since hecaton#475) read as not initialised (#1314).
+REPO_DIR="$(cd "${1:-$(dirname "${BASH_SOURCE[0]}")/..}" && pwd -P)"
 
 fail=0
 checked=0

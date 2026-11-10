@@ -142,7 +142,9 @@ check("the branches run are main and staging", wall.WALL_REFS == ("main", "stagi
 
 print("== a tree whose lint and tests pass ==")
 with tempfile.TemporaryDirectory() as td:
-    root = pathlib.Path(td)
+    # Resolved, as the uv stub records the cwd it ran in resolved: under a TMPDIR that is a link, as on Tanjiro's
+    # runners since hecaton#475, the unresolved tree is not the cwd it reports (#1314).
+    root = pathlib.Path(td).resolve()
     s = Stubs(root)
     s.publish("main", SHA_MAIN, wall_tree())
     sha = with_path(s.bin, lambda: wall.resolve("main"))

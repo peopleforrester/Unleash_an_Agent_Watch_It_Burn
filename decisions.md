@@ -50997,3 +50997,66 @@ login was not touched. The desk is as found.
 
 **Tests.** No file a test reads changed besides this one; no test was run beyond the live script and the prose gate.
 **No dependency was added.**
+
+## 2026-11-10 · #1314 · run 20143 · CI on staging after hecaton#475: a linked TMPDIR, an empty uv Python directory, a cut layer stream
+
+Tanjiro's runners came back at 19:02Z with hecaton#475 live, and verify-suites on staging 78209675 (Actions run
+42866956234) ran both jobs and failed both. This run read both job logs and the run before it (42863038669) and fixed
+each failure that comes from the repo.
+
+**Offline job, 9 tests.** Since hecaton#475 the runner hands each job TMPDIR=/srv/gha-agent/t/<hex>, a link to the
+runner's `_work/_temp`. The e2e job sets TMPDIR to `$RUNNER_TEMP`, the real path, and its offline suite failed only
+`test_no_system_temp_paths.py`, so the other eight are the link. A symlinked TMPDIR outside the worktree reproduced
+them here, and each is fixed where the path first differs:
+
+- `artifact_cache.scratch_dir()` returns its directory resolved. `resolve_root()` and `worktree_of()` already print
+  resolved paths, so the six tests whose scratch comes from it (`test_artifact_cache.py`, `test_git_mirror.py`,
+  `test_image_cache.py`, `test_tf_module_cache.py`, `test_prompts_wall_suite.py`, `test_e2e_tools_tier.py`) compared
+  a link path with a resolved one.
+- `test_e2e_tools_tier.py` and `test_prompts_wall_suite.py` each had one more case on a plain
+  `tempfile.TemporaryDirectory()`; both resolve it.
+- `submodule-pins-pushed.sh` and `guard-proxy-pin-on-main.sh` took the repo directory with `pwd`, then compared it
+  with git's `--show-toplevel`, which resolves links, so a repo reached through one read as not initialised. They
+  use `pwd -P`. The bug was in the scripts themselves, and any checkout reached through a link hit it.
+- `test_no_system_temp_paths.py` built its 91-byte TMPDIR under the checkout's `tmp/`, and the CI checkout path alone
+  is longer than 91 bytes. It now builds the path from the short prefix `/t1313-`, never made, and asserts its length.
+
+**E2E job.** Three causes besides the offline suite:
+
+- Four tests on the mcp and llm-guard environments failed on "uv finds no Python 3.12". The job log shows
+  `UV_PYTHON_INSTALL_DIR` moved from `/srv/gha-agent/.local/share/uv/python` (run 42863038669) to the new, empty
+  `/srv/gha-agent/cache/uv-python`, and `package_cache.py` only finds an interpreter. New
+  `package_cache.ensure_pythons()` and its verb `ensure-pythons` have uv install each version `ENVS` is locked for
+  that `uv python find` lacks, then find it, and fail by name when uv cannot. The e2e job runs
+  `python3 verify/package_cache.py ensure-pythons` before the suite, and `test_verify_suites_workflow.py` fails a
+  workflow without it or with it after the suite. A version already found is not installed, so the system Python
+  3.13 the jobs' venvs use is left alone.
+- `test_image_version_tags.py` stopped on tarfile's "unexpected end of data" in both runs, after 887 s and 1061 s,
+  streaming a web-terminal layer (about 680 MB in all). http.client returns an empty read when a connection closes
+  before Content-Length, so a cut stream looks like the end. New `ghcr_pull.open_blob()` reads a blob of the size the
+  manifest gives and, when it ends or drops early, asks for the rest with `Range: bytes=<next>-`, up to 5 times,
+  refusing any answer that is not a 206 from that byte. `find()` reads each layer through it. A first draft copied
+  `header_items()` into the resume, which carries urllib's `Host: ghcr.io` across the redirect, and the blob host
+  answered 421 live; it copies the request's own headers now, and `test_ghcr_pull.py` holds that.
+- `test_delivered_tags_github_e2e.py`'s one `git ls-remote` hung its whole 120 s. It now tries 3 times of 60 s each,
+  and only a hang is asked again.
+
+`test_weather_feed_e2e.py` failed once on Open-Meteo's TLS handshake timing out from Tanjiro, and passed in the run
+before. It is not changed: #964's criteria, held by an offline test, say the feed is asked once with no retry. If it
+fails again, that ruling is the thing to revisit.
+
+**Tests run here, each once.** With TMPDIR a link outside the worktree: `test_artifact_cache.py`,
+`test_git_mirror.py`, `test_tf_module_cache.py`, `test_image_cache.py` and `test_prompts_wall_suite.py` exit 0;
+`test_e2e_tools_tier.py`, `test_submodule_pins_pushed.sh` and `test_guard_proxy_pin_on_main.sh` pass every case but
+the ones that run git on this checkout, whose `.git` names a worktree that does not exist here (they passed on CI).
+`test_ghcr_pull.py` and `test_verify_suites_workflow.py` exit 0. `test_package_cache.py` passes every check up to
+its `git ls-files` scan, which cannot run here; that scan's pattern finds no install line in the changed files.
+`test_no_system_temp_paths.py` also needs git; its 91- and 200-byte cases were run against `run-e2e-tools.sh` alone
+and pass. Live: `test_image_version_tags.py` exits 0 (28 checks), `test_delivered_tags_github_e2e.py` passes from
+outside the checkout, `package_cache.py ensure-pythons` prints "uv finds Python 3.12, 3.13, none installed", and two
+real web-terminal layers, each cut twice at 700 bytes, were resumed through ghcr.io's redirect to their exact
+digests. `artifact_cache.py` and `package_cache.py` are in the scope map's full list, so validation runs everything.
+
+**No live cluster check.** The change touches only `verify/` files no cluster runs and the CI workflow.
+
+**No dependency was added.**

@@ -515,7 +515,9 @@ with tempfile.TemporaryDirectory() as t:
           cached(tmp) == [] and not (vdir / ".tools" / "dl").exists(), str(cached(tmp)))
 
 with tempfile.TemporaryDirectory() as t:
-    tmp = pathlib.Path(t)
+    # Resolved, as the fetch's error names the root and the worktree resolved: under a TMPDIR that is a link, as on
+    # Tanjiro's runners since hecaton#475, the unresolved path is not the one it prints (#1314).
+    tmp = pathlib.Path(t).resolve()
     vdir = scratch(tmp, GOOD_LOCK, (FETCH,))
     make_stubs(tmp / "bin")
     inside = tmp / "repo" / "cache"

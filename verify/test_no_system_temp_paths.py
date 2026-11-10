@@ -233,9 +233,12 @@ check("the limit is checked right after TMPDIR is exported, before any test or f
       e2e_runner.index("TMPDIR_MAX=90") > e2e_runner.index(FALLBACK)
       and e2e_runner.index("TMPDIR_MAX=90") < e2e_runner.index("TOOLS_BIN="))
 for size in (91, 200):
-    # Never made: the runner exits on the length before it writes anything.
-    long_tmp = str(REPO / "tmp" / "t1313-")
+    # Never made: the runner exits on the length before it writes anything. Built to exactly `size` bytes from a short
+    # absolute prefix, not under the checkout's tmp/: the CI checkout's path alone is longer than 91 bytes on
+    # Tanjiro's runners, so a 91-byte path under it could not be built and the case failed there (#1314).
+    long_tmp = "/t1313-"
     long_tmp += "x" * (size - len(long_tmp))
+    assert len(long_tmp) == size, f"the {size}-byte TMPDIR case built {len(long_tmp)} bytes"
     r = subprocess.run(["bash", str(REPO / "verify" / "run-e2e-tools.sh")], cwd=REPO, capture_output=True, text=True,
                        env={**os.environ, "TMPDIR": long_tmp}, timeout=60)
     check(f"a {size}-byte TMPDIR: exit 1, naming its length and the limit, with nothing else run",

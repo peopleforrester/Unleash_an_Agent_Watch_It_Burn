@@ -179,7 +179,21 @@ import json, os, pathlib, sys
 a = sys.argv[1:]
 with open({str(log)!r}, "a") as f:
     f.write(json.dumps({{"args": a, "uv_cache": os.environ.get("UV_CACHE_DIR")}}) + "\\n")
+# STUB_UV_MISSING names versions this uv has no interpreter for until `uv python install` gets them (a marker file
+# beside the log); STUB_UV_INSTALL_FAILS makes that install fail.
+missing = set(os.environ.get("STUB_UV_MISSING", "").split())
+have = pathlib.Path({str(log)!r} + ".installed")
+if a[:2] == ["python", "install"]:
+    if os.environ.get("STUB_UV_INSTALL_FAILS"):
+        print("error: no download found for the request", file=sys.stderr)
+        sys.exit(2)
+    with open(have, "a") as f:
+        f.write("".join(v + "\\n" for v in a[3:]))
 if a[:2] == ["python", "find"]:
+    got = set(have.read_text().split()) if have.exists() else set()
+    if a[-1] in missing and a[-1] not in got:
+        print(f"error: No interpreter found for Python {{a[-1]}}", file=sys.stderr)
+        sys.exit(2)
     print({sys.executable!r})
 elif a[:1] == ["venv"]:
     b = pathlib.Path(a[-1]) / "bin"
@@ -305,6 +319,30 @@ try:
     err = refusal(lambda: pc.install("fx", sys.executable, root=root, lock=wrong, fetch=no_fetch))
     check("an interpreter on another Python is refused before any install",
           f"fx is locked for Python {other}, and {sys.executable} is Python {PY}" in err and len(uv_calls(log)) == n, err)
+
+    print("== ensure_pythons(): uv installs each Python the environments are locked for, then finds it (#1314) ==")
+    check("pythons() is each version ENVS is locked for, once", pc.pythons() == sorted({e.python for e in pc.ENVS.values()})
+          and "3.12" in pc.pythons(), str(pc.pythons()))
+    finds = [["python", "find", "--no-config", v] for v in pc.pythons()]
+    n = len(uv_calls(log))
+    got = pc.ensure_pythons()
+    new = [c["args"] for c in uv_calls(log)[n:]]
+    check("with every version found, nothing is installed", new == finds and got == [], str(new))
+    n = len(uv_calls(log))
+    got = pc.ensure_pythons(ienv={**os.environ, "STUB_UV_MISSING": "3.12"})
+    new = [c["args"] for c in uv_calls(log)[n:]]
+    check("a version uv finds no interpreter for (3.12, as on Tanjiro in run 42866956234) is installed, alone, "
+          "then found", new == finds + [["python", "install", "--no-config", "3.12"], finds[0]] and got == ["3.12"],
+          str(new))
+    err = refusal(lambda: pc.ensure_pythons(ienv={**os.environ, "STUB_UV_MISSING": "3.11 3.13",
+                                                  "STUB_UV_INSTALL_FAILS": "1"},
+                                            envs={"a": pc.Env("3.11", ()), "b": pc.Env("3.13", ())}))
+    check("an install uv cannot do fails, naming the missing versions and uv's answer",
+          "uv could not install Python 3.11, 3.13 (exit 2)" in err and "no download found" in err, err)
+    r = subprocess.run([sys.executable, str(VERIFY / "package_cache.py"), "ensure-pythons"], capture_output=True,
+                       text=True, env={**os.environ, "STUB_UV_MISSING": "3.12 3.13", "STUB_UV_INSTALL_FAILS": "1"})
+    check("the ensure-pythons verb exits 1 on it, so the CI step fails", r.returncode == 1
+          and r.stderr.startswith("PACKAGE CACHE FAILED: uv could not install Python"), r.stderr)
 finally:
     os.environ["PATH"] = PATH
     subprocess.run(["chmod", "-R", "u+w", str(SCRATCH)], check=False)

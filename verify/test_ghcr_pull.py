@@ -14,6 +14,7 @@ import json
 import pathlib
 import re
 import sys
+import tarfile
 import urllib.error
 import urllib.request
 
@@ -239,6 +240,116 @@ try:
     except urllib.error.HTTPError as e:
         check("the opener given is the one asked, and its redirect reaches the caller at once",
               e.code == 307 and opener.asked == 1 and not seen and not naps, repr((e.code, opener.asked, seen, naps)))
+    print("== open_blob resumes a blob whose stream ends early, from the first byte not yet read (#1314) ==")
+    BLOB = bytes(range(256)) * 40  # 10240 bytes
+
+    class Part(io.BytesIO):
+        """One answer of a blob server: the bytes from start, cut after <cut> of them with no error, as Tanjiro's
+        connection to ghcr.io's blob host closed in CI run 42866956234. raise_at drops it with an exception instead."""
+
+        def __init__(self, start: int, cut: int | None, status: int, content_range: str | None,
+                     raise_at: bool = False) -> None:
+            end = len(BLOB) if cut is None else start + cut
+            super().__init__(BLOB[start:end])
+            self.status, self.raise_at = status, raise_at
+            self.headers = {"Content-Range": content_range} if content_range else {}
+
+        def readinto(self, b) -> int:
+            n = super().readinto(b)
+            if not n and self.raise_at:
+                raise http.client.IncompleteRead(b"", 1)
+            return n
+
+    def blob_server(cuts: list, ranged_status: int = 206, bad_range: bool = False, raise_at: bool = False):
+        """urlopen serving BLOB: each answer is cut after the next of cuts (None: to the end). An ask with a Range
+        header gets ranged_status and a Content-Range from that byte (bad_range: from byte 0)."""
+        asked: list = []
+        carried.clear()
+
+        def urlopen(req, timeout=None):
+            rng = req.get_header("Range") if not isinstance(req, str) else None
+            start = int(rng.removeprefix("bytes=").removesuffix("-")) if rng else 0
+            asked.append((rng, timeout, req.get_header("Authorization")))
+            # What urllib's open does: a Host the redirect handler leaves behind. A resume that copies it into its
+            # own headers sends ghcr.io's Host to the blob host's CDN, which answered 421 live.
+            carried.append(sorted(req.headers))
+            req.add_unredirected_header("Host", "ghcr.io")
+            cut = cuts.pop(0) if cuts else None
+            if rng is None:
+                return Part(0, cut, 200, None, raise_at)
+            from_byte = 0 if bad_range else start
+            return Part(start, cut, ranged_status, f"bytes {from_byte}-{len(BLOB) - 1}/{len(BLOB)}", raise_at)
+
+        return urlopen, asked
+
+    carried: list = []
+    req = urllib.request.Request("https://ghcr.io/v2/x/blobs/sha256:00", headers={"Authorization": "Bearer t"})
+    naps.clear()
+    urllib.request.urlopen, asked = blob_server([None])
+    with ghcr_pull.open_blob(req, len(BLOB), timeout=120) as r:
+        got = r.read()
+    check("a whole stream is read once, with no Range", got == BLOB and asked == [(None, 120, "Bearer t")],
+          repr(asked))
+
+    urllib.request.urlopen, asked = blob_server([3000, 4000])
+    with ghcr_pull.open_blob(req, len(BLOB), timeout=120) as r:
+        got = r.read()
+    check("a stream that ends early twice is resumed to the last byte", got == BLOB, f"{len(got)} bytes")
+    check("each resume asks from the first byte not yet read, with the same headers and timeout",
+          asked == [(None, 120, "Bearer t"), ("bytes=3000-", 120, "Bearer t"), ("bytes=7000-", 120, "Bearer t")],
+          repr(asked))
+    check("a resume carries only the request's own headers and its Range, not the Host urllib added (421 live)",
+          carried == [["Authorization"], ["Authorization", "Range"], ["Authorization", "Range"]], repr(carried))
+
+    urllib.request.urlopen, asked = blob_server([3000], raise_at=True)
+    with ghcr_pull.open_blob(req, len(BLOB)) as r:
+        got = r.read()
+    check("a stream that drops with an IncompleteRead is resumed too",
+          got == BLOB and [a[0] for a in asked] == [None, "bytes=3000-"], repr(asked))
+
+    payload = io.BytesIO()
+    with tarfile.open(fileobj=payload, mode="w|gz") as tar:
+        info = tarfile.TarInfo("usr/local/bin/ttyd")
+        data = bytes(range(256)) * 200
+        info.size = len(data)
+        tar.addfile(info, io.BytesIO(data))
+    BLOB = payload.getvalue()
+    urllib.request.urlopen, asked = blob_server([len(BLOB) // 3, len(BLOB) // 3])
+    with ghcr_pull.open_blob(req, len(BLOB)) as r, tarfile.open(fileobj=r, mode="r|*") as tar:
+        names = [(m.name, tar.extractfile(m).read() == data) for m in tar]
+    check("a gzipped layer streamed through two early ends untars whole, as test_image_version_tags.py reads it",
+          names == [("usr/local/bin/ttyd", True)] and len(asked) == 3, repr((names, asked)))
+    urllib.request.urlopen, asked = blob_server([len(BLOB) // 3])
+    with urllib.request.urlopen(req) as r:
+        try:
+            with tarfile.open(fileobj=r, mode="r|*") as tar:
+                list(tar)
+            cut_fails = False
+        except tarfile.ReadError as e:
+            cut_fails = "unexpected end of data" in str(e)
+    check("read without open_blob, the same cut stream fails as CI run 42866956234 did", cut_fails)
+
+    urllib.request.urlopen, asked = blob_server([100] * (ghcr_pull.RESUMES + 1))
+    try:
+        with ghcr_pull.open_blob(req, len(BLOB)) as r:
+            r.read()
+        check("a stream that ends early on every resume is raised", False, "it returned")
+    except ConnectionError as e:
+        check("a stream that ends early on every resume is raised, naming the byte, the size and the resumes",
+              f"the body ended at byte {100 * (ghcr_pull.RESUMES + 1)} of {len(BLOB)}" in str(e)
+              and f"{ghcr_pull.RESUMES} resumes did not finish it" in str(e)
+              and len(asked) == ghcr_pull.RESUMES + 1, f"{e} {asked!r}")
+
+    for status, bad, label in ((200, False, "a 200 to a Range ask (the whole blob again)"),
+                               (206, True, "a 206 from another byte")):
+        urllib.request.urlopen, asked = blob_server([100], ranged_status=status, bad_range=bad)
+        try:
+            with ghcr_pull.open_blob(req, len(BLOB)) as r:
+                r.read()
+            check(f"{label} is refused, never spliced in", False, "it returned")
+        except ConnectionError as e:
+            check(f"{label} is refused, never spliced in, naming the byte and the answer",
+                  "the rest from byte 100" in str(e) and f"HTTP {status}" in str(e), str(e))
 finally:
     urllib.request.urlopen = real
 
