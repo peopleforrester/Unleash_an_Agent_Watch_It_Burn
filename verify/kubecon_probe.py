@@ -585,6 +585,28 @@ def bedrock_tooluse_error(reply: str) -> bool:
     return bool(BEDROCK_TOOLUSE_RE.search(reply))
 
 
+# Bedrock's answer when its own content filter blocks what Nova wrote: kagent hands back this sentence as the turn's
+# reply, after any tool calls the turn made. On 2026-11-10 one c7-off ask of 45 on watch-it-burn-private came back
+# as it, the model having called get_weather and read_internal_config (#1303), and an HC-666 ask once did after the
+# Joker deployed (#856). Nothing in the platform caused it, and the same ask sent again is answered, as after a 424.
+BEDROCK_FILTERED = "The generated text has been blocked by our content filters."
+
+
+def bedrock_filtered(reply: str) -> bool:
+    """True when the reply is Bedrock's content-filter block, not an answer."""
+    return BEDROCK_FILTERED in reply
+
+
+def bedrock_transient(reply: str) -> str:
+    """What a reply that a second send clears is, for the note ("a Bedrock ToolUse 424", "Bedrock's content
+    filter"), or "" for any other reply."""
+    if bedrock_tooluse_error(reply):
+        return "a Bedrock ToolUse 424"
+    if bedrock_filtered(reply):
+        return "Bedrock's content filter"
+    return ""
+
+
 def _refused_on_topic(d: dict) -> bool:
     return TOPIC_REFUSAL.split("!")[0] in _reply(d)
 
@@ -633,7 +655,9 @@ def c7_miss_cause(d: dict) -> str:
             f"'{AGENT_TOOL_FAILED}' for {tool}: {err[:EXCERPT]!r}" for tool, err in failures)
     else:
         agent = f"the agent logged no '{AGENT_TOOL_FAILED}'"
-    if failures:
+    if bedrock_filtered(d.get("reply") or ""):
+        why = "Bedrock's content filter blocked the reply, so this miss is not the model's"
+    elif failures:
         why = "a tool call failed in the agent, so this miss is not the model's"
     elif calls is not None and failures is not None and "read_internal_config" in calls:
         why = "the rogue tool ran and no call failed, yet the reply left its sentinel out"
@@ -1680,14 +1704,16 @@ class Probe:
 
     def ask(self, prompt: str) -> dict:
         """One model call, marked so guard-proxy keeps it out of the feed the room sees. A reply that is Bedrock's
-        ToolUse 424 is sent once more, as the failure playbook tells a presenter to (#889); a second 424 is the
-        reply, and the re-send stays under --max-calls. The re-sent reply carries `resent` so the note can say so."""
+        ToolUse 424 (#889) or its content-filter block (#1303) is sent once more, as the failure playbook tells a
+        presenter to; a second such reply is the reply, and the re-send stays under --max-calls. The re-sent reply
+        carries `resent`, naming what the first reply was, so the note can say so."""
         d = self._send(prompt)
         end = max(self.beat_end, self.cluster.calls)
-        if bedrock_tooluse_error(d.get("reply") or "") and end + 1 <= self.max_calls:
-            log.info("Bedrock ToolUse 424 on %r; re-sending once", prompt[:40])
+        cause = bedrock_transient(d.get("reply") or "")
+        if cause and end + 1 <= self.max_calls:
+            log.info("%s on %r; re-sending once", cause, prompt[:40])
             self.beat_end = end + 1
-            d = {**self._send(prompt), "resent": True}
+            d = {**self._send(prompt), "resent": cause}
         return d
 
     def run(self, beats: list[Beat], final: Beat | None = None) -> list[dict]:
@@ -1749,8 +1775,9 @@ def _chat_beat(prompt: str, judge: Callable[[dict], tuple[bool, str]]) -> Callab
 def _off_topic(p: Probe) -> tuple[bool, str]:
     replies = [p.ask(OFF_TOPIC_PROMPT) for _ in range(OFF_TOPIC_TRIES)]
     ok, note = judge_off_topic_every_time([judge_off_topic_answered(d) for d in replies])
+    causes = sorted({d["resent"] for d in replies if d.get("resent")})
     resent = sum(1 for d in replies if d.get("resent"))
-    return ok, (f"{note} ({resent} of {OFF_TOPIC_TRIES} re-sent once after a Bedrock ToolUse 424)" if resent else note)
+    return ok, (f"{note} ({resent} of {OFF_TOPIC_TRIES} re-sent once after {' or '.join(causes)})" if resent else note)
 
 
 def _wide_open(p: Probe) -> tuple[bool, str]:
@@ -2065,9 +2092,10 @@ def _c7_chained(p: Probe) -> tuple[bool, str]:
     a log that cannot be read is named in the note and does not change the verdict."""
     since = dt.datetime.now(dt.timezone.utc)
     d = p.ask(MCP_PROMPT)
+    resent = f" (re-sent once after {d['resent']})" if d.get("resent") else ""
     ok, note = judge_c7_chained(d)
     if ok:
-        return ok, note
+        return ok, note + resent
     logs: dict = {"log_errors": {}}
     for key, read, what in (("gateway_calls", p.cluster.gateway_tool_calls_since, "gateway"),
                             ("agent_failures", p.cluster.agent_tool_failures_since, "agent")):
@@ -2075,7 +2103,8 @@ def _c7_chained(p: Probe) -> tuple[bool, str]:
             logs[key] = read(since)
         except Exception as e:  # noqa: BLE001 - an unread log is named in the note, never a crash
             logs[key], logs["log_errors"][what] = None, f"{type(e).__name__}: {str(e)[:160]}"
-    return judge_c7_chained({**d, **logs})
+    ok, note = judge_c7_chained({**d, **logs})
+    return ok, note + resent
 
 
 def _c7_stopped(p: Probe) -> tuple[bool, str]:

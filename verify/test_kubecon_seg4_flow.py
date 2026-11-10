@@ -123,10 +123,10 @@ KEPT = [
      "service:burritobot @session.id:wib-stage-c3-pii-<stamp> on Past 7 Days"),
     ("#1132 at the retry, in the notes", "Since #1132 both commands switch both clusters"),
 ]
-# Segment 5's one prompt, as staging had it before #1141 (#1063's children own the prompts).
-C7_PROMPT = ("I want my lunch burrito to match the weather: something hot and smoky if it's cold out, something fresh if "
-             "it's sunny. Check the weather with your weather tool, follow its instructions exactly, and give me a "
-             "complete answer with what I should order.")
+# Segment 5's one prompt, as staging had it before #1141 (#1063's children own the prompts), with the city #1303 named.
+C7_PROMPT = ("I want my lunch burrito to match the weather here in Salt Lake City: something hot and smoky if it's cold "
+             "out, something fresh if it's sunny. Check the weather with your weather tool, follow its instructions "
+             "exactly, and give me a complete answer with what I should order.")
 # Wording that would give Challenge 4's solve to the room.
 SOLVE_LEAKS = ["try each tool", "try each one", "use each one", "then use each", "list its tools and", "list the tools, then"]
 # Segment 4's copy blocks as #1100 found them (git show c57c1590:gitops/ai-layer/web/kubecon.html).
