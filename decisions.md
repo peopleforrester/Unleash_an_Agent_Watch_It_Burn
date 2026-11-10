@@ -51193,3 +51193,59 @@ was changed.
 `python3 verify/test_scope_tests.py`, `test_ghcr_pull.py`, `test_verify_harness.py` and `test_tests_own_inputs.py`
 passed, and `scope_tests.py check` reports 0 problems with the map unchanged. The rest of the scoped offline
 selection is left to validation.
+
+## 2026-11-11 · #1319 · run 20175 · The offline suite runs the files hecaton's tests gate names, and a Test map carries the scope map to it
+
+**What changed.** `verify/run-tests.sh` reads `HECATON_TEST_FILES`, one repo path per line, as hecaton#623 passes it.
+When it is set and not blank, the runner runs exactly those files, once each, in the order given, and does not call
+`scope_tests.py`, even with `HECATON_BASE_SHA` set: the gate's `ran N of M test files` is then what ran. A listed
+`# SUITE: e2e` file is set aside, as the glob sets it aside, each file runs under `no_cloud_run`, and a list of e2e
+files alone runs nothing and passes. `NO TESTS FOUND` fails only with the variable unset or blank. A listed path that is
+not an existing `verify/test_*.py` or `verify/test_*.sh` fails the run by name rather than being skipped. Neither
+variable reaches the tests. Unset, the runner works as it did.
+AGENTS.md declares `Test files: verify/test_*.py verify/test_*.sh` and `Test map: verify/test-map.yaml` under the Test
+command.
+
+**Why a Test map, and why generated.** The gate selects a test for a changed path when the test's code spells the path.
+Here, 81 offline tests read the whole tree or its history (the scope map's `always`) and many more glob a directory
+(`gitops/bootstrap/apps/*.yaml`), so for a path one test spells and another globs, the gate alone would run the first
+and leave out the second. Without the variable the runner's own `scope_tests.py` selection (#1018) already catches
+that, so honouring the gate's list without a map would have narrowed the suite below what it runs today.
+`scope_tests.py write` now also writes `verify/test-map.yaml` from `verify/scope-map.yaml` in the format of hecaton's
+tests/testmap.yaml: the map's `full` list as a `full: true` rule; the always tests and the tests that read `**`, for
+every path the map covers; one rule per offline test with its entry's paths; and the tests that read a kind of file
+across the tree (`**.md`, `*Dockerfile`) for those files under each covered path and for the two submodules. An
+fnmatch glob in the map, where `*` crosses `/`, becomes a `full_match` glob that keeps its literal directories, spans
+any depth, then matches the last segment from its first `*` on. A path no entry covers matches no rule, so the gate
+runs everything for it unless a test spells it.
+`verify/test_test_map.py` holds the file to what the generator writes and, for every tracked path plus a new file of
+six kinds under each covered directory (1,776 paths), checks the rules give at least the offline tests `select()` runs,
+and the whole suite for a path in `full`. Its compiled regexes are checked against `PurePosixPath.full_match` on
+39,975 path and glob pairs. For the issue's example the two agree exactly: `platform-baseline.yaml` selects 86 of 454
+offline tests both ways (its 3 readers, the 81 always tests and the 2 that read `**`), `decisions.md` 115 and
+`gitops/bootstrap/values-burn.yaml` 144.
+
+**Where it differs from `scope_tests.py`.** A change to the scope map's own `full`, `unread` or `bounds` sections runs
+everything under `scope_tests.py`, but under the Test map it runs the always tests and the readers of
+`verify/scope-map.yaml`: the gate reads the map from the base commit, so such a change does not alter its own
+selection. A changed test entry with no change to the test runs that test only under `scope_tests.py`. The Test map
+is written from the committed scope map, not from the tests' sources, so a test the map is behind is caught by
+`test_scope_tests.py`, which every covered path runs, not by the gate's list.
+
+**Tests.** `verify/test_run_tests_files.py` (new) drives the real runner in a fixture: unset and blank run all three
+offline tests; a list runs exactly its files; a listed e2e file is set aside; e2e files alone pass with no run;
+`aws` is the no-cloud stub in each test and neither variable reaches one; a missing path, a non-test file, a helper
+and a `../` path each fail by name; a failing listed test fails the run; an empty suite with the variable unset fails
+`NO TESTS FOUND`. The 20 tests that read the changed files (the two new ones, `test_scope_tests.py`,
+`test_gate_commands.py`, `test_dispatched_runs.py`, `test_offline_suite_no_cloud.sh`, `test_e2e_tools_gate_scope.py`
+and the others whose map entry names AGENTS.md or the runner) ran through the new path,
+`HECATON_TEST_FILES=<the 20> bash verify/run-tests.sh`: `20 listed, 20 of them offline tests, all of which ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`. The prose gate passes. Since the change edits `run-tests.sh` and
+`scope_tests.py`, both on the map's full list, validation runs the whole offline suite; it is left to validation.
+The change touches only `verify/` and AGENTS.md, which no cluster runs, so there is no live check.
+
+**Not yet seen.** The issue's third criterion, a candidate changing one config file showing `ran N of M test files` in
+the gate's detail, needs hecaton#623 on the gate. The release hecaton runs now (76b38e5281ed) has no
+`HECATON_TEST_FILES` and scopes only a plain pytest Test command, so it runs this suite whole until #623 deploys. The
+first candidate after that which changes one config file shows it; for `platform-baseline.yaml` it should read
+`ran 86 of 613 test files`, M being every file the `Test files:` globs match, the 159 e2e ones among them.
