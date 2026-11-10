@@ -50896,3 +50896,29 @@ failed, naming that line, and passed again once the line was restored. Pointed a
 naming the path. `test_no_system_temp_paths.py` and `test_scope_tests.py` pass.
 
 **Live check.** Skipped: the change adds a test under `verify/` that no cluster runs.
+
+## 2026-11-10 · #1318 · run 20104 · The heavy gate's two failures on staging 2b16e9f7: a deck note and a wall clock
+
+**What.** The heavy gate failed on staging `2b16e9f7` with two checks red: `test_ros_deck_live.py` in the tools tier
+and `test_coc_floor_latency.py` in the offline suite. The gate's logs were not readable from the run, so each cause
+was found by running the test here.
+
+**The deck.** rounds-agenticburn `79401d66` (2026-11-10 14:55 UTC, "Fix two speaker-note typos on slides 5 and 51")
+changed `#/51`'s Say note from "The first is when you already saw..." to "The first is what you already saw...". The
+run-of-show's segment 4 step "The retry (`#/51`)" quoted the old words, so "every quote in a step is on a slide its
+bold lead cites" failed. The run-of-show now quotes the deck's words. With the run-of-show of staging, the test's
+checks run on `attendee.html` at `79401d66` (read from the rounds repo) failed that one check, naming `#/51`; with
+this change all six checks and the nine self-checks pass. During the run the deck URL answered 429 "rate limited"
+for a few minutes from Railway's edge (`server: railway-hikari`; rounds' own nginx config has no rate limit), then
+200 again. `bash verify/run-e2e-tools.sh test_ros_deck_live.py` then read the live 127-slide deck and passed:
+exit 0, ALL E2E TOOLS TIER CHECKS GREEN.
+
+**The latency test.** It timed the term floor by `time.perf_counter()`, the wall clock, and passes on an idle host.
+The gate ran it inside the offline suite beside the tools tier, four checks at a time. Its check that masking a reply
+ten times as long costs at most twenty times as much has the failure #1307 found in `test_coc_pattern_linear.py`: the
+short reply (3 to 4 ms) mostly runs between two preemptions and the long one (about 35 ms) is preempted, so the wait
+lands on the long text alone. It now times by `time.thread_time()`, this thread's CPU time, as that test does.
+`python3 verify/test_coc_floor_latency.py` passes: the costliest of 56 turns 4.46 ms against the 16.0195 ms limit,
+the 24,800-character reply 34.59 ms against 20 times 3.99 ms.
+
+**Live check.** Skipped: the change touches the run-of-show and a test under `verify/` that no cluster runs.

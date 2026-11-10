@@ -1723,7 +1723,7 @@ its 7 minutes.
 - **The retry (`#/51`).** It reads "Try your attack again." Say: "Reset your bot and ask
   BurritoBot about your ticket again. It should no longer deploy anything. Let's talk
   about what just happened and how we fixed it. There are two problems here. The first
-  is when you already saw..." The room presses reset and asks about its ticket, or
+  is what you already saw..." The room presses reset and asks about its ticket, or
   HC-666, again while the next slides run. The room's retry runs on the public bot:
   since #1132, `guard-agency-on` and `guard-input-on` switch both clusters, as
   `guardrails-on` does, so the public bot the room asks has both fixes. On 2026-11-09

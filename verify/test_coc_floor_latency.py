@@ -14,11 +14,12 @@ holding, in two halves:
    all-calls median and to the prompt count results.json does hold. The README's sum, "about half a second" on a
    3.8 s turn and "about a millisecond" for the floor alone, is recomputed from the figures.
 2. The floor as it stands. The proposed term floor (floor.py and terms-proposed.rot13, read as measure.py reads them)
-   is timed on turns built from the repo's own /chat prompts and a reply the size the README's Go row names, each turn
-   the best of 5 runs, so a loaded host does not read as a regression. The costliest turn must stay within the
-   16 ms the worst observed turn cost, about four times what it costs today, and masking a reply ten times as long
-   must cost at most twenty times as much, so a longer list or a pattern change that makes the floor slow, or slow
-   in the reply's length beyond linear, fails here and not as a slow turn in the room.
+   is timed on turns built from the repo's own /chat prompts and a reply the size the README's Go row names, each
+   turn the best of 5 runs timed in this thread's CPU time, so a loaded host does not read as a regression. The
+   costliest turn must stay within the 16 ms the worst observed turn cost, about four times what it costs today, and
+   masking a reply ten times as long must cost at most twenty times as much, so a longer list or a pattern change
+   that makes the floor slow, or slow in the reply's length beyond linear, fails here and not as a slow turn in the
+   room.
 
 The Bedrock half is not re-measured: its guardrail was deleted after the spike, and calling one needs AWS.
 """
@@ -85,11 +86,18 @@ def within(stated: str, value: float, share: float) -> bool:
 
 
 def best_us(fn, text: str) -> float:
+    """The fastest of RUNS calls of fn on text, in µs of this thread's CPU time.
+
+    CPU time, not the wall clock, as test_coc_pattern_linear.py times (#1307): the heavy gate on staging 2b16e9f7 ran
+    this test inside the offline suite beside the tools tier, four checks at a time, and it failed there (#1318) while
+    it passes on an idle host. A 2,480-character reply masks in 3 to 4 ms and mostly runs between two of the
+    scheduler's preemptions; the 24,800-character one takes about 35 ms and is preempted, so the wall clock adds the
+    time it waited on the run queue to the long text alone. The thread's CPU time counts only the time the floor ran."""
     best = float("inf")
     for _ in range(RUNS):
-        t0 = time.perf_counter()
+        t0 = time.thread_time()
         fn(text)
-        best = min(best, time.perf_counter() - t0)
+        best = min(best, time.thread_time() - t0)
     return best * 1e6
 
 
