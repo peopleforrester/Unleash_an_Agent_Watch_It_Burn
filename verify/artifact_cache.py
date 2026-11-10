@@ -248,7 +248,12 @@ def scratch_dir(prefix: str, env: Mapping[str, str] | None = None) -> pathlib.Pa
     """A new directory outside every git worktree, for a test's cache root, which the caller removes when it is done:
     in the first of scratch_parents() that is outside a worktree and takes a new directory. Hecaton points TMPDIR
     inside the run's worktree (<worktree>/tmp/hecaton), where resolve_root() rightly refuses a root, so in a run it is
-    the user's cache directory. With none usable it raises, naming each one and why."""
+    the user's cache directory. With none usable it raises, naming each one and why.
+
+    The directory comes back resolved, as resolve_root() and worktree_of() resolve every path they print, so a caller
+    comparing a printed path with its own sees the same string. On Tanjiro's runners TMPDIR is a link,
+    /srv/gha-agent/t/<hex> to the runner's _work/_temp (hecaton#475), and an unresolved scratch directory failed six
+    offline tests on CI that pass with a real TMPDIR (#1314)."""
     why = []
     for cand in dict.fromkeys(scratch_parents(env)):
         tree = worktree_of(cand)
@@ -257,7 +262,7 @@ def scratch_dir(prefix: str, env: Mapping[str, str] | None = None) -> pathlib.Pa
             continue
         try:
             cand.mkdir(parents=True, exist_ok=True)
-            return pathlib.Path(tempfile.mkdtemp(prefix=prefix, dir=cand))
+            return pathlib.Path(tempfile.mkdtemp(prefix=prefix, dir=cand)).resolve()
         except OSError as e:
             why.append(f"{cand}: {e}")
     raise ArtifactCacheError("no scratch directory outside a git worktree takes a new directory: "

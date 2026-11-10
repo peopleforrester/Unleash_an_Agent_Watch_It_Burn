@@ -20,6 +20,10 @@ later; 26 since #1200), so the node harnesses never run on a Node the tier refus
 checkout's tmp/, 119 bytes on Tanjiro, and a Terraform provider's socket under it passes Linux's 107-byte limit, so no
 provider started and the tier's three terraform tests failed on staging aa2c7dcd.
 
+#1314: before the suite, the e2e job runs `python3 verify/package_cache.py ensure-pythons`, which has uv install every
+Python the package cache's environments are locked for. package_cache.py only finds an interpreter, and hecaton#475
+gave Tanjiro's runners a new, empty UV_PYTHON_INSTALL_DIR, so the tier's four tests on Python 3.12 failed.
+
 #1113: staging tests only its newest tip. The workflow-level concurrency group is the workflow and the ref, and on a
 staging push `cancel-in-progress` is true, so a newer push cancels the queued and running run before it. On an
 agent/** push the group carries the run id and `cancel-in-progress` is false, so no candidate's checks are cancelled
@@ -69,6 +73,8 @@ E2E_PERMISSIONS = {"contents": "read", "issues": "read", "actions": "read"}
 CHROMIUM_STEP = 'python3 verify/ci_chromium_libs.py "$RUNNER_TEMP/chromium-libs"'
 # #1313: the e2e job's TMPDIR is the job's temp directory; the checkout's tmp/ is too long for a provider's socket.
 TMPDIR_STEP = 'echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"'
+# #1314: the e2e job has uv install every Python the package cache's environments are locked for; it only finds them.
+PYTHONS_STEP = "python3 verify/package_cache.py ensure-pythons"
 STAGING_REF = "refs/heads/staging"
 AGENT_REF = "refs/heads/agent/1113-1"
 
@@ -230,6 +236,12 @@ def problems(doc: dict, text: str) -> list[str]:
                      "for a Terraform provider's socket (#1313)")
     elif SUITES["e2e-tools"] in e2e_runs and e2e_runs.index(TMPDIR_STEP) > e2e_runs.index(SUITES["e2e-tools"]):
         found.append(f"e2e-tools: `{TMPDIR_STEP}` runs after the suite (#1313)")
+    # #1314: hecaton#475 gave the runners an empty UV_PYTHON_INSTALL_DIR, and the tier's Python 3.12 tests found none.
+    if PYTHONS_STEP not in e2e_runs:
+        found.append(f"e2e-tools: no step runs `{PYTHONS_STEP}`, so the mcp and llm-guard environments find no Python "
+                     "3.12 on a runner whose uv has none (#1314)")
+    elif SUITES["e2e-tools"] in e2e_runs and e2e_runs.index(PYTHONS_STEP) > e2e_runs.index(SUITES["e2e-tools"]):
+        found.append(f"e2e-tools: `{PYTHONS_STEP}` runs after the suite (#1314)")
     # #1200: the node harnesses run on the Node on PATH, which run-e2e-tools.sh refuses only below 24, so the e2e job
     # installs a Node major of 24 or later (26 today) before the suite.
     e2e_steps = e2e.get("steps") or []
@@ -376,6 +388,11 @@ cases = {
     "the TMPDIR step after the suite (#1313)": lambda d: d["jobs"]["e2e-tools"].update(
         {"steps": [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() != TMPDIR_STEP]
          + [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() == TMPDIR_STEP]}),
+    "no ensure-pythons step on the e2e job (#1314)": lambda d: d["jobs"]["e2e-tools"].update(
+        {"steps": [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() != PYTHONS_STEP]}),
+    "the ensure-pythons step after the suite (#1314)": lambda d: d["jobs"]["e2e-tools"].update(
+        {"steps": [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() != PYTHONS_STEP]
+         + [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() == PYTHONS_STEP]}),
 }
 for what, edit in cases.items():
     got = problems(broken(edit), text)

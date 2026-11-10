@@ -25,14 +25,22 @@ def check(name: str, cond: bool, detail: str = "") -> None:
         failures.append(name)
 
 
+# A read that hangs is asked again, up to TRIES times of TIMEOUT seconds each, as ghcr_pull.py asks a dropped
+# connection again (#1047): in CI run 42866956234 one `git ls-remote` from Tanjiro hung for its whole 120 s, with no
+# answer from GitHub, and the tier went red on it (#1314). An answer, a refusal or a non-zero exit, is never asked
+# again: only the hang is.
+TRIES, TIMEOUT = 3, 60
 print(f"== GitHub's delivered tags ({dt.GITHUB_URL}) ==")
-try:
-    res = subprocess.run(["git", "ls-remote", "--tags", dt.GITHUB_URL, "refs/tags/delivered/*"],
-                         capture_output=True, text=True, timeout=120,
-                         env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
-    out, err, rc = res.stdout, res.stderr, res.returncode
-except subprocess.TimeoutExpired:
-    out, err, rc = "", "git ls-remote timed out after 120 s", 124
+for attempt in range(1, TRIES + 1):
+    try:
+        res = subprocess.run(["git", "ls-remote", "--tags", dt.GITHUB_URL, "refs/tags/delivered/*"],
+                             capture_output=True, text=True, timeout=TIMEOUT,
+                             env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+        out, err, rc = res.stdout, res.stderr, res.returncode
+        break
+    except subprocess.TimeoutExpired:
+        out, err, rc = "", f"git ls-remote timed out after {TIMEOUT} s, {attempt} of {TRIES} tries", 124
+        print(f"  {err}")
 check("git ls-remote read GitHub's tags", rc == 0, f"exit {rc}: {err.strip()}")
 if rc == 0:
     refs = dt.parse_ls_remote(out)

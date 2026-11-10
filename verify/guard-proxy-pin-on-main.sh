@@ -12,7 +12,9 @@
 # "On main" means reachable from refs/remotes/origin/main as of the submodule's last fetch, as in #521: a commit
 # merged to main since then reads as off main until `git -C <submodule> fetch` updates that ref.
 set -uo pipefail
-REPO_DIR="$(cd "${1:-$(dirname "${BASH_SOURCE[0]}")/..}" && pwd)"
+# pwd -P: the top-level check below compares with git's --show-toplevel, which resolves links, so a repo reached
+# through one (a TMPDIR that is a link, as on Tanjiro's runners since hecaton#475) read as not initialised (#1314).
+REPO_DIR="$(cd "${1:-$(dirname "${BASH_SOURCE[0]}")/..}" && pwd -P)"
 SUB_PATH="${2:-gitops/ai-layer/guard-proxy}"
 FIX="${3:-8b525c617b7543f7d957b87c1ff0228e318831d3}"
 sub="${REPO_DIR}/${SUB_PATH}"

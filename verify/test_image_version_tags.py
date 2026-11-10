@@ -38,7 +38,7 @@ import urllib.request
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "verify"))
-from ghcr_pull import ACCEPT, open_url, read_url, served_digest  # noqa: E402
+from ghcr_pull import ACCEPT, open_blob, open_url, read_url, served_digest  # noqa: E402
 
 WIB = "peopleforrester/watch-it-burn"
 RESOURCES = (REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")
@@ -62,10 +62,13 @@ def token(package: str) -> str:
     return json.loads(read_url(f"https://ghcr.io/token?scope=repository:{package}:pull"))["token"]
 
 
+def ghcr_request(package: str, tok: str, path: str) -> urllib.request.Request:
+    return urllib.request.Request(f"https://ghcr.io/v2/{package}/{path}",
+                                  headers={"Authorization": f"Bearer {tok}", "Accept": ACCEPT})
+
+
 def get(package: str, tok: str, path: str):
-    req = urllib.request.Request(f"https://ghcr.io/v2/{package}/{path}",
-                                 headers={"Authorization": f"Bearer {tok}", "Accept": ACCEPT})
-    return open_url(req, timeout=120)
+    return open_url(ghcr_request(package, tok, path), timeout=120)
 
 
 def amd64_manifest(package: str, tok: str, digest: str) -> dict:
@@ -80,11 +83,6 @@ def amd64_manifest(package: str, tok: str, digest: str) -> dict:
     return m
 
 
-def amd64_layers(package: str, tok: str, digest: str) -> list[str]:
-    """The layer digests of the linux/amd64 image at digest, an index or a single manifest."""
-    return [layer["digest"] for layer in amd64_manifest(package, tok, digest)["layers"]]
-
-
 def image_config(package: str, digest: str) -> dict:
     """The config blob (Env, Labels and the rest) of the linux/amd64 image at digest."""
     tok = token(package)
@@ -94,11 +92,14 @@ def image_config(package: str, digest: str) -> dict:
 
 def find(package: str, digest: str, pattern: str) -> tuple[str, bytes] | None:
     """The first file whose path matches pattern, streamed out of the image's layers, last layer first. A hard link
-    is followed to its file: busybox's layer stores bin/busybox as a link to bin/[."""
+    is followed to its file: busybox's layer stores bin/busybox as a link to bin/[. Each layer is read through
+    open_blob, which resumes a stream that ends before the layer's size: on Tanjiro's runner a web-terminal layer's
+    stream ended early with no error, and tarfile stopped on "unexpected end of data" (#1314)."""
     tok = token(package)
     rx = re.compile(pattern)
-    for layer in reversed(amd64_layers(package, tok, digest)):
-        with get(package, tok, f"blobs/{layer}") as r, tarfile.open(fileobj=r, mode="r|*") as tar:
+    for layer in reversed(amd64_manifest(package, tok, digest)["layers"]):
+        with open_blob(ghcr_request(package, tok, f"blobs/{layer['digest']}"), layer["size"], timeout=120) as r, \
+                tarfile.open(fileobj=r, mode="r|*") as tar:
             for member in tar:
                 if not rx.search(member.name.lstrip("./")):
                     continue
