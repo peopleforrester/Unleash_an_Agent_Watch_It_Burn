@@ -50804,3 +50804,25 @@ and runs the runner with 91-byte and 200-byte TMPDIRs: exit 1, the message, noth
 `verify/run-e2e-tools.sh`, in the scope map's full list, so CI runs the whole tier on it; this run did not.
 
 **Live check.** Skipped: the change touches the CI workflow, a test runner and two tests, none of which a cluster runs.
+
+## 2026-11-10 · #1314 · run 20014 · CI on staging dc9cb247 never started: every Tanjiro runner is offline
+
+**What.** The heavy gate read "no CI result on dc9cb2477aec after 2:08:28". The cause is not in this repo. Actions
+run 42770060074 (verify-suites on staging `dc9cb247`) was still `queued` at 2h23m, both jobs with no runner and no
+step. The run before it, 42766404467 on `1d8d52c0`, also never got a runner and was cancelled by the next push after
+32 minutes in the queue. `gh api repos/peopleforrester/Unleash_an_Agent_Watch_It_Burn/actions/runners` lists the
+repo's three runners, `tanjiro-Unleash_an_Agent_Watch_It_Burn`, `-2` and `-3`, all `offline`, and hecaton's own
+`tanjiro-hecaton` and `tanjiro-hecaton-2` read `offline` too, so the whole Tanjiro host or its WSL distro is
+down. No Megumi runner is registered for this repo, although `megumi_runners` in hecaton's
+`config/runners.yaml` lists it, so no second host takes the queue.
+
+**The code failure before it is already fixed.** The last run that got a runner, 42763616410 on `aa2c7dcd`, failed
+three terraform tier tests (`test_control_plane_app_ports_module.py`, `test_iam_policy_structural.py`,
+`test_lab_platform_operator_entry.py`). `dc9cb247` (#1313) is the fix for those, and it has not run on CI yet.
+
+**Change.** None to code. This run cannot reach Tanjiro: `sources fleet` is refused to a run. Its report
+hands up hecaton's documented rerun of `deploy/tanjiro/runners.sh` for this repo on Tanjiro, which only starts or
+enables what is not running, and the registration of the Megumi runner the runbook names. When a runner is back,
+the queued run on staging's tip runs, and CI's verdict on `dc9cb247` is the remaining criterion.
+
+**Live check.** Skipped: no change touches what the clusters run.
