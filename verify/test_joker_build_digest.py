@@ -199,7 +199,23 @@ with tempfile.TemporaryDirectory() as t:
         print("== build.sh again, from a copy whose every directory carries setgid, as under a hecaton run directory ==")
         sgid = tmp / "setgid"
         shutil.copytree(VILLAINS, sgid / "images/villains")
-        for module in ("verify/image_cache.py", "verify/artifact_cache.py"):
+        # build-loopback.sh runs verify/image_cache.py, so the copy carries it and every verify/ module it imports. #1320
+        # gave image_cache.py `import ghcr_pull`, which this list lacked, and the setgid build died on the import (#1321).
+        # The list stays literal, and the modules image_cache loaded, here in this process, are held to it.
+        copied = ("verify/image_cache.py", "verify/artifact_cache.py", "verify/ghcr_pull.py")
+        here = pathlib.Path(image_cache.__file__).resolve().parent
+        loaded, todo = set(), [image_cache]
+        while todo:
+            mod = todo.pop()
+            path = pathlib.Path(mod.__file__).resolve().relative_to(REPO).as_posix()
+            if path in loaded:
+                continue
+            loaded.add(path)
+            todo += [v for v in vars(mod).values() if isinstance(v, type(image_cache)) and getattr(v, "__file__", None)
+                     and pathlib.Path(v.__file__).resolve().parent == here]
+        check("the setgid copy carries image_cache.py and every verify/ module it imports",
+              loaded <= set(copied), f"not copied: {sorted(loaded - set(copied))}")
+        for module in copied:
             (sgid / module).parent.mkdir(exist_ok=True)
             shutil.copy2(REPO / module, sgid / module)
         dirs = [sgid, *(p for p in sgid.rglob("*") if p.is_dir())]

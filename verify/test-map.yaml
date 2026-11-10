@@ -4091,6 +4091,7 @@ rules:
       - verify/artifact-cache.sh
       - verify/artifact_cache.py
       - verify/e2e-tools.lock
+      - verify/ghcr_pull.py
       - verify/image_cache.py
     tests:
       - verify/test_ghcr_version_tag.py
@@ -4605,6 +4606,7 @@ rules:
     paths:
       - verify/artifact-cache.sh
       - verify/artifact_cache.py
+      - verify/ghcr_pull.py
       - verify/image_cache.py
     tests:
       - verify/test_image_cache.py
