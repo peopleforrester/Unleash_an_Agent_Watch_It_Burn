@@ -50304,6 +50304,31 @@ call: `agent_tool_failures_since` and `gateway_tool_calls_since` over the last h
 watch-it-burn-community each returned `[]` with kubectl exit 0, so the new argv reads both clusters. Nothing on either
 cluster changed.
 
+## 2026-11-10: #1279 resumed (run 19832): run 19785's draft ported onto staging 0abba686
+
+**Why it did not land.** Run 19785's change passed its gates but conflicted with staging in `verify/scope-map.yaml`
+at promotion: staging's caee92d8 (#1303) added the `test_agentgateway_mcp_get_e2e.py` and `test_mcp_standalone_stream.py`
+entries while the run worked. `bash verify/prior-drafts.sh 1279 origin/staging` named `origin/agent/1279-19785` with two
+edits in place (`gitops/ai-layer/resources.yaml`, `verify/scope-map.yaml`, both from caee92d8) and the decisions.md
+append. caee92d8 changes evil-mcp's RemoteMCPServer timeout and adds two scope-map entries, nothing the draft reads or
+claims, so the draft is squashed onto 0abba686 as one commit with both sides kept, unchanged from run 19785's design.
+`python3 verify/scope_tests.py write` adds nothing to the merged map.
+
+**Tests run,** each once, alone, all exit 0: `test_coc_guardrail_tf.py`, `test_fleet_import_state.py`,
+`test_iam_policy_structural.py`, `test_tf_module_cache.py`, `test_mcp_standalone_stream.py` (staging's new test on the
+same file), `test_scope_tests.py`, `test_pin_coc_guardrail.sh`, `test_fleet_converge_repairs.sh` and
+`test_fleet_standbys.sh`. The rest of the scoped Test and E2E commands is left to validation.
+
+**Live check,** read-only, with no change to either cluster. The guard-proxy Deployment as committed, applied with
+`--dry-run=server` as Argo CD's application controller, printed `deployment.apps/guard-proxy configured (server dry
+run)` on watch-it-burn-community and watch-it-burn-private. On both, guard-proxy runs as `guard-proxy-reader` with one
+ready replica and there is no `agent/coc-guardrail` ConfigMap; accen-dev us-west-2 lists no guardrail. guard-proxy's
+pin is still a7a5a369, behind 48cc2ca, so it ignores the CONDUCT_GUARDRAIL_* env until it is repinned.
+
+**Not yet run on a cluster.** Unchanged from run 19636's entry: the cluster root's apply on both clusters (an
+operator's act, not a run's), then `infra/terraform/fleet/fleet.sh converge instructors` to write the ConfigMap, then
+guard-proxy's env naming the guardrail and an ApplyGuardrail call as `guard-proxy-reader` returning
+GUARDRAIL_INTERVENED on an insult and NONE on a stage prompt, once guard-proxy is pinned at or after 48cc2ca.
 ## 2026-11-10 · #1307 · run 19836 · test_coc_pattern_linear.py times each case by CPU time, not the wall clock
 
 **What failed and why.** The test was reproduced under load before any edit: three runs beside 24 CPU-bound Python
@@ -50463,28 +50488,22 @@ watch-it-burn-private. No Datadog setting was changed, and the presenter termina
 
 **Not yet run on a cluster.** Nothing. The logs are `/var/lib/hecaton/runs/19920/sandbox-1.log`, `read-2.log` and
 `a2a-watch-it-burn-*/ask0.json`. No test changed, so no suite ran; the prose gate ran on this entry.
-## 2026-11-10: #1279 resumed (run 19832): run 19785's draft ported onto staging 0abba686
 
-**Why it did not land.** Run 19785's change passed its gates but conflicted with staging in `verify/scope-map.yaml`
-at promotion: staging's caee92d8 (#1303) added the `test_agentgateway_mcp_get_e2e.py` and `test_mcp_standalone_stream.py`
-entries while the run worked. `bash verify/prior-drafts.sh 1279 origin/staging` named `origin/agent/1279-19785` with two
-edits in place (`gitops/ai-layer/resources.yaml`, `verify/scope-map.yaml`, both from caee92d8) and the decisions.md
-append. caee92d8 changes evil-mcp's RemoteMCPServer timeout and adds two scope-map entries, nothing the draft reads or
-claims, so the draft is squashed onto 0abba686 as one commit with both sides kept, unchanged from run 19785's design.
-`python3 verify/scope_tests.py write` adds nothing to the merged map.
+## 2026-11-10: #1279 resumed (run 19969): run 19832's tests gate failure was the linear-time test's wall clock
 
-**Tests run,** each once, alone, all exit 0: `test_coc_guardrail_tf.py`, `test_fleet_import_state.py`,
-`test_iam_policy_structural.py`, `test_tf_module_cache.py`, `test_mcp_standalone_stream.py` (staging's new test on the
-same file), `test_scope_tests.py`, `test_pin_coc_guardrail.sh`, `test_fleet_converge_repairs.sh` and
-`test_fleet_standbys.sh`. The rest of the scoped Test and E2E commands is left to validation.
+**Cause.** Run 19832's tests gate failed on `verify/test_coc_pattern_linear.py` alone ("FAIL: 4 checks failed"). The
+test is selected because it reads `gitops/ai-layer/resources.yaml`, and the guardrail change adds only three env
+entries there, nothing in the code-of-conduct pattern it times. At base 0abba686 the test timed each case on the wall
+clock, so preemption at the host's load average read as quadratic growth. Staging's f686f2f6 (#1307) moved it to the
+thread's CPU time after this branch was cut. The gate's first line, `--context is empty`, is
+`test_burritobot_cluster_live.py`'s own message, a live test the offline suite does not run; it is not a failure.
 
-**Live check,** read-only, with no change to either cluster. The guard-proxy Deployment as committed, applied with
-`--dry-run=server` as Argo CD's application controller, printed `deployment.apps/guard-proxy configured (server dry
-run)` on watch-it-burn-community and watch-it-burn-private. On both, guard-proxy runs as `guard-proxy-reader` with one
-ready replica and there is no `agent/coc-guardrail` ConfigMap; accen-dev us-west-2 lists no guardrail. guard-proxy's
-pin is still a7a5a369, behind 48cc2ca, so it ignores the CONDUCT_GUARDRAIL_* env until it is repinned.
+**Fix.** Merged origin/staging (94dea467, which holds f686f2f6) into the branch, with no conflict. Nothing in the
+guardrail change differs from run 19832's commits.
 
-**Not yet run on a cluster.** Unchanged from run 19636's entry: the cluster root's apply on both clusters (an
-operator's act, not a run's), then `infra/terraform/fleet/fleet.sh converge instructors` to write the ConfigMap, then
-guard-proxy's env naming the guardrail and an ApplyGuardrail call as `guard-proxy-reader` returning
-GUARDRAIL_INTERVENED on an insult and NONE on a stage prompt, once guard-proxy is pinned at or after 48cc2ca.
+**Tests run,** each once, alone, both exit 0: `test_coc_pattern_linear.py` (PASS on floor.py's pattern and its 4
+copies) and `test_scope_tests.py`. `scope_tests.py write` adds nothing to the merged map. The rest of the scoped Test
+and E2E commands is left to validation.
+
+**Live check.** Skipped: the merge brings in only staging's own commits, and run 19832's read-only dry run of the
+guard-proxy Deployment on both clusters stands for this change.
