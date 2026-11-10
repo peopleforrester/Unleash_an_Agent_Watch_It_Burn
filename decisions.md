@@ -50149,3 +50149,26 @@ test reads alone, so no tier run here.
 call: `agent_tool_failures_since` and `gateway_tool_calls_since` over the last hour on watch-it-burn-private and
 watch-it-burn-community each returned `[]` with kubectl exit 0, so the new argv reads both clusters. Nothing on either
 cluster changed.
+
+## 2026-11-10 · #1307 · run 19836 · test_coc_pattern_linear.py times each case by CPU time, not the wall clock
+
+**What failed and why.** The test was reproduced under load before any edit: three runs beside 24 CPU-bound Python
+loops on the 16-vCPU host (load average 22 to 34) all ended `FAIL: 4 checks failed`, with 1 to 13 failing cases per
+copy. Each failing case had passed the 50 ms limit and failed the 8-fold growth bound, for example a run of `'*'` (the
+`a` class) at 2.7 ms on 1,000 characters and 59.2 ms on 4,000, or `'xvyy'` then a run of `'*'` at 2.8 ms and 33.7 ms.
+The cases were not quadratic; the wall clock was. A 1,000-character case takes about 2 ms and mostly runs between two
+preemptions, and a 4,000-character one takes about 20 ms and is preempted, so the time it waited for a CPU was added
+to the long text alone, and best of 3 then best of 9 did not remove it at that load.
+
+**The change.** `best_ms()` reads `time.thread_time()`, the thread's CPU time, in place of `time.perf_counter()`.
+The host's load does not add to it. The bounds (`coc_linear_cases.within()`: 50 ms, 8-fold growth) and the cases are
+unchanged, and `coc_linear_cases.py` is not touched, so test_chat_coc_e2e, which shares those bounds and times the
+chat page's port in node with `process.hrtime`, is unchanged; it has the same wall-clock exposure and is filed as a
+followup rather than changed here.
+
+**Evidence.** Ten runs in a row beside the same 24 loops, load average 34.9 to 52.3 at their starts: all ten exit 0,
+no FAIL line. The slowest 4,000-character case on any copy took 21.3 ms of CPU time. Section 2 failed the pattern as
+built before #1300 in all ten: a run of `'$'` at 122 to 159 ms on 1,000 characters and 1,822 to 2,414 ms on 4,000,
+and `'5$'` at 64 to 91 ms and 1,007 to 1,177 ms. At idle it passes in 20 s, as before.
+
+**Live check.** None: the change is to a `verify/` file no cluster runs.
