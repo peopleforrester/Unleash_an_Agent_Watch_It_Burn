@@ -50225,3 +50225,32 @@ each. watch-it-burn-community runs no Tempo, so it was not read there.
 
 **Live check.** The two chats above, each one model call, and c1-exfil-block.sh, which left the C1 policies as it found
 them. Nothing else on either cluster was changed. No live check is owed on this issue now.
+## 2026-11-10 · #1310 · run 19849 · test_chat_coc_e2e.py times the page's cocViolation less the thread's run-queue wait
+
+**What failed and why.** Section 6 (the linear-time checks) was run alone, ten times in a row, beside 24 CPU-bound
+shell loops on the 16-vCPU host, with the timer as it was (`process.hrtime.bigint()`, the wall clock). Nine of ten
+failed at a load average of 80 to 181, for example `'wrex'` then a run of `'*'` at 7.2 ms on 1,000 characters and
+47.2 ms on 4,000, and a run of `' *'` at 1.9 ms and 35.7 ms. As in #1307, the cases were not quadratic: the long text
+was preempted and the wall clock added the wait to it alone.
+
+**What the issue suggested, and why it is not used.** `process.threadCpuUsage()` was tried first. Node reads it, and
+`process.cpuUsage()`, from getrusage(), which on this kernel moves only at the scheduler's tick: readings came back
+as 0.0, 4.0 and 8.0 ms. Ten runs at load 51 to 167 all failed the growth bound on cases such as a run of `' '` at
+0.0 ms then 9.8 ms. Node has no binding for clock_gettime(CLOCK_THREAD_CPUTIME_ID), which Python's
+`time.thread_time()` reads. The scheduler's own `sum_exec_runtime` (the first field of `/proc/thread-self/schedstat`)
+is just as stale between ticks.
+
+**The change.** The timer takes each call's wall time and subtracts how long the thread waited on the run queue
+during it: the second field of `/proc/thread-self/schedstat`, in ns, which the kernel adds to each time the thread is
+given a CPU back, so a read from the running thread holds every wait up to it. The file is opened once and read with
+pread at offset 0 (about 5 µs a read). What is left is the time the match ran. A host without that file fails the
+node step loudly, as a missing node does. The bounds (`coc_linear_cases.within()`) and the cases are unchanged.
+
+**Evidence.** With the new timer, ten runs in a row beside the same 24 loops, at a 1-minute load average of 17.2 to
+40.1 at their starts: all ten passed section 6, the slowest 4,000-character case at 6.2 to 12.5 ms. Then five
+interleaved pairs at load 35 to 45: the wall-clock timer failed one of five (`'q'` then a run of `'1|'`, 0.9 ms then
+24.6 ms) and read its slowest long case at 10 to 25 ms; the new timer passed five of five at 6.5 to 10.2 ms. In all
+fifteen runs, and in the whole test once at load 42 (17.8 s, every check PASS), the page built as before #1300 still
+failed: a run of `'$'` at 96 to 160 ms then 1,554 to 1,740 ms, and `'5$'` at 52 to 81 ms then 787 to 1,041 ms.
+
+**Live check.** None: the change is to a `verify/` file no cluster runs.
