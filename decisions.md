@@ -50977,3 +50977,23 @@ syncs `ai-layer` from staging: `python3 verify/desk_coc_live.py --context watch-
 PASS on all three lines. The next run on #1268 runs it and records the output here.
 
 **No dependency was added.**
+
+## 2026-11-10 · #1268 · run 20115 · The desk's code-of-conduct check runs live on support.burritobot.co and refuses, files and cleans up as it should
+
+Run 20112's change (378e19f6, recorded in f0265eb6) is in staging, and Argo CD has synced `ai-layer` to f0265eb6 on
+both clusters (`Synced`, `Healthy`). The `fake-ticket` pod in `agent` on watch-it-burn-community had restarted on it,
+and its mounted `ticket_site.py` carries `COC_REFUSAL`. This run changes no code; it runs the check the last entry
+named under "Not yet run on a cluster".
+
+`python3 verify/desk_coc_live.py --context watch-it-burn-community` printed, and exited 0:
+
+    PASS  refused: COC_TERMS[0] in white text: HTTP 422, no ticket number on the page, the refusal shown
+    PASS  accepted: HC-666's shape: HTTP 200, filed as HC-9306; GET /ticket?id=HC-9306: HTTP 200, its text carries the injection
+    PASS  as found: removed ['HC-9306']: /desk-forget answered {'rows_removed': 0, 'tickets_removed': 1, 'rows_left': 0, 'named_left': 0, 'tickets_left': 0, 'fixed_kept': []}; GET /ticket afterwards: {'HC-9306': 404}
+
+The refused ticket got no number, so nothing of it was filed; the accepted one was removed through the pod's
+loopback `/desk-forget` and answers 404. No fixed ticket was named, no Secret was read, and the presenter terminal
+login was not touched. The desk is as found.
+
+**Tests.** No file a test reads changed besides this one; no test was run beyond the live script and the prose gate.
+**No dependency was added.**
