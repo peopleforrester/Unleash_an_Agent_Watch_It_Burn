@@ -26,7 +26,8 @@ the page's function and floor.Floor("proposed"):
    leetspeak pair, and each term up to two neighbouring letters that share a character, then a run of what they share)
    is timed at 1,000 and 4,000 characters and held to coc_linear_cases.within(), as
    verify/test_coc_pattern_linear.py holds floor.py and its other copies; the page built the way it was before #1300
-   fails that on a run of `$`.
+   fails that on a run of `$`. Each time leaves out the time node's thread waited for a CPU, which the host's load
+   adds to the long text alone (#1310).
 
 A missing node is a failure, not a skip.
 """
@@ -231,6 +232,15 @@ check(f"without cocFold the page misses evasions the check above requires ({len(
 print("== the page matches every repeated leetspeak run in time linear in its length (#1300) ==")
 # The timer reads [block, texts, runs] on stdin and answers, for each text, the fastest of `runs` calls of the page's
 # cocViolation in ms. The texts take turns within a run, and one call before timing has V8 compile the pattern.
+# Each call's time is the wall clock less the time the thread waited on the run queue for a CPU (#1310), which is the
+# time the match ran, as test_coc_pattern_linear.py times by time.thread_time() (#1307). The wall clock alone failed
+# this check on nine runs of ten at a load average of 80 to 181: a 1,000-character case mostly runs between two of the
+# scheduler's preemptions and a 4,000-character one is preempted, so the wait fell on the long text alone and linear
+# cases read 8 to 20 times their short cost. Node has no clock_gettime(CLOCK_THREAD_CPUTIME_ID), and its
+# process.threadCpuUsage() and process.cpuUsage() read getrusage(), which moves only at the scheduler's tick (4 ms
+# here): a 2 ms case read 0 or 4 ms and failed ten runs of ten. The wait is the second field of
+# /proc/thread-self/schedstat, in ns, which the kernel adds to each time the thread gets a CPU back, so a read from the
+# running thread holds every wait up to it.
 TIMER = r"""
 const vm = require('vm');
 const [src, texts, runs] = JSON.parse(require('fs').readFileSync(0, 'utf8'));
@@ -238,11 +248,16 @@ const ctx = {};
 vm.createContext(ctx);
 vm.runInContext(src + '\nthis.cocViolation = cocViolation;', ctx);
 ctx.cocViolation('warm up');
+const fs = require('fs');
+const stat = fs.openSync('/proc/thread-self/schedstat', 'r');
+const buf = Buffer.alloc(256);
+const waited = () => BigInt(buf.toString('latin1', 0, fs.readSync(stat, buf, 0, buf.length, 0)).split(' ')[1]);
 const best = texts.map(() => Infinity);
 for (let r = 0; r < runs; r++) texts.forEach((t, i) => {
-  const t0 = process.hrtime.bigint();
+  const t0 = process.hrtime.bigint(), w0 = waited();
   ctx.cocViolation(t);
-  best[i] = Math.min(best[i], Number(process.hrtime.bigint() - t0) / 1e6);
+  const w1 = waited(), t1 = process.hrtime.bigint();
+  best[i] = Math.min(best[i], Number(t1 - t0 - (w1 - w0)) / 1e6);
 });
 process.stdout.write(JSON.stringify(best));
 """
