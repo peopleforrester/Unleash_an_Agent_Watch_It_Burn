@@ -51131,3 +51131,16 @@ criterion is met.
 annotation a restart adds. The ai-layer Application read Synced and Healthy after the rollout, at `f5f94f93`.
 
 **No code change.** This run adds only this entry, so it runs no offline test beyond the prose gate.
+**Run 20154.** Run 20151's branch merged into staging as f5f94f93, and verify-suites ran on it (Actions run
+42899216872). The offline job passed on runner `tanjiro-Unleash_an_Agent_Watch_It_Burn-2`: its base was main's
+84545b01, so it ran every test, and it ended `ALL OFFLINE RENDER-GATE TESTS GREEN`. The nine offline tests that failed
+in Actions run 42866956234 pass. The e2e tools job never ran a step. On runner `tanjiro-Unleash_an_Agent_Watch_It_Burn-3`
+its "Set up job" timed out three times getting action download info from GitHub ("The HTTP request timed out after
+00:01:40"), between 20:50:45 and 20:56:35 UTC. That is Tanjiro's network, not this repo:
+infrastructure-end-device-management#55, still open, records that the WSL distro holds a global IPv6 address with no
+IPv6 path, so a request to GitHub that tries AAAA first times out. No workflow step runs before the runner resolves
+its actions, so nothing in verify-suites.yml can work around it, and Michael asked on the issue that the workflow stay
+as it is. The tier fixes of runs 20143 to 20151 (uv installing Python 3.12 on a miss, the resumed layer stream, the
+ls-remote tries) are therefore not yet shown on CI. This entry changes no code. Its promotion starts verify-suites on
+a new staging tip, and the next run on the issue reads that run. No cluster runs this file, so there is no live
+cluster check.
