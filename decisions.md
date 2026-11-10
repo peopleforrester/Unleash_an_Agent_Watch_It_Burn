@@ -50633,3 +50633,44 @@ whole Test command and the scoped E2E command are left to validation.
 
 **Live check skipped.** The new edits touch a comment and the scratch line of two image build scripts, which no
 cluster runs, and files under `verify/` that no cluster runs. No image was built or pushed.
+
+## 2026-11-10 · #1311 · run 19985 · #1279's guardrail is not in AWS yet: the apply is escalated and the /chat check waits on #1288's repin
+
+**What the issue asks.** Apply the cluster root (`infra/terraform/aws/cluster`) on watch-it-burn-community and
+watch-it-burn-private so the code-of-conduct guardrail, its version and guard-proxy-reader's Pod Identity exist, run
+`fleet.sh converge instructors` so `pin_coc_guardrail` writes `agent/coc-guardrail`, then check guard-proxy's env and
+that an insult on `/chat` is blocked with "Keep it kind." and a stage prompt is not. `bash verify/prior-drafts.sh 1311
+origin/staging` printed NONE, and the issue had no comments.
+
+**Why the run did none of it.** A terraform apply of a cluster root on these two clusters is an operator's act under
+this run's governance, even with the session, so the exact commands are in the run's escalation, not run here. The
+issue's own precondition is not met either: guard-proxy is pinned at a7a5a369 (#1267), and guard-proxy-agenticburn's
+compare API reads 48cc2ca as three commits ahead of it, so the running proxy.py ignores the CONDUCT_GUARDRAIL_* env.
+The repin is #1288, still open and waiting on #1280's chat-page term list; run 19825's attempt at it ended blocked. The
+third criterion can only be checked after both.
+
+**Live check,** read-only, at about 2026-11-10T06:00Z, with no change to either cluster or to AWS:
+- On both clusters `kubectl -n agent get configmap coc-guardrail` prints NotFound.
+- guard-proxy runs one pod on each as `guard-proxy-reader`, and its Deployment already names CONDUCT_GUARDRAIL_ID,
+  CONDUCT_GUARDRAIL_VERSION and AWS_REGION (#1279 has synced through Argo CD). With no ConfigMap they are unset.
+- `aws eks list-pod-identity-associations --namespace agent` lists agent-sa, web-terminal and agentgateway on both
+  clusters, none for guard-proxy-reader.
+- `aws bedrock list-guardrails --region us-west-2` in accen-dev returns an empty list.
+- origin/main 84545b01 holds `aws_bedrock_guardrail.coc` and `module.guard_proxy_pod_identity`, so the operator can
+  apply from main as docs/floor.md describes.
+
+**The escalated commands,** on tanjiro-wsl2 in `/home/michael/repos/talks/Unleash_an_Agent_Watch_It_Burn`, where
+the two states live, after `git fetch origin main && git checkout --detach origin/main`, from `infra/terraform/fleet`:
+`WIB_FORCE_UP=1 WIB_NO_BOOTSTRAP=1 ./fleet.sh instructors up community`, the same for `admin`, then
+`./fleet.sh converge instructors`. This is the procedure #1042 used on 2026-11-08 (docs/floor.md). The plan should
+add the guardrail, its version, the guardrail policy and the guard-proxy Pod Identity role and association; when it
+shows a node roll or a node group replacement instead, that is drift since #1042 and is worth reading before the
+apply, since the KubeCon session is 2026-11-12. The apply can run before #1288 lands: guard-proxy reads the env only
+once it is repinned.
+
+**Not yet run on a cluster.** All three criteria. After the apply, the converge and #1288's repin: on each cluster,
+`kubectl -n agent get configmap coc-guardrail` and guard-proxy's pod env with the three names set; an ApplyGuardrail
+call as guard-proxy-reader returning GUARDRAIL_INTERVENED on an insult and NONE on a stage prompt; and `/chat`
+answering an insult with "Keep it kind." and a stage prompt as usual.
+
+**Tests.** None changed: this entry is the only file the run touches. The prose gate was run on it.
