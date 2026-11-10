@@ -50719,3 +50719,27 @@ stage prompt to `/chat` on each.
 
 **Tests.** None changed: this entry is the only file the run touches. The prose gate was run on it; the scoped Test
 command is left to validation.
+
+## 2026-11-10 · #1312 · run 19992 · the run-of-show quotes Challenge 4's notes from before the deck counted three weather tools
+
+**What failed.** The heavy gate on staging `4cc279ef` failed one check, `test_ros_deck_live.py`, which reads the deck
+`https://rounds.agenticburn.com/attendee.html` serves. Run here, two of its checks failed. The diagram notes the
+run-of-show quotes for `#/78`, `#/79`, `#/97` and `#/98` said the weather server has 2 tools, 14 in all, and that the
+gateway drops `read_internal_config` alone. The Say lines quoted for `#/71` and `#/113` were the older wording.
+
+**Why.** rounds-agenticburn `ed161a4` (2026-11-09, rounds-agenticburn#167) fixed Challenge 4's tool counts: the
+weather server serves three tools, `get_weather`, `read_internal_config` and `apply_optimization`
+(`gitops/ai-layer/server.py` here has all three), so the agent is offered 15 and the gateway passes 13. The same
+commit reworded `#/71` to name the tool the poisoned one points to, and added to `#/113` that the rule contains this
+payload, not tool poisoning in general. The deck served now is rounds main `4dd5bbb`, still 127 slides. The deck was
+right and the run-of-show was behind, so the run-of-show follows the deck.
+
+**Change.** `facilitation/kubecon-na-2026-run-of-show.md`: the `#/71` and `#/113` Say lines and the `#/78`, `#/79`,
+`#/97` and `#/98` notes, word for word from the served deck, and the diagrams step names `ed161a4` and the three
+tools. `verify/test_ros_seg4_flow.py` keeps the offline copy of those four notes, which it holds the run-of-show to,
+so it changes with them; its comment names the deck commit they were read from.
+
+**Tests.** `python3 verify/test_ros_deck_live.py`: every check and self-check PASS against the 127-slide deck.
+`python3 verify/test_ros_seg4_flow.py`: PASS. The prose gate was run on the change.
+
+**Live check.** Skipped: the change touches the run-of-show, decisions.md and a test no cluster runs.

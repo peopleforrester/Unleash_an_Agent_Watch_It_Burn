@@ -1881,8 +1881,8 @@ See the total under "The segments, in order".
   on the tab "tools" opened, shows the fixed trace, without the `read_internal_config`
   call.
 - **The retry (`#/71`).** It reads "Try your attack again." Say: "Reset your bot and
-  ask BurritoBot about the weather again. This time the poisoned tool isn't there to
-  call." The room presses reset and asks about the weather again while the next slides
+  ask BurritoBot about the weather again. This time the tool the poisoned one points to
+  isn't there to call." The room presses reset and asks about the weather again while the next slides
   run. The room's retry runs on the public bot: since #1132, `guard-mcp-on` switches
   both clusters, as `guardrails-on` does, each through its own control. On the private
   cluster agentgateway's rule allows only `get_weather`; on the public cluster evil-mcp's
@@ -1900,7 +1900,10 @@ See the total under "The segments, in order".
   agent and its MCP servers, and it decides which tools the agent is allowed to call.
   Let's walk through it."
 - **The two diagrams (`#/74` to `#/111`).** Thirty-eight slides, as rounds-agenticburn
-  `cfbd9ba` redrew them on 2026-11-08: one weather question without the gateway
+  `cfbd9ba` redrew them on 2026-11-08 and `ed161a4` fixed their tool counts on 2026-11-09
+  (rounds-agenticburn#167): the weather server serves three tools, `get_weather`,
+  `read_internal_config` and `apply_optimization`, so the agent is offered 15 and the
+  gateway passes 13. One weather question without the gateway
   (`#/74` to `#/91`), from the agent asking its MCP servers for their tools to the reply
   going back to the human, then the same question with it (`#/92` to `#/111`), where the
   gateway answers the tool list. The notes, slide by slide:
@@ -1908,8 +1911,8 @@ See the total under "The segments, in order".
   - `#/75`: "A human asks BurritoBot about the weather."
   - `#/76`: "The question goes through the AI guardrails to the BurritoBot agent."
   - `#/77`: "Before it answers, BurritoBot asks its MCP servers what tools they have."
-  - `#/78`: "The MCP tool server has 12, and the weather server has 2. That's 14 tools."
-  - `#/79`: "The agent sends the model the question and all 14 tools, each with a
+  - `#/78`: "The MCP tool server has 12, and the weather server has 3. That's 15 tools."
+  - `#/79`: "The agent sends the model the question and all 15 tools, each with a
     description of what it does."
   - `#/80`: "The model answers: use the get_weather tool."
   - `#/81`: "Here's what get_weather's description says. The model read it, along with
@@ -1937,9 +1940,9 @@ See the total under "The segments, in order".
   - `#/95`: "This time, when BurritoBot asks what tools it has, the ask goes to the
     gateway."
   - `#/96`: "The gateway asks both MCP servers."
-  - `#/97`: "They answer the same as before: 12 tools and 2 tools."
-  - `#/98`: "But the gateway passes along only 13. read_internal_config isn't on its list,
-    so BurritoBot never gets it."
+  - `#/97`: "They answer the same as before: 12 tools and 3 tools."
+  - `#/98`: "But the gateway passes along only 13. read_internal_config and
+    apply_optimization aren't on its list, so BurritoBot never gets them."
   - `#/99`: "The agent sends the model the question and 13 tools."
   - `#/100`: "The model answers: use the get_weather tool."
   - `#/101`: "The poisoned description is still there. The gateway didn't change what the
@@ -1964,8 +1967,9 @@ See the total under "The segments, in order".
   `gitops/ai-layer/web-terminal/entrypoint.sh`, with `mcp.tool.name == "get_weather"` in
   green. Say: "Now the gateway lets BurritoBot call only get_weather. The poisoned
   instructions can be as convincing as they like. BurritoBot can still be fooled, but the
-  tool it would be fooled into calling isn't there. Michael's MCP server vetting
-  checklist is on the take-home slide."
+  tool it would be fooled into calling isn't there. The rule covers the weather server
+  only, so it contains this payload, not tool poisoning in general. Michael's MCP server
+  vetting checklist is on the take-home slide."
 - **The claim on stage:** tools are vetted through an MCP proxy and a registry
   allow-list, so the model can be fully persuaded and still find the capability
   gone. Only that still holds when the next model is more persuadable. Do not say the

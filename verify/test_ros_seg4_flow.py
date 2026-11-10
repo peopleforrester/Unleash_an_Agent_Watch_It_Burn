@@ -95,8 +95,9 @@ NAMED_LINES = [
     "\"This attack was prevented with an MCP gateway.\"",
 ]
 # The diagram slides' Say notes, word for word from the built deck (read from attendee.html on rounds main faf4005,
-# 2026-11-09, the deck https://rounds.agenticburn.com served that day). Segment 4 walks #/56 to #/64, segment 5 #/74
-# to #/111.
+# 2026-11-09, the deck https://rounds.agenticburn.com served that day; #/78, #/79, #/97 and #/98 read again at rounds
+# main 4dd5bbb on 2026-11-10, after ed161a4 gave the weather server its third tool, #1312). Segment 4 walks #/56 to
+# #/64, segment 5 #/74 to #/111.
 DIAGRAM_NOTES = {
     56: "Let's follow one request through the system. A human asks BurritoBot about a ticket on the chat page. "
             "It could also be a vampire or an ogre, because BurritoBot serves everyone.",
@@ -117,8 +118,8 @@ DIAGRAM_NOTES = {
     75: "A human asks BurritoBot about the weather.",
     76: "The question goes through the AI guardrails to the BurritoBot agent.",
     77: "Before it answers, BurritoBot asks its MCP servers what tools they have.",
-    78: "The MCP tool server has 12, and the weather server has 2. That's 14 tools.",
-    79: "The agent sends the model the question and all 14 tools, each with a description of what it does.",
+    78: "The MCP tool server has 12, and the weather server has 3. That's 15 tools.",
+    79: "The agent sends the model the question and all 15 tools, each with a description of what it does.",
     80: "The model answers: use the get_weather tool.",
     81: "Here's what get_weather's description says. The model read it, along with every other description, "
             "before it picked. Look at the highlighted part: to answer a weather question, you must also call "
@@ -140,9 +141,9 @@ DIAGRAM_NOTES = {
     94: "It reaches the agent the same way.",
     95: "This time, when BurritoBot asks what tools it has, the ask goes to the gateway.",
     96: "The gateway asks both MCP servers.",
-    97: "They answer the same as before: 12 tools and 2 tools.",
-    98: "But the gateway passes along only 13. read_internal_config isn't on its list, so BurritoBot never "
-            "gets it.",
+    97: "They answer the same as before: 12 tools and 3 tools.",
+    98: "But the gateway passes along only 13. read_internal_config and apply_optimization aren't on its list, "
+            "so BurritoBot never gets them.",
     99: "The agent sends the model the question and 13 tools.",
     100: "The model answers: use the get_weather tool.",
     101: "The poisoned description is still there. The gateway didn't change what the weather server says "
