@@ -51093,3 +51093,41 @@ call site classed, and `test_fetch_inventory.py`, `test_package_cache.py` and `t
 `test_fleet_contract.py`, which reads the inventory for the web-terminal entry only, stops here on the guard-proxy
 submodule this checkout does not have, before that check; the entry is unchanged. No cluster runs these files, so
 there is no live cluster check.
+
+## 2026-11-10 · #1258 · run 20153 · A console rollout under a loop of POST /chat returns no 502
+
+**Read first.** Run 19711's keepalive change (`8967b06a`, merged to staging as `ff173c00`) is synced on both KubeCon
+clusters. On watch-it-burn-private and watch-it-burn-community the ai-layer Application was Synced and Healthy at
+staging `78209675`, which contains `ff173c00`. The console's nginx has `preStop.sleep.seconds: 45` and a 340 s grace
+period, the agent namespace carries `elbv2.k8s.aws/pod-readiness-gate-inject=enabled`, and the console-conf ConfigMap
+each pod mounts (`console-conf-2859gk7hk4` on private, `console-conf-6m755k45m9` on community) sets
+`keepalive_time 10s;`. The talk is 2026-11-12, so nobody was chatting.
+
+**Live check, watch-it-burn-private, 2026-11-10 20:52Z.** `. "$HECATON_CLUSTER_ENV"; CONTEXT=watch-it-burn-private
+ROLLOUT=admin python3 verify/test_console_rollout_drain_live.py` exited 0. Every setting check passed: both target
+groups (`k8s-agent-console-987ae15e03` on 443, `k8s-agent-console-d3e2c2d1b4` on 80) deregister in 30 s, under the 45 s
+sleep, and 10 s keepalive plus 30 s is under it too. The loop was answered 20 of 20 before the rollout, and the
+admin-group restart was admitted 28 s into the loop. Then:
+
+```
+== what the loop got, 159 turns over 158s ==
+  by status: {400: 159}
+  console-7b7689c599-vc69x: marked for deletion at 81s, gone at 126s
+  PASS  no turn came back 502
+  PASS  no turn lost its connection
+  PASS  every turn was answered by guard-proxy (159 of 159)
+  PASS  console-7b7689c599-vc69x served on for 45s after deletion, past the 45s preStop sleep
+  PASS  the rollout made a new console pod (got ['console-6cf7fcc5b9-2blrz'])
+  PASS  console-6cf7fcc5b9-2blrz carries the load balancer controller's target-health readiness gates (got 2)
+  PASS  console-6cf7fcc5b9-2blrz's target-health gates are True
+A console rollout under a loop of POST /chat dropped no turn.
+```
+
+Every turn through the public host was guard-proxy's own 400 for an empty prompt, across the whole drain and the old
+pod's exit. Run 19661's rollout on the same cluster without the keepalive change got one 502 in 183. The issue's third
+criterion is met.
+
+**Left as found.** The console is back to one Running pod on the same spec, plus the `kubectl.kubernetes.io/restartedAt`
+annotation a restart adds. The ai-layer Application read Synced and Healthy after the rollout, at `f5f94f93`.
+
+**No code change.** This run adds only this entry, so it runs no offline test beyond the prose gate.
