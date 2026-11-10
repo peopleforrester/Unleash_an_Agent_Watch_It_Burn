@@ -50584,3 +50584,27 @@ deployments.json lists 0 deploy rows` and `FAIL https://beacon.burritobot.co/bea
 The beacon count was there before and this run did not reset it. Afterwards the TMPDIR it was given held 0 entries,
 and the system temp directory held 6 entries before and 6 after. No cluster was changed and `agent/terminal-auth` was
 not read. The `images/` changes touch only the build scripts' scratch handling; no image was built or pushed.
+## 2026-11-10 · #1261 · run 19963 · the three tests that failed run 19569's tests gate
+
+**Why run 19569 did not land.** Hecaton's `tests` gate ran the whole offline suite, since the change touches both
+runners, and three tests failed. Each failed the same way run alone, so none is flaky.
+- `test_fetch_inventory.py`: the new `test_no_system_temp_paths.py` quotes a pod's `curl` in its exception list and
+  writes a stub `curl` for `fleet.sh start-check`, and the fetch inventory had no entry for the file. It now has one,
+  class `none`, 6 lines: nothing in it leaves the host.
+- `test_no_cloud_by_hand.sh`: every offline test that runs fleet.sh must set up the no-cloud guard (#859), and the new
+  test runs `fleet.sh start-check`. It now calls `no_cloud.setup()` after its imports and ends with the
+  `_calls = no_cloud.calls()` check that no cloud tool was called.
+- `test_no_system_temp_paths.py`: a research script that reached staging after run 19569 started,
+  `docs/research/2026-11-07-ask-user/a2a_raw.py`, had a usage line writing to `/tmp/a2a-raw.jsonl`. The test caught
+  it as designed; the line now writes to `"$TMPDIR/a2a-raw.jsonl"`.
+
+**The netcup directories.** Michael's comment on #1261 records that the two `wib-tf-plugins-*` directories were
+removed from netcup's system temp directory, which closes the fourth criterion.
+
+**Tests run.** `python3 verify/test_fetch_inventory.py`, `python3 verify/test_no_system_temp_paths.py` (with its new
+offline check) and `bash verify/test_no_cloud_by_hand.sh` (23 passed) each exited 0 after the fix.
+`python3 verify/test_scope_tests.py` printed ALL PASS; `scope_tests.py write` changed nothing. The scoped Test and E2E
+commands are left to validation.
+
+**Live check skipped.** This fix touches only files under `verify/` that no cluster runs, a docstring under `docs/`,
+and decisions.md. Run 19569's live check of `fleet.sh` stands.
