@@ -16,7 +16,8 @@ resolves the root and refuses one inside a worktree):
     and the other platforms are not fetched. The layout is assembled in a temp directory beside its place, from hard
     links to those blobs, and renamed into place whole, so no reader sees a half-built layout.
 The registry is read anonymously, as a node with no pull secret reads a public package: a 401 that names a Bearer
-realm is answered with that realm's anonymous token, and a blob's redirect is followed without it.
+realm is answered with that realm's anonymous token, and a blob's redirect is followed without it. A blob whose body
+ends or drops before its Content-Length is resumed from the next byte through a fresh redirect (registry_fetch, #1320).
 
 image(layout_dir) reads a layout back: the image manifest (the platform's, for an index), its config and its layers'
 paths, each in the layout.
@@ -36,6 +37,7 @@ Any failure prints one line starting IMAGE CACHE FAILED to stderr and exits 1.""
 from __future__ import annotations
 
 import fcntl
+import http.client
 import json
 import os
 import pathlib
@@ -43,6 +45,7 @@ import re
 import shutil
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -52,6 +55,7 @@ from typing import BinaryIO
 VERIFY = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(VERIFY))
 import artifact_cache  # noqa: E402
+import ghcr_pull  # noqa: E402
 
 SUBDIR = "oci"
 PLATFORM = "linux/amd64"
@@ -119,27 +123,84 @@ def _token(challenge: str) -> str:
     return _TOKENS[url]
 
 
-def registry_fetch(url: str, out: BinaryIO) -> None:
-    """An artifact_cache Fetcher for a registry's /v2/<repo>/manifests/<digest> or /blobs/<digest>."""
-    headers = {"Accept": ACCEPT, "User-Agent": UA}
+# A blob cut short is resumed, not fetched again from the start (#1320). On Tanjiro's runner the tools tier streamed the
+# web-terminal image's 645 MiB of layers from ghcr.io for 30 minutes in CI run 42913497804, and the stream died on TLS
+# handshakes that timed out; #1314 had seen the same streams end early with no error. http.client hands back an empty
+# read when a connection closes before Content-Length, so the end of a body is told by its length, and the rest is
+# asked for with a Range header from the first byte not yet written, up to RESUMES times, after RESUME_WAIT seconds
+# times the resume. Each resume asks the registry again for the blob's redirect: ghcr.io's signed URL expires minutes
+# after it is given (se= in its query), well inside a slow layer's download. An answer that is not a 206 from that
+# byte is refused, never spliced in, and get_retrying() then fetches the blob again whole.
+RESUMES = 8
+RESUME_WAIT = 5.0
+_sleep = time.sleep
+REDIRECTS = (301, 302, 303, 307, 308)
+DROPPED = (urllib.error.URLError, http.client.HTTPException, ConnectionError, TimeoutError)
+
+
+class RangeRefused(ConnectionError):
+    """A resume answered with anything but a 206 from the byte asked for. A ConnectionError, so get_retrying() takes it
+    as the network's and fetches the blob again whole."""
+
+
+def _open(url: str, headers: dict[str, str], offset: int):
+    """The registry's answer for url, a blob's redirect followed with no Authorization, from byte offset on."""
     for _ in range(2):
         try:
-            with _OPENER.open(urllib.request.Request(url, headers=headers), timeout=artifact_cache.TIMEOUT) as r:
-                _copy(r, out)
-                return
+            return _OPENER.open(urllib.request.Request(url, headers=headers), timeout=artifact_cache.TIMEOUT)
         except urllib.error.HTTPError as e:
-            if e.code in (301, 302, 303, 307, 308) and e.headers.get("Location"):
+            if e.code in REDIRECTS and e.headers.get("Location"):
                 # A blob store's signed URL: its own credential is in the URL, and a second one is refused.
                 loc = urllib.parse.urljoin(url, e.headers["Location"])
-                with urllib.request.urlopen(urllib.request.Request(loc, headers={"User-Agent": UA}),
-                                            timeout=artifact_cache.TIMEOUT) as r:
-                    _copy(r, out)
-                return
+                store = {"User-Agent": UA, **({"Range": f"bytes={offset}-"} if offset else {})}
+                return urllib.request.urlopen(urllib.request.Request(loc, headers=store),
+                                              timeout=artifact_cache.TIMEOUT)
             if e.code == 401 and "Authorization" not in headers:
                 headers["Authorization"] = "Bearer " + _token(e.headers.get("WWW-Authenticate", ""))
                 continue
             raise
     raise ImageCacheError(f"{url} refused the anonymous token")
+
+
+def registry_fetch(url: str, out: BinaryIO) -> None:
+    """An artifact_cache Fetcher for a registry's /v2/<repo>/manifests/<digest> or /blobs/<digest>. A body that ends or
+    drops before the first answer's Content-Length is resumed from the next byte (RESUMES)."""
+    headers = {"Accept": ACCEPT, "User-Agent": UA}
+    start, size, resumes = out.tell(), None, 0
+    while True:
+        got = out.tell() - start
+        try:
+            with _open(url, headers, got) as r:
+                if got:
+                    cr = r.headers.get("Content-Range") or ""
+                    if r.status != 206 or not cr.startswith(f"bytes {got}-"):
+                        raise RangeRefused(f"{url}: asked for the rest from byte {got} of {size}, the answer was "
+                                              f"HTTP {r.status} with Content-Range {cr!r}, not a 206 from that byte")
+                else:
+                    length = r.headers.get("Content-Length") or ""
+                    size = int(length) if length.isdigit() else None
+                _copy(r, out)
+            why = "the connection closed"
+        except RangeRefused:
+            raise
+        except urllib.error.HTTPError as e:
+            # Before the first byte, get_retrying() asks again; nothing is lost.
+            if e.code not in ghcr_pull.BUSY or out.tell() == start:
+                raise
+            why = f"HTTP {e.code} {e.reason}"
+        except DROPPED as e:
+            if out.tell() == start:
+                raise
+            why = f"{type(e).__name__}: {e}"
+        if size is None or out.tell() - start >= size:
+            return
+        if resumes == RESUMES:
+            raise ConnectionError(f"{url}: the body ended at byte {out.tell() - start} of {size} ({why}), and "
+                                  f"{RESUMES} resumes did not finish it")
+        resumes += 1
+        print(f"  RESUME {url} from byte {out.tell() - start} of {size}: {why} (resume {resumes} of {RESUMES})",
+              file=sys.stderr, flush=True)
+        _sleep(RESUME_WAIT * resumes)
 
 
 def _media_type(doc: dict) -> str:

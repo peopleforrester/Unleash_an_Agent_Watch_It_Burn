@@ -263,6 +263,76 @@ try:
     finally:
         srv.shutdown()
         srv.server_close()
+
+    print("== a blob cut short is resumed from the next byte, through a fresh redirect each time (#1320) ==")
+    # The store cuts each answer after CUTS[i] bytes while it lasts, with the whole Content-Length sent, as Tanjiro's
+    # runner saw ghcr.io's blob store do; a Range ask is answered 206 from that byte, or with RANGED when it is set.
+    # A layer that ends at the cut is a different blob only by its length, so the hash check alone would fail it.
+    store = {"cuts": [], "ranged": 206, "asked": []}
+    big = bytes(range(256)) * 64
+
+    class Cut(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):  # noqa: N802 - http.server's name
+            port = self.server.server_address[1]
+            if self.path.startswith("/v2/"):
+                store["asked"].append(("registry", self.path, None))
+                self.send_response(307)
+                # A new signed URL on each ask, as ghcr.io gives: the one before it may have expired.
+                self.send_header("Location", f"http://127.0.0.1:{port}/store/{sha(big)}?se={len(store['asked'])}")
+                self.end_headers()
+                return
+            rng = self.headers.get("Range")
+            store["asked"].append(("store", self.path, rng))
+            start = int(rng.removeprefix("bytes=").rstrip("-")) if rng else 0
+            status = store["ranged"] if rng else 200
+            body = big[start:] if status == 206 else big
+            self.send_response(status)
+            self.send_header("Content-Length", str(len(body)))
+            if status == 206:
+                self.send_header("Content-Range", f"bytes {start}-{len(big) - 1}/{len(big)}")
+            self.end_headers()
+            cut = store["cuts"].pop(0) if store["cuts"] else None
+            self.wfile.write(body if cut is None else body[:cut])
+
+    real_sleep, ic._sleep = ic._sleep, lambda s: None
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Cut)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        url = f"http://127.0.0.1:{srv.server_address[1]}/v2/{REPO}/blobs/sha256:{sha(big)}"
+        store.update(cuts=[700, 3000], asked=[])
+        b = ac.get(sha(big), url, root=base / "cache-cut", fetch=ic.registry_fetch)
+        stores = [a for a in store["asked"] if a[0] == "store"]
+        check("a blob cut twice is resumed and kept whole, its digest checked", b.read_bytes() == big, str(stores))
+        check("each resume asks the registry for a fresh redirect, then the store from the next byte",
+              [a[0] for a in store["asked"]] == ["registry", "store"] * 3
+              and [a[2] for a in stores] == [None, "bytes=700-", "bytes=3700-"]
+              and len({a[1] for a in stores}) == 3, str(store["asked"]))
+
+        store.update(cuts=[700], ranged=200, asked=[])
+        msg, cause = "NO ERROR", None
+        try:
+            ac.get(sha(big), url, root=base / "cache-200", fetch=ic.registry_fetch)
+        except ac.ArtifactCacheError as e:
+            msg, cause = str(e), e.__cause__
+        check("a resume answered 200 (the whole blob again) is refused, never spliced in, naming the byte",
+              "the rest from byte 700" in msg and "HTTP 200" in msg and not (base / "cache-200" / "sha256" / sha(big))
+              .exists(), msg)
+        check("the refusal is one get_retrying() takes as the network's and fetches whole again",
+              isinstance(cause, ic.RangeRefused) and ac.transient(cause), repr(cause))
+
+        store.update(cuts=[100] * (ic.RESUMES + 1), ranged=206, asked=[])
+        msg = raises(lambda: ac.get(sha(big), url, root=base / "cache-cut-all", fetch=ic.registry_fetch),
+                     ac.ArtifactCacheError)
+        check(f"a body still short after {ic.RESUMES} resumes fails, naming where it ended",
+              f"{ic.RESUMES} resumes did not finish it" in msg and f"of {len(big)}" in msg
+              and len([a for a in store["asked"] if a[0] == "store"]) == ic.RESUMES + 1, msg)
+    finally:
+        ic._sleep = real_sleep
+        srv.shutdown()
+        srv.server_close()
 finally:
     shutil.rmtree(base, ignore_errors=True)
 

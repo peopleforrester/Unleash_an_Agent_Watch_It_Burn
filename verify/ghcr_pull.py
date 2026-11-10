@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import http.client
-import io
 import json
 import time
 import urllib.error
@@ -59,73 +58,6 @@ def open_url(req, timeout: float = 30, opener=None):
     """The response to req, from opener (urlopen by default), asked again while the connection drops before an
     answer. Only the open is retried: a caller that streams the body owns a drop part way through it."""
     return _retried(lambda: _opener_of(opener)(req, timeout=timeout))
-
-
-# A blob streamed whole is resumed, not read again from the start (#1314). On Tanjiro's runner the stream of a
-# web-terminal layer in test_image_version_tags.py ended early with no error in CI runs 42863038669 and 42866956234,
-# after 887 s and 1061 s: http.client hands back an empty read when a connection closes before Content-Length, so
-# tarfile stopped on "unexpected end of data". RESUMES is how many times one blob is asked again from the first byte
-# not yet read.
-RESUMES = 5
-
-
-class BlobBody(io.RawIOBase):
-    """The body of a blob whose size the manifest gives, read start to end. When the connection ends or drops before
-    size bytes, the rest is asked for with a Range header from the first byte not yet read, up to RESUMES times; an
-    answer that is not a 206 from that byte is refused, never spliced in."""
-
-    def __init__(self, req, size: int, timeout: float = 30, opener=None) -> None:
-        super().__init__()
-        self.req = req if isinstance(req, urllib.request.Request) else urllib.request.Request(req)
-        self.size, self.timeout, self.opener = size, timeout, opener
-        self.pos = 0
-        self.resumes = 0
-        self.resp = open_url(self.req, timeout, opener)
-
-    def readable(self) -> bool:
-        return True
-
-    def _resume(self, why: str) -> None:
-        url = self.req.full_url
-        if self.resumes == RESUMES:
-            raise ConnectionError(f"{url}: the body ended at byte {self.pos} of {self.size} ({why}), "
-                                  f"and {RESUMES} resumes did not finish it")
-        self.resumes += 1
-        self.resp.close()
-        # The request's own headers only: header_items() also holds the Host urllib added on the first open, and
-        # carried across ghcr.io's redirect it sends the blob host's CDN Host: ghcr.io, which answers 421.
-        headers = {**self.req.headers, "Range": f"bytes={self.pos}-"}
-        self.resp = open_url(urllib.request.Request(url, headers=headers), self.timeout, self.opener)
-        status = getattr(self.resp, "status", None)
-        got = (self.resp.headers.get("Content-Range") or "") if self.resp.headers else ""
-        if status != 206 or not got.startswith(f"bytes {self.pos}-"):
-            self.resp.close()
-            raise ConnectionError(f"{url}: asked for the rest from byte {self.pos} of {self.size} after {why}, "
-                                  f"the answer was HTTP {status} with Content-Range {got!r}, not a 206 from that byte")
-
-    def readinto(self, b) -> int:
-        while self.pos < self.size:
-            try:
-                n = self.resp.readinto(b)
-                why = "the connection closed"
-            except DROPPED as e:
-                n, why = 0, f"{type(e).__name__}: {e}"
-            if n:
-                self.pos += n
-                return n
-            self._resume(why)
-        return 0
-
-    def close(self) -> None:
-        # No resp when the first open raised; close() still runs, from IOBase's __del__.
-        if not self.closed and getattr(self, "resp", None) is not None:
-            self.resp.close()
-        super().close()
-
-
-def open_blob(req, size: int, timeout: float = 30, opener=None) -> BlobBody:
-    """The body of the blob at req, size bytes long, resumed where it ends early (BlobBody)."""
-    return BlobBody(req, size, timeout, opener)
 
 
 def read_url(req, timeout: float = 30, opener=None) -> bytes:

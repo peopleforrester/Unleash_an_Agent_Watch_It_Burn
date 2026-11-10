@@ -641,7 +641,7 @@ sites:
     lines: 3
     class: pinned
     kind: container-image
-    pin: the reference's own @sha256 digest (images/villains/build.sh's JOKER_BASE, images/kyverno-counter-fix/build.sh's BASE); each manifest and blob through artifact_cache.get_retrying by its sha256, platform_layout through layout()
+    pin: the reference's own @sha256 digest (images/villains/build.sh's JOKER_BASE, images/kyverno-counter-fix/build.sh's BASE, the images test_image_version_tags.py reads); each manifest and blob through artifact_cache.get_retrying by its sha256, platform_layout through layout()
     cached: true
   - match: .
     lines: 7
@@ -1420,7 +1420,7 @@ sites:
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   verify/test_ghcr_pull.py:
   - match: .
-    lines: 44
+    lines: 35
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   verify/test_ghcr_version_tag.py:
@@ -1449,6 +1449,13 @@ sites:
     class: pinned
     kind: helm-chart
     pin: verify/charts.lock (each chart's tarball SHA-256)
+    cached: true
+  verify/test_image_version_tags.py:
+  - match: image_cache\.layout\(
+    lines: 1
+    class: pinned
+    kind: container-image
+    pin: gitops/ai-layer/resources.yaml and backstage/k8s/templated-test-svc.yaml (workshop-mcp, web-terminal and sample-app by digest), and the digest the Joker's tag serves; layers from image_cache.py's OCI layout, ghcr.io only on a miss (#1320)
     cached: true
   verify/test_images_lock.py:
   - match: .

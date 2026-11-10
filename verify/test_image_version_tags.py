@@ -40,7 +40,8 @@ import urllib.request
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "verify"))
-from ghcr_pull import ACCEPT, open_blob, open_url, read_url, served_digest  # noqa: E402
+import image_cache  # noqa: E402
+from ghcr_pull import ACCEPT, open_url, read_url, served_digest  # noqa: E402
 
 WIB = "peopleforrester/watch-it-burn"
 RESOURCES = (REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")
@@ -92,16 +93,27 @@ def image_config(package: str, digest: str) -> dict:
         return json.load(r)
 
 
+_LAYOUTS: dict[str, pathlib.Path] = {}
+
+
+def layers(package: str, digest: str) -> list[pathlib.Path]:
+    """The linux/amd64 image's layer files at digest, last layer first, from its OCI layout in the host artifact cache
+    (image_cache.layout, #1122). Until #1320 each layer was streamed from ghcr.io on every run: the web-terminal image is
+    645 MiB, which took Tanjiro's runner 30 minutes in CI run 42913497804 before a TLS handshake timed out. Now the
+    first run on a host fetches each blob once, checked against its digest and resumed where it ends early
+    (image_cache.registry_fetch), and later runs read it from disk. The layout is checked once per run."""
+    ref = f"ghcr.io/{package}@{digest}"
+    if ref not in _LAYOUTS:
+        _LAYOUTS[ref] = image_cache.layout(ref)
+    return list(reversed(image_cache.image(_LAYOUTS[ref])["layers"]))
+
+
 def find(package: str, digest: str, pattern: str) -> tuple[str, bytes] | None:
-    """The first file whose path matches pattern, streamed out of the image's layers, last layer first. A hard link
-    is followed to its file: busybox's layer stores bin/busybox as a link to bin/[. Each layer is read through
-    open_blob, which resumes a stream that ends before the layer's size: on Tanjiro's runner a web-terminal layer's
-    stream ended early with no error, and tarfile stopped on "unexpected end of data" (#1314)."""
-    tok = token(package)
+    """The first file whose path matches pattern in the image's layers, last layer first. A hard link is followed to
+    its file: busybox's layer stores bin/busybox as a link to bin/[."""
     rx = re.compile(pattern)
-    for layer in reversed(amd64_manifest(package, tok, digest)["layers"]):
-        with open_blob(ghcr_request(package, tok, f"blobs/{layer['digest']}"), layer["size"], timeout=120) as r, \
-                tarfile.open(fileobj=r, mode="r|*") as tar:
+    for layer in layers(package, digest):
+        with tarfile.open(layer, mode="r|*") as tar:
             for member in tar:
                 if not rx.search(member.name.lstrip("./")):
                     continue
@@ -115,11 +127,9 @@ def find(package: str, digest: str, pattern: str) -> tuple[str, bytes] | None:
 def find_files(package: str, digest: str, paths: tuple[str, ...]) -> dict[str, bytes]:
     """The regular files at each of paths as the image holds them, in one pass over its layers, last layer first, so
     a later layer's copy wins over the base's. A path no layer holds as a file is left out."""
-    tok = token(package)
     got: dict[str, bytes] = {}
-    for layer in reversed(amd64_manifest(package, tok, digest)["layers"]):
-        with open_blob(ghcr_request(package, tok, f"blobs/{layer['digest']}"), layer["size"], timeout=120) as r, \
-                tarfile.open(fileobj=r, mode="r|*") as tar:
+    for layer in layers(package, digest):
+        with tarfile.open(layer, mode="r|*") as tar:
             for member in tar:
                 name = member.name.lstrip("./")
                 if name in paths and name not in got and member.isfile():
