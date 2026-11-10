@@ -50674,3 +50674,48 @@ call as guard-proxy-reader returning GUARDRAIL_INTERVENED on an insult and NONE 
 answering an insult with "Keep it kind." and a stage prompt as usual.
 
 **Tests.** None changed: this entry is the only file the run touches. The prose gate was run on it.
+
+## 2026-11-10 · #1311 · run 19989 · The guardrail is applied on both clusters and guard-proxy-reader's call on it works; /chat waits on #1288's repin
+
+**What changed since run 19985.** `bash verify/prior-drafts.sh 1311 origin/staging` named run 19985's draft
+(`origin/agent/1311-19985`, one decisions.md commit) as START and CLEAN, and it ended blocked only on the apply this
+entry finds done, so it is cherry-picked above as the record of that morning's state. Its "about 2026-11-10T06:00Z"
+is the wrong hour: its commit is 05:54 +0100, so its reads were before 04:55Z. An operator applied both cluster roots
+and ran the converge after it: Bedrock reports `watch-it-burn-community-coc` created at 04:59:08Z and
+`watch-it-burn-private-coc` at 05:00:55Z, and the ConfigMaps were about four minutes old at 05:05Z. This run changed
+nothing in AWS or on either cluster.
+
+**Live check,** read-only apart from two ApplyGuardrail calls per cluster, at 2026-11-10T05:00Z to 05:10Z:
+- `aws bedrock list-guardrails` in accen-dev us-west-2: `dpgs5zuibvsp` (`watch-it-burn-community-coc`) and
+  `u39ixzgi2uxu` (`watch-it-burn-private-coc`), each READY with DRAFT and version 1. `get-guardrail --guardrail-version 1`
+  on each: "Keep it kind." as the block message, VIOLENCE at LOW and HATE, SEXUAL and INSULTS at MEDIUM, each BLOCK on
+  input, profile `us.guardrail.v1:0`, as #1279 defined.
+- `aws eks list-pod-identity-associations --namespace agent --service-account guard-proxy-reader`: one association on
+  each, `a-iosse39ccyoualznv` (community) and `a-rgc5lqk4eoso4biyb` (private).
+- `kubectl -n agent get configmap coc-guardrail -o jsonpath='{.data}'`: `{"id":"dpgs5zuibvsp","region":"us-west-2","version":"1"}`
+  on community and `{"id":"u39ixzgi2uxu","region":"us-west-2","version":"1"}` on private.
+- guard-proxy's pod on each, restarted by `pin_coc_guardrail` (age about 4m35s at 05:05Z), runs as
+  `guard-proxy-reader` with `CONDUCT_GUARDRAIL_ID` the cluster's own id, `CONDUCT_GUARDRAIL_VERSION=1` and
+  `AWS_REGION=us-west-2`.
+- ApplyGuardrail as guard-proxy-reader: a script under the run's `$TMPDIR` read the Pod Identity credentials from
+  inside each guard-proxy pod (the agent's token file and credentials URI), kept them in memory and never printed
+  them, and called `aws bedrock-runtime apply-guardrail --source INPUT` with the ConfigMap's id and version.
+  `sts get-caller-identity` named `assumed-role/watch-it-burn-community-guard-.../eks-watch-it-b-guard-prox-...` and
+  its private twin. On both clusters the insult "You are a worthless idiot and everyone at this conference thinks you
+  are a stupid joke." returned `GUARDRAIL_INTERVENED` with output "Keep it kind." (INSULTS, HIGH), and the stage prompt
+  "Scale the storefront deployment in the shop namespace to three replicas and tell me what changed." returned `NONE`.
+- The running `/app/proxy.py` on both pods hashes `5caafc6044af...`, the a7a5a369 build staging pins, and holds no
+  `CONDUCT_GUARDRAIL` and no "Keep it kind.": it never calls the guardrail, so an insult on `/chat` is not answered by
+  it yet. No `/chat` call was made, since it would only show that.
+
+**What is left.** The third criterion waits on #1288, the repin of `gitops/ai-layer/guard-proxy` past 48cc2ca. Its run
+19825 ended blocked because f75aa2f's term pattern is quadratic; the fix, 0627502 (guard-proxy-agenticburn#83), is now
+on guard-proxy-agenticburn main (the compare API reads seven commits from a7a5a369 to main, 0627502 the newest), so
+#1288 can move. Once Argo CD has synced its repin on both clusters, the next run on this issue sends an insult and a
+stage prompt to `/chat` on each.
+
+**Not yet run on a cluster.** `/chat` answering an insult with "Keep it kind." and a stage prompt as usual, after
+#1288's repin syncs.
+
+**Tests.** None changed: this entry is the only file the run touches. The prose gate was run on it; the scoped Test
+command is left to validation.
