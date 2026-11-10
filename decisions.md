@@ -50329,3 +50329,162 @@ pin is still a7a5a369, behind 48cc2ca, so it ignores the CONDUCT_GUARDRAIL_* env
 operator's act, not a run's), then `infra/terraform/fleet/fleet.sh converge instructors` to write the ConfigMap, then
 guard-proxy's env naming the guardrail and an ApplyGuardrail call as `guard-proxy-reader` returning
 GUARDRAIL_INTERVENED on an insult and NONE on a stage prompt, once guard-proxy is pinned at or after 48cc2ca.
+## 2026-11-10 · #1307 · run 19836 · test_coc_pattern_linear.py times each case by CPU time, not the wall clock
+
+**What failed and why.** The test was reproduced under load before any edit: three runs beside 24 CPU-bound Python
+loops on the 16-vCPU host (load average 22 to 34) all ended `FAIL: 4 checks failed`, with 1 to 13 failing cases per
+copy. Each failing case had passed the 50 ms limit and failed the 8-fold growth bound, for example a run of `'*'` (the
+`a` class) at 2.7 ms on 1,000 characters and 59.2 ms on 4,000, or `'xvyy'` then a run of `'*'` at 2.8 ms and 33.7 ms.
+The cases were not quadratic; the wall clock was. A 1,000-character case takes about 2 ms and mostly runs between two
+preemptions, and a 4,000-character one takes about 20 ms and is preempted, so the time it waited for a CPU was added
+to the long text alone, and best of 3 then best of 9 did not remove it at that load.
+
+**The change.** `best_ms()` reads `time.thread_time()`, the thread's CPU time, in place of `time.perf_counter()`.
+The host's load does not add to it. The bounds (`coc_linear_cases.within()`: 50 ms, 8-fold growth) and the cases are
+unchanged, and `coc_linear_cases.py` is not touched, so test_chat_coc_e2e, which shares those bounds and times the
+chat page's port in node with `process.hrtime`, is unchanged; it has the same wall-clock exposure and is filed as a
+followup rather than changed here.
+
+**Evidence.** Ten runs in a row beside the same 24 loops, load average 34.9 to 52.3 at their starts: all ten exit 0,
+no FAIL line. The slowest 4,000-character case on any copy took 21.3 ms of CPU time. Section 2 failed the pattern as
+built before #1300 in all ten: a run of `'$'` at 122 to 159 ms on 1,000 characters and 1,822 to 2,414 ms on 4,000,
+and `'5$'` at 64 to 91 ms and 1,007 to 1,177 ms. At idle it passes in 20 s, as before.
+
+**Live check.** None: the change is to a `verify/` file no cluster runs.
+
+## 2026-11-10 · #1222 · run 19848 · The patched agent runtime runs on both clusters, and a Challenge 1 turn's gateway tools/call pair now hangs under execute_tool
+
+**What was owed.** Run 19476's entry above named three steps under "Not yet run on a cluster": the workflow's push and
+the digest's cosign signature, the Pod on watch-it-burn-private running the pinned digest, and one Challenge 1 turn read
+from Tempo. The first is done: `build-kagent-mcp-traceparent` pushed the digest on staging and main (runs 42704638019,
+42708084639 and 42711738723, each green), and #1302's runs 19761 and 19773 record its signature and a server-side dry
+run that verify-image-signatures now admits on watch-it-burn-private. This run did the other two. It changed no file but
+this one.
+
+**The Pods (read live, 2026-11-10 about 00:14Z).** The workshop-agent Pod in namespace agent runs
+`ghcr.io/peopleforrester/watch-it-burn:golang-adk-0.10.1-mcptrace@sha256:59bc5777ae74609446fde57324f4e33e606c819dd32fffc543243c0e7940f6c5`
+on watch-it-burn-private (Pod `workshop-agent-6ffd5cbc78-hkxwk`, created 2026-11-09 23:21:18Z) and on
+watch-it-burn-community (`workshop-agent-6c886c8fd5-wxzm9`, 23:19:52Z). The controller is still kagent's own
+`controller:0.10.1`.
+
+**Before (Tempo on watch-it-burn-private).** A TraceQL search for
+`{ resource.service.name = "burritobot-gateway" && name =~ "tools/call.*" }` from 2026-11-09 22:40Z to the Pod's start
+returned only 2-span traces rooted at the gateway's `tools/call` server span, each holding one
+`tools/call evil-mcp_<tool>` child. Trace `4b5749b8937c6909bde5987745849df2` (22:53:09Z, `evil-mcp_read_internal_config`)
+is one. From 23:21Z to 00:15Z the same search returned none, since no turn called a tool.
+
+**The Challenge 1 turn.** `bash verify/c1-exfil-block.sh burritobot-private watch-it-burn-private accen-dev`, started
+00:17:02Z, took the guard lock, applied the C1 policies, sent the resend prompt, printed
+`OK    burritobot-private: with the C1 policies on, BurritoBot reports the send as failed`, put the policies back as it
+found them, released the lock and exited 0. The same search over 00:17:02Z to 00:20:10Z returned one trace, the turn's
+own, `5c2f477caa99948704036b04ecbe9364`: 14 spans, one root, burritobot's `POST /chat`. Each gateway `tools/call` span
+in it, read up to the root:
+
+    burritobot-gateway tools/call [deb0574a] <- burritobot-agent execute_tool run_shell [7dd843bd]
+        <- invoke_agent workshop_agent <- invocation <- POST / <- burritobot-gateway POST workshop-agent...:8080
+        <- burritobot-gateway POST /* <- burritobot POST <- agent.forward <- chat <- POST /chat
+    burritobot-gateway tools/call workshop-mcp_run_shell [fe8759ea] <- burritobot-gateway tools/call [deb0574a] <- (as above)
+
+So the pair hangs under the turn's `execute_tool run_shell`, not under the gateway's A2A hop as it did after #885, and
+there is no trace rooted at the gateway's `tools/call` for that call.
+
+**evil-mcp too.** The issue's parentless traces were evil-mcp's, which no allowedHeaders forward reached. One chat on
+burritobot-private at 00:22:48Z asked for Portland's weather, and the agent called `get_weather` and
+`read_internal_config`. Its trace `174bb04a6f02b8d781a2c1fb57f68a56` has 18 spans and one root, burritobot's
+`POST /chat`, and both gateway pairs (`tools/call evil-mcp_get_weather`, `tools/call evil-mcp_read_internal_config`)
+hang under their own `execute_tool get_weather` and `execute_tool read_internal_config` spans. The search over that
+window returned that trace alone.
+
+**APM.** Read with the `watch-it-burn/datadog` read pair (the APM spans API, env `burritobot-kubecon-na-26`, service
+`burritobot-gateway`, at 00:24Z). The turn's gateway spans are in trace `5c2f477caa99948704036b04ecbe9364`. The gateway
+`POST` for the call has parent 9068072328771049381 (hex 7dd843bd..., the `execute_tool run_shell` span), and
+`tools/call workshop-mcp_run_shell` has parent 16046421451485955004 (hex deb0574a..., that POST). Before the patch, the
+newest gateway spans in APM (22:53:09Z) were a `POST` with parent 0 and its `tools/call evil-mcp_<tool>` child, one trace
+each. watch-it-burn-community runs no Tempo, so it was not read there.
+
+**Live check.** The two chats above, each one model call, and c1-exfil-block.sh, which left the C1 policies as it found
+them. Nothing else on either cluster was changed. No live check is owed on this issue now.
+## 2026-11-10 · #1310 · run 19849 · test_chat_coc_e2e.py times the page's cocViolation less the thread's run-queue wait
+
+**What failed and why.** Section 6 (the linear-time checks) was run alone, ten times in a row, beside 24 CPU-bound
+shell loops on the 16-vCPU host, with the timer as it was (`process.hrtime.bigint()`, the wall clock). Nine of ten
+failed at a load average of 80 to 181, for example `'wrex'` then a run of `'*'` at 7.2 ms on 1,000 characters and
+47.2 ms on 4,000, and a run of `' *'` at 1.9 ms and 35.7 ms. As in #1307, the cases were not quadratic: the long text
+was preempted and the wall clock added the wait to it alone.
+
+**What the issue suggested, and why it is not used.** `process.threadCpuUsage()` was tried first. Node reads it, and
+`process.cpuUsage()`, from getrusage(), which on this kernel moves only at the scheduler's tick: readings came back
+as 0.0, 4.0 and 8.0 ms. Ten runs at load 51 to 167 all failed the growth bound on cases such as a run of `' '` at
+0.0 ms then 9.8 ms. Node has no binding for clock_gettime(CLOCK_THREAD_CPUTIME_ID), which Python's
+`time.thread_time()` reads. The scheduler's own `sum_exec_runtime` (the first field of `/proc/thread-self/schedstat`)
+is just as stale between ticks.
+
+**The change.** The timer takes each call's wall time and subtracts how long the thread waited on the run queue
+during it: the second field of `/proc/thread-self/schedstat`, in ns, which the kernel adds to each time the thread is
+given a CPU back, so a read from the running thread holds every wait up to it. The file is opened once and read with
+pread at offset 0 (about 5 µs a read). What is left is the time the match ran. A host without that file fails the
+node step loudly, as a missing node does. The bounds (`coc_linear_cases.within()`) and the cases are unchanged.
+
+**Evidence.** With the new timer, ten runs in a row beside the same 24 loops, at a 1-minute load average of 17.2 to
+40.1 at their starts: all ten passed section 6, the slowest 4,000-character case at 6.2 to 12.5 ms. Then five
+interleaved pairs at load 35 to 45: the wall-clock timer failed one of five (`'q'` then a run of `'1|'`, 0.9 ms then
+24.6 ms) and read its slowest long case at 10 to 25 ms; the new timer passed five of five at 6.5 to 10.2 ms. In all
+fifteen runs, and in the whole test once at load 42 (17.8 s, every check PASS), the page built as before #1300 still
+failed: a run of `'$'` at 96 to 160 ms then 1,554 to 1,740 ms, and `'5$'` at 52 to 81 ms then 787 to 1,041 ms.
+
+**Live check.** None: the change is to a `verify/` file no cluster runs.
+## 2026-11-10 · #1163 · run 19920 · After the sync, a turn that skipped guard-proxy files under ml_app burritobot on both clusters, and check 4 passes
+
+**What was owed.** Run 18937's change (staging `5b35b83e`) put `transform/llmobs_root_mark`, `groupbyattrs/llmobs_root`
+and `transform/llmobs_root_service` at the end of the collector's `traces/llmobs` pipeline, and left criterion 3, the
+live check after the sync, to the next run. `bash verify/prior-drafts.sh` was not needed: that run's commit is in
+staging, and this run changes no code.
+
+**The change is on both clusters.** Argo CD's `otel-collector` Application read Synced and Healthy on both, at revision
+`5aaeb5c4` (which holds `5b35b83e`), last synced 2026-11-09 22:54:55Z on watch-it-burn-community and 22:56:32Z on
+watch-it-burn-private. The running ConfigMap `monitoring/otel-collector-opentelemetry-collector-agent` on each holds the
+three processors and runs them in the llmobs pipeline, and each collector pod started at the sync (22:54:56Z and
+22:56:34Z).
+
+**The turns, 2026-11-10 01:21:58Z to 01:22:30Z.** One `/chat` through guard-proxy on each bot, with the body run
+18581 used (`"What are your hours?"`, session `check-1163-19920`, witch `Hazel the Ghoul`): 200 in 3.2 s on
+`attackme.burritobot.co` and 2.2 s on `burritobot-private.burritobot.co`, each with the cantina's hours. Then one A2A
+`message/send` past guard-proxy on each, sent by `docs/research/2026-11-08-ask-user/a2a_asks.py` with a count of 1
+over a `kubectl port-forward` to `agent/svc/agentgateway` (:3000): context `a2a-590e7288` on watch-it-burn-community
+(completed; its one `run_shell` call was an `echo` of the answer) and `a2a-752f3b4d` on watch-it-burn-private
+(completed, no tool call). These are the turns that filed under `ml_app:burritobot-agent` before the change.
+
+**Where they filed.** Read from the sandbox org with `watch-it-burn/datadog`'s read keys (GETs only), at 01:26Z. The
+LLM Observability spans API (`/api/v2/llm-obs/v1/spans/events`, `filter[query]=session_id:<id>`) gave:
+
+```
+a2a-590e7288      5 spans  k8s.cluster.name:burritobot-public   root: invocation, ml_app burritobot   ml_apps: burritobot
+a2a-752f3b4d      3 spans  k8s.cluster.name:burritobot-private  root: invocation, ml_app burritobot   ml_apps: burritobot
+check-1163-19920  8 spans  both clusters                        roots: POST, POST (the guard's)        ml_apps: burritobot
+```
+
+So each turn that skipped guard-proxy still has kagent's `invocation` as its root (`parent_id` `undefined`), and with
+the root sent as service burritobot it files under `ml_app:burritobot`, on each cluster. `ml_app:burritobot-agent`
+returned no span from 2026-11-09 22:57Z to 01:26Z, and `sum:ml_obs.trace{env:burritobot-kubecon-na-26} by {ml_app}`
+over 01:21Z to now read one group, `ml_app:burritobot`, 4 traces: the two chats and the two A2A turns. (With
+`filter[query]` set, the spans API returned the same rows for `filter[ml_app]=burritobot-agent` as for `burritobot`,
+each row's own `ml_app` reading `burritobot`; the table reads each row's own field.)
+
+**Check 4, 01:26:39Z.** `python3 verify/test_datadog_sandbox_live.py` (default 60-minute lookback, as accen-dev in
+us-west-2), exit 0, all 16 checks PASS and `Both KubeCon clusters ship under Whitney's sandbox rules (#629).` Check 4:
+
+```
+== 4. LLM Observability files the interactions under ml_app burritobot (ml_obs.trace) ==
+  PASS  ml_obs.trace reports under env:burritobot-kubecon-na-26 as ml_app burritobot
+  PASS  no other ml_app reports under env:burritobot-kubecon-na-26
+```
+
+`ml_obs.*` has no cluster tag, so check 4 reads the env for both clusters at once; the per-session read above is what
+shows each cluster's turn that skipped guard-proxy filing under burritobot. That meets criterion 3 of #1163.
+
+**Both clusters as found.** The turns were a read-only question and an `echo`; the port-forwards were closed. After
+the check every Argo CD Application read Synced and Healthy: 24 on watch-it-burn-community and 40 on
+watch-it-burn-private. No Datadog setting was changed, and the presenter terminal login was not read or touched.
+
+**Not yet run on a cluster.** Nothing. The logs are `/var/lib/hecaton/runs/19920/sandbox-1.log`, `read-2.log` and
+`a2a-watch-it-burn-*/ask0.json`. No test changed, so no suite ran; the prose gate ran on this entry.
