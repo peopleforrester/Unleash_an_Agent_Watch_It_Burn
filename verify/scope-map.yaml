@@ -174,6 +174,7 @@ always:
   test_terminal_login_live.sh: 'verify/terminal-login-live.sh: it runs git on the tree or history as a whole; verify/test_no_presenter_login.py: it runs git ls-files, which reads the tree or history as a whole'
   test_terminal_login_request.py: 'verify/test_no_presenter_login.py: it runs git ls-files, which reads the tree or history as a whole'
   test_terraform_module_pins.py: it runs git ls-files, which reads the tree or history as a whole; line 70 builds a path under the repo root from a value it finds at run time
+  test_test_map.py: 'verify/scope_tests.py: it runs git archive, blame, cat-file, diff, diff-tree, grep, log, ls-files, ls-tree, rev-list, shortlog, show, whatchanged, which reads the tree or history as a whole; verify/scope_tests.py: it runs grep -r'
   test_tests_own_inputs.py: it runs git grep, which reads the tree or history as a whole
   test_tf_plugin_cache.py: 'it runs git ls-files, which reads the tree or history as a whole; verify/test_event_tag.py: it runs git ls-files, which reads the tree or history as a whole; verify/test_terraform_module_pins.py: it runs git ls-files, which reads the tree or history as a whole; verify/test_terraform_module_pins.py: line 70 builds a path under the repo root from a value it finds at run time'
   test_verify_suites_workflow.py: 'verify/ci-base-sha.sh: it runs git on the tree or history as a whole'
@@ -8205,6 +8206,25 @@ reads:
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/otel-collector/values.yaml
+  test_run_tests_files.py:
+    - .gitmodules
+    - AGENTS.md
+    - gitops/ai-layer/guard-proxy
+    - images/llm-guard
+    - verify
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/ensure-submodules.sh
+    - verify/git_mirror.py
+    - verify/no-cloud.sh
+    - verify/run-e2e.sh
+    - verify/run-tests.sh
+    - verify/test_*.py
+    - verify/test_*.sh
+    - verify/test_alpha.py
+    - verify/test_beta.py
+    - verify/test_live.py
+    - verify/test_missing.py
   test_scheduled_up.sh:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh

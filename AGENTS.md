@@ -87,7 +87,16 @@ down after. There is no production-risk constraint here. Apply these without exc
    briefly, then proceed with the change unless told otherwise. Do not re-raise settled objections.
 
 Test command: `bash verify/run-tests.sh`
+Test files: `verify/test_*.py verify/test_*.sh`
+Test map: `verify/test-map.yaml`
 E2E command: `bash verify/run-e2e-tools.sh`
+
+Hecaton's tests gate picks the Test command's files itself (#1319, hecaton#623): of the `Test files:`, those whose
+code spells a changed path, plus what the `Test map:` rules add, passed to `run-tests.sh` in `HECATON_TEST_FILES`, one
+repo path per line, and `run-tests.sh` runs exactly those, still setting `# SUITE: e2e` files aside. The map is written
+from `verify/scope-map.yaml` by `python3 verify/scope_tests.py write`, so a test that globs a directory is picked for
+the files under it, and `verify/test_test_map.py` holds the two equal. Without the variable, `run-tests.sh` scopes
+itself as the next paragraph says.
 
 The E2E command is the cluster-free tier (#572): the offline suite, then every `# E2E TIER: tools` check, run
 with the pinned, checksum-verified binaries in `verify/e2e-tools.lock`, which `verify/fetch-e2e-tools.sh`

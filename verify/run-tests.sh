@@ -37,9 +37,42 @@ no_cloud_setup "${NO_CLOUD_DIR}"
 # the change against that base and verify/scope-map.yaml, the committed map of each test to the repo paths it reads,
 # and names the tests the change can affect, each with why, or says to run them all: a change to a runner, the map
 # or a shared helper, or to a path no entry covers. Without it, a person running this by hand, every test runs.
+#
+# Hecaton names the files itself (#1319, hecaton#623). AGENTS.md declares the suite's `Test files:` globs and the
+# `Test map:` (verify/test-map.yaml, which scope_tests.py writes from the scope map), so the tests gate works out which
+# of them read the change and passes them in HECATON_TEST_FILES, one repo path per line. When that is set and not
+# empty, this runs exactly those files and does not ask scope_tests.py: the gate's `ran N of M test files` is then
+# what ran. A listed file must be a verify/test_*.py or verify/test_*.sh that exists: a wrong name fails, never
+# skips. A listed `# SUITE: e2e` file is set aside, as the glob sets it aside, and a list of only those runs nothing.
+REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+listed=()
+declare -A seen_listed=()
+if [[ -n "${HECATON_TEST_FILES:-}" ]]; then
+    mapfile -t raw_listed <<<"${HECATON_TEST_FILES}"
+    for t in "${raw_listed[@]}"; do
+        t="${t#"${t%%[![:space:]]*}"}"
+        t="${t%"${t##*[![:space:]]}"}"
+        [[ -n "${t}" && -z "${seen_listed[${t}]:-}" ]] || continue
+        seen_listed["${t}"]=1
+        listed+=("${t}")
+    done
+fi
+bad_listed=()
+for t in "${listed[@]}"; do
+    [[ "${t}" =~ ^verify/test_[^/]+\.(py|sh)$ && -f "${REPO_DIR}/${t}" ]] || bad_listed+=("${t}")
+done
+if [[ "${#bad_listed[@]}" -gt 0 ]]; then
+    printf 'HECATON_TEST_FILES names %d paths that are not test files of this suite (verify/test_*.py or verify/test_*.sh, present in %s):\n' \
+        "${#bad_listed[@]}" "${REPO_DIR}" >&2
+    printf '  %q\n' "${bad_listed[@]}" >&2
+    exit 1
+fi
+
 scoped=0
 declare -A selected=()
-if [[ -n "${HECATON_BASE_SHA:-}" ]]; then
+if [[ "${#listed[@]}" -gt 0 ]]; then
+    : # the listed files are the run; scope_tests.py is not asked
+elif [[ -n "${HECATON_BASE_SHA:-}" ]]; then
     plan="$(python3 "${SCRIPT_DIR}/scope_tests.py" select offline)" \
         || { printf 'SCOPE FAILED: scope_tests.py could not read the change against HECATON_BASE_SHA=%s\n' \
                  "${HECATON_BASE_SHA}" >&2; exit 1; }
@@ -56,8 +89,9 @@ if [[ -n "${HECATON_BASE_SHA:-}" ]]; then
     esac
 fi
 # The tests get no HECATON_BASE_SHA: one that drives a runner in a fixture means that runner to run whole.
+# Nor HECATON_TEST_FILES, for the same reason.
 scope_base="${HECATON_BASE_SHA:-}"
-unset HECATON_BASE_SHA
+unset HECATON_BASE_SHA HECATON_TEST_FILES
 
 fail=0
 ran=0
@@ -85,7 +119,13 @@ run_one() {
 
 # Both suffixes: the shell checks (fleet naming, exit codes, teardown hooks) are as offline as the Python
 # ones and were never in the old list at all.
-for t in "${SCRIPT_DIR}"/test_*.py "${SCRIPT_DIR}"/test_*.sh; do
+if [[ "${#listed[@]}" -gt 0 ]]; then
+    candidates=()
+    for t in "${listed[@]}"; do candidates+=("${REPO_DIR}/${t}"); done
+else
+    candidates=("${SCRIPT_DIR}"/test_*.py "${SCRIPT_DIR}"/test_*.sh)
+fi
+for t in "${candidates[@]}"; do
     [[ -e "${t}" ]] || continue
     if grep -q '^# SUITE: e2e' "${t}"; then
         e2e_names+=("$(basename "${t}")")
@@ -97,6 +137,10 @@ for t in "${SCRIPT_DIR}"/test_*.py "${SCRIPT_DIR}"/test_*.sh; do
 done
 
 printf '\n%d tests ran\n' "${ran}"
+if [[ "${#listed[@]}" -gt 0 ]]; then
+    printf '  the files HECATON_TEST_FILES names (#1319): %d listed, %d of them offline tests, all of which ran\n' \
+        "${#listed[@]}" "${found}"
+fi
 if [[ "${scoped}" -eq 1 ]]; then
     printf '  scoped to the change since HECATON_BASE_SHA=%s: %d of the %d offline tests; the other %d read nothing it touched\n' \
         "${scope_base}" "${ran}" "${found}" "$((found - ran))"
@@ -106,7 +150,8 @@ if [[ "${#e2e_names[@]}" -gt 0 ]]; then
 fi
 # A glob that matches nothing is the failure mode this replaces: a runner that exits 0 having done nothing
 # looks exactly like a passing build.
-if [[ "${found}" -eq 0 ]]; then
+# With HECATON_TEST_FILES set, the gate chose the files, and a list of e2e files alone rightly runs none.
+if [[ "${found}" -eq 0 && "${#listed[@]}" -eq 0 ]]; then
     printf 'NO TESTS FOUND in %s — the suite is not running\n' "${SCRIPT_DIR}" >&2
     exit 1
 fi

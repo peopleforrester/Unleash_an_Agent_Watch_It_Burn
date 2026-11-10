@@ -5,7 +5,9 @@
 
     python3 verify/scope_tests.py select offline|tools   the plan for HECATON_BASE_SHA..HEAD (stdout), why (stderr)
     python3 verify/scope_tests.py check                  exit 1 naming each way the map is out of date
-    python3 verify/scope_tests.py write                  add what the extractor finds to the map, keeping the rest
+    python3 verify/scope_tests.py write                  add what the extractor finds to the map, keeping the rest,
+                                                         and write verify/test-map.yaml from it
+    python3 verify/scope_tests.py test-map               write verify/test-map.yaml, hecaton's Test map, from the map
 
 The map, verify/scope-map.yaml, has five parts:
 
@@ -1146,6 +1148,125 @@ def dump(doc: dict, path: pathlib.Path = MAP) -> None:
 
 
 # ---------------------------------------------------------------------------------------------------------------------
+# The Test map hecaton's tests gate reads (#1319)
+#
+# Hecaton's gate picks the offline suite's files itself (hecaton#623): a test reaches a changed path when its code spells
+# the path, and the `Test map:` file AGENTS.md declares adds the rest, in the format of hecaton's tests/testmap.yaml
+# (rules of `paths`, globs matched with PurePosixPath.full_match, in which ** spans directories and * does not, and
+# `tests` to add, or `full: true` to run every test). A test that globs a directory or walks the tree spells no path,
+# so the gate alone would leave it out; this writes the scope map as those rules, so the files the gate passes in
+# HECATON_TEST_FILES hold every test select() would run:
+#
+#   full      the map's full list: a change to one runs every test, as select() does
+#   always    the always tests, and each test that reads the whole tree (**), for every path the map covers: each
+#             literal entry of any offline test's reads, and unread. A path the map does not cover matches no rule
+#             here, so the gate runs everything for it unless a test spells it
+#   <test>    one rule per offline test with the paths its entry names, an entry's glob widened to full_match's terms
+#   <globs>   the tests that read a kind of file across the tree (**.md, *Dockerfile), for those files under each
+#             covered path and for each submodule, whose pin moving select() counts as read by such a glob
+#
+# Only offline tests are named: run-tests.sh sets a `# SUITE: e2e` file aside, so naming one would only make the
+# gate's count wrong. test_test_map.py holds the file to what this writes and, for every tracked path, the rules to a
+# superset of select()'s choice.
+
+TEST_MAP = VERIFY / "test-map.yaml"
+TEST_MAP_REL = "verify/test-map.yaml"
+WILD = re.compile(r"[*?\[]")
+
+
+def _last(seg: str) -> str:
+    """A path's last segment matched by an fnmatch glob whose last segment is seg (* crossing /): the text from the first
+    * on can start inside it, so the segment ends as seg does after that *."""
+    if "*" in seg:
+        seg = "*" + seg[seg.index("*") + 1:]
+    while "**" in seg:
+        seg = seg.replace("**", "*")
+    return seg
+
+
+def widen(entry: str, files: set[str] | frozenset[str] = frozenset()) -> list[str]:
+    """full_match globs that match every path covers(entry, path) does. A literal entry is itself and, unless it is a
+    tracked file, everything under it. A glob keeps the literal directories before its first wildcard, then any depth,
+    then a last segment _last() gives, and everything under such a path, as covers() adds."""
+    if not WILD.search(entry):
+        return [entry] if entry in files else [entry, f"{entry}/**"]
+    segs = entry.split("/")
+    first = next(i for i, sg in enumerate(segs) if WILD.search(sg))
+    head = "/".join(segs[:first] + ["**"])
+    last = _last(segs[-1])
+    return [f"{head}/{last}", f"{head}/{last}/**"]
+
+
+def covered_roots(doc: dict, tests: dict[str, str]) -> list[str]:
+    """The entries that between them cover every path the map covers for the offline suite: each literal entry of an
+    offline test's reads and of unread that no other such entry contains, and each glob entry outside all of those."""
+    ents = {e for n, v in doc["reads"].items() if tests.get(n) == "offline" for e in v if names(e)} | set(doc["unread"])
+    lit = sorted(e for e in ents if not WILD.search(e))
+    roots = [e for e in lit if not any(o != e and e.startswith(o + "/") for o in lit)]
+    globs = sorted(e for e in ents if WILD.search(e) and not any(e.startswith(r + "/") for r in roots))
+    return roots + globs
+
+
+def test_map(doc: dict, tree: Tree, tests: dict[str, str]) -> list[dict]:
+    """The Test map's rules for the offline suite, from the committed scope map."""
+    files = tree.files
+    offline = sorted(n for n, sv in tests.items() if sv == "offline")
+    roots = covered_roots(doc, tests)
+    covered = [g for r in roots for g in widen(r, files)]
+    rules: list[dict] = [{"name": "full", "paths": [g for e in doc["full"] for g in widen(e, files)], "full": True}]
+    whole = [n for n in offline if n in doc["always"] or "**" in doc["reads"].get(n, [])]
+    rules.append({"name": "always", "paths": covered, "tests": [f"verify/{n}" for n in whole]})
+    kinds: dict[tuple[str, ...], list[str]] = {}
+    for n in offline:
+        if n in doc["always"]:
+            continue
+        entries = doc["reads"].get(n, [])
+        named = [e for e in entries if names(e)]
+        lit = [e for e in named if not WILD.search(e)]
+        named = [e for e in named if WILD.search(e) or not any(o != e and e.startswith(o + "/") for o in lit)]
+        paths = list(dict.fromkeys(g for e in sorted(named) for g in widen(e, files)))
+        if paths:
+            rules.append({"name": n, "paths": paths, "tests": [f"verify/{n}"]})
+        kind = tuple(sorted({e for e in entries if not names(e) and e != "**"}))
+        if kind:
+            kinds.setdefault(kind, []).append(n)
+    for kind, group in sorted(kinds.items()):
+        lasts = sorted({_last(e.split("/")[-1]) for e in kind})
+        paths = []
+        for r in roots:
+            for last in lasts:
+                if not WILD.search(r) and pathlib.PurePosixPath(r).match(last):
+                    paths.append(r)
+                if r in files:
+                    continue
+                head = r if not WILD.search(r) else widen(r)[0].rsplit("/", 1)[0]
+                paths += [f"{head}/**/{last}", f"{head}/**/{last}/**"]
+        paths += sorted(tree.submodules)
+        rules.append({"name": "across the tree: " + " ".join(kind), "paths": list(dict.fromkeys(paths)),
+                      "tests": [f"verify/{n}" for n in group]})
+    return rules
+
+
+def dump_test_map(rules: list[dict], path: pathlib.Path = TEST_MAP) -> None:
+    path.write_text(render_test_map(rules), encoding="utf-8")
+
+
+def render_test_map(rules: list[dict]) -> str:
+    q = lambda v: yaml.safe_dump(v, width=10**6).strip().removesuffix("\n...")  # noqa: E731
+    out = ("# ABOUTME: The Test map AGENTS.md declares for hecaton's tests gate (#1319), written by scope_tests.py write from\n"
+           "# ABOUTME: verify/scope-map.yaml: what a change's paths add to the files it passes run-tests.sh. Do not edit.\n"
+           "rules:\n")
+    for r in rules:
+        out += f"  - name: {q(r['name'])}\n    paths:" + ("\n" if r["paths"] else " []\n")
+        out += "".join(f"      - {q(g)}\n" for g in r["paths"])
+        if r.get("full"):
+            out += "    full: true\n"
+        else:
+            out += "    tests:" + ("\n" if r["tests"] else " []\n") + "".join(f"      - {t}\n" for t in r["tests"])
+    return out
+
+
+# ---------------------------------------------------------------------------------------------------------------------
 # Selection
 
 
@@ -1313,6 +1434,10 @@ def main(argv: list[str]) -> int:
     if argv == ["write"]:
         tree = Tree()
         dump(write(load_map(), tree), MAP)
+        dump_test_map(test_map(load_map(), tree, discover()))
+        return 0
+    if argv == ["test-map"]:
+        dump_test_map(test_map(load_map(), Tree(), discover()))
         return 0
     print(__doc__, file=sys.stderr)
     return 2
