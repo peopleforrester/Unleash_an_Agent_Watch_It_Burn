@@ -50868,3 +50868,31 @@ tests above each exit 0 once more, the two live tests compile, and `bash -n` rea
 same `kubectl -n agent exec deploy/workshop-mcp` read on watch-it-burn-community and watch-it-burn-private printed
 line 41's `/tmp/burrito-data` default, `WORKSHOP_DATA_DIR` unset, and the five seeded entries. The check after the
 Argo CD sync, named above, is still not yet run on a cluster.
+
+## 2026-11-10 · #1317 · run 20099 · A test runs sk-tmp-check itself and holds it to no literal findings
+
+**What.** #1315's done line reads: `sk-tmp-check`, run from the repo root, reports no "a system tempdir path"
+(literal) findings. No test ran sk-tmp-check. `test_no_system_temp_paths.py` holds the same paths with its own
+pattern and its own `EXCEPTIONS` list, which never reads a `tmp-ok` waiver, so a deleted waiver passed every test.
+
+**Change.** `verify/test_sk_tmp_check_e2e.py` runs scripts-knowledge's `bin/sk-tmp-check --warn` from the repo root
+and fails on any line that reads "a system tempdir path". It first checks that `tmp_writes.py` still defines that
+message and the `tmp-ok` waiver word, so a reworded message fails by name and does not read as zero findings. It also
+checks that the run read every tracked `.sh`, `.bash` and `.py` file. Then it copies each tracked file that carries
+a waiver into a scratch git repo with the waivers renamed, and holds that sk-tmp-check reports every one of those
+files and that each literal it reports sits on a line that carried a waiver. So the zero comes from the waivers,
+and a checker gone blind fails rather than passes.
+
+**Why `# SUITE: e2e` and not the offline suite or the tools tier.** scripts-knowledge is private and this repo is
+public, so a vendored copy would publish its code, and the gate host has neither `~/repos` nor a way to fetch a
+private repo. `test_american_english_published.py` is the same case and sits in the same suite. The checker is found
+at `SCRIPTS_KNOWLEDGE` (default `~/repos/workflow/scripts-knowledge`); a missing one fails with its path printed.
+Neither scoped runner runs the test, so `verify/scope-map.yaml` takes no entry (`scope_tests.py check`: 0 problems).
+
+**Tests.** With `SCRIPTS_KNOWLEDGE` pointed at the host's scripts-knowledge checkout (`60c3b9cf`), the test passes on
+this branch: sk-tmp-check read all 850 tracked files, reported 291 findings and no literal one, and with the waivers
+renamed it reported all 18 waived files. With the waiver removed from `verify/test_local_inference.py` line 79 it
+failed, naming that line, and passed again once the line was restored. Pointed at a missing checkout it failed,
+naming the path. `test_no_system_temp_paths.py` and `test_scope_tests.py` pass.
+
+**Live check.** Skipped: the change adds a test under `verify/` that no cluster runs.
