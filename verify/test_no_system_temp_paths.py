@@ -62,8 +62,6 @@ EXCEPTIONS: list[tuple[str, str, str]] = [
     ("*", "/tmp/burrito-data",
      "the workshop-mcp pod's seeded data directory, baked by images/workshop-mcp/Dockerfile; the C2 and C3 beats read "
      "it inside the pod, so the path is the container's, not the host's"),
-    ("images/web-terminal/Dockerfile", "awscli",
-     "the AWS CLI installer, unpacked in the image build's own container and removed in the same RUN layer"),
     ("gitops/ai-layer/workshop-mcp-server.py", "/tmp is writable",
      "the server runs in the workshop-mcp pod, whose /tmp is the pod's own and the one writable path there"),
     ("gitops/ai-layer/workshop-mcp-server.py", "/tmp/body.json",

@@ -648,7 +648,7 @@ check("c7-off: the sentinel passes whatever the logs say",
 check("agent_probe's own C7 note no longer says the model did not chain",
       "Nova" not in kp.judge_mcp_leaks(chat(WEATHER))[1] and "did not chain" not in kp.judge_mcp_leaks(chat(WEATHER))[1])
 ag_argv: list[list[str]] = []
-ag = kp.KubeconCluster("h", "ctx-admin", None, "/tmp/admin.kubeconfig", 5, runner=lambda argv, **kw: (
+ag = kp.KubeconCluster("h", "ctx-admin", None, "/fake/admin.kubeconfig", 5, runner=lambda argv, **kw: (
     ag_argv.append(argv), subprocess.CompletedProcess(argv, 0, stdout=AGENT_LOG_19733, stderr=""))[1])
 got_ag = ag.agent_tool_failures_since(dt.datetime(2026, 11, 9, 21, 40, 3, tzinfo=dt.timezone.utc))
 check("the agent log is workshop-agent's kagent container, on the named context, from AUDIT_SKEW_S before the ask",

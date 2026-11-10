@@ -24,12 +24,14 @@ verify/test_bootstrap_chart_render.py builds the component with the pinned kusto
 """
 from __future__ import annotations
 
+import atexit
 import fnmatch
 import importlib.util
 import json
 import os
 import pathlib
 import re
+import shutil
 import sys
 import tempfile
 import threading
@@ -185,6 +187,7 @@ support.Handler.log_message = lambda self, *a: support_seen.append(self.path)
 SUPPORT = serve(support.Server(("127.0.0.1", 0), support.Handler))
 
 tmp = pathlib.Path(tempfile.mkdtemp(prefix="desk-relay-1256-"))
+atexit.register(shutil.rmtree, tmp, True)  # the token file goes with it, pass or fail (#1261)
 (tmp / "token").write_text(TOKEN, encoding="utf-8")
 relay = load("desk_relay_1256", COMPONENT / "desk_relay.py", {"DESK_REPORT_TOKEN_FILE": str(tmp / "token")})
 os.environ["DESK_REPORT_TOKEN_FILE"] = str(tmp / "token")

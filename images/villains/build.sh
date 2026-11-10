@@ -55,7 +55,7 @@ JOKER_INTERNAL_REF="${JOKER_REF}-internal"
 # The files go in as a layer under /villain rather than through --cmd, which crane splits on commas.
 # amd64 only: the cluster nodes are AL2023_x86_64 (infra/terraform/aws/cluster/main.tf).
 # build_joker_web <ref> [<overlay dir>]: the overlay's files replace joker-web/'s before the layer is made.
-# The layer's scratch directory goes on exit too, so a failed crane push leaves nothing behind (#1261).
+# The layer's scratch directory goes on exit too, so a failed push leaves nothing behind (#1261).
 JOKER_TMP=""; trap 'rm -rf "${JOKER_TMP}"' EXIT
 build_joker_web() {
   local ref="$1" overlay="${2:-}" tmp src layer

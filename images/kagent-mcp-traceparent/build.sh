@@ -65,6 +65,7 @@ PATCH_SHA256="f2882930470308acea692804e75f8452a38ce2068aadafd507b671cc45f8d376"
 BASE="ghcr.io/kagent-dev/kagent/golang-adk:0.10.1@sha256:120353200c0226b322e2830de2844eaf02ae4a4c06e778ee60014e5f6ed4a6d0"
 TAG="golang-adk-0.10.1-mcptrace"
 
+export TMPDIR="${TMPDIR:-$(cd "${HERE}/../.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 tmp="$(mktemp -d)"
 trap 'rm -rf "${tmp}"' EXIT
 echo "${PATCH_SHA256}  ${HERE}/mcp-traceparent.patch" | sha256sum -c --quiet - \
