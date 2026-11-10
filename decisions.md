@@ -53411,3 +53411,39 @@ from ghcr.io. An anonymous token read of `ghcr.io/v2/peopleforrester/wib-e2e-too
 that pull and makes the switch.
 
 **Live check.** None: this change touches `verify/`, `.github/workflows/` and prose, and no cluster runs any of it.
+
+## 2026-11-10 · #1188 · run 20049 · Run 19536's port, through the temp-directory rule (#1261)
+
+**What this run took from run 19536.** `bash verify/prior-drafts.sh 1188 origin/staging` printed START from
+`origin/agent/1188-19536`: six commits, all drift edits in place and a decisions.md append. They cherry-picked onto
+staging `71c9b650` with no conflict. Hecaton's comment says the run's `tests` gate failed without quoting it. Run
+alone here, `python3 verify/test_no_system_temp_paths.py` failed three checks on the draft: #1261 (`790df923`, on
+staging since the draft was cut) holds that no script names a system temp directory, that a bare `mktemp` has the
+`TMPDIR` fallback, and that every script with `mktemp` removes it on an EXIT trap. `verify/e2e-image.sh` named
+`/tmp/e2e-home` and had no fallback, and `verify/e2e-image/install.sh` called `mktemp /tmp/wib-e2e-fetch.XXXXXX` with
+no trap.
+
+**What differs from the draft.** `install.sh` fetches into one scratch directory under `TMPDIR`, else under the
+image's own `$WIB_E2E_TOOLS/.fetch`, and removes it on exit, so the image holds neither. `e2e-image.sh` sets
+`TMPDIR` to itself, else the checkout's ignored `tmp/`, for the gh relay's socket. Inside the container it now passes
+`TMPDIR=/tmp/e2e-tmp` next to `HOME=/tmp/e2e-home`: both are the container's own `/tmp`, removed with it by `--rm`, so
+`test_no_system_temp_paths.py` excepts that one line with why, as it does the workshop-mcp pod's paths. Without the
+`TMPDIR`, the runner inside fell back to the checkout's `tmp/`, which on CI is 119 bytes, past the 90 that
+`run-e2e-tools.sh` allows since #1313. `verify/test_e2e_image.py` gains three checks: a run of `install.sh` leaves
+nothing in `TMPDIR`, the bad-SHA run included; without `TMPDIR` it leaves only `bin` and `tools.txt`; and it names no
+system temp directory. The changed `install.sh` moves the tag's build half: the tag is now
+`51ec299b51b3558f-4c319cf1`, and the lock's half is unchanged.
+
+**Checked in this run.** Each passed alone: `python3 verify/test_no_system_temp_paths.py`,
+`python3 verify/test_e2e_image.py`, `python3 verify/test_gh_relay.py`, `python3 verify/test_workflow_artifact_cache.py`,
+`python3 verify/test_scope_tests.py` and `python3 verify/scope_tests.py check`. The image was not built again: the
+change is to where `install.sh` puts its downloads, which `test_e2e_image.py` runs for real, and run 19536 built the
+rest. The workflow builds the new tag once these commits reach staging.
+
+**What is left, unchanged.** An anonymous token read for `peopleforrester/wib-e2e-tools` on ghcr.io answered 403 on
+2026-11-10, and this host's podman has no image of that name, so `run-e2e-tools.sh` cannot yet require the image
+without failing this run's own gate on netcup. Its switch, CI and the gate using the image, and the offline test of the
+host-side refusal wait on the workflow's first push. The repository is public, but a new ghcr.io package can start private
+whatever its repository is, so the next run checks that the gate's podman pulls it with no login.
+
+**Live check.** None: this change touches `verify/`, `.github/workflows/` and prose, and no cluster runs any of it.
