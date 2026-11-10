@@ -15,7 +15,8 @@ the router, the console's nginx and the pod.
 It starts ONE shell, the positive control, with the cluster's own credential, and closes it at once; ttyd ends a
 shell when its socket closes. Every other probe sends a single first message and never types anything, so even a
 broken check would start a shell that receives no input. Each start is counted from ttyd's log line "started
-process" in the web-terminal pod, before and after; the run fails unless the control's is the only one.
+process" in the web-terminal pod, before and after; the run fails unless the control's is the only one. It also
+fails unless that pod's ttyd container runs the digest gitops/ai-layer/resources.yaml pins (#1276).
 
 Usage: CONTEXT=<kube-context> python3 verify/test_terminal_ws_auth_live.py
 """
@@ -24,6 +25,7 @@ from __future__ import annotations
 import base64
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -31,6 +33,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import ttyd_ws  # noqa: E402
 
+RESOURCES = (pathlib.Path(__file__).resolve().parents[1] / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")
 CONTEXT = os.environ.get("CONTEXT", "")
 NS = "agent"
 PATH = "/terminal/ws"
@@ -95,6 +98,15 @@ check("the terminal-auth Secret holds a user:password TTYD_CREDENTIAL (without i
       ":" in credential and not credential.endswith(":"), r.stderr.strip())
 pod = terminal_pod()
 check("exactly one web-terminal pod is running", bool(pod))
+# #1276: what is probed is the build the repo pins, so the pod's ttyd container must run the digest
+# gitops/ai-layer/resources.yaml pins for the web-terminal Deployment, read from the image the node pulled.
+pins = set(re.findall(r"watch-it-burn:web-terminal-ttyd-[0-9][\w.-]*@(sha256:[0-9a-f]{64})", RESOURCES))
+r = kubectl("-n", NS, "get", "pod", pod, "-o", "jsonpath={.status.containerStatuses[?(@.name==\"ttyd\")].imageID}") \
+    if pod else None
+running = r.stdout.strip().rsplit("@", 1)[-1] if r is not None and r.returncode == 0 else ""
+check(f"resources.yaml pins one web-terminal digest ({sorted(p[:19] for p in pins)})", len(pins) == 1)
+check(f"the pod's ttyd container runs that pinned digest ({running[:19] or 'unread'})",
+      len(pins) == 1 and running in pins, f"pod runs {running or '?'}; pinned {sorted(pins)}")
 before = starts(pod) if pod else None
 check("ttyd's log in that pod can be read", before is not None)
 if not host or not credential or before is None:

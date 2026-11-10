@@ -10,7 +10,9 @@ that named no version (workshop-mcp, web-terminal, joker; sample-app and tool-pi
   watch-it-burn:web-terminal-ttyd-<v>       ttyd, the terminal the pod serves (images/web-terminal/Dockerfile), read
                                             from `ttyd --version` run on the binary taken out of the image. A rebuild
                                             of new source under the same ttyd is web-terminal-ttyd-<v>-<n> (#838):
-                                            its image carries the source-tree label the build workflow sets
+                                            its image carries the source-tree label the build workflow sets. The
+                                            pinned image must be a build of #1273's pinned fetches (#1276): its apt
+                                            sources name a fixed Debian snapshot and its notebook lock is hashed
   watch-it-burn:sample-app-nginx-<v>        the nginx serving Backstage's templated-test-svc (images/sample-app),
                                             read from the version string compiled into usr/sbin/nginx
   watch-it-burn:tool-pin-grpcio-<v>         the #480 spike's processor (images/tool-pin): grpcio, the one package
@@ -110,6 +112,23 @@ def find(package: str, digest: str, pattern: str) -> tuple[str, bytes] | None:
     return None
 
 
+def find_files(package: str, digest: str, paths: tuple[str, ...]) -> dict[str, bytes]:
+    """The regular files at each of paths as the image holds them, in one pass over its layers, last layer first, so
+    a later layer's copy wins over the base's. A path no layer holds as a file is left out."""
+    tok = token(package)
+    got: dict[str, bytes] = {}
+    for layer in reversed(amd64_manifest(package, tok, digest)["layers"]):
+        with open_blob(ghcr_request(package, tok, f"blobs/{layer['digest']}"), layer["size"], timeout=120) as r, \
+                tarfile.open(fileobj=r, mode="r|*") as tar:
+            for member in tar:
+                name = member.name.lstrip("./")
+                if name in paths and name not in got and member.isfile():
+                    got[name] = tar.extractfile(member).read()
+        if len(got) == len(paths):
+            break
+    return got
+
+
 def run_version(binary: bytes, name: str, args: list[str]) -> str:
     """Run a binary taken out of one of our images and return what it prints: the version it reports of itself."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -186,6 +205,8 @@ pin = pinned("web-terminal-ttyd-", rebuild=True)
 if pin:
     version, n, digest = pin
     serves(f"ghcr.io/{WIB}:web-terminal-ttyd-{version}{n}", digest)
+    check(f"images.lock pins web-terminal-ttyd-{version}{n} at the same digest",
+          f"ghcr.io/{WIB}:web-terminal-ttyd-{version}{n}@{digest} {digest} " in LOCK)
     if n:
         # A -<n> tag is a rebuild of new source under the same ttyd (#838): the build workflow labels its image with
         # the source tree scripts/ghcr_version_tag.py told it apart by.
@@ -198,6 +219,23 @@ if pin:
         out = run_version(hit[1], "ttyd", ["--version"])
         got = re.match(r"ttyd version (\d+\.\d+\.\d+)\b", out)
         check(f"its ttyd reports {version}, the tag's ({out[:60]})", bool(got) and got.group(1) == version)
+    # #1276: the pinned build is one of #1273's Dockerfile, which pins every fetch. Two of its pins stay in the image:
+    # apt's sources name a fixed snapshot.debian.org time, not the live archive, and the notebook stack was installed
+    # from a lock holding a version and a sha256 for every package. A build of the floating fetches (68004fb5) has
+    # neither. Read from the image, not git, so the pin may trail a change under images/web-terminal by one build.
+    sources, lock = "etc/apt/sources.list.d/debian.sources", "opt/jupyter-requirements.txt"
+    held = find_files(WIB, digest, (sources, lock))
+    src = held.get(sources, b"").decode(errors="replace")
+    check(f"the image's apt sources name a fixed snapshot.debian.org time, never the live archive ({sources})",
+          bool(re.search(r"^URIs: http://snapshot\.debian\.org/archive/debian/\d{8}T\d{6}Z$", src, re.M))
+          and bool(re.search(r"^URIs: http://snapshot\.debian\.org/archive/debian-security/\d{8}T\d{6}Z$", src, re.M))
+          and "deb.debian.org" not in src, src[:200] or "the image has no such file")
+    req = held.get(lock, b"").decode(errors="replace")
+    hashed = re.findall(r"^([A-Za-z0-9._-]+)==\S+ \\\n(?:    --hash=sha256:[0-9a-f]{64}(?: \\)?\n)+", req, re.M)
+    names = [line.split("==")[0] for line in req.splitlines() if re.match(r"^[A-Za-z0-9._-]+==", line)]
+    check(f"the image's notebook lock gives every package a version and a sha256, pip too ({len(hashed)} of "
+          f"{len(names)}, {lock})", len(hashed) == len(names) > 0 and "pip" in hashed,
+          "" if req else "the image has no such file")
     check("the build workflow tags the image with the ttyd version it reads from the image it built",
           "--entrypoint /usr/local/bin/ttyd web-terminal:built --version" in WORKFLOW
           and "watch-it-burn:web-terminal-ttyd-${v}" in WORKFLOW
