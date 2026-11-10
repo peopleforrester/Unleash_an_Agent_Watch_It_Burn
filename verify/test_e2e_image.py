@@ -155,6 +155,17 @@ with tempfile.TemporaryDirectory() as tmp:
     r = subprocess.run(["bash", str(INSTALL), "tool", "short", "v1", "abc", payload.as_uri(), "-"],
                        capture_output=True, text=True, env=env)
     check("a pin that is not a SHA-256 fails", r.returncode != 0 and "not a SHA-256" in r.stderr, r.stderr)
+    left = sorted(p.name for p in t.iterdir())
+    check("its downloads go under TMPDIR and are removed on exit, the bad one too (#1261)",
+          left == ["fake-tool", "tools"], str(left))
+    env_no_tmp = {k: v for k, v in env.items() if k != "TMPDIR"}
+    env_no_tmp["WIB_E2E_TOOLS"] = str(t / "tools2")
+    r = subprocess.run(["bash", str(INSTALL), "tool", "fake", "v1", good, payload.as_uri(), "-"],
+                       capture_output=True, text=True, env=env_no_tmp)
+    check("without TMPDIR, the build's scratch is under the tool directory and gone when it ends",
+          r.returncode == 0 and sorted(p.name for p in (t / "tools2").iterdir()) == ["bin", "tools.txt"],
+          r.stderr + str(sorted(p.name for p in (t / "tools2").iterdir())))
+    check("install.sh names no system temp directory", "/tmp" not in INSTALL.read_text(encoding="utf-8"))
 
 print("== 4. inside the image, tools.txt must be the lock's, and nothing is fetched ==")
 TOOLS_TXT = "".join(f"{n} {v} {s}\n" for n, v, s, *_ in LOCK)
