@@ -50254,3 +50254,58 @@ fifteen runs, and in the whole test once at load 42 (17.8 s, every check PASS), 
 failed: a run of `'$'` at 96 to 160 ms then 1,554 to 1,740 ms, and `'5$'` at 52 to 81 ms then 787 to 1,041 ms.
 
 **Live check.** None: the change is to a `verify/` file no cluster runs.
+## 2026-11-10 · #1163 · run 19920 · After the sync, a turn that skipped guard-proxy files under ml_app burritobot on both clusters, and check 4 passes
+
+**What was owed.** Run 18937's change (staging `5b35b83e`) put `transform/llmobs_root_mark`, `groupbyattrs/llmobs_root`
+and `transform/llmobs_root_service` at the end of the collector's `traces/llmobs` pipeline, and left criterion 3, the
+live check after the sync, to the next run. `bash verify/prior-drafts.sh` was not needed: that run's commit is in
+staging, and this run changes no code.
+
+**The change is on both clusters.** Argo CD's `otel-collector` Application read Synced and Healthy on both, at revision
+`5aaeb5c4` (which holds `5b35b83e`), last synced 2026-11-09 22:54:55Z on watch-it-burn-community and 22:56:32Z on
+watch-it-burn-private. The running ConfigMap `monitoring/otel-collector-opentelemetry-collector-agent` on each holds the
+three processors and runs them in the llmobs pipeline, and each collector pod started at the sync (22:54:56Z and
+22:56:34Z).
+
+**The turns, 2026-11-10 01:21:58Z to 01:22:30Z.** One `/chat` through guard-proxy on each bot, with the body run
+18581 used (`"What are your hours?"`, session `check-1163-19920`, witch `Hazel the Ghoul`): 200 in 3.2 s on
+`attackme.burritobot.co` and 2.2 s on `burritobot-private.burritobot.co`, each with the cantina's hours. Then one A2A
+`message/send` past guard-proxy on each, sent by `docs/research/2026-11-08-ask-user/a2a_asks.py` with a count of 1
+over a `kubectl port-forward` to `agent/svc/agentgateway` (:3000): context `a2a-590e7288` on watch-it-burn-community
+(completed; its one `run_shell` call was an `echo` of the answer) and `a2a-752f3b4d` on watch-it-burn-private
+(completed, no tool call). These are the turns that filed under `ml_app:burritobot-agent` before the change.
+
+**Where they filed.** Read from the sandbox org with `watch-it-burn/datadog`'s read keys (GETs only), at 01:26Z. The
+LLM Observability spans API (`/api/v2/llm-obs/v1/spans/events`, `filter[query]=session_id:<id>`) gave:
+
+```
+a2a-590e7288      5 spans  k8s.cluster.name:burritobot-public   root: invocation, ml_app burritobot   ml_apps: burritobot
+a2a-752f3b4d      3 spans  k8s.cluster.name:burritobot-private  root: invocation, ml_app burritobot   ml_apps: burritobot
+check-1163-19920  8 spans  both clusters                        roots: POST, POST (the guard's)        ml_apps: burritobot
+```
+
+So each turn that skipped guard-proxy still has kagent's `invocation` as its root (`parent_id` `undefined`), and with
+the root sent as service burritobot it files under `ml_app:burritobot`, on each cluster. `ml_app:burritobot-agent`
+returned no span from 2026-11-09 22:57Z to 01:26Z, and `sum:ml_obs.trace{env:burritobot-kubecon-na-26} by {ml_app}`
+over 01:21Z to now read one group, `ml_app:burritobot`, 4 traces: the two chats and the two A2A turns. (With
+`filter[query]` set, the spans API returned the same rows for `filter[ml_app]=burritobot-agent` as for `burritobot`,
+each row's own `ml_app` reading `burritobot`; the table reads each row's own field.)
+
+**Check 4, 01:26:39Z.** `python3 verify/test_datadog_sandbox_live.py` (default 60-minute lookback, as accen-dev in
+us-west-2), exit 0, all 16 checks PASS and `Both KubeCon clusters ship under Whitney's sandbox rules (#629).` Check 4:
+
+```
+== 4. LLM Observability files the interactions under ml_app burritobot (ml_obs.trace) ==
+  PASS  ml_obs.trace reports under env:burritobot-kubecon-na-26 as ml_app burritobot
+  PASS  no other ml_app reports under env:burritobot-kubecon-na-26
+```
+
+`ml_obs.*` has no cluster tag, so check 4 reads the env for both clusters at once; the per-session read above is what
+shows each cluster's turn that skipped guard-proxy filing under burritobot. That meets criterion 3 of #1163.
+
+**Both clusters as found.** The turns were a read-only question and an `echo`; the port-forwards were closed. After
+the check every Argo CD Application read Synced and Healthy: 24 on watch-it-burn-community and 40 on
+watch-it-burn-private. No Datadog setting was changed, and the presenter terminal login was not read or touched.
+
+**Not yet run on a cluster.** Nothing. The logs are `/var/lib/hecaton/runs/19920/sandbox-1.log`, `read-2.log` and
+`a2a-watch-it-burn-*/ask0.json`. No test changed, so no suite ran; the prose gate ran on this entry.
