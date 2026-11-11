@@ -17,12 +17,17 @@ Command line:
                                  the build inputs
   e2e_image.py matches <file>    exit 1 unless <file> (the image's tools.txt) lists exactly the lock's tools, versions
                                  and SHA-256s: run-e2e-tools.sh's check inside the image
+  e2e_image.py git-mounts <dir>  print, one per line, each directory outside the checkout <dir> that git there reads:
+                                 its common git directory and every object directory it borrows through
+                                 objects/info/alternates, followed to the end. e2e-image.sh run mounts each (#1361)
 """
 from __future__ import annotations
 
 import hashlib
+import os
 import pathlib
 import re
+import subprocess
 import sys
 
 VERIFY = pathlib.Path(__file__).resolve().parent
@@ -127,6 +132,51 @@ def tools_txt_problems(lock_text: str, tools_text: str) -> list[str]:
            ["the image lists the lock's tools in another order"]
 
 
+def _within(path: str, root: str) -> bool:
+    return path == root or path.startswith(root.rstrip("/") + "/")
+
+
+def git_mounts(checkout: str) -> list[str]:
+    """The directories outside `checkout` that git in it reads, for the container to see at their own paths.
+
+    A hecaton gate checkout keeps no objects of its own: its objects/info/alternates names the host's mirror
+    (/var/lib/hecaton/mirrors/<repo>.git/objects), so a container that sees only the checkout and its git directory
+    fails every git read with "unable to normalize alternate object path" (#1361). Alternates are followed as git
+    follows them: a relative line is read against the objects directory that names it, and a mirror may borrow in turn.
+    A path is kept as written, as git reads it (normalized, not resolved through symlinks); one that does not exist
+    is left out, as git skips it. A directory under the checkout or under one already listed is not listed again.
+    """
+    top = os.path.abspath(checkout)
+    out = subprocess.run(["git", "-C", top, "rev-parse", "--git-common-dir"], capture_output=True, text=True)
+    if out.returncode != 0:
+        raise ImageError(f"git rev-parse --git-common-dir in {top} failed: {out.stderr.strip()}")
+    common = os.path.normpath(os.path.join(top, out.stdout.strip()))
+    found = [common]
+    queue = [os.path.join(common, "objects")]
+    seen: set[str] = set()
+    while queue:
+        objects = queue.pop(0)
+        if objects in seen:
+            continue
+        seen.add(objects)
+        alternates = pathlib.Path(objects, "info", "alternates")
+        if not alternates.is_file():
+            continue
+        for line in alternates.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            alt = os.path.normpath(os.path.join(objects, line))
+            if os.path.isdir(alt):
+                found.append(alt)
+                queue.append(alt)
+    mounts: list[str] = []
+    for d in found:
+        if not _within(d, top) and not any(_within(d, m) for m in mounts):
+            mounts = [m for m in mounts if not _within(m, d)] + [d]
+    return mounts
+
+
 def main(argv: list[str]) -> int:
     try:
         if argv == ["ref"]:
@@ -152,6 +202,9 @@ def main(argv: list[str]) -> int:
                 for p in problems:
                     print(f"  - {p}", file=sys.stderr)
                 return 1
+        elif len(argv) == 2 and argv[0] == "git-mounts":
+            for d in git_mounts(argv[1]):
+                print(d)
         else:
             print(__doc__.split("Command line:")[1], file=sys.stderr)
             return 2

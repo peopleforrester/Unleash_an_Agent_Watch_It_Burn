@@ -21,6 +21,9 @@ verify/e2e-tools.lock. What this holds:
   5. verify/e2e-image.sh run, with a podman stand-in: a host that holds the tag starts it with --pull=never and pulls
      nothing; a host that lacks it pulls once; a host where the pull fails exits 1 naming the image and
      `bash verify/e2e-image.sh build`, and runs no container, no curl and no fetch-e2e-tools.sh.
+  5a. A checkout that borrows its objects through objects/info/alternates, as a gate checkout borrows the host's
+     mirror, has each object directory it borrows from mounted at its own path, followed to the end, relative lines
+     read as git reads them (#1361).
   6. The workflow builds on a GitHub-hosted runner, only when the lock or a build input changes, checks the pins
      first, and pushes through scripts/ghcr_version_tag.py.
 """
@@ -338,6 +341,68 @@ check("and no container runs, and nothing is downloaded instead",
       "podman run" not in calls and "curl" not in calls and "wget" not in calls, calls)
 check("e2e-image.sh never runs fetch-e2e-tools.sh",
       "fetch-e2e-tools" not in (HERE / "e2e-image.sh").read_text(encoding="utf-8"))
+
+print("== 5a. a checkout that borrows its objects (a gate checkout) has every borrowed object directory mounted (#1361) ==")
+# The gate's checkout keeps no objects of its own: objects/info/alternates names the host's mirror, which the container
+# did not see, so git inside failed with "unable to normalize alternate object path" and scope_tests.py could not read
+# the change (#1361). These repos are built here: a bare mirror, a clone borrowing from it, and one borrowing from that.
+GIT = ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "init.defaultBranch=main",
+       "-c", "protocol.file.allow=always"]
+
+
+def git(*a: str) -> None:
+    subprocess.run([*GIT, *a], check=True, capture_output=True, text=True)
+
+
+with tempfile.TemporaryDirectory() as tmp:
+    t = pathlib.Path(tmp)
+    git("init", "-q", str(t / "src"))
+    (t / "src" / "f").write_text("x\n")
+    git("-C", str(t / "src"), "add", "f")
+    git("-C", str(t / "src"), "commit", "-qm", "c")
+    git("clone", "-q", "--bare", str(t / "src"), str(t / "mirror.git"))
+    git("clone", "-q", "--shared", str(t / "mirror.git"), str(t / "mid"))
+    git("clone", "-q", "--shared", str(t / "mid"), str(t / "co"))
+    mirror_objects, mid_objects = str(t / "mirror.git" / "objects"), str(t / "mid" / ".git" / "objects")
+    got = e2e_image.git_mounts(str(t / "co"))
+    check("a clone borrowing from a clone that borrows from a mirror mounts both object directories, as git follows them",
+          got == [mid_objects, mirror_objects], str(got))
+    alternates = t / "co" / ".git" / "objects" / "info" / "alternates"
+    alternates.write_text("# a comment\n../../../mid/.git/objects\n/no/such/objects\n")
+    got = e2e_image.git_mounts(str(t / "co"))
+    check("a relative alternate is read against the objects directory naming it, and a missing one is left out",
+          got == [mid_objects, mirror_objects], str(got))
+    check("and git there still reads through them", subprocess.run(
+        ["git", "-C", str(t / "co"), "rev-parse", "--verify", "--quiet", "HEAD^{commit}"],
+        capture_output=True).returncode == 0)
+    git("-C", str(t / "co"), "worktree", "add", "-q", str(t / "wt"))
+    got = e2e_image.git_mounts(str(t / "wt"))
+    check("a worktree mounts its common git directory and what that borrows",
+          got == [str(t / "co" / ".git"), mid_objects, mirror_objects], str(got))
+    check("a checkout with objects of its own, inside it, mounts nothing", e2e_image.git_mounts(str(t / "src")) == [])
+
+    # The launcher itself, run from the borrowing clone with this tree's launcher files: each directory is a mount.
+    for f in ("e2e-image.sh", "e2e_image.py", "artifact-cache.sh", "artifact_cache.py", "gh_relay.py",
+              "e2e-tools.lock", ".dockerignore", *e2e_image.CONTEXT_FILES):
+        (t / "co" / "verify").mkdir(exist_ok=True)
+        shutil.copy2(HERE / f, t / "co" / "verify" / f)
+    shutil.copytree(HERE / "e2e-image", t / "co" / "verify" / "e2e-image")
+    log = t / "calls.log"
+    (t / "bin").mkdir()
+    (t / "bin" / "podman").write_text(f'#!/bin/sh\necho "podman $*" >> "{log}"\nexit 0\n')
+    (t / "bin" / "podman").chmod(0o755)
+    cache = artifact_cache.scratch_dir("e2e-image-test-")
+    try:
+        r = subprocess.run(["bash", str(t / "co" / "verify" / "e2e-image.sh"), "run"], capture_output=True, text=True,
+                           timeout=120, env={**os.environ, "PATH": f"{t / 'bin'}:{os.environ['PATH']}",
+                                             "WIB_ARTIFACT_CACHE": str(cache), "HECATON_TOOLS_CACHE": ""})
+    finally:
+        shutil.rmtree(cache, ignore_errors=True)
+    calls = log.read_text() if log.exists() else ""
+    runs = [ln for ln in calls.splitlines() if ln.startswith("podman run ")]
+    check("e2e-image.sh run in a borrowing checkout mounts each borrowed object directory at its own path",
+          r.returncode == 0 and bool(runs) and f"-v {mid_objects}:{mid_objects} " in runs[0]
+          and f"-v {mirror_objects}:{mirror_objects} " in runs[0], (runs[0] if runs else calls) + r.stderr)
 
 print("== 5b. e2e-image.sh build uses the runtime WIB_CONTAINER_RUNTIME names, though podman is on PATH too (#1355) ==")
 
