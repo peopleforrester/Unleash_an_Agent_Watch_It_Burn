@@ -34,7 +34,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from collector_render import (GATE_VOLUME, PROFILE_APP, REPO, collector_config, config_paths,  # noqa: E402
                               datadog_overlay, feature_gate_args, helm_values, mounted_file)
 
-OTELCOL = REPO / "verify/.tools/bin/otelcol-contrib"
+# run-e2e-tools.sh and run-e2e.sh name the pinned binary in OTELCOL_CONTRIB; inside the image it is not under verify/.
+OTELCOL = pathlib.Path(os.environ.get("OTELCOL_CONTRIB") or REPO / "verify/.tools/bin/otelcol-contrib")
 LOCK = REPO / "verify/e2e-tools.lock"
 BUILD_LIMIT_S = 10.0  # #1328's criterion
 MASK = "transform/coc_mask"

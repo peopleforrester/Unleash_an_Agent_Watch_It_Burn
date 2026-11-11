@@ -54,7 +54,8 @@ from coc_mask_cases import MASK, corpora, hc666_ticket, mask, term_cases  # noqa
 from collector_render import (COC_MASK_KEY, REPO, coc_mask_configmap, collector_config,  # noqa: E402
                               feature_gate_args)
 
-OTELCOL = REPO / "verify/.tools/bin/otelcol-contrib"
+# run-e2e-tools.sh and run-e2e.sh name the pinned binary in OTELCOL_CONTRIB; inside the image it is not under verify/.
+OTELCOL = pathlib.Path(os.environ.get("OTELCOL_CONTRIB") or REPO / "verify/.tools/bin/otelcol-contrib")
 LOCK = REPO / "verify/e2e-tools.lock"
 START_BOUND = float(os.environ.get("COLLECTOR_START_BOUND", "120"))  # seconds the collector gets to take the spans
 
