@@ -1154,6 +1154,10 @@ spec:
             # infra/datadog-cluster-identity.sh into the agent namespace's cluster-identity ConfigMap.
             - name: WIB_PUBLIC_HOST
               valueFrom: { configMapKeyRef: { name: cluster-identity, key: public-host, optional: true } }
+            # This cluster's EKS name, from the same ConfigMap, so the /controls read every stage switch ends on
+            # (_controls in the entrypoint's .guardlib, #1349) names this cluster as it names the peer.
+            - name: WIB_CLUSTER_NAME
+              valueFrom: { configMapKeyRef: { name: cluster-identity, key: cluster-name, optional: true } }
           volumeMounts:
             - { name: work, mountPath: /home/student/work }
             - { name: entrypoint, mountPath: /entrypoint.sh, subPath: entrypoint.sh, readOnly: true }

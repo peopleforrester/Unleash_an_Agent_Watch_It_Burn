@@ -280,7 +280,8 @@ _kg() { local st="$1" g="$2" c a p; shift 2
 # _guardrails on|off [seconds] : the switch itself. One guardrail at a time, here and then on the other cluster, so
 # each badge lights (or goes dark) on both chat pages together; [seconds] waits between guardrails, so the room can
 # watch each one arrive (the page polls every 12 seconds). Says what changed, names anything that did not, and fails
-# when either cluster missed a guardrail or the other cluster could not be reached at all.
+# when either cluster missed a guardrail or the other cluster could not be reached at all. Leaves the peer it found in
+# _LINKED and _PEERNAME, as _both does, for _controls, and the time of its last write in _WROTE.
 _guardrails() { local st="$1" pause="${2:-0}" peer g bad=() line
   case "$pause" in ''|*[!0-9]*) echo "Usage: guardrails-$st [seconds between guardrails, default 0]"; return 2 ;; esac
   peer="$(_peer)" || peer=""
@@ -302,6 +303,7 @@ _guardrails() { local st="$1" pause="${2:-0}" peer g bad=() line
     echo "$line"
     [ "$g" = egress ] || [ "$pause" = 0 ] || sleep "$pause"
   done
+  _PEERNAME="$peer"; _LINKED=unlinked; [ -n "$peer" ] && _LINKED=peer; _WROTE="$(date +%s)"
   if [ -z "$peer" ]; then
     echo "⚠️  This cluster is not linked to the other KubeCon cluster (no guardrails-switch/guardrails-peer Secret),"
     echo "    so only this one was switched. From the fleet host: infra/terraform/fleet/fleet.sh guardrails-link"
@@ -326,6 +328,28 @@ _toggle() { local q="$1" c; shift
   if [ "$*" = kubectl ]; then _px "$q"; return; fi
   c=("$@" get --raw "/api/v1/namespaces/agent/services/guard-proxy:8080/proxy/toggle?$q" --request-timeout=20s)
   _show "${c[@]}"; "${c[@]}" >/dev/null 2>&1; }
+# _topic on|off <kubectl...> : a switch step for _both, guard-topic-on's and guard-topic-off's (#1349). /toggle?topic=
+# on that cluster, as _toggle reaches it (here _pxkey, the exec, which prints the one key; on the peer the Service
+# proxy, whose JSON answer is read for it), then what that guard-proxy now reports for topic. A guard-proxy without
+# the topic stage ignores the key, so on needs True: anything else is a failure naming the cluster, never a confident
+# ON for a guard that does not exist. off needs False, or no topic stage at all, which already chats about anything.
+_topic() { local st="$1" who c r; shift
+  who="$(_who "$@")"
+  if [ "$*" = kubectl ]; then r="$(_pxkey "topic=$st" topic)"
+  else
+    c=("$@" get --raw "/api/v1/namespaces/agent/services/guard-proxy:8080/proxy/toggle?topic=$st" --request-timeout=20s)
+    _show "${c[@]}"
+    r="$("${c[@]}" 2>/dev/null | python3 -c 'import json,sys;print(json.load(sys.stdin).get("topic","missing"))' 2>/dev/null)"
+  fi
+  case "$st:$r" in
+    on:True|off:False) return 0 ;;
+    off:missing) echo "🔓 $who: its guard-proxy has no on-topic guard, so BurritoBot there already chats about anything."
+                 return 0 ;;
+    on:missing) echo "⚠️  $who: its guard-proxy has no on-topic guard, so nothing changed there. It needs the guard-proxy build with the topic stage." ;;
+    on:False) echo "⚠️  $who: its guard-proxy still reports the on-topic guard off." ;;
+    off:True) echo "⚠️  $who: its guard-proxy still reports the on-topic guard on." ;;
+  esac
+  return 1; }
 # _both <step> [args...] : one switch step on this cluster, then on the other KubeCon cluster (#1147, for #1132: the
 # room plays on the public bot, so a fix the private terminal makes has to reach it too). The step is a function called
 # as `<step> [args...] <kubectl...>`, the way _kg is, with kubectl for this cluster and kubectl --kubeconfig
@@ -333,7 +357,9 @@ _toggle() { local q="$1" c; shift
 # runs as its guardrails-switch ServiceAccount, so a step there can do only what gitops/guardrails-switch/ grants.
 # Says in one line which clusters changed, naming a peer that could not be reached. A cluster with no guardrails-peer
 # Secret, the 2-hour workshop's, is switched alone, and that is success; a Secret that is there but cannot be read is
-# a failure, so a flaky read never passes for an unlinked cluster.
+# a failure, so a flaky read never passes for an unlinked cluster. What it found is left in _LINKED and _PEERNAME for
+# the _controls read the switch ends on, and, after a step that writes a Kubernetes control (any step but _toggle and
+# _topic, which set guard-proxy's own guards), the time of that write in _WROTE.
 _both() { local peer="" link=none here=0 there=0 c r
   if peer="$(_peer)"; then link=peer
   else
@@ -341,8 +367,10 @@ _both() { local peer="" link=none here=0 there=0 c r
     _show "${c[@]}"
     if r="$("${c[@]}" 2>/dev/null)" && [ -z "$r" ]; then link=none; else link=unread; fi
   fi
+  _LINKED="$link"; _PEERNAME="$peer"
   "$@" kubectl || here=1
   if [ "$link" = peer ]; then "$@" kubectl --kubeconfig "$HOME/.kube/peer" --context "$peer" || there=1; fi
+  case "$1" in _toggle|_topic) ;; *) _WROTE="$(date +%s)" ;; esac
   case "$link:$here:$there" in
     peer:0:0) echo "Switched on both clusters: this one and $peer."; return 0 ;;
     peer:0:1) echo "⚠️  Switched on this cluster, but not on $peer: it could not be reached, or it refused the change." ;;
@@ -398,6 +426,70 @@ _gp() { _gpc "$@"; _show "${_GPC[@]}"; "${_GPC[@]}" 2>/dev/null; }
 _room_after() {
   if [ "$_ROOMNAME" = "this cluster" ]; then echo "    Changed: this cluster only."
   else echo "    Changed: $_ROOMNAME only. This cluster, the private one, is unchanged."; fi; }
+# _controls : the read every stage switch ends on (#1349), so the room sees what each cluster now runs, not only what
+# the switch meant to change. guard-proxy's /controls, the read the chat page's badges make, on this cluster and, when
+# it is linked, on the other KubeCon cluster, through _gp: the exec into deploy/guard-proxy here, the Service proxy on
+# guard-proxy:8080 there, which the peer grant already covers (get on services/proxy guard-proxy:8080). Each cluster is
+# printed by name, this one's from WIB_CLUSTER_NAME (the cluster-identity ConfigMap's cluster-name, written by
+# infra/datadog-cluster-identity.sh, in the web-terminal Deployment's env) and the peer's from guardrails-peer, with
+# its host and the controls measured ON and off. The link is the one _both or _guardrails
+# found earlier in the same command (_LINKED, _PEERNAME), so the Secret is not read twice; called alone it reads it. A
+# cluster that cannot be read says so, and its state is never guessed. Returns 1 when a read failed; each switch exits
+# with its own code, so a failed read never turns a switch that worked into a failure.
+# guard-proxy keeps the Kubernetes half of /controls for 5 s (_CONTROLS_TTL in proxy.py), and every chat page's badge
+# poll fills it, so a read sooner than that after a Kubernetes write can show the controls as they were. After one
+# (_WROTE), _controls waits until 6 s have passed since it; guard-proxy's own guards are read live, so a switch of
+# those alone does not wait. Each control reads ON, off, or not measured when guard-proxy could not read it (null).
+_LINKED="" _PEERNAME="" _WROTE=""
+_ctlfmt() { python3 -c '
+import json, sys
+GROUPS = (("AI guards ", "ai", (("output", "output"), ("input_blocklist", "input block-list"),
+                                ("input_classifier", "injection classifier"), ("budget", "budget cap"),
+                                ("topic", "on-topic"))),
+          ("Kubernetes", "infra", (("networkpolicy", "NetworkPolicy"), ("kyverno", "Kyverno"),
+                                   ("kubearmor", "KubeArmor"), ("falco", "Falco"),
+                                   ("tool_allowlist", "tool allow-list"), ("rbac_scoped", "RBAC scope"),
+                                   ("agency_scoped", "least privilege"))))
+try:
+    d = json.load(sys.stdin)
+except ValueError:
+    sys.exit(1)
+if not isinstance(d, dict) or not isinstance(d.get("ai"), dict):
+    sys.exit(1)
+print("  %s%s" % (sys.argv[1], ", " + d["host"] if isinstance(d.get("host"), str) and d["host"] else ""))
+for title, part, names in GROUPS:
+    got = d.get(part) if isinstance(d.get(part), dict) else {}
+    label = dict(names)
+    keys = [k for k, _ in names if k in got] + sorted(k for k in got if k not in label)
+    on = [label.get(k, k) for k in keys if got[k] is True]
+    off = [label.get(k, k) for k in keys if got[k] is False]
+    unread = [label.get(k, k) for k in keys if got[k] is not True and got[k] is not False]
+    print("    %s  ON: %s   off: %s%s" % (title, ", ".join(on) or "none", ", ".join(off) or "none",
+                                         "   not measured: " + ", ".join(unread) if unread else ""))
+' "$1"; }
+_controls() { local me="This cluster" body bad=0 k w
+  if [ -z "$_LINKED" ]; then
+    if _PEERNAME="$(_peer)"; then _LINKED=peer; else _PEERNAME=""; _LINKED=unlinked; fi
+  fi
+  if [ -n "$_WROTE" ]; then
+    w=$(( _WROTE + 6 - $(date +%s) ))
+    if [ "$w" -gt 0 ]; then
+      echo "Waiting out guard-proxy's 5-second cache of the Kubernetes controls, so the read shows them as they are now."
+      sleep "$w"
+    fi
+  fi
+  [ -n "${WIB_CLUSTER_NAME:-}" ] && me="$WIB_CLUSTER_NAME (this cluster)"
+  echo "Read back from guard-proxy's /controls, what each chat page's badges show:"
+  body="$(_gp /controls kubectl)"
+  printf '%s' "$body" | _ctlfmt "$me" || { echo "  ⚠️  $me: /controls could not be read, so its state is not shown."; bad=1; }
+  if [ "$_LINKED" = peer ]; then
+    k=(kubectl --kubeconfig "$HOME/.kube/peer" --context "$_PEERNAME")
+    body="$(_gp /controls "${k[@]}")"
+    printf '%s' "$body" | _ctlfmt "$_PEERNAME" || { echo "  ⚠️  $_PEERNAME: /controls could not be read, so its state is not shown."; bad=1; }
+  elif [ "$_LINKED" = unread ]; then
+    echo "  ⚠️  The other KubeCon cluster was not read: guardrails-switch/guardrails-peer could not be read."; bad=1
+  fi
+  return "$bad"; }
 EOS
 
 # The rule rewrite behind _c7rule. Reads the ConfigMap as JSON on stdin and prints the JSON patch. Exactly
@@ -532,13 +624,17 @@ if ! _both _mcp on >/dev/null; then
   echo "⚠️  The MCP tool restriction did not switch on everywhere. Run 'guard-mcp-on' to retry it."
   failed="${failed:+$failed, }the MCP tool restriction"
 fi
+rc=0
 if [ -n "$failed" ]; then
   echo "⚠️  guards-on ran every step; these did not switch on: $failed."
-  exit 1
+  rc=1
+else
+  echo "🛡️  ALL AI guards ON: output scrubbing, input block-list + injection classifier, MCP tool"
+  echo "    restriction, and the spend budget. Re-run any challenge to watch it get blocked, redacted,"
+  echo "    or frozen on cost."
 fi
-echo "🛡️  ALL AI guards ON: output scrubbing, input block-list + injection classifier, MCP tool"
-echo "    restriction, and the spend budget. Re-run any challenge to watch it get blocked, redacted,"
-echo "    or frozen on cost."
+_controls
+exit "$rc"
 EOS
 cat > "$HOME/guards-off" <<'EOS'
 #!/bin/bash
@@ -555,34 +651,49 @@ if ! _both _mcp off >/dev/null; then
   echo "⚠️  The MCP tool restriction did not switch off everywhere. Run 'guard-mcp-off' to retry it."
   failed="${failed:+$failed, }the MCP tool restriction"
 fi
+rc=0
 if [ -n "$failed" ]; then
   echo "⚠️  guards-off ran every step; these did not switch off: $failed."
-  exit 1
+  rc=1
+else
+  echo "🔓 ALL AI guards OFF: the agent is back to wide open. Re-run any challenge prompt to see the weakness."
 fi
-echo "🔓 ALL AI guards OFF: the agent is back to wide open. Re-run any challenge prompt to see the weakness."
+_controls
+exit "$rc"
 EOS
 
-# OUTPUT guard (scrubs the leaked Bat Spit Amazing Awesome Sauce from replies).
+# OUTPUT guard (scrubs the leaked Bat Spit Amazing Awesome Sauce from replies). Both set it on this cluster's
+# guard-proxy and on the other KubeCon cluster's (_both _toggle, #1349), as guard-input-on does; on the 2-hour lab's
+# lone cluster, this one alone. Every stage switch, these and the ones below, ends with _controls: guard-proxy's
+# /controls read back on each cluster, printed by name.
 cat > "$HOME/guard-output-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-if _px "output=on"; then
+rc=0
+if _both _toggle "output=on"; then
   echo "🛡️  OUTPUT guard ON. The agent's replies are now scanned on the way out: the recipe"
   echo "    amounts, the ogre-toenails ingredient, and the signature are redacted before they reach you."
   echo "    Re-send the recipe prompt; the reply comes back scrubbed (and Datadog shows the guard fired)."
 else
-  echo "⚠️  Could not reach the guard-proxy. Wait a moment and try 'guard-output-on' again."
+  echo "⚠️  The output guard did not change everywhere. Wait a moment and try 'guard-output-on' again; it is safe to repeat."
+  rc=1
 fi
+_controls
+exit "$rc"
 EOS
 cat > "$HOME/guard-output-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-if _px "output=off"; then
+rc=0
+if _both _toggle "output=off"; then
   echo "🔓 OUTPUT guard OFF. Replies are no longer scrubbed. Re-send the recipe prompt and the"
   echo "    full secret recipe leaks straight through."
 else
-  echo "⚠️  Could not reach the guard-proxy. Wait a moment and try 'guard-output-off' again."
+  echo "⚠️  The output guard did not change everywhere. Wait a moment and try 'guard-output-off' again; it is safe to repeat."
+  rc=1
 fi
+_controls
+exit "$rc"
 EOS
 
 # INPUT guards, the support ticket's fix (deterministic block-list + prompt-injection classifier), upstream of the model.
@@ -592,6 +703,7 @@ EOS
 cat > "$HOME/guard-input-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
+rc=0
 if _both _toggle "input_blocklist=on&input_classifier=on"; then
   echo "🛡️  INPUT guards ON, the support ticket's first tier (two stages): (1) a block-list rejects prompts containing"
   echo "    destructive commands or the secret-recipe phrases, and (2) a prompt-injection classifier catches"
@@ -600,19 +712,24 @@ if _both _toggle "input_blocklist=on&input_classifier=on"; then
   echo "    instructions and nothing is deployed. A prompt the guards block never reaches the model at all."
 else
   echo "⚠️  The input guards did not change everywhere. Wait a moment and try 'guard-input-on' again; it is safe to repeat."
-  exit 1
+  rc=1
 fi
+_controls
+exit "$rc"
 EOS
 cat > "$HOME/guard-input-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
+rc=0
 if _both _toggle "input_blocklist=off&input_classifier=off"; then
   echo "🔓 INPUT guards OFF. Prompts go straight to the model. Re-send the poisoned support ticket and"
   echo "    the injected instructions ride right in (and you pay tokens for it)."
 else
   echo "⚠️  The input guards did not change everywhere. Wait a moment and try 'guard-input-off' again; it is safe to repeat."
-  exit 1
+  rc=1
 fi
+_controls
+exit "$rc"
 EOS
 
 # MCP tool authorization, the poisoned weather tool's fix. Only get_weather stays usable on evil-mcp; the rogue tools
@@ -630,68 +747,90 @@ case "$bound" in ''|*[!0-9]*) echo "Usage: guard-mcp-on [seconds to wait for eac
 switched=1; served=1
 _both _mcp on || switched=0
 _c7wait "$bound" || served=0
-[ "$switched" = 1 ] || { echo "⚠️  The MCP tool restriction did not switch on everywhere. Wait a moment and try 'guard-mcp-on' again; it is safe to repeat."; exit 1; }
-[ "$served" = 1 ] || { echo "⚠️  The restriction is written, but not every cluster serves it yet: the ones named above had not, within $bound s. Give them a moment before the re-ask."; exit 1; }
-case "$_C7HERE" in
-  gateway)
-    echo "🛡️  MCP tool authorization ON, at the gateway, against the poisoned weather tool. agentgateway now allows only get_weather"
-    echo "    on evil-mcp: the rogue tools drop out of the tool list it hands the agent, and a call to"
-    echo "    read_internal_config is refused before evil-mcp ever runs it. Your real BurritoBot tools are"
-    echo "    untouched. Re-ask the weather question: the poisoned description still tries, and the gateway"
-    echo "    says no, so the sentinel never appears. The gateway reloads its rule without a restart." ;;
-  toolnames)
-    echo "🛡️  MCP tool authorization ON, against the poisoned weather tool. The rogue evil-mcp tools (read_internal_config,"
-    echo "    apply_optimization) are removed from the agent's allow-list; only get_weather remains. Your real"
-    echo "    BurritoBot tools are untouched. Re-ask the weather question: the poisoned description still tries,"
-    echo "    but the rogue tool is gone, so the sentinel never appears." ;;
-  *)
-    echo "⚠️  The MCP tool restriction did not switch on. Wait a moment and try 'guard-mcp-on' again."; exit 1 ;;
-esac
+rc=0
+if [ "$switched" != 1 ]; then
+  echo "⚠️  The MCP tool restriction did not switch on everywhere. Wait a moment and try 'guard-mcp-on' again; it is safe to repeat."; rc=1
+elif [ "$served" != 1 ]; then
+  echo "⚠️  The restriction is written, but not every cluster serves it yet: the ones named above had not, within $bound s. Give them a moment before the re-ask."; rc=1
+else
+  case "$_C7HERE" in
+    gateway)
+      echo "🛡️  MCP tool authorization ON, at the gateway, against the poisoned weather tool. agentgateway now allows only get_weather"
+      echo "    on evil-mcp: the rogue tools drop out of the tool list it hands the agent, and a call to"
+      echo "    read_internal_config is refused before evil-mcp ever runs it. Your real BurritoBot tools are"
+      echo "    untouched. Re-ask the weather question: the poisoned description still tries, and the gateway"
+      echo "    says no, so the sentinel never appears. The gateway reloads its rule without a restart." ;;
+    toolnames)
+      echo "🛡️  MCP tool authorization ON, against the poisoned weather tool. The rogue evil-mcp tools (read_internal_config,"
+      echo "    apply_optimization) are removed from the agent's allow-list; only get_weather remains. Your real"
+      echo "    BurritoBot tools are untouched. Re-ask the weather question: the poisoned description still tries,"
+      echo "    but the rogue tool is gone, so the sentinel never appears." ;;
+    *)
+      echo "⚠️  The MCP tool restriction did not switch on. Wait a moment and try 'guard-mcp-on' again."; rc=1 ;;
+  esac
+fi
+_controls
+exit "$rc"
 EOS
 cat > "$HOME/guard-mcp-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 switched=1
 _both _mcp off || switched=0
-[ "$switched" = 1 ] || { echo "⚠️  The MCP tool restriction did not switch off everywhere. Wait a moment and try 'guard-mcp-off' again; it is safe to repeat."; exit 1; }
-case "$_C7HERE" in
-  gateway)
-    echo "🔓 MCP tool authorization OFF, at the gateway, for the poisoned weather tool. agentgateway lets every evil-mcp tool"
-    echo "    through again. Re-ask the weather question and the agent gets chained into read_internal_config,"
-    echo "    leaking the sentinel." ;;
-  toolnames)
-    echo "🔓 MCP tool authorization OFF for the poisoned weather tool. The rogue evil-mcp tools are back in the allow-list."
-    echo "    Re-ask the weather question and the agent gets chained into read_internal_config, leaking the"
-    echo "    sentinel." ;;
-  *)
-    echo "⚠️  The MCP tool restriction did not switch off. Wait a moment and try 'guard-mcp-off' again."; exit 1 ;;
-esac
+rc=0
+if [ "$switched" != 1 ]; then
+  echo "⚠️  The MCP tool restriction did not switch off everywhere. Wait a moment and try 'guard-mcp-off' again; it is safe to repeat."; rc=1
+else
+  case "$_C7HERE" in
+    gateway)
+      echo "🔓 MCP tool authorization OFF, at the gateway, for the poisoned weather tool. agentgateway lets every evil-mcp tool"
+      echo "    through again. Re-ask the weather question and the agent gets chained into read_internal_config,"
+      echo "    leaking the sentinel." ;;
+    toolnames)
+      echo "🔓 MCP tool authorization OFF for the poisoned weather tool. The rogue evil-mcp tools are back in the allow-list."
+      echo "    Re-ask the weather question and the agent gets chained into read_internal_config, leaking the"
+      echo "    sentinel." ;;
+    *)
+      echo "⚠️  The MCP tool restriction did not switch off. Wait a moment and try 'guard-mcp-off' again."; rc=1 ;;
+  esac
+fi
+_controls
+exit "$rc"
 EOS
 # DENIAL-OF-WALLET. The agent does not have to crash your cluster to hurt you; it can just
 # run up the bill. On the community cluster there is no cap and the cost counter on BurritoBot climbs
 # with no ceiling. The control is a per-agent budget at the gateway: once this cluster's spend crosses
 # its cap, further requests are refused BEFORE the model is called, so a blocked request costs nothing.
+# guard-budget-on and guard-budget-off set it on this cluster and the other KubeCon cluster (_both _toggle, #1349).
 cat > "$HOME/guard-budget-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-if _px "budget=on"; then
-  echo "🛡️  BUDGET guard ON. This cluster now has a spend cap at the gateway. Keep chatting;"
+rc=0
+if _both _toggle "budget=on"; then
+  echo "🛡️  BUDGET guard ON. Each cluster named above now has a spend cap at the gateway. Keep chatting;"
   echo "    once the tab crosses the cap, BurritoBot refuses further requests BEFORE calling the model, so"
   echo "    the cost counter stops dead and a blocked request costs \$0. The agent is not down; the bill is"
   echo "    capped. That is denial-of-wallet stopped at the platform, not in the app."
 else
-  echo "⚠️  Could not reach the guard-proxy. Wait a moment and try 'guard-budget-on' again."
+  echo "⚠️  The budget guard did not change everywhere. Wait a moment and try 'guard-budget-on' again; it is safe to repeat."
+  rc=1
 fi
+_controls
+exit "$rc"
 EOS
 cat > "$HOME/guard-budget-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-if _px "budget=off"; then
+rc=0
+if _both _toggle "budget=off"; then
   echo "Budget limits are now removed. You should be able to proceed with the lab."
   echo "(The meter keeps counting; only the limit is gone.)"
 else
-  echo "⚠️  Could not reach the guard-proxy. Wait a moment and try 'guard-budget-off' again."
+  echo "⚠️  The budget guard did not change everywhere. Wait a moment and try 'guard-budget-off' again; it is safe to repeat."
+  rc=1
 fi
+_controls
+exit "$rc"
 EOS
 # The KubeCon finale (#690): the room is invited to drive the public cluster's spend to its cap. COST_CAP_USD
 # is $25 for the whole cluster, out of reach in a few minutes, so finale-cap-on lowers the cap live to what that
@@ -757,35 +896,35 @@ EOS
 # The KubeCon ending (#455, run-of-show segment 7): the on-topic guard. BurritoBot answers the menu, hours
 # and locations and turns everything else back to the menu, before the model is called. It reports what the
 # proxy says rather than assuming the flip worked, because a guard-proxy without the topic stage ignores the
-# key and would otherwise print a confident ON for a guard that does not exist.
+# key and would otherwise print a confident ON for a guard that does not exist. Both switch this cluster and the
+# other KubeCon cluster (_both _topic in .guardlib, #1349), each read back the same way.
 cat > "$HOME/guard-topic-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-case "$(_pxkey "topic=on" topic)" in
-  True)
-    echo "🛡️  On-topic guard ON. BurritoBot now sells burritos only: the menu, hours and locations get answered,"
-    echo "    and anything else (salsa dance moves, a hot dog party, karaoke for a wedding) is turned back to the"
-    echo "    menu, politely, before the model is called. Re-send your weirdest off-topic question." ;;
-  "")
-    echo "⚠️  Could not reach the guard-proxy. Wait a moment and try 'guard-topic-on' again."; exit 1 ;;
-  *)
-    echo "⚠️  This guard-proxy has no on-topic guard, so nothing changed. It needs the guard-proxy build with"
-    echo "    the topic stage."; exit 1 ;;
-esac
+rc=0
+if _both _topic on; then
+  echo "🛡️  On-topic guard ON. BurritoBot now sells burritos only: the menu, hours and locations get answered,"
+  echo "    and anything else (salsa dance moves, a hot dog party, karaoke for a wedding) is turned back to the"
+  echo "    menu, politely, before the model is called. Re-send your weirdest off-topic question."
+else
+  echo "⚠️  The on-topic guard did not switch on everywhere. Wait a moment and try 'guard-topic-on' again; it is safe to repeat."
+  rc=1
+fi
+_controls
+exit "$rc"
 EOS
 cat > "$HOME/guard-topic-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-case "$(_pxkey "topic=off" topic)" in
-  False)
-    echo "🔓 On-topic guard OFF. BurritoBot will chat about anything again. Ask it for salsa dance moves." ;;
-  missing)
-    echo "🔓 This guard-proxy has no on-topic guard, so BurritoBot already chats about anything." ;;
-  "")
-    echo "⚠️  Could not reach the guard-proxy. Wait a moment and try 'guard-topic-off' again."; exit 1 ;;
-  *)
-    echo "⚠️  The guard-proxy still reports the on-topic guard on. Try 'guard-topic-off' again."; exit 1 ;;
-esac
+rc=0
+if _both _topic off; then
+  echo "🔓 On-topic guard OFF. BurritoBot will chat about anything again. Ask it for salsa dance moves."
+else
+  echo "⚠️  The on-topic guard did not switch off everywhere. Wait a moment and try 'guard-topic-off' again; it is safe to repeat."
+  rc=1
+fi
+_controls
+exit "$rc"
 EOS
 # The cluster fixes, beside the AI guards. Each prints its kubectl before it runs, as the AI guards do.
 #
@@ -862,23 +1001,31 @@ EOS
 cat > "$HOME/guard-agency-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
+rc=0
 if _both _apply c6-least-privilege-role.yaml; then
   echo "🛡️  Least privilege ON for the support ticket. agent-sa's Role no longer creates or changes Deployments"
   echo "    or Pods, so BurritoBot cannot deploy anything, from any registry. Re-send the ticket ask: deploy_app"
   echo "    comes back Forbidden from the Kubernetes API. The CEO's record stays out of reach."
 else
-  echo "⚠️  The Role did not change everywhere. Wait a moment and try 'guard-agency-on' again; it is safe to repeat."; exit 1
+  echo "⚠️  The Role did not change everywhere. Wait a moment and try 'guard-agency-on' again; it is safe to repeat."
+  rc=1
 fi
+_controls
+exit "$rc"
 EOS
 cat > "$HOME/guard-agency-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
+rc=0
 if _both _apply c5-scoped-role.yaml; then
   echo "🔓 Least privilege OFF for the support ticket. agent-sa can create Deployments and Pods again, so the"
   echo "    ticket's Joker lands. The CEO's record stays out of reach."
 else
-  echo "⚠️  The Role did not change everywhere. Wait a moment and try 'guard-agency-off' again; it is safe to repeat."; exit 1
+  echo "⚠️  The Role did not change everywhere. Wait a moment and try 'guard-agency-off' again; it is safe to repeat."
+  rc=1
 fi
+_controls
+exit "$rc"
 EOS
 # guardrails-on / guardrails-off: the KubeCon breakout's one command for the four Kubernetes guardrails on both
 # clusters (#774; _guardrails in .guardlib). An optional number of seconds waits between guardrails.
@@ -886,11 +1033,19 @@ cat > "$HOME/guardrails-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 _guardrails on "${1:-0}"
+rc=$?
+# A usage error (2) switched nothing, so there is nothing to read back.
+[ "$rc" = 2 ] || _controls
+exit "$rc"
 EOS
 cat > "$HOME/guardrails-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 _guardrails off "${1:-0}"
+rc=$?
+# A usage error (2) switched nothing, so there is nothing to read back.
+[ "$rc" = 2 ] || _controls
+exit "$rc"
 EOS
 chmod +x "$HOME/platform" "$HOME/guards-status" "$HOME/guards-on" "$HOME/guards-off" \
   "$HOME"/guardrails-on "$HOME"/guardrails-off \

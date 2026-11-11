@@ -48,6 +48,7 @@ ENTRYPOINT = REPO / "gitops/ai-layer/web-terminal/entrypoint.sh"
 TWIN = REPO / "images/web-terminal/entrypoint.sh"
 GATEWAY = REPO / "gitops/ai-layer/agentgateway.yaml"
 MCP_SWITCH = REPO / "gitops/guardrails-switch/mcp-switch.yaml"
+CONTROLS_PATH = "/api/v1/namespaces/agent/services/guard-proxy:8080/proxy/controls"
 SWITCH_DIR = REPO / "gitops/guardrails-switch"
 SWITCH_APP = REPO / "gitops/bootstrap/apps/guardrails-switch.yaml"
 DRIFT = REPO / "policies/kyverno/block-argocd-drift.yaml"
@@ -251,6 +252,10 @@ def need(c: dict) -> set[tuple[str, str, str, str]]:
     ns = a[a.index("-n") + 1] if "-n" in a else ""
     if "guardrails-peer" in a:
         return set()  # read on this cluster, never on the peer
+    if a[:2] == ["get", "--raw"] and a[2] == CONTROLS_PATH:
+        # The closing /controls read every stage switch ends on (#1349). It is guardrails-switch.yaml's get on
+        # services/proxy guard-proxy:8080, not mcp-switch.yaml's; verify/test_guard_switch_controls.py holds it.
+        return set()
     if "annotate" in a:
         return {(ns, "pods", "*", "list"), (ns, "pods", "*", "patch")}
     if "logs" in a:

@@ -70,6 +70,10 @@ with tempfile.TemporaryDirectory() as tmp:
         (home / name).chmod(0o755)
     (fakebin / "kubectl").write_text(FAKE_KUBECTL)
     (fakebin / "kubectl").chmod(0o755)
+    # A sleep that returns at once: _controls, the read each guard command ends on (#1349), waits out guard-proxy's
+    # 5 s cache after a Kubernetes write, which this fake has none of.
+    (fakebin / "sleep").write_text("#!/usr/bin/env bash\nexit 0\n")
+    (fakebin / "sleep").chmod(0o755)
     env = {**os.environ, "HOME": str(home), "PATH": f"{fakebin}:{os.environ['PATH']}"}
 
     for cmd in ("guard-input-on", "guard-output-on", "guard-topic-on", "guard-mcp-on", "guard-input-off",

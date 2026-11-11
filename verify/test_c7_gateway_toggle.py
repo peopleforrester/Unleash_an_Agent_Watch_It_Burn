@@ -209,6 +209,10 @@ def run(cluster: str, *commands: str, race: bool = False) -> tuple[dict, list[su
             (home / name).chmod(0o755)
         (fakebin / "kubectl").write_text(FAKE_KUBECTL)
         (fakebin / "kubectl").chmod(0o755)
+        # A sleep that returns at once: _controls, the read each toggle ends on (#1349), waits out guard-proxy's 5 s
+        # cache after a Kubernetes write, which this fake has none of.
+        (fakebin / "sleep").write_text("#!/usr/bin/env bash\nexit 0\n")
+        (fakebin / "sleep").chmod(0o755)
         state_path = pathlib.Path(tmp, "state.json")
         state_path.write_text(json.dumps({"cluster": cluster, "config": COMMITTED, "rv": 7, "race": race,
                                           "toolNames": None, "calls": []}))

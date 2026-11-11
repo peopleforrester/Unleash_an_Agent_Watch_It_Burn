@@ -14,7 +14,8 @@ Checked here, with a kubectl on PATH that plays two clusters:
   * what the two commands ask of the peer is inside its guardrails-switch grant, and that grant is #774's plus
     #1148's one guard-proxy Service proxy rule;
   * guardrails-on and guardrails-off make the same kubectl calls and print the same output as before #1147, held to
-    verify/fixtures/guardrails-switch-golden.json, recorded from staging e4354c50.
+    verify/fixtures/guardrails-switch-golden.json, recorded from staging e4354c50 and recorded again for #1349, whose
+    closing /controls read (_controls) both now end on: the switch's calls and lines are #774's, then the read.
 
 `python3 verify/test_guard_switch_both.py --write-golden` rewrites that file from the current entrypoint. Run it only
 when guardrails-on or guardrails-off is meant to change, and say why in decisions.md.
@@ -96,8 +97,19 @@ elif "get" in a and "validatingpolicy" in a:
     sys.stdout.write(state.get(ctx, {}).get(a[a.index("validatingpolicy") + 1], "Audit"))
 elif "apply" in a:
     state.setdefault(ctx, {})["applied"] = state.get(ctx, {}).get("applied", []) + [os.path.basename(a[-1])]
+elif "/controls" in " ".join(a):
+    # The closing /controls read every stage switch ends on (#1349), measured from what this fake holds.
+    s = state.get(ctx, {})
+    role = next((f for f in reversed(s.get("applied", [])) if f.endswith("-role.yaml")), "c8-broad-role.yaml")
+    print(json.dumps({"ai": {"output": False}, "infra": {
+        "kyverno": s.get("restrict-image-registries") == "Deny",
+        "rbac_scoped": role in ("c5-scoped-role.yaml", "c6-least-privilege-role.yaml"),
+        "agency_scoped": role == "c6-least-privilege-role.yaml"}, "host": ctx + ".example"}))
 json.dump(state, open(os.environ["STATE"], "w"))
 '''
+
+FAKE_DATE = "#!/usr/bin/env bash\necho 1762300800\n"
+FAKE_SLEEP = "#!/usr/bin/env bash\nexit 0\n"
 
 helpers = dict(re.findall(r'cat > "\$HOME/([^"]+)" <<\'EOS\'\n(.*?)\nEOS\n', ENTRYPOINT.read_text(encoding="utf-8"), re.S))
 
@@ -119,8 +131,11 @@ def run(cmd: str, mode: str, args: tuple[str, ...] = ()) -> dict:
             (home / "challenges" / name).write_text(body)
         for name, body in helpers.items():
             (home / name).write_text(body + "\n")
-        (fakebin / "kubectl").write_text(FAKE)
-        (fakebin / "kubectl").chmod(0o755)
+        # A clock that stands still and a sleep that returns at once (#1349): _controls waits out guard-proxy's 5 s
+        # cache after a Kubernetes write, and with the clock pinned it always says so, so the record reads the same.
+        for tool, body in (("kubectl", FAKE), ("date", FAKE_DATE), ("sleep", FAKE_SLEEP)):
+            (fakebin / tool).write_text(body)
+            (fakebin / tool).chmod(0o755)
         calls, state = pathlib.Path(tmp, "calls"), pathlib.Path(tmp, "state")
         state.write_text("{}")
         env = {**os.environ, "HOME": str(home), "PATH": f"{fakebin}:{os.environ['PATH']}", "CALLS": str(calls),
@@ -188,8 +203,9 @@ for cmd, f in ROLE.items():
           f"Switched on both clusters: this one and {PEER}." in r["stdout"], r["stdout"])
     check(f"{cmd}: still explains what the Role does", "Least privilege " + ("ON" if cmd.endswith("on") else "OFF")
           in r["stdout"], r["stdout"])
+    # Two reads of the peer Secret, the apply on each cluster, then the closing /controls read on each (#1349).
     check(f"{cmd}: every line it prints, run by bash, makes the call it made, in order",
-          r["replayed"] == r["calls"] and len(r["calls"]) == 4, f"\n    shown: {r['replayed']}\n    ran:   {r['calls']}")
+          r["replayed"] == r["calls"] and len(r["calls"]) == 6, f"\n    shown: {r['replayed']}\n    ran:   {r['calls']}")
     others = [c for c in r["calls"] if c["cluster"] not in ("this", PEER)]
     check(f"{cmd}: touches no cluster but these two", not others, str(others))
 

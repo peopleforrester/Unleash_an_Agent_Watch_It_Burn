@@ -4525,6 +4525,49 @@ rules:
       - verify/no_cloud.py
     tests:
       - verify/test_guard_switch_both.py
+  - name: test_guard_switch_controls.py
+    paths:
+      - CLAUDE.md
+      - agent
+      - agent/**
+      - agent/**/*
+      - agent/**/*/**
+      - challenges
+      - challenges/**
+      - challenges/**/*
+      - challenges/**/*/**
+      - cost
+      - cost/**
+      - docs/admin-console.md
+      - gitops/ai-layer
+      - gitops/ai-layer/**
+      - gitops/guardrails-switch/guardrails-switch.yaml
+      - gitops/workshop-agent/agent.yaml
+      - images/web-terminal/entrypoint.sh
+      - infra/datadog-cluster-identity.sh
+      - infra/datadog-fleet
+      - infra/datadog-fleet/**
+      - infra/org/boundary
+      - infra/org/boundary/**
+      - infra/terraform/aws/cluster/main.tf
+      - infra/terraform/aws/network
+      - infra/terraform/aws/network/**
+      - infra/terraform/fleet
+      - infra/terraform/fleet/**
+      - infra/terraform/fleet/providers/**/*.sh
+      - infra/terraform/fleet/providers/**/*.sh/**
+      - scripts/harvest_cluster_access.sh
+      - scripts/harvest_cluster_access.sh/**
+      - scripts/harvest_terminal_credential.sh
+      - scripts/harvest_terminal_credential.sh/**
+      - scripts/push_vtt_aws_creds.sh
+      - scripts/push_vtt_aws_creds.sh/**
+      - scripts/reload-routes.sh
+      - scripts/reload-routes.sh/**
+      - verify/no-cloud.sh
+      - verify/no_cloud.py
+    tests:
+      - verify/test_guard_switch_controls.py
   - name: test_guardrails_arm.py
     paths:
       - CLAUDE.md

@@ -107,10 +107,16 @@ print("== the terminal helpers ==")
 for helper in ("guard-topic-on", "guard-topic-off"):
     check(f"{helper} is written and made executable",
           f'cat > "$HOME/{helper}"' in terminal and f'"$HOME"/{helper}' in terminal)
-check("guard-topic-on flips topic=on and reads back what the proxy reports",
-      '_pxkey "topic=on" topic' in terminal and "_pxkey()" in terminal)
+# Since #1349 both switch this cluster and the other KubeCon cluster through _both _topic, which reads back what each
+# guard-proxy reports; verify/test_guard_switch_controls.py runs them against two clusters.
+topic_on = terminal.split('cat > "$HOME/guard-topic-on" <<\'EOS\'\n', 1)[-1].split("\nEOS\n", 1)[0]
+topic_off = terminal.split('cat > "$HOME/guard-topic-off" <<\'EOS\'\n', 1)[-1].split("\nEOS\n", 1)[0]
+check("guard-topic-on and guard-topic-off switch through _both _topic",
+      "_both _topic on" in topic_on and "_both _topic off" in topic_off)
+check("_topic flips topic=on|off and reads back what the proxy reports",
+      '_pxkey "topic=$st" topic' in terminal and "_pxkey()" in terminal and "_topic()" in terminal)
 check("guard-topic-on fails loudly on a guard-proxy without the topic stage",
-      "This guard-proxy has no on-topic guard, so nothing changed" in terminal)
+      "its guard-proxy has no on-topic guard, so nothing changed there" in terminal)
 guards_on = terminal.split('cat > "$HOME/guards-on" <<\'EOS\'\n', 1)[1].split("\nEOS\n", 1)[0]
 guards_off = terminal.split('cat > "$HOME/guards-off" <<\'EOS\'\n', 1)[1].split("\nEOS\n", 1)[0]
 check("the guards-on and guards-off bodies are found", "_toggle" in guards_on and "_toggle" in guards_off)

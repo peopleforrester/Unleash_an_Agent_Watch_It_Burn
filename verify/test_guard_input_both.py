@@ -7,8 +7,9 @@ always was (_px), and on the other KubeCon cluster a GET through the API server'
 /api/v1/namespaces/agent/services/guard-proxy:8080/proxy/toggle?<query>, as its guardrails-switch ServiceAccount.
 
 Checked here, with a kubectl on PATH that plays two clusters, each with a guard-proxy that keeps its guard state:
-  * linked: both set input_blocklist and input_classifier on both clusters, say so naming the peer, and every
-    printed `$ ` line, run by bash, makes the call it made;
+  * linked: both set input_blocklist and input_classifier on both clusters, say so naming the peer, end with the
+    /controls read on each (#1349; verify/test_guard_switch_controls.py holds that read), and every printed `$ ` line,
+    run by bash, makes the call it made;
   * the peer's API cannot be reached, or it refuses: this cluster switches, the run fails and names the peer;
   * no guardrails-peer Secret (the 2-hour workshop's): this cluster switches alone, one line says so, exit 0;
   * a peer Secret that cannot be read: this cluster switches and the run fails, never passing as unlinked;
@@ -90,11 +91,14 @@ if mode == "peer-forbidden" and ctx != "this":
 if mode == "here-down" and ctx == "this":
     sys.stderr.write("Error from server (Forbidden)\n"); sys.exit(1)
 query = None
-if a[:4] == ["-n", "agent", "exec", "deploy/guard-proxy"]:
+if a[:4] == ["-n", "agent", "exec", "deploy/guard-proxy"] and "/toggle?" in a[a.index("-c") + 1]:
     code = a[a.index("-c") + 1]
     query = code.split("http://localhost:8080/toggle?", 1)[1].split("'", 1)[0]
 elif a[:2] == ["get", "--raw"] and a[2].startswith("/api/v1/namespaces/agent/services/guard-proxy:8080/proxy/toggle?"):
     query = urlparse(a[2]).query
+elif "/controls" in " ".join(a):
+    # The closing /controls read every stage switch ends on (#1349): this cluster's guards as they now stand.
+    print(json.dumps({"ai": state.get(ctx, {}), "infra": {}, "host": ctx + ".example"}))
 if query is not None:
     g = state.setdefault(ctx, {"input_blocklist": False, "input_classifier": False, "output": False})
     q = parse_qs(query)
@@ -152,7 +156,7 @@ def toggles(r: dict) -> list[tuple[str, str]]:
     out = []
     for c in r["calls"]:
         a = c["args"]
-        if a[:4] == ["-n", "agent", "exec", "deploy/guard-proxy"]:
+        if a[:4] == ["-n", "agent", "exec", "deploy/guard-proxy"] and "/toggle?" in a[-1]:
             out.append((c["cluster"], "exec"))
         elif a[:2] == ["get", "--raw"] and a[2].startswith(PROXY_PATH + "?"):
             out.append((c["cluster"], "proxy"))
@@ -200,8 +204,9 @@ for cmd, q in QUERY.items():
     check(f"{cmd}: says it switched both clusters, naming {PEER}",
           f"Switched on both clusters: this one and {PEER}." in r["stdout"], r["stdout"])
     check(f"{cmd}: still explains what the input guards do", EXPLAINS[cmd] in r["stdout"], r["stdout"])
+    # Two reads of the peer Secret, the toggle on each cluster, then the closing /controls read on each (#1349).
     check(f"{cmd}: every line it prints, run by bash, makes the call it made, in order",
-          r["replayed"] == r["calls"] and len(r["calls"]) == 4, f"\n    shown: {r['replayed']}\n    ran:   {r['calls']}")
+          r["replayed"] == r["calls"] and len(r["calls"]) == 6, f"\n    shown: {r['replayed']}\n    ran:   {r['calls']}")
     others = [c for c in r["calls"] if c["cluster"] not in ("this", PEER)]
     check(f"{cmd}: touches no cluster but these two", not others, str(others))
 

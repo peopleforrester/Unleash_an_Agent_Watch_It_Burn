@@ -11,6 +11,7 @@ that guards-on and guards-off call them, and nothing else:
   * neither calls _px or _mcp outside _both;
   * a refused toggle still runs C7 after it (#1203), and each refused step is named in the closing line with exit 1;
   * a refused C7 step exits 1 naming guard-mcp-on/off;
+  * each ends with the /controls read (_controls, #1349), whether its steps switched or not;
   * the images/ twin is byte-identical.
 
 The scripts are run by bash from the entrypoint's own heredocs, with a ~/.guardlib whose _both records its arguments.
@@ -49,6 +50,7 @@ _both() { local f; printf '%s\n' "$*" >> "$CALLS"
   for f in $FAIL; do case " $* " in *" $f "*) return 1 ;; esac; done; return 0; }
 _px() { printf 'BARE _px %s\n' "$*" >> "$CALLS"; }
 _mcp() { printf 'BARE _mcp %s\n' "$*" >> "$CALLS"; }
+_controls() { printf '_controls\n' >> "$CALLS"; }
 '''
 
 
@@ -68,11 +70,11 @@ ON_Q = "_toggle output=on&input_blocklist=on&input_classifier=on&budget=on"
 OFF_Q = "_toggle output=off&input_blocklist=off&input_classifier=off&budget=off&topic=off"
 
 rc, out, got = run("guards-on")
-check("guards-on sends the guard-proxy guards, then C7, through _both, and exits 0",
-      rc == 0 and got == [ON_Q, "_mcp on"], f"exit {rc}, calls {got}: {out}")
+check("guards-on sends the guard-proxy guards, then C7, through _both, reads /controls back, and exits 0",
+      rc == 0 and got == [ON_Q, "_mcp on", "_controls"], f"exit {rc}, calls {got}: {out}")
 rc, out, got = run("guards-off")
-check("guards-off sends the guard-proxy guards, topic included, then C7, through _both, and exits 0",
-      rc == 0 and got == [OFF_Q, "_mcp off"], f"exit {rc}, calls {got}: {out}")
+check("guards-off sends the guard-proxy guards, topic included, then C7, through _both, reads /controls back, and "
+      "exits 0", rc == 0 and got == [OFF_Q, "_mcp off", "_controls"], f"exit {rc}, calls {got}: {out}")
 for name in ("guards-on", "guards-off"):
     body = scripts[name]
     bare = [ln for ln in body.splitlines() if re.search(r"(^|[;&|]\s*|if !?\s*)_(px|mcp)\b", ln.strip())]
@@ -82,14 +84,14 @@ for name in ("guards-on", "guards-off"):
 # the step that failed, for each script.
 for name, query, word, mcp in (("guards-on", ON_Q, "on", "_mcp on"), ("guards-off", OFF_Q, "off", "_mcp off")):
     rc, out, got = run(name, fail="_toggle")
-    check(f"a refused guard-proxy toggle still runs {name}'s C7 step after it",
-          got == [query, mcp], f"exit {rc}, calls {got}: {out}")
+    check(f"a refused guard-proxy toggle still runs {name}'s C7 step after it, and the /controls read",
+          got == [query, mcp, "_controls"], f"exit {rc}, calls {got}: {out}")
     check(f"{name} exits 1 and names the guard-proxy guards alone when only the toggle was refused",
           rc == 1 and f"{name} ran every step; these did not switch {word}: the guard-proxy guards." in out
           and "the MCP tool restriction did not" not in out, f"exit {rc}: {out}")
     rc, out, got = run(name, fail="_toggle _mcp")
     check(f"{name} with both steps refused runs both and names both",
-          rc == 1 and got == [query, mcp]
+          rc == 1 and got == [query, mcp, "_controls"]
           and f"these did not switch {word}: the guard-proxy guards, the MCP tool restriction." in out
           and f"guard-mcp-{word}" in out, f"exit {rc}, calls {got}: {out}")
     check(f"{name} does not claim success when a step was refused", "ALL AI guards" not in out, out)
