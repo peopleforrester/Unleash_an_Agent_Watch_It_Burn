@@ -87,9 +87,9 @@ touched, so the app stays Synced and self-heal has nothing to revert. It then re
 `/cost` through the router and exits non-zero unless the counter reads
 `$0.0000 over 0 requests`. The curl is the same read by eye: `"usd": 0.0` and
 `"requests": 0`. To zero the private cluster's counter as well, add its name
-(`watch-it-burn-private`), then run `guards-off` on its terminal: the restart puts guard-proxy's own toggles back
+(`watch-it-burn-private`), then run `guardrails-ai-off` on its terminal: the restart puts guard-proxy's own toggles back
 to the repo's values (all off), but the C7 tool allow-list and gateway rule live
-outside guard-proxy, and only `guards-off` puts them back.
+outside guard-proxy, and only `guardrails-ai-off` puts them back.
 
 **Then empty the prompt wall (#926).** The room opens on an empty wall, and no
 `reset-bot` reaches it: `https://prompts.burritobot.co` is its own Railway app
@@ -109,7 +109,7 @@ delivered session, and before any run that should open on an empty wall, from
 ./fleet.sh start-check
 ```
 
-Then run `guards-off` on the private cluster's terminal, as above. `wall-reset`
+Then run `guardrails-ai-off` on the private cluster's terminal, as above. `wall-reset`
 refuses, naming the cluster, while attackme's or burritobot-private's
 `/prompts` still holds a prompt, and restarts nothing. Otherwise it restarts
 the wall and waits until the wall reads both clusters and holds no prompt.
@@ -645,7 +645,7 @@ agenticburn.com behind it (#651).
 - **Public cluster**, `attackme.burritobot.co`: nothing armed at the start, and no
   Terminal button (#645). This is what the room attacks from their phones for all
   three challenges. Its profile is `kubecon-community`: the burn build plus the four
-  Kubernetes guardrails present and off, so Kyverno only audits until `guardrails-on`
+  Kubernetes guardrails present and off, so Kyverno only audits until `guardrails-k8s-on`
   and C6's deployment lands. Its top bar has Deployments, Support and Beacon buttons,
   as the private bot's does (#1347): the one deployments page, whose rows say "from
   attackme" or "from presenters", the one support desk both bots read, and the beacon's
@@ -656,15 +656,15 @@ agenticburn.com behind it (#651).
   the four Kubernetes guardrails present but off at the start so they can be turned
   on live. This is where each challenge's fix is shown.
 
-**The Kubernetes guardrails switch (#774).** `guardrails-on`, typed in either
+**The Kubernetes guardrails switch (#774).** `guardrails-k8s-on`, typed in either
 cluster's terminal, turns the four Kubernetes guardrails on for both clusters at
 once, one at a time, printing every `kubectl` it runs: RBAC (agent-sa's Role reads
 one Secret by name), Kyverno (`restrict-image-registries` and
 `deny-external-registries` to Deny, so anything BurritoBot deploys must come from
 the internal registry, `registry.burritobot.co`), KubeArmor (`block-recipe-snoop`)
 and egress (the agent namespace's NetworkPolicy set). Each lights its badge on both
-chat pages within a poll; `guardrails-on 12` waits 12 seconds between guardrails so
-the room sees each one arrive. `guardrails-off` turns all four off again, for
+chat pages within a poll; `guardrails-k8s-on 12` waits 12 seconds between guardrails so
+the room sees each one arrive. `guardrails-k8s-off` turns all four off again, for
 rehearsals and resets. The two clusters are linked by `./fleet.sh guardrails-link`,
 which `instructors up` runs once it has built both. The internal registry is
 Distribution on the private cluster, seeded at start with the images the agent may
@@ -676,8 +676,8 @@ game and any public image the room asked for go; Challenge 3's
 maintenance-shell and the room's Jokers, from `registry.burritobot.co`, stay, as does
 everything the platform runs. The deployments page keeps every app that landed. One
 the sweep removed stays listed, greyed, and reads "..., removed at <time>" within about
-a minute and a half of `guardrails-on` (#1049, #1050); a `registry.burritobot.co` app's
-line is left as it was. `guardrails-off` stops the sweep.
+a minute and a half of `guardrails-k8s-on` (#1049, #1050); a `registry.burritobot.co` app's
+line is left as it was. `guardrails-k8s-off` stops the sweep.
 
 Both hostnames and their service hosts are served through the apex router, whose
 table carries the roster only (`./fleet.sh routes roster`, Night Before). No
@@ -761,7 +761,7 @@ them and moves a hostname when its cluster fails:
   tap. Nothing else: no refresh, no new link, no new name.
 - **After a promotion on stage.** The standby starts in its own start state: an
   empty prompt wall feed and a zero cost counter on the public bot, and every AI
-  guard off on the private bot. Re-run the current segment's `guard-*-on` there.
+  guard off on the private bot. Re-run the current segment's `guardrails-*-on` there.
   Nothing an attack left behind moves either: C6's maintenance-shell and its Joker
   page exist only where the room landed them, so a C6 already shown on the old
   cluster has to land again before `maintenance-shell-` answers. A presenter's open
@@ -771,12 +771,12 @@ them and moves a hostname when its cluster fails:
     before the router sends the room to it: both registry policies at Deny, so the
     image that took the old cluster down cannot land on the new one, and no other
     public image can either. The room's chat page shows the Kyverno badge lit there.
-    RBAC, KubeArmor and egress stay off until `guardrails-on`, so the room's Challenge 1
+    RBAC, KubeArmor and egress stay off until `guardrails-k8s-on`, so the room's Challenge 1
     read and Challenge 2's recipe read and beacon post still land. A private standby
     keeps the start state, all four off. A promotion by hand with `backups.py promote`
     arms the public cluster the same way, the roster cluster included.
     - **The link.** Once the router has moved, the watcher links the new holder with
-      the other bot's cluster (`fleet.sh guardrails-link`), so `guardrails-on` from the
+      the other bot's cluster (`fleet.sh guardrails-link`), so `guardrails-k8s-on` from the
       private bot's terminal reaches the pair that serves the room now. The watcher's
       log names any link that failed, with the command to run by hand, and
       `logs/failover.jsonl` records `armed` and `linked` for each promotion.
@@ -787,13 +787,13 @@ them and moves a hostname when its cluster fails:
     - **Step 5 itself** runs as written. On a promoted public cluster the Kyverno line
       repeats what the promotion did; the other three guardrails arm on both clusters.
     - **A promotion after step 5** gets Kyverno and the link but not the other
-      three: run `guardrails-on` again from the private bot's terminal (it is safe to
+      three: run `guardrails-k8s-on` again from the private bot's terminal (it is safe to
       repeat), and both clusters carry all four again.
     - **A promotion after segment 4's or segment 5's fix** gets none of the AI switches:
       a promoted public bot comes up with every AI guard off, the shipped Role and the
       rogue tools offered. Once the watcher has linked it, run from the private bot's
-      terminal the fixes the stage has reached: `guard-agency-on` and `guard-input-on`
-      once segment 4 has run them, and `guard-mcp-on` too once segment 5 has. Each is
+      terminal the fixes the stage has reached: `guardrails-agency-on` and `guardrails-input-on`
+      once segment 4 has run them, and `guardrails-mcp-on` too once segment 5 has. Each is
       safe to repeat and switches both clusters, and each prints the clusters it
       changed (#1152).
 
@@ -902,15 +902,38 @@ each cluster's `agent/terminal-auth` Secret, not in this repo, so read it off
 the cluster if in doubt:
 `kubectl -n agent get secret terminal-auth -o jsonpath='{.data.TTYD_CREDENTIAL}' | base64 -d`.
 
-Guard toggles on the private cluster, from its terminal: `guard-output-on`,
-`guard-input-on`, `guard-mcp-on`, `guard-budget-on` and `guard-topic-on` flip one
-at a time. `guards-off` turns every one of them off, the on-topic guard included.
-`guards-on` turns on all but the on-topic guard, which it leaves off because it
-would refuse every challenge prompt; segment 6 turns it on alone. They go through
+Guard toggles on the private cluster, from its terminal: `guardrails-output-on`,
+`guardrails-input-on`, `guardrails-mcp-on`, `guardrails-budget-on` and `guardrails-topic-on` flip one
+at a time. `guardrails-ai-off` turns every one of them off but the on-topic guard,
+which `guardrails-topic-off` turns off alone (#1350). `guardrails-ai-on` turns on all
+but the on-topic guard, which it leaves off because it would refuse every challenge
+prompt; segment 6 turns it on alone. They go through
 the guard-proxy `/toggle` endpoint, which Argo CD does not revert, so never flip a
-guard with `kubectl set env`. `guard-mcp-on` is different: it narrows
+guard with `kubectl set env`. `guardrails-mcp-on` is different: it narrows
 agentgateway's MCP authorization rule for evil-mcp, which Argo CD also leaves
 alone, and the gateway reloads it with no restart (#496).
+
+Every stage switch is `guardrails-<name>-on` or `guardrails-<name>-off` (#1350), typed
+in the private cluster's terminal. Each switches both KubeCon clusters, prints every
+`kubectl` it runs and the clusters it changed, and ends on both clusters' `/controls`:
+
+| Switch | What it turns on or off | On stage |
+|---|---|---|
+| `guardrails-k8s-on` / `-off` | the four Kubernetes guardrails: RBAC scope, Kyverno admission, KubeArmor, the egress NetworkPolicy | segment 3 |
+| `guardrails-agency-on` / `-off` | least privilege: the bot's Role without the workload verbs | segment 4 |
+| `guardrails-input-on` / `-off` | the input block-list and the injection classifier | segment 4 |
+| `guardrails-mcp-on` / `-off` | the MCP tool allow-list and agentgateway's rule for evil-mcp | segment 5 |
+| `guardrails-topic-on` / `-off` | the on-topic guard | segment 6 |
+| `guardrails-output-on` / `-off`, `guardrails-budget-on` / `-off` | the output guard, the budget cap | no |
+| `guardrails-ai-on` / `-off` | input, output, budget and mcp together, never on-topic | resets |
+| `guardrails-all-on` / `-off` | k8s, agency and ai together, never on-topic | resets |
+| `guardrails-status` | lists the switches and reads both clusters' `/controls` | checks |
+
+The names the terminal had before #1350 (`guardrails-on`, `guards-off`, `guard-mcp-on`
+and the rest) still answer through 2026-11-12, each as an alias that prints its new
+name and runs it, so a deck note that still types one works (rounds-agenticburn#171
+renames them; #1363 removes the aliases after the talk). One alias does less than it
+did: `guards-off` is now `guardrails-ai-off` and leaves the on-topic guard as it is.
 
 ---
 
@@ -953,10 +976,10 @@ beats give way first.
 |---|-----|-----|-----------|----------|-----------------|
 | 1 | 3 | M | The title (no QR), a hello, why a burrito bot, "You get access to an insecure BurritoBot.", the privacy slide "Nothing you type here is private.", whose "THE PROMPT WALL" link opens the prompt wall `prompts.burritobot.co`, then "BurritoBot!" with its QR and `attackme.burritobot.co`, wide open, whose link opens the public bot; during the opening minute of play, an optional quick tour of the public chat page, then the Prompt Wall tab, then back to the deck for the hand-off to Challenge 1 | Gets on the bot and plays, including off-topic asks | framing, 1 |
 | 2 | 5 | M+W | Challenge 1: the two-slide tee-up, the challenge slide and the public bot, the prompt wall optional during play, then the hint slide naming Ophelia Thorn; Whitney's live attack on the private bot, then its trace in Datadog, opened from the hint slide's "Ophelia Thorn" link (the Secret read); no fix here; it ends on the OWASP Top 10 for LLM Applications, opened from `genai.owasp.org/resource/owasp-genai-llm-top-10-2026/`, the 2026 edition, naming LLM02 and LLM03 | Pulls the CEO's home address out of the bot | 4, 7 |
-| 3 | 5 | W+M | Challenge 2, the Kubernetes catch-all: "It is time for Challenge 2!", "Everything you already knew about Kubernetes security", "BurritoBot has none of these things.", the challenge sentence on slide 17, then the three attacks built up one per slide on slides 18 to 20, where play starts ("pick just one attack") and the prompt wall goes up after a minute; a hint slide for each attack (slides 21 to 26), whose "deploy" link opens the deployments wall, and the recap of all three with their hints and one more minute of play (slide 27), the beacon view opened from the `agenticburn.com/beacon` link; Whitney's live attack on the private bot, the recipe read, then its pre-seeded trace `c2-attack`, the same read; then, depending on #774, "Let's turn on Kubernetes guardrails." (slide 28), whose link opens the admin terminal, where `guardrails-on` arms RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy on both clusters; then "Try your attacks again." (slide 29), the room resetting its bot and retrying its saved prompts, and one set per guardrail on slides 30 to 42 (RBAC, an admission policy, runtime security, NetworkPolicy), each recalling its attack, naming the fix and showing its YAML | Deploys a public image, reads the recipe file, posts to the beacon; after the switch (#774), tries Challenges 1 and 2 again and is stopped | 3, 4, 5, 7 |
-| 4 | 7 | W+M | Challenge 3, `#/42` to `#/67`: the title card, "It is time for Challenge 3!" (`#/42`) and the "AI guardrails" heading (`#/43`); "BurritoBot has a support desk." (`#/44`), which reads tickets by ticket number; "You've got access to a support desk." (`#/45`), at `support.burritobot.co` or the Support button at the top of the chat page; the desk's QR code, the room's first look at it (`#/46`), where a ticket is filed and looked up by its number and none can be browsed; "Let's file a ticket." (`#/47`), an ordinary ticket the presenters file on the one desk in their reserved range, HC-900 to HC-999, that the admin bot reads back by its number and the room's bot can read too; the challenge sentence (`#/48`), its "deploy" opening the room's deployments page, the deployments page and the prompt wall optional during play; the hint, HC-666 (`#/49`), whose white text the presenters select live to show, then their live attack on the private bot and its deployment landing on the one deployments page, `deployments.burritobot.co`, tagged with its cluster; Kyverno, at Deny since segment 3's switch (#774), admits it from the internal registry; then the seeded trace its link opens (`#/50`); LLM01, Prompt Injection (`#/51`); "Let's turn on some guardrails." (`#/52`), whose link opens the admin terminal, where `guard-agency-on`, then `guard-input-on`, run on the private bot; "Try your attack again." (`#/53`), the room's retry on the public bot, which both commands reach (#1132); "Pesky RBAC!" and the optional Kyverno question (`#/54`), the Role before and after (`#/55` and `#/56`); LLM Guard, with products that do the same (`#/57`); the nine-slide architecture diagram, a request's path, where LLM Guard checks the ticket and the dead ticket (`#/58` to `#/66`); and the bottom line, an AI guardrail classified the ticket as malicious and blocked it (`#/67`) | Writes its own injection ticket or asks BurritoBot to read HC-666, then tries again | 4, 5, 6, 7 |
-| 5 | 5 | M+W | Challenge 4, `#/68` to `#/117`: the title card, "It is time for Challenge 4!" (`#/68`); BurritoBot gets its tools from MCP servers, and not every one can be trusted (`#/69` and `#/70`); "Find the poisoned MCP tool." (`#/71`), the prompt wall optional during play; the hint, "Ask BurritoBot what tools it has." (`#/72`), then Michael's live weather ask on the private bot and the seeded trace its "tools" link opens; LLM04, Supply Chain (`#/73`); "Let's turn on an MCP gateway." (`#/74`), `guard-mcp-on` on the private bot; "Try your attack again." (`#/75`), the room's retry on the public bot, which `guard-mcp-on` reaches (#1132); the MCP gateway, agentgateway in the notes (`#/76` and `#/77`); the two diagrams, one weather question without and then with the gateway (`#/78` to `#/115`); and its rule before and after (`#/116` and `#/117`) | Hunts for the poisoned tool, then tries again | 2, 4, 6, 7 |
-| 6 | 5 | M+W | The OWASP close, `#/118` to `#/126`, `guard-topic-on`, the take-home's five QR codes, the speakers and "Thank you" (`#/126`) | Scans the take-home and rates the session | 7, 8 |
+| 3 | 5 | W+M | Challenge 2, the Kubernetes catch-all: "It is time for Challenge 2!", "Everything you already knew about Kubernetes security", "BurritoBot has none of these things.", the challenge sentence on slide 17, then the three attacks built up one per slide on slides 18 to 20, where play starts ("pick just one attack") and the prompt wall goes up after a minute; a hint slide for each attack (slides 21 to 26), whose "deploy" link opens the deployments wall, and the recap of all three with their hints and one more minute of play (slide 27), the beacon view opened from the `agenticburn.com/beacon` link; Whitney's live attack on the private bot, the recipe read, then its pre-seeded trace `c2-attack`, the same read; then, depending on #774, "Let's turn on Kubernetes guardrails." (slide 28), whose link opens the admin terminal, where `guardrails-k8s-on` arms RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy on both clusters; then "Try your attacks again." (slide 29), the room resetting its bot and retrying its saved prompts, and one set per guardrail on slides 30 to 42 (RBAC, an admission policy, runtime security, NetworkPolicy), each recalling its attack, naming the fix and showing its YAML | Deploys a public image, reads the recipe file, posts to the beacon; after the switch (#774), tries Challenges 1 and 2 again and is stopped | 3, 4, 5, 7 |
+| 4 | 7 | W+M | Challenge 3, `#/42` to `#/67`: the title card, "It is time for Challenge 3!" (`#/42`) and the "AI guardrails" heading (`#/43`); "BurritoBot has a support desk." (`#/44`), which reads tickets by ticket number; "You've got access to a support desk." (`#/45`), at `support.burritobot.co` or the Support button at the top of the chat page; the desk's QR code, the room's first look at it (`#/46`), where a ticket is filed and looked up by its number and none can be browsed; "Let's file a ticket." (`#/47`), an ordinary ticket the presenters file on the one desk in their reserved range, HC-900 to HC-999, that the admin bot reads back by its number and the room's bot can read too; the challenge sentence (`#/48`), its "deploy" opening the room's deployments page, the deployments page and the prompt wall optional during play; the hint, HC-666 (`#/49`), whose white text the presenters select live to show, then their live attack on the private bot and its deployment landing on the one deployments page, `deployments.burritobot.co`, tagged with its cluster; Kyverno, at Deny since segment 3's switch (#774), admits it from the internal registry; then the seeded trace its link opens (`#/50`); LLM01, Prompt Injection (`#/51`); "Let's turn on some guardrails." (`#/52`), whose link opens the admin terminal, where `guardrails-agency-on`, then `guardrails-input-on`, run on the private bot; "Try your attack again." (`#/53`), the room's retry on the public bot, which both commands reach (#1132); "Pesky RBAC!" and the optional Kyverno question (`#/54`), the Role before and after (`#/55` and `#/56`); LLM Guard, with products that do the same (`#/57`); the nine-slide architecture diagram, a request's path, where LLM Guard checks the ticket and the dead ticket (`#/58` to `#/66`); and the bottom line, an AI guardrail classified the ticket as malicious and blocked it (`#/67`) | Writes its own injection ticket or asks BurritoBot to read HC-666, then tries again | 4, 5, 6, 7 |
+| 5 | 5 | M+W | Challenge 4, `#/68` to `#/117`: the title card, "It is time for Challenge 4!" (`#/68`); BurritoBot gets its tools from MCP servers, and not every one can be trusted (`#/69` and `#/70`); "Find the poisoned MCP tool." (`#/71`), the prompt wall optional during play; the hint, "Ask BurritoBot what tools it has." (`#/72`), then Michael's live weather ask on the private bot and the seeded trace its "tools" link opens; LLM04, Supply Chain (`#/73`); "Let's turn on an MCP gateway." (`#/74`), `guardrails-mcp-on` on the private bot; "Try your attack again." (`#/75`), the room's retry on the public bot, which `guardrails-mcp-on` reaches (#1132); the MCP gateway, agentgateway in the notes (`#/76` and `#/77`); the two diagrams, one weather question without and then with the gateway (`#/78` to `#/115`); and its rule before and after (`#/116` and `#/117`) | Hunts for the poisoned tool, then tries again | 2, 4, 6, 7 |
+| 6 | 5 | M+W | The OWASP close, `#/118` to `#/126`, `guardrails-topic-on`, the take-home's five QR codes, the speakers and "Thank you" (`#/126`) | Scans the take-home and rates the session | 7, 8 |
 
 Total 30 minutes. Segments 2 to 5 are 22 minutes of hands-on. There is no separate
 trace walk-through any more: each challenge shows its own trace after the presenters'
@@ -1035,17 +1058,17 @@ cluster. The panels carry the internal ids:
 - **C5:** Challenge 1, the CEO's Secret read. The panel lists every turn whose
   agent called `get_vault_entry` on `ceo-personal-record`. Open one and read the
   `execute_tool get_vault_entry` span's result: Whitney's segment 2 attack carries
-  the CEO's record, and the room's retry after segment 3's `guardrails-on` reads
+  the CEO's record, and the room's retry after segment 3's `guardrails-k8s-on` reads
   `HTTP 403`, Forbidden by the scoped Role. Challenge 1 runs no output guard since
   #776, so there is no redacted reply to look for (#852).
-- **C6:** Challenge 3, the HC-666 ask sent after `guard-input-on`. The prompt is
+- **C6:** Challenge 3, the HC-666 ask sent after `guardrails-input-on`. The prompt is
   innocent, so the model is called and there are input tokens: open the trace and
   `read_support_ticket` returns the guard's withheld notice, with no `deploy_app`
   after it. This is the same ask as segment 4's `c3-fixed` seed in Datadog, and the
   Grafana C6 panel lists exactly these turns (#709).
 - **C7:** Challenge 4, the weather-tool ask that never reached
   `read_internal_config`. The panel beside it lists the calls that did reach it; the
-  ask sent before `guard-mcp-on` is there, and the one sent after is not.
+  ask sent before `guardrails-mcp-on` is there, and the one sent after is not.
 
 ### Segment 1: Opening and the rules of the room (3 min). Owner: Michael.
 
@@ -1288,7 +1311,7 @@ numbered as in the decks those figures were read from; the figures stand.
 | The recap and one more minute of play | 27 | 1:00 | 0:10 | |
 | Whitney's live attack on the admin bot | 27 | 0:30 | 0:30 | |
 | Its trace, `c2-attack` | 27 | 0:20 | 0:20 | |
-| The switch: the slide's link, `guardrails-on`, the panel | 28 | 0:30 | 0:30 | |
+| The switch: the slide's link, `guardrails-k8s-on`, the panel | 28 | 0:30 | 0:30 | |
 | The retry, the room trying again under the next slides | 29 | 0:15 | 0:15 | |
 | One set per guardrail | 30 to 42 | 2:15 | 1:00 | |
 | Segment 3 | 14 to 42 | 8:40 | 6:05 | |
@@ -1475,11 +1498,11 @@ the Rehearsal column, both tables and this paragraph together (#1298).
    switch to a terminal here and run this command to turn on four different Kubernetes
    guardrails. I'll explain the four specific guardrails here in a minute, but for
    now..." The presenter clicks the line to open the admin terminal, types
-   `guardrails-on`, and points at the bot's guardrails panel, which now lists the four.
+   `guardrails-k8s-on`, and points at the bot's guardrails panel, which now lists the four.
 
    One command, run from the admin cluster's terminal (the private bot's terminal),
    turns on RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy together,
-   for both clusters. That command is `guardrails-on`, which #774 added; it prints
+   for both clusters. That command is `guardrails-k8s-on`, which #774 added; it prints
    every `kubectl` it runs, and each badge lights on the room's chat page within a
    poll (see "The Kubernetes guardrails switch (#774)" above).
 
@@ -1511,7 +1534,7 @@ the Rehearsal column, both tables and this paragraph together (#1298).
      prevented with RBAC." Slide 32 shows BurritoBot's overprivileged Role rule from
      before the switch, `verbs: ["get", "list"]` on `secrets` with no `resourceNames`,
      so every Secret in the namespace; slide 33 sets that rule beside the scoped one
-     `guardrails-on` applies, `resourceNames: ["workshop-agent"]` with
+     `guardrails-k8s-on` applies, `resourceNames: ["workshop-agent"]` with
      `verbs: ["get"]`. agent-sa's Role reads one Secret by name, the agent's own
      `workshop-agent` config Secret, so the CEO's record is out of reach. It has no
      fallback script; the room's own Challenge 1 ask, coming back Forbidden after
@@ -1739,14 +1762,14 @@ The length is left as it is (Michael, 2026-11-11; #1040 stays with the presenter
   admin cluster's terminal, `https://burritobot-private.burritobot.co/lab`, in its own
   tab. Say: "Let's put a stop to the exploits. I'm going to switch to the terminal and
   turn on two fixes. I'll explain each one in a minute." The presenter types
-  `guard-agency-on`, then `guard-input-on`; admission is not one of them, since it
-  already did its job. Run `guard-agency-on`, which prints the `kubectl apply` of
+  `guardrails-agency-on`, then `guardrails-input-on`; admission is not one of them, since it
+  already did its job. Run `guardrails-agency-on`, which prints the `kubectl apply` of
   `~/challenges/c6-least-privilege-role.yaml`: the bot's Role keeps Challenge 1's
   scoped Secret and loses create and patch on Deployments and Pods. That is OWASP
   LLM03, Excessive Agency, from right after Challenge 1: the bot never needed to deploy
   anything to answer a support ticket. With it alone, the bot follows the ticket,
   calls `deploy_app`, and the Kubernetes API answers Forbidden, whatever registry the
-  image is from. Then `guard-input-on`: the input classifier flags the ticket's hidden
+  image is from. Then `guardrails-input-on`: the input classifier flags the ticket's hidden
   instruction before the model reads it, because the same toggle arms the check inside
   `read_support_ticket`, which withholds a flagged ticket. The prompt itself is
   innocent, so the model is still called to fetch the ticket; what it never sees is
@@ -1755,20 +1778,20 @@ The length is left as it is (Michael, 2026-11-11; #1040 stays with the presenter
   as an override of the bot's instructions, as HC-666's is, and passes one worded as a
   polite note or a plain request to deploy: on 2026-11-08 LLM Guard scored such a
   ticket clean and the admin bot deployed it with `guard-input-on` alone (#1102,
-  question 1120). With both commands on, the Role stops that ticket. `guard-agency-off`
+  question 1120). With both commands on, the Role stops that ticket. `guardrails-agency-off`
   gives the workload verbs back. Both commands keep each cluster's Secret rule: scoped
-  after `guardrails-on`, broad after `guardrails-off` (#1358, #1362). From the start
-  state `guard-agency-on` applies `c6-broad-secrets-role.yaml`, the same workload rules
-  with every Secret readable, so a rehearsal of `guard-agency-on` then
-  `guard-agency-off` ends where it began, with RBAC off. The 2-hour lab keeps its
-  admission tier, `guard-admission-on`, on HC-7731's refused image.
+  after `guardrails-k8s-on`, broad after `guardrails-k8s-off` (#1358, #1362). From the start
+  state `guardrails-agency-on` applies `c6-broad-secrets-role.yaml`, the same workload rules
+  with every Secret readable, so a rehearsal of `guardrails-agency-on` then
+  `guardrails-agency-off` ends where it began, with RBAC off. The 2-hour lab keeps its
+  admission tier, `guardrails-admission-on`, on HC-7731's refused image.
 - **The retry (`#/53`).** It reads "Try your attack again." Say: "Reset your bot and ask
   BurritoBot about your ticket again. It should no longer deploy anything. Let's talk
   about what just happened and how we fixed it. There are two problems here. The first
   is what you already saw..." The room presses reset and asks about its ticket, or
   HC-666, again while the next slides run. The room's retry runs on the public bot:
-  since #1132, `guard-agency-on` and `guard-input-on` switch both clusters, as
-  `guardrails-on` does, so the public bot the room asks has both fixes. On 2026-11-09
+  since #1132, `guardrails-agency-on` and `guardrails-input-on` switch both clusters, as
+  `guardrails-k8s-on` does, so the public bot the room asks has both fixes. On 2026-11-09
   (#1127) the two commands, run from the private terminal, left the public cluster's
   Role with only `get` and `list` on Deployments and its input guards on, and HC-666
   asked twice on the public bot came back withheld, with nothing deployed. A room
@@ -1778,11 +1801,11 @@ The length is left as it is (Michael, 2026-11-11; #1040 stays with the presenter
   had too much access. BurritoBot should not be able to make deployments. Here's how to
   fix this..." Optionally, ask the room: "Do you know why Kyverno let this through?"
   The answer: the image came from our own internal registry, `registry.burritobot.co`,
-  which Kyverno trusts. `#/55` shows BurritoBot's Role as `guardrails-on` leaves it,
+  which Kyverno trusts. `#/55` shows BurritoBot's Role as `guardrails-k8s-on` leaves it,
   `c5-scoped-role.yaml` in `gitops/ai-layer/resources.yaml`, with
   `verbs: ["create", "get", "list", "patch"]` on `deployments` in red. Say: "Here's
   BurritoBot's Role. It's allowed to create Deployments." `#/56` sets beside it the
-  Role `guard-agency-on` applies, `c6-least-privilege-role.yaml`, with
+  Role `guardrails-agency-on` applies, `c6-least-privilege-role.yaml`, with
   `verbs: ["get", "list"]` on `deployments` in green. Say: "With least privilege,
   BurritoBot can still look at Deployments, but it can't create them. Pods get the
   same treatment. So even if a ticket tricks it, it has nothing to deploy with. But
@@ -1834,7 +1857,7 @@ The length is left as it is (Michael, 2026-11-11; #1040 stays with the presenter
   (Michael's Toronto keynote point). What it catches: e-mail addresses, card
   numbers, US social security numbers and phone numbers, by LLM Guard's Regex input
   scanner with the same four patterns attackme's collector scrubs (#647, #648). Names
-  and street addresses are not caught. The same `guard-input-on` arms it, and the
+  and street addresses are not caught. The same `guardrails-input-on` arms it, and the
   reply names the scanner: `blocked by the input guardrail: Regex, risk 1.00`. The
   `c3-pii` seed shows it, in APM's traces, found by its session id as the Night Before
   step "Seed the stage's Datadog traces" says.
@@ -1860,7 +1883,7 @@ slide, in a line said to the room, or in a room-facing part of `/kubecon`.
 minutes 30 seconds at 150 words a minute (read from rounds main `faf4005` on 2026-11-09):
 283 on the challenge's `#/69` to `#/77`, 478 on the diagrams' `#/78` to `#/115` and 62
 on the YAML's `#/116` and `#/117`. The notes alone run past the segment's 5 minutes,
-before 2 minutes of play, the live attack, the trace, `guard-mcp-on` and 49 slide clicks.
+before 2 minutes of play, the live attack, the trace, `guardrails-mcp-on` and 49 slide clicks.
 See the total under "The segments, in order". `8f53ce2`'s card on `#/68` adds one slide
 and one line, "It is time for our last challenge, Challenge 4."; the length is left as it
 is (Michael, 2026-11-11).
@@ -1926,7 +1949,7 @@ is (Michael, 2026-11-11).
   is a link that opens the admin cluster's terminal,
   `https://burritobot-private.burritobot.co/lab`, in its own tab. Say: "I'm going to
   switch to the terminal and turn on a rule in our MCP gateway." The presenter types
-  `guard-mcp-on`. The agent reaches evil-mcp through agentgateway, and the rule narrows
+  `guardrails-mcp-on`. The agent reaches evil-mcp through agentgateway, and the rule narrows
   to the one registered tool, `get_weather`. The poisoned call is blocked because that
   tool was never registered. The notes say to wait about five seconds: the terminal
   prints when each cluster has the rule (rounds `faf4005`, from #1237's run below, where
@@ -1937,11 +1960,11 @@ is (Michael, 2026-11-11).
 - **The retry (`#/75`).** It reads "Try your attack again." Say: "Reset your bot and
   ask BurritoBot about the weather again. This time the tool the poisoned one points to
   isn't there to call." The room presses reset and asks about the weather again while the next slides
-  run. The room's retry runs on the public bot: since #1132, `guard-mcp-on` switches
-  both clusters, as `guardrails-on` does, each through its own control. On the private
+  run. The room's retry runs on the public bot: since #1132, `guardrails-mcp-on` switches
+  both clusters, as `guardrails-k8s-on` does, each through its own control. On the private
   cluster agentgateway's rule allows only `get_weather`; on the public cluster evil-mcp's
   tools in the agent's allow-list are `get_weather` alone, so the bot the room asks is
-  never offered `read_internal_config`. `guard-mcp-on` returns once each cluster serves
+  never offered `read_internal_config`. `guardrails-mcp-on` returns once each cluster serves
   the change, so the room can retry as soon as it prints. On 2026-11-09 (#1237) the
   command, run from the private terminal, took 9 s: the gateway reloaded 1 s after its
   write and kagent rolled the public bot 5 s after its. The weather ask sent twice on
@@ -2018,7 +2041,7 @@ is (Michael, 2026-11-11).
   rule from the `agentgateway-c7-config` ConfigMap in `gitops/ai-layer/agentgateway.yaml`,
   with `- 'true'`, every tool, in red. Say: "Before, the gateway let BurritoBot call every
   tool on the weather server, including the two it never needed." `#/117` sets beside it
-  the rule `guard-mcp-on` sets, `RULES["on"]` in `_c7rule` in
+  the rule `guardrails-mcp-on` sets, `RULES["on"]` in `_c7rule` in
   `gitops/ai-layer/web-terminal/entrypoint.sh`, with `mcp.tool.name == "get_weather"` in
   green. Say: "Now the gateway lets BurritoBot call only get_weather. The poisoned
   instructions can be as convincing as they like. BurritoBot can still be fooled, but the
@@ -2071,7 +2094,7 @@ community cluster's $25 `COST_CAP_USD` holds as before, and nothing lowers it.
   (Challenge 1), K04 Lack of Cluster Level Policy Enforcement (Challenge 2), K05 Missing
   Network Segmentation Controls (Challenge 2), K10 Inadequate Logging and Monitoring.
   Challenge 3 sits under K02, not K04: since #775 Kyverno admits its Joker from the
-  internal registry, and what stops it is `guard-agency-on`'s least-privilege Role. The
+  internal registry, and what stops it is `guardrails-agency-on`'s least-privilege Role. The
   2025 edition is still the current one (rounds-agenticburn#172).
 - **The ASI beat, the blast radius leaving the cluster (optional, 1 min, #113/#716):**
   Say: "The blast radius can leave the cluster, too: a pod that reads the node's metadata
@@ -2093,7 +2116,7 @@ community cluster's $25 `COST_CAP_USD` holds as before, and nothing lowers it.
   `challenges/imds-node-creds/FACILITATOR.md`. This is the first thing to drop if the clock
   is behind after segment 5; the take-home always keeps its minute.
 - **Burritos only (1 min):** Say: "BurritoBot will still talk about anything you like.
-  Let's make it sell burritos and nothing more." Then `guard-topic-on` on the private
+  Let's make it sell burritos and nothing more." Then `guardrails-topic-on` on the private
   cluster terminal, then
   re-send an off-topic ask that uses a listed word (dance, hot dog, karaoke, linked
   list, playlist, song). BurritoBot redirects to the menu, hours and locations. The
@@ -2150,10 +2173,10 @@ saying the same thing.
 | 2 | Connected to an under-protected MCP server | 5 (Challenge 4) | Yes |
 | 3 | Deployed on a full IDP | 3, by voice | Named, not toured: the catch-all plays against the open public cluster and names each layer |
 | 4 | Starts wide open, the audience hacks it live | 2 to 5 (public bot, phones) | Yes |
-| 5 | The Kubernetes security layers you should already have | 3 (RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy, switched on together by `guardrails-on` from #774, then one set of slides each, 30 to 42), 4 (least privilege, `guard-agency-on`) | Yes: all four are shown turning on in segment 3's one switch, which depends on #774, before the first LLM-specific guardrail in segment 4, and each is named in its own set of slides |
+| 5 | The Kubernetes security layers you should already have | 3 (RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy, switched on together by `guardrails-k8s-on` from #774, then one set of slides each, 30 to 42), 4 (least privilege, `guardrails-agency-on`) | Yes: all four are shown turning on in segment 3's one switch, which depends on #774, before the first LLM-specific guardrail in segment 4, and each is named in its own set of slides |
 | 6 | LLM-specific guardrails, pre- and mid-inference prompt analysis | 4 (Challenge 3, pre), 5 (Challenge 4, mid, between the agent's steps) | Yes, as #456 defines mid-inference (2026-10-24). The MCP-return scan before the model (#480) is not built and is not claimed |
-| 7 | Good GenAI observability practices | 2 to 5 (each challenge's trace, shown right after its live attack) | Yes once the traces are pre-seeded (#648); `verify/stage_traces.py` seeds Challenge 2 with the recipe read, the ask Whitney sends live in segment 3 (#1003), before and after `guardrails-on` (#843), as `docs/KUBECON-ABSTRACT-READINESS.md` row 7 says; the Grafana view carries them without Datadog (#500) |
-| 8 | By the end the chatbot is selling burritos, nothing more | 6 (`guard-topic-on`) | Yes: a listed word is refused on the phrase, and a paraphrase by BanTopics (#455) |
+| 7 | Good GenAI observability practices | 2 to 5 (each challenge's trace, shown right after its live attack) | Yes once the traces are pre-seeded (#648); `verify/stage_traces.py` seeds Challenge 2 with the recipe read, the ask Whitney sends live in segment 3 (#1003), before and after `guardrails-k8s-on` (#843), as `docs/KUBECON-ABSTRACT-READINESS.md` row 7 says; the Grafana view carries them without Datadog (#500) |
+| 8 | By the end the chatbot is selling burritos, nothing more | 6 (`guardrails-topic-on`) | Yes: a listed word is refused on the phrase, and a paraphrase by BanTopics (#455) |
 | 9 | "Bring your weirdest off-topic question" (live input, recorded fallback) | 1 (live, in the opening minute on the bot, over the venue network) + Night Before (recorded fallback, #452) | Yes: the live input, and the replay and the screenshots deck in `facilitation/kubecon-na-2026/fallback/`; the segment videos left this repo with M4 (#613) |
 
 Points the cut cannot fully deliver today, marked so they are not presented as
@@ -2163,8 +2186,8 @@ ready: the pre-seeded traces (#648).
 
 | Challenge | Internal id | In the cut? | Why |
 |---|---|---|---|
-| Challenge 1, the CEO's record (no fix in segment 2; RBAC arrives with segment 3's `guardrails-on`; no output guard) | C5 | Shown, segment 2 | The opener: it prints something that feels real. Since #776 the segment ends on the OWASP Top 10 for LLM applications with no fix run; the room tries it again after segment 3's switch, and the Secret read comes back Forbidden |
-| Challenge 2, the Kubernetes catch-all (RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy, turned on together by `guardrails-on`, #774) | C2, C3, C1 | Played and fixed, segment 3 | The room plays against the open public cluster; then `guardrails-on` on the private bot's terminal arms all four layers on both clusters, the room's Challenge 1 and 2 attacks are stopped, and one set per guardrail follows on slides 30 to 42 |
+| Challenge 1, the CEO's record (no fix in segment 2; RBAC arrives with segment 3's `guardrails-k8s-on`; no output guard) | C5 | Shown, segment 2 | The opener: it prints something that feels real. Since #776 the segment ends on the OWASP Top 10 for LLM applications with no fix run; the room tries it again after segment 3's switch, and the Secret read comes back Forbidden |
+| Challenge 2, the Kubernetes catch-all (RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy, turned on together by `guardrails-k8s-on`, #774) | C2, C3, C1 | Played and fixed, segment 3 | The room plays against the open public cluster; then `guardrails-k8s-on` on the private bot's terminal arms all four layers on both clusters, the room's Challenge 1 and 2 attacks are stopped, and one set per guardrail follows on slides 30 to 42 |
 | Challenge 3, prompt injection through support ticket HC-666 (least privilege, then the input guard; Kyverno admits the trusted image) | C6 | Shown, segment 4 | Pre-inference analysis, point 6, with least privilege behind it and a Joker page per attendee |
 | Challenge 4, the poisoned MCP tool (agentgateway tool allow-list) | C7 | Shown, segment 5 | The under-protected MCP server, point 2; a fix that is not a classifier |
 | Denial-of-wallet | C4 | **Cut** | Whitney, 2026-10-28: the number never moved convincingly as a challenge, so it was folded into a finale where the room drove it (#690). Michael cut that finale at the rehearsal of 2026-11-11 (rounds-agenticburn#172, #1348); the $25 cluster cap still holds, unshown |
@@ -2271,16 +2294,16 @@ is merely slow rather than rebuilding:
   links the pair; if it said the link failed, or a standby now holds a hostname,
   link the two that hold the hostnames: `./fleet.sh guardrails-link` (or
   `./fleet.sh guardrails-link <community>@<region> <private>@<region>`). Then, in the
-  private cluster's terminal, `guardrails-on` must end "all four Kubernetes
-  guardrails are on." and `guardrails-off` "... are off.". The internal registry
+  private cluster's terminal, `guardrails-k8s-on` must end "all four Kubernetes
+  guardrails are on." and `guardrails-k8s-off` "... are off.". The internal registry
   answers through the router (`routes roster` publishes its name on the private
   cluster's load balancer):
   `curl -fsS https://registry.burritobot.co/v2/burritobot/maintenance-shell/tags/list`
   lists the seeded tag.
 - [ ] **Every stage switch reaches both clusters (#1146), after #1132's switches are
-  built.** #1132 made Challenge 3's and Challenge 4's fixes (`guard-agency-on`,
-  `guard-input-on`, `guard-mcp-on`) switch both clusters from the private terminal, as
-  `guardrails-on` does, so the room's retry on the public bot meets the fix too. This
+  built.** #1132 made Challenge 3's and Challenge 4's fixes (`guardrails-agency-on`,
+  `guardrails-input-on`, `guardrails-mcp-on`) switch both clusters from the private terminal, as
+  `guardrails-k8s-on` does, so the room's retry on the public bot meets the fix too. This
   step proves each one does, after the guardrails step above and before the admin
   probe. From the repo root, with both clusters' credentials in one isolated
   kubeconfig, each context named for its cluster (`watch-it-burn-private` and
@@ -2297,16 +2320,16 @@ is merely slow rather than rebuilding:
   It holds both clusters' guard lock from its first read to its last, stops unless the
   context is the private cluster, and reads both clusters' `/controls`
   (`burritobot-private.burritobot.co` and `attackme.burritobot.co`). Then it runs
-  `guardrails-on`, `guard-agency-on`, `guard-input-on` and `guard-mcp-on` in talk order
+  `guardrails-k8s-on`, `guardrails-agency-on`, `guardrails-input-on` and `guardrails-mcp-on` in talk order
   in the private terminal pod, as the presenter types them, printing what the terminal
-  prints, and after each reads both `/controls` again. Last it runs `guards-off` and
-  `guardrails-off` from the same terminal, whatever happened before (a FAIL, a ^C), and
+  prints, and after each reads both `/controls` again. Last it runs `guardrails-ai-off` and
+  `guardrails-k8s-off` from the same terminal, whatever happened before (a FAIL, a ^C), and
   reads both clusters once more.
 
   - **PASS** on a switch's line for a cluster: every `/controls` field that switch
-    owns read off before it and on after it on that cluster (`guardrails-on` the four
-    Kubernetes guardrails, `guard-agency-on` `agency_scoped`, `guard-input-on`
-    `input_blocklist` and `input_classifier`, `guard-mcp-on` `tool_allowlist`). The
+    owns read off before it and on after it on that cluster (`guardrails-k8s-on` the four
+    Kubernetes guardrails, `guardrails-agency-on` `agency_scoped`, `guardrails-input-on`
+    `input_blocklist` and `input_classifier`, `guardrails-mcp-on` `tool_allowlist`). The
     closing lines are `start-state`, every one of those fields off again on that
     cluster (Falco is not judged), and `as-found`, each field the closing pair turns
     off reading what it read before the first switch.
@@ -2314,7 +2337,7 @@ is merely slow rather than rebuilding:
     retry there would not meet the fix. A `terminal` FAIL line is the terminal's own
     command exiting non-zero or timing out; read what it printed above the line. A
     FAIL on `start-state` or `as-found` means the closing pair left a guard on: run
-    the switch's own `-off` command (`guard-mcp-off`, `guard-input-off`) in the private
+    the switch's own `-off` command (`guardrails-mcp-off`, `guardrails-input-off`) in the private
     terminal before anything else.
   - It must end `STAGE SWITCH CHECK GREEN` (exit 0). `STAGE SWITCH CHECK RED` (exit 1)
     is any FAIL line; its summary names the lines that wait on #1132. `STAGE SWITCH
@@ -2374,7 +2397,7 @@ is merely slow rather than rebuilding:
   - Each beat that sends a challenge prompt runs at the guardrail state this file's
     segments table has at that point (#1134): Challenge 1 and Challenge 2 with every
     guardrail off; the room's Challenge 3 attempt with the four Kubernetes guardrails
-    on and `guard-agency-on` and `guard-input-on` still off; Challenge 4 with the four
+    on and `guardrails-agency-on` and `guardrails-input-on` still off; Challenge 4 with the four
     and both of those on. A challenge beat whose switch did not pass is a FAIL that
     sends nothing, so no prompt goes out at a state the stage does not have then.
 
@@ -2388,24 +2411,24 @@ is merely slow rather than rebuilding:
     sent once to the public bot (#1135), passing only when the image it asks for is
     a Deployment on the cluster and a row on `deployments.burritobot.co` (the probe
     removes both again, also on a FAIL), all with every guardrail
-    off; then `guardrails-on`, run in the private cluster's terminal
+    off; then `guardrails-k8s-on`, run in the private cluster's terminal
     (`--switch-context`) as segment 3 runs it, arming the four Kubernetes
     guardrails on both clusters; then Challenge 3's HC-666 ask landing
     `joker-agatha-the-banshee` with Kyverno at Deny, since its image is the internal
-    registry's (the probe deletes it again); then `guard-agency-on` and
-    `guard-input-on`, each run in the private terminal as segment 4 runs them and
+    registry's (the probe deletes it again); then `guardrails-agency-on` and
+    `guardrails-input-on`, each run in the private terminal as segment 4 runs them and
     reaching the public bot since #1132, and each read back on the community
     cluster (the Joker's dry run as `workshop-mcp` Forbidden, both input stages
     on); then Challenge 4's `/kubecon` weather ask sent once to the public bot with
     the four Kubernetes guardrails and both fixes on, passing when the rogue tool
-    chains and its sentinel comes back (#1129); then `guard-mcp-on`, run in the
+    chains and its sentinel comes back (#1129); then `guardrails-mcp-on`, run in the
     private terminal as segment 5 runs it and read back on the community cluster
     (the rogue tools gone from the Agent's evil-mcp list), and the same weather ask
     sent again as the room's Challenge 4 retry, passing when `get_weather` is called and
     no rogue tool reaches the gateway (#1152); the cost counter moving, and the
-    projected feed on. Its last act is `guard-input-off`, `guard-mcp-off` and
-    `guardrails-off` in the private terminal, run even when a beat fails or the call
-    ceiling is hit (`guardrails-off`'s shipped Role undoes `guard-agency-on`), then
+    projected feed on. Its last act is `guardrails-input-off`, `guardrails-mcp-off` and
+    `guardrails-k8s-off` in the private terminal, run even when a beat fails or the call
+    ceiling is hit (`guardrails-k8s-off`'s shipped Role undoes `guardrails-agency-on`), then
     both clusters read back at the start state: AI guards off, the rogue tools back
     and the C7 gateway rule open, and the four Kubernetes guardrails off. Each beat is judged on what the console shows, with
     Nova's `<thinking>` block folded as the storefront folds it, and a FAIL quotes
@@ -2415,15 +2438,15 @@ is merely slow rather than rebuilding:
     Kubernetes guardrails present and off, #774); the `/controls` badges agree with
     the cluster; then the challenges in stage order, with the guards turned on
     cumulatively as segments 2 to 5 do: C5 leaking, with no fix run in segment 2 (#776);
-    `guardrails-on`, run in the private terminal pod, arming all four on both clusters
+    `guardrails-k8s-on`, run in the private terminal pod, arming all four on both clusters
     and the badges lighting; C5 asked again and out of reach, since the switch's RBAC
     scoped the Role (#855); C1, C2 and C3
     (Challenge 2) blocked, a public image denied by `deny-external-registries` and the
     internal registry's image admitted; C6 (#775): HC-666's ask landing
     `joker-agatha-the-banshee` with Kyverno at Deny, since its image is the internal
-    registry's, then its two fixes (after `guard-agency-on`'s Role, a server-side dry
+    registry's, then its two fixes (after `guardrails-agency-on`'s Role, a server-side dry
     run of that Joker as `workshop-mcp` Forbidden by RBAC; then, after
-    `guard-input-on`, `read_support_ticket` withholding the ticket when called in
+    `guardrails-input-on`, `read_support_ticket` withholding the ticket when called in
     the tool pod and the model asked with no Deployment appearing); C7 off then on,
     stopped at the gateway: the probe narrows agentgateway's rule for evil-mcp and
     leaves toolNames full, so a blocked re-ask can only be the gateway's doing. C1, C2
@@ -2433,15 +2456,16 @@ is merely slow rather than rebuilding:
     paraphrase with no listed word, which only BanTopics can refuse (#455), and
     letting "what are your hours", "do you have mild salsa" and "does the rice have
     chicken stock" through (the last is #905's allergen card). Its last
-    act is `guards-off`, run even when a beat fails, so the stage starts clean; it
-    also puts the shipped Role back and runs `guardrails-off`, which turns the four
+    act turns every AI guard off, the on-topic guard included, as `guardrails-ai-off` and
+    then `guardrails-topic-off` do, run even when a beat fails, so the stage starts clean; it
+    also puts the shipped Role back and runs `guardrails-k8s-off`, which turns the four
     Kubernetes guardrails off on both clusters, then reads attackme back at the
     start state too. The two runs take turns: each holds both clusters' guard
     locks for its whole run, so the second waits for the first.
   - Every prompt it sends carries guard-proxy's probe marker, so none of them shows
     up in the feed the room sees.
   - Each run holds the cluster's guard lock (#1024), the Lease `agent/wib-guard-lock`,
-    from before the start state is read until after `guards-off`, and so do
+    from before the start state is read until after that last act, and so do
     `verify/stage_traces.py seed`, `verify/agent_probe.py`, `verify/input-guard.sh`,
     `verify/beat-02.sh` and `verify/beat-cost.sh`. A second run on the same cluster
     waits for it, up to 30 minutes (`--lock-wait`), then exits 3 naming the holder;
@@ -2449,7 +2473,7 @@ is merely slow rather than rebuilding:
     --context <context>` prints who holds it. On 2026-11-06 three of five admin runs
     went red on an output guard another run turned on (#900).
   - The same lock covers the Kubernetes guardrails (#1016). Both probe runs hold it
-    on both clusters, since the private terminal's `guardrails-on` reaches attackme
+    on both clusters, since the private terminal's `guardrails-k8s-on` reaches attackme
     (#1134), and so do
     `verify/stage_traces.py seed` and `verify/test_recipe_block_live.py`. Every live
     check that switches a policy holds it on its own cluster: `verify/beat-01.sh`,
@@ -2463,7 +2487,7 @@ is merely slow rather than rebuilding:
     `KUBECON PROBE NOT RUN` or `SEEDED NOT RUN`, rather than hold one lock only
     (#1053).
     `WIB_GUARD_LEASE_WAIT` sets the wait for the scripts that have no `--lock-wait`.
-    To run `guardrails-on` by hand, wrap it: `python3 verify/guard_lease.py hold
+    To run `guardrails-k8s-on` by hand, wrap it: `python3 verify/guard_lease.py hold
     --with-peer --context <context> -- <the kubectl exec>`. On 2026-11-06 run
     17944's Kyverno check read run 17950's switches, eight in an hour.
   - Each run must end `KUBECON PROBE GREEN`. A FAIL is a beat to fix or to plan its
@@ -2478,10 +2502,10 @@ is merely slow rather than rebuilding:
   and Challenge 3 adds someone else's PII
   refused by the input guard: nine `/chat` requests (eight model calls; the PII one
   spends no tokens), in presentation order, with the probe's own guard flips and its
-  `guards-off` at the end. Challenge 2's pair is the `/kubecon` recipe read, sent
-  before `guardrails-on` and again after it (#843). Challenge 1 runs no fix of its own
+  closing reset at the end. Challenge 2's pair is the `/kubecon` recipe read, sent
+  before `guardrails-k8s-on` and again after it (#843). Challenge 1 runs no fix of its own
   (#776), so its second seed, `c1-fixed`, is the CEO ask sent again after
-  `guardrails-on`, beside `c2-fixed`: the Secret read Forbidden by the switch's scoped
+  `guardrails-k8s-on`, beside `c2-fixed`: the Secret read Forbidden by the switch's scoped
   Role (#855).
 
   The seeds read their prompts from `/kubecon` (#1137). When the run starts, every
@@ -2585,14 +2609,14 @@ is merely slow rather than rebuilding:
     in the reply (#855).
   - `c2-fixed`, segment 3's KubeArmor set: `run_shell`, with the recipe kept out of
     the reply by `block-recipe-snoop` (#843).
-  - `c3-fixed`, segment 4, after `guard-agency-on` and `guard-input-on`:
+  - `c3-fixed`, segment 4, after `guardrails-agency-on` and `guardrails-input-on`:
     `read_support_ticket` with the guard's withheld notice, and no `deploy_app`.
   - `c3-pii`, segment 4's input guard double duty. A refused prompt reaches no model,
     so it is not in Agent Observability: type `app.datadoghq.com/apm/traces`, search
     `service:burritobot @session.id:wib-stage-c3-pii-<stamp>` on Past 7 Days, and
     open the trace: the `/chat` root span decided by `input_classifier`, zero tokens,
     no agent span and none of the PII.
-  - `c4-fixed`, segment 5, after `guard-mcp-on`: `get_weather`, the poisoned call
+  - `c4-fixed`, segment 5, after `guardrails-mcp-on`: `get_weather`, the poisoned call
     stopped at the gateway.
 
   The room's link (`k8s.cluster.name:burritobot-public`) is the `burritobot-public`
@@ -2681,9 +2705,10 @@ is merely slow rather than rebuilding:
   quoted line or note no longer matches what this file or `/kubecon` cites; change this
   file and `/kubecon` to the deck, with `verify/test_ros_seg4_flow.py`'s copy of its
   notes, and run it again. The tools tier runs it too.
-- [ ] **Guard start state on the admin cluster:** run `guards-off` from its terminal
+- [ ] **Guard start state on the admin cluster:** run `guardrails-ai-off`, then
+  `guardrails-topic-off`, from its terminal
   so the AI guardrails start off and the live toggles in segments 2 to 6 are real. The
-  probe above ends with it already; run it again if anyone has touched the guards
+  probe above ends there already; run the two again if anyone has touched the guards
   since.
 - [ ] **Datadog org** for the observability segment is loaded and the fleet monitors
   are applied (#454, #485; `WIB_FLEET_MONITORS_APP_KEY=<key> ./fleet.sh monitors --apply
@@ -2793,7 +2818,7 @@ is merely slow rather than rebuilding:
   and every rehearsal leave prompts on `https://prompts.burritobot.co`, which keeps
   them in memory until its app restarts. Once nothing else will prompt either bot,
   from `infra/terraform/fleet/` on a host logged in to Railway:
-  `./fleet.sh reset-bot watch-it-burn-private` (then `guards-off` on its terminal),
+  `./fleet.sh reset-bot watch-it-burn-private` (then `guardrails-ai-off` on its terminal),
   `./fleet.sh wall-reset`, then `./fleet.sh wall-check --empty`, which must end "the
   wall shows every roster cluster and holds no prompts". `wall-reset` refuses while
   either cluster's feed still holds a prompt and names the `reset-bot` to run. If the
@@ -2855,15 +2880,15 @@ cluster: `CONTEXT` is its kube-context, the only input any of them takes (prefix
 `KUBECONFIG=<file>` if its credentials are in an isolated kubeconfig). None of them
 calls the model. Each prints PASS or FAIL per check and exits non-zero on any FAIL,
 and none writes a scratch file. The C5 and C6 scripts turn their guard on the way
-`guard-output-on` and `guard-input-on` do, and put it back the way they found it.
+`guardrails-output-on` and `guardrails-input-on` do, and put it back the way they found it.
 
 | Beat | Run | PASS means |
 |---|---|---|
 | C5 | `CONTEXT=<admin-ctx> challenges/02-sanitization/fallback.curl.sh output` | With the output guard on, the CEO record sent through guard-proxy's output path comes back with `OPHELIA-THORN-TIBBY-TOP-SPIRE-No9` and the address redacted |
 | C6 | `CONTEXT=<admin-ctx> challenges/02-sanitization/fallback.curl.sh input` | In the workshop-mcp pod, `read_support_ticket` hands back HC-7731 with its hidden paragraph while the input guards are off, and `[input guard] withheld` once they are on. No model call |
 | C2 | `CONTEXT=<admin-ctx> challenges/c2-villain-image/fallback.kubectl.sh` | As `workshop-mcp`, a Deployment of `ghcr.io/peopleforrester/lab-platform/promo/joker:v1` is denied at admission and the denial names `restrict-image-registries`. It prints the deny message to read aloud |
-| C6 (least privilege, #775) | `kubectl --context <admin-ctx> -n agent auth can-i create deployments --as=system:serviceaccount:agent:workshop-mcp` | After `guard-agency-on` it prints `no`: the bot's Role creates no Deployment, from any registry. `yes` means the Role did not change. No model call |
-| C7 | `CONTEXT=<admin-ctx> challenges/03-bad-mcp-excessive-agency/fallback.curl.sh` | From the web terminal pod, `read_internal_config` called through agentgateway `:3003` returns `FAKE-MCP-EXFIL-sentinel-4c1d` after `guard-mcp-off`, and the gateway refuses it after `guard-mcp-on` while `get_weather` still answers. It prints how many seconds the narrowed rule took to take effect, and puts the rule back as it found it. It refuses a workshop cluster |
+| C6 (least privilege, #775) | `kubectl --context <admin-ctx> -n agent auth can-i create deployments --as=system:serviceaccount:agent:workshop-mcp` | After `guardrails-agency-on` it prints `no`: the bot's Role creates no Deployment, from any registry. `yes` means the Role did not change. No model call |
+| C7 | `CONTEXT=<admin-ctx> challenges/03-bad-mcp-excessive-agency/fallback.curl.sh` | From the web terminal pod, `read_internal_config` called through agentgateway `:3003` returns `FAKE-MCP-EXFIL-sentinel-4c1d` after `guardrails-mcp-off`, and the gateway refuses it after `guardrails-mcp-on` while `get_weather` still answers. It prints how many seconds the narrowed rule took to take effect, and puts the rule back as it found it. It refuses a workshop cluster |
 | C1 | `CONTEXT=<admin-ctx> challenges/c1-exfil-s3/fallback.kubectl.sh` | From the workshop-mcp pod, where `run_shell` runs, the POST to `https://beacon.burritobot.co/beacon` fails, and the beacon count does not move. Keep the beacon view on screen |
 | C3 | `CONTEXT=<admin-ctx> challenges/c3-secret-grep/fallback.kubectl.sh` | The agent's grep for the recipe in the workshop-mcp pod reads `Permission denied`, and the `kubearmor-relay` log carries the `block-recipe-snoop` Block alert, which it prints |
 

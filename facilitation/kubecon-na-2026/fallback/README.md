@@ -102,7 +102,7 @@ Each shot says how it is made (`capture` in `assets.yaml`):
   shot unless each control the shot lists reads as listed, so a guarded shot is
   never taken on an open bot. It never flips a guard. A shot with a `toggle` waits
   for that command on the private terminal, then `--shot` takes it; put the guards
-  back after (`guards-off`, `guardrails-off`).
+  back after (`guardrails-all-off`, then `guardrails-topic-off`).
 - **page:** the same script screenshots the URL.
 - **by_hand:** taken from the projector output, for a screen the script cannot
   drive, such as a signed-in Datadog tab or a terminal. No shot in the deck is taken
