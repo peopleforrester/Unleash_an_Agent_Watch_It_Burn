@@ -416,7 +416,7 @@ print("== arguments ==")
 r = run("guardrails-k8s-on", ("3",))
 check("guardrails-k8s-on 3 switches and waits 3 s between guardrails", r["rc"] == 0, f"exit {r['rc']}\n{r['out']}")
 r = run("guardrails-k8s-on", ("soon",))
-check("guardrails-k8s-on soon: exit 2, its usage line names guardrails-k8s-on, nothing switched",
+check("guardrails-k8s-on soon: the usage code 2, its usage line names guardrails-k8s-on, nothing switched",
       r["rc"] == 2 and "Usage: guardrails-k8s-on [seconds" in r["out"]
       and not any("apply" in c["args"] or "patch" in c["args"] for c in r["calls"]), r["out"])
 r = run("guardrails-mcp-on", ("60",))
