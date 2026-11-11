@@ -54206,3 +54206,99 @@ tier on 6840b2f0. None of the six comes from the removed steps: `verify/e2e-imag
 and the `LD_LIBRARY_PATH` and `FONTCONFIG_FILE` that `ci_chromium_libs.py` wrote to `GITHUB_ENV` never reached a tier
 test, and the image brings its own Node 24.22.2 and Chromium. With no fallback to the host's tools, keeping the steps
 would not make the job pass. The six failures are #1361's to fix.
+## 2026-11-11 · #1350 · run 20435 · Every stage switch is guardrails-<name>-on/off on both KubeCon clusters, and every old name is an alias
+
+**What changed.** Both entrypoint.sh copies (`gitops/ai-layer/web-terminal/`, `images/web-terminal/`, byte-identical)
+now write `guardrails-<name>-on` and `guardrails-<name>-off` for k8s, agency, input, output, mcp, budget, topic, ai and
+all, the eighteen the issue's table names, and for rbac and admission. Michael's two rulings on the issue stand over its
+text: the Kubernetes switch is `guardrails-k8s-*`, never "kates" (a speech-to-text error), and every old name keeps
+working on both clusters as an alias of its new name. Each switch is a heredoc of its own, as the old ones were: the
+old bodies moved to their new names, with their retry lines naming the new name, so the code #1349 had just made reach
+both clusters is the code that runs. Every switch reaches watch-it-burn-private and watch-it-burn-community from the
+private terminal (`_both`, or `_guardrails` for k8s), prints each kubectl it runs and the clusters each step changed,
+and ends with `_controls`, both clusters' `/controls` read by name.
+
+- `guardrails-k8s-on/off` is the old `guardrails-on/off` (`_guardrails`), seconds argument kept. `_guardrails` takes
+  the command name for its usage and retry lines; `verify/fixtures/guardrails-switch-golden.json` was rewritten with
+  `--write-golden`, and differs from the old record only in the two peer-down retry lines and the case names
+  (checked by renaming the old record and comparing: equal).
+- `guardrails-ai-on/off` is the old `guards-on/off`: input, output, budget and mcp. ai-off no longer sends `topic=off`,
+  as the table says; on-topic is `guardrails-topic-on/off` alone. Both now print each step's own cluster lines (the MCP
+  step's were sent to /dev/null).
+- `guardrails-all-on` runs k8s, then agency (c6 over k8s's c5), then the AI guards; `guardrails-all-off` runs the AI
+  guards, then agency off (c5), then k8s off (c8), so the shipped Role is the one left. Neither touches topic. Every
+  step runs when one fails, the failed ones are named, and the run exits 1, as since #1203.
+- `guardrails-rbac-on/off` and `guardrails-admission-on/off`, the 2-hour lab's cluster fixes, now switch both clusters
+  through `_both` (rbac: `_apply` of c5/c8; admission: a new `_admission` step that patches
+  restrict-image-registries and reads it back) and end on `_controls`. They were on Michael's alias list, which asks
+  each old name to run on both clusters. The peer's guardrails-switch grant already covers both (checked live below).
+  On a lone cluster they switch it alone, as every `_both` switch does.
+- `guardrails-status` is the old `guards-status`, whose help now lists the new switches and the alias rule, and which
+  now ends on `_controls` so it reads both clusters.
+
+**The old names.** Kept, as aliases, past the talk on 2026-11-12: `guardrails-on/off`, `guards-on/off/status` and
+`guard-<name>-on/off` for agency, input, output, mcp, budget, topic, rbac and admission (21 in all). The entrypoint
+writes each from one `ALIASES` table: the alias prints `(<old> is now <new>; running that.)` and execs the new script,
+so it does what the new name does, arguments and exit code included. The deck (rounds-agenticburn#171), the rehearsal
+script, the run-of-show, /kubecon, the lab pages and the probes still type the old names, and every one of them keeps
+working. Removing the aliases is a separate issue after 2026-11-12, as Michael's go on #1346 says.
+
+One alias does less than its old self: `guards-off` is now `guardrails-ai-off`, which leaves the on-topic guard as it
+is, where the old guards-off turned it off. The issue's table decides this and Michael's ruling ("each doing what its
+new name does") repeats it. So the alias says it on its first line, `It leaves the on-topic guard as it is:
+guardrails-topic-off turns that off.`, and guardrails-ai-off's closing line says it too. On stage the on-topic guard
+comes on last (segment 7), and the reset after it is `fleet.sh reset-bot`, whose restart puts it back off, so the talk
+loses nothing. The run-of-show's line that guards-off turns on-topic off is the docs child's to correct.
+`verify/kubecon_probe.py` sends its own `/toggle` queries and still turns topic off at its end, which equals
+guardrails-ai-off then guardrails-topic-off; `test_kubecon_probe.py` now holds that.
+
+**Not renamed.** `finale-cap-on`, `finale-cap-off` and `cost-watch` keep their names: they set and show the room's
+spend cap on the room's cluster alone (`_room`), not a guardrail on both, so the guardrails pattern does not fit them.
+`guard-rbac-*` and `guard-admission-*` are renamed, to `guardrails-rbac-*` and `guardrails-admission-*`, with the old
+names as aliases, since Michael's list of aliases names them.
+
+**Tests.** New `verify/test_guardrails_names.py` (254 checks), with its scope-map entry from `scope_tests.py write`:
+the entrypoint's own `.guardlib`, heredocs and alias loop, a kubectl playing both clusters and a clock that stands
+still. Each of the eighteen switches plus rbac and admission, from the opposite state, exits 0, turns its groups'
+`/controls` fields on both clusters and no others (ai and all never touch topic), says once per step that it switched
+this cluster and the peer, prints a `$ ` line for every kubectl in order, and ends with `/controls` on this cluster,
+then the peer, each named with the switched controls ON or off. all-on and all-off leave c6 and c8. A peer that is
+down: every step still runs, the failed ones are named, exit 1. A lone cluster is switched and read alone. Each of the
+21 aliases, from both start states, prints its line and then exactly the new name's output, calls, end state and exit
+code; a mis-paired alias is caught. Renamed to the new names, with their expectations moved where the behaviour moved:
+`test_guards_all_both`, `test_guard_switch_both` (and its golden record), `test_guard_switch_controls`,
+`test_guardrails_switch`, `test_guard_commands_echo`, `test_guard_input_both`, `test_guard_mcp_both`,
+`test_c7_gateway_toggle`, `test_evil_tools_by_name`, `test_topic_guard`, `test_topic_guard_proxy` and
+`test_coc_admission`. Readers that type the old names now resolve them through the `ALIASES` table:
+`test_kubecon_probe`, `test_challenge_fallbacks` (the C7 fallback's fake terminal now prints the alias line first),
+`test_stage_switch_run`, `test_stage_switch_night_before` and `test_terminal_quiet`. Each of those passes, run once
+alone, as do `test_finale_cap`, `test_finale_cap_peer`, `test_instructor_brief`, `test_fetch_inventory`,
+`test_c7_badge_grants`, `test_stage_switch_check`, `test_room_view`, `test_falco_badge_measured`,
+`test_datadog_sandbox_names`, `test_lab_events`, `test_two_domains`, `test_trace_walkthrough_view`,
+`test_backstage_catalog`, `test_c7_control_comments`, `test_console_no_toggle`, `test_kyverno_profile_policies`,
+`test_manifest_contract`, `test_recipe_block_coverage`, `test_room_reader_rbac`, `test_service_links`,
+`test_student_aws_creds_namespace`, `test_terminal_kubeconfig`, `test_scope_tests` and `test_test_map`. The full scoped
+`run-tests.sh` and `run-e2e-tools.sh` are left to validation.
+
+**Live check, 2026-11-11**, read-only, since the presenters rehearse on these two clusters today. The peer grant, as
+the guardrails-switch ServiceAccount on each cluster (`kubectl auth can-i --as=system:serviceaccount:guardrails-switch:guardrails-switch`):
+get and patch on `roles/workshop-agent` in agent, and on `validatingpolicies/restrict-image-registries`, answer yes on
+both; patch on another ValidatingPolicy answers no. Then the committed `.guardlib`, `guardrails-status` and the alias
+loop were written to a scratch home in watch-it-burn-private's web-terminal pod (`web-terminal-6fcf997796-x4tvx`, its
+own ServiceAccount and guardrails-peer link), and `guards-status` was run there. It printed
+`(guards-status is now guardrails-status; running that.)`, the AI guard list, the new help, and then:
+
+    watch-it-burn-private (this cluster), burritobot-private.agenticburn.com
+      AI guards   ON: none   off: output, input block-list, injection classifier, budget cap, on-topic
+      Kubernetes  ON: Falco   off: NetworkPolicy, Kyverno, KubeArmor, tool allow-list, RBAC scope, least privilege
+    watch-it-burn-community, attackme.agenticburn.com
+      AI guards   ON: none   off: output, input block-list, injection classifier, budget cap, on-topic
+      Kubernetes  ON: none   off: NetworkPolicy, Kyverno, KubeArmor, Falco, tool allow-list, RBAC scope, least privilege
+
+exit 0. Nothing was switched, and the scratch home was removed, so both clusters are as found.
+
+**Not yet run on a cluster.** The switches themselves, which change both clusters: once hecaton promotes this and Argo
+CD rolls web-terminal, the next run on the issue runs, from the private terminal, each `guardrails-<name>-on` then
+`-off` for k8s, agency, input, output, mcp, budget, topic, ai and all, and `guards-on`/`guards-off` and one
+`guard-<name>-on/off` pair as aliases, leaving both at the start state, or `python3 verify/stage_switch_run.py` with
+its closing pair. Switching the KubeCon clusters on rehearsal day was not done from a draft.
