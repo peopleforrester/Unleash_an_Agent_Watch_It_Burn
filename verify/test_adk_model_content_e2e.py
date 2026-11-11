@@ -39,7 +39,6 @@ from __future__ import annotations
 import json
 import os
 import pathlib
-import socket
 import subprocess
 import sys
 import tempfile
@@ -50,6 +49,7 @@ import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from collector_render import REPO, collector_config, feature_gate_args  # noqa: E402
+import otelcol_local  # noqa: E402
 
 OTELCOL = REPO / "verify/.tools/bin/otelcol-contrib"
 LOCK = REPO / "verify/e2e-tools.lock"
@@ -186,17 +186,12 @@ def otlp_body(spans: list[tuple[str, str, dict]]) -> bytes:
                                           "scopeSpans": [{"spans": out}]}]}).encode()
 
 
-def free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
-def post(port: int, body: bytes, proc: subprocess.Popen) -> bool:
+def post(collector: otelcol_local.Collector, body: bytes) -> bool:
+    """POST once the collector is ready on its own port: the send clock starts only then (#969)."""
     deadline = time.time() + 30
-    while time.time() < deadline and proc.poll() is None:
+    while collector.ready and time.time() < deadline and collector.proc.poll() is None:
         try:
-            req = urllib.request.Request(f"http://127.0.0.1:{port}/v1/traces", data=body,
+            req = urllib.request.Request(f"http://127.0.0.1:{collector.port}/v1/traces", data=body,
                                          headers={"Content-Type": "application/json"})
             return urllib.request.urlopen(req, timeout=5).status == 200
         except OSError:
@@ -210,46 +205,52 @@ def run_collector(profile: str) -> tuple[dict[str, dict], str, bool]:
     conf = collector_config(profile, datadog_secret=True)
     procs = conf["service"]["pipelines"]["traces"]["processors"]
     gates = feature_gate_args(profile)
-    port = free_port()
     got: dict[str, dict] = {}
     alive = False
     with tempfile.TemporaryDirectory() as d:
         out = pathlib.Path(d) / "spans.json"
-        cfg = {
-            "receivers": {"otlp": {"protocols": {"http": {"endpoint": f"127.0.0.1:{port}"}}}},
-            "processors": {p: conf["processors"][p] for p in procs},
-            "exporters": {"file": {"path": str(out)}},
-            "service": {"telemetry": {"metrics": {"level": "none"}},
-                        "pipelines": {"traces": {"receivers": ["otlp"], "processors": procs, "exporters": ["file"]}}},
-        }
-        cfg_file = pathlib.Path(d) / "config.yaml"
-        cfg_file.write_text(yaml.safe_dump(cfg, sort_keys=False))
+
+        def config(port: int) -> pathlib.Path:
+            cfg = {
+                "receivers": {"otlp": {"protocols": {"http": {"endpoint": f"127.0.0.1:{port}"}}}},
+                "processors": {p: conf["processors"][p] for p in procs},
+                "exporters": {"file": {"path": str(out)}},
+                "service": {"telemetry": {"metrics": {"level": "none"}},
+                            "pipelines": {"traces": {"receivers": ["otlp"], "processors": procs,
+                                                     "exporters": ["file"]}}},
+            }
+            cfg_file = pathlib.Path(d) / "config.yaml"
+            cfg_file.write_text(yaml.safe_dump(cfg, sort_keys=False))
+            return cfg_file
+
         env = {**os.environ, "WIB_CLUSTER_NAME": f"burritobot-{profile}"}
-        val = subprocess.run([str(OTELCOL), "validate", f"--config={cfg_file}", *gates],
+        val = subprocess.run([str(OTELCOL), "validate", f"--config={config(0)}", *gates],
                              capture_output=True, text=True, env=env)
         check(f"{profile}: the collector accepts the traces processors with the chart's gates {gates}",
               val.returncode == 0, val.stderr[-1500:])
-        log = (pathlib.Path(d) / "collector.log").open("w")
-        proc = subprocess.Popen([str(OTELCOL), f"--config={cfg_file}", *gates], stdout=log, stderr=subprocess.STDOUT,
-                                env=env)
+        # #1329: the traces processors carry #1316's name-policy statements, about 46 s of CPU to parse, so the
+        # collector came up after the 30 s this test gave it from the Popen. otelcol_local.start() waits for its ready
+        # line (READY_POLLS polls, not wall seconds), retries a taken port, and only then does the send clock start.
+        collector = otelcol_local.start(lambda port: [str(OTELCOL), f"--config={config(port)}", *gates],
+                                        pathlib.Path(d) / "collector.log", env=env)
         try:
-            check(f"{profile}: the collector took the {len(SPANS)} spans", post(port, otlp_body(SPANS), proc))
-            check(f"{profile}: and a second request after them", post(port, otlp_body([AFTER]), proc))
-            alive = proc.poll() is None
+            check(f"{profile}: the collector took the {len(SPANS)} spans", post(collector, otlp_body(SPANS)),
+                  collector.detail())
+            check(f"{profile}: and a second request after them", post(collector, otlp_body([AFTER])),
+                  collector.detail())
+            alive = collector.proc.poll() is None
             deadline = time.time() + 30  # the batch processor holds spans up to its timeout
             while len(got) < len(SPANS) + 1 and time.time() < deadline:
                 time.sleep(0.5)
-                for line in (out.read_text().splitlines() if out.exists() else []):
+                for line in (out.read_text() if out.exists() else "").splitlines():
                     for rs in json.loads(line)["resourceSpans"]:
                         for ss in rs["scopeSpans"]:
                             for s in ss["spans"]:
                                 a = {x["key"]: x["value"].get("stringValue") for x in s.get("attributes", [])}
                                 got[a.get("witb.test.case", s["spanId"])] = a
         finally:
-            proc.terminate()
-            proc.wait(timeout=15)
-            log.close()
-        return got, (pathlib.Path(d) / "collector.log").read_text(), alive
+            collector.stop()
+        return got, collector.log(), alive
 
 
 def parsed(value: str | None) -> object:

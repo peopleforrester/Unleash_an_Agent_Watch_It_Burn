@@ -543,6 +543,8 @@ reads:
     - verify/collector_render.py
     - verify/e2e-tools.lock
     - verify/fetch-e2e-tools.sh
+    - verify/otelcol_local.py
+    - verify/test_trace_shape_e2e.py
   test_admin_actions.sh:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
@@ -2317,6 +2319,8 @@ reads:
     - verify/collector_render.py
     - verify/e2e-tools.lock
     - verify/fetch-e2e-tools.sh
+    - verify/otelcol_local.py
+    - verify/test_trace_shape_e2e.py
   test_collector_no_datadog.py:
     - CLAUDE.md
     - backstage

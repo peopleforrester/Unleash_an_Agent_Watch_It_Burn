@@ -29,7 +29,6 @@ import hashlib
 import json
 import os
 import pathlib
-import socket
 import subprocess
 import sys
 import tempfile
@@ -40,6 +39,7 @@ import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from collector_render import REPO, collector_config, feature_gate_args  # noqa: E402
+import otelcol_local  # noqa: E402
 
 OTELCOL = REPO / "verify/.tools/bin/otelcol-contrib"
 LOCK = REPO / "verify/e2e-tools.lock"
@@ -117,12 +117,6 @@ def otlp_body() -> bytes:
                                           "scopeSpans": [{"spans": spans}]}]}).encode()
 
 
-def free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
 def read_spans(out: pathlib.Path) -> dict[str, dict]:
     """Every span the file exporter wrote, by its span id."""
     got: dict[str, dict] = {}
@@ -145,57 +139,58 @@ def run_collector(profile: str, env_map: dict[str, str]) -> tuple[dict[str, dict
     conf = collector_config(profile, datadog_secret=True)
     pipes = conf["service"]["pipelines"]
     procs, lprocs = pipes["traces"]["processors"], pipes["traces/llmobs"]["processors"]
-    port = free_port()
     with tempfile.TemporaryDirectory() as d:
         out, lout = pathlib.Path(d) / "apm.json", pathlib.Path(d) / "llmobs.json"
-        cfg = {
-            "receivers": {"otlp": {"protocols": {"http": {"endpoint": f"127.0.0.1:{port}"}}}},
-            "processors": {p: conf["processors"][p] for p in procs + lprocs},
-            "connectors": {"forward/llmobs": conf["connectors"]["forward/llmobs"]},
-            "exporters": {"file/apm": {"path": str(out)}, "file/llmobs": {"path": str(lout)}},
-            "service": {"telemetry": {"metrics": {"level": "none"}},
-                        "pipelines": {"traces": {"receivers": ["otlp"], "processors": procs,
-                                                 "exporters": ["file/apm", "forward/llmobs"]},
-                                      "traces/llmobs": {"receivers": ["forward/llmobs"], "processors": lprocs,
-                                                        "exporters": ["file/llmobs"]}}},
-        }
-        cfg_file = pathlib.Path(d) / "config.yaml"
-        cfg_file.write_text(yaml.safe_dump(cfg, sort_keys=False))
+
+        def config(port: int) -> pathlib.Path:
+            cfg = {
+                "receivers": {"otlp": {"protocols": {"http": {"endpoint": f"127.0.0.1:{port}"}}}},
+                "processors": {p: conf["processors"][p] for p in procs + lprocs},
+                "connectors": {"forward/llmobs": conf["connectors"]["forward/llmobs"]},
+                "exporters": {"file/apm": {"path": str(out)}, "file/llmobs": {"path": str(lout)}},
+                "service": {"telemetry": {"metrics": {"level": "none"}},
+                            "pipelines": {"traces": {"receivers": ["otlp"], "processors": procs,
+                                                     "exporters": ["file/apm", "forward/llmobs"]},
+                                          "traces/llmobs": {"receivers": ["forward/llmobs"], "processors": lprocs,
+                                                            "exporters": ["file/llmobs"]}}},
+            }
+            cfg_file = pathlib.Path(d) / "config.yaml"
+            cfg_file.write_text(yaml.safe_dump(cfg, sort_keys=False))
+            return cfg_file
+
         env = {k: v for k, v in os.environ.items() if not k.startswith("WIB_BEDROCK_PROFILE_")}
         env.update({"WIB_CLUSTER_NAME": f"burritobot-{profile}", **env_map})
-        val = subprocess.run([str(OTELCOL), "validate", f"--config={cfg_file}", *feature_gate_args(profile)],
+        val = subprocess.run([str(OTELCOL), "validate", f"--config={config(0)}", *feature_gate_args(profile)],
                              capture_output=True, text=True, env=env)
         check(f"{profile}: the collector accepts the pipelines", val.returncode == 0, val.stderr)
-        log_file = pathlib.Path(d) / "collector.log"
-        log = log_file.open("w")
-        proc = subprocess.Popen([str(OTELCOL), f"--config={cfg_file}", *feature_gate_args(profile)], stdout=log,
-                                stderr=subprocess.STDOUT, env=env)
+        # #1329: the traces processors carry #1316's name-policy statements, about 46 s of CPU to parse, so the
+        # collector logs its ready line well past the 100 polls (30 s) this wait had. otelcol_local.start() waits
+        # READY_POLLS for it, retries a taken port, and the send clock starts only once it is ready (#969).
+        collector = otelcol_local.start(
+            lambda port: [str(OTELCOL), f"--config={config(port)}", *feature_gate_args(profile)],
+            pathlib.Path(d) / "collector.log", env=env)
         want = 2 + len(CALLS)
+        got: dict[str, dict] = {}
+        lgot: dict[str, dict] = {}
         try:
-            # Polls, not wall seconds, as test_trace_shape_e2e.py waits (#799): a host stall spends none of them, and
-            # the port is the collector's own only once it says it is ready.
+            # Polls, not wall seconds, as test_trace_shape_e2e.py waits (#799): a host stall spends none of them.
             sent, polls = False, 0
-            while not sent and polls < 100 and proc.poll() is None:
+            while collector.ready and not sent and polls < 100 and collector.proc.poll() is None:
                 polls += 1
-                if "Everything is ready" not in log_file.read_text():
-                    time.sleep(0.3)
-                    continue
                 try:
-                    req = urllib.request.Request(f"http://127.0.0.1:{port}/v1/traces", data=otlp_body(),
+                    req = urllib.request.Request(f"http://127.0.0.1:{collector.port}/v1/traces", data=otlp_body(),
                                                  headers={"Content-Type": "application/json"})
                     sent = urllib.request.urlopen(req, timeout=5).status == 200
                 except OSError:
                     time.sleep(0.3)
-            check(f"{profile}: the collector took the spans", sent, f"collector log tail:\n{log_file.read_text()[-1500:]}")
-            got, lgot, polls = {}, {}, 0
+            check(f"{profile}: the collector took the spans", sent, collector.detail())
+            polls = 0
             while sent and (len(got) < want or len(lgot) < want) and polls < 60:
                 time.sleep(0.5)
                 got, lgot, polls = read_spans(out), read_spans(lout), polls + 1
         finally:
-            proc.terminate()
-            proc.wait(timeout=15)
-            log.close()
-        return got, lgot, log_file.read_text()
+            collector.stop()
+        return got, lgot, collector.log()
 
 
 def unchanged(lgot: dict[str, dict]) -> list[str]:
