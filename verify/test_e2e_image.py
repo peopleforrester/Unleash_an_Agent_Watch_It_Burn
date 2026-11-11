@@ -15,9 +15,11 @@ verify/e2e-tools.lock. What this holds:
   4. tools.txt is held to the lock the same way inside the image (`e2e_image.py matches`), and run-e2e-tools.sh runs
      that check first in the image and fails on a tools.txt that is not the lock's, and fetches nothing there.
   4b. On a host, run-e2e-tools.sh refuses to download: it never names fetch-e2e-tools.sh, curl or wget, and a run that
-     needs the tools goes to `e2e-image.sh run`, the tier tests named passed on. Run for real with a podman stand-in,
-     a host that holds the image starts it and nothing else; one whose pull fails exits 1 naming the image and
-     `bash verify/e2e-image.sh build`, with no container, no curl, no wget and no verify/.tools written.
+     needs the tools goes to `e2e-image.sh run`, the tier tests named passed on. Run for real on a host whose one
+     runtime is a podman or a docker stand-in (the other taken off PATH, #1354): a host that holds the image starts it
+     and nothing else; one that lacks it pulls it once, then starts it; one whose pull fails exits 1 naming the image
+     and `bash verify/e2e-image.sh build`; one with neither runtime exits 1 naming the image. None runs a curl, a wget
+     or a check on the host, or writes verify/.tools.
   5. verify/e2e-image.sh run, with a podman stand-in: a host that holds the tag starts it with --pull=never and pulls
      nothing; a host that lacks it pulls once; a host where the pull fails exits 1 naming the image and
      `bash verify/e2e-image.sh build`, and runs no container, no curl and no fetch-e2e-tools.sh.
@@ -208,35 +210,64 @@ check("on a host, a run that needs the tools is handed to e2e-image.sh run, with
 REF = e2e_image.ref()
 
 
-def host_runner(state: str, *tests: str) -> tuple[subprocess.CompletedProcess, str, bool]:
-    """Run `run-e2e-tools.sh [tests]` on this host, outside the image and unscoped, with a podman stand-in whose
-    image is present, or neither present nor pullable, and curl and wget tripwires first on PATH. Returns the run, every
-    logged call, and whether verify/.tools was made."""
+RUNTIMES = ("podman", "docker")
+
+
+def path_without(names: tuple[str, ...], scratch: pathlib.Path) -> str:
+    """This process's PATH with each directory that holds one of `names` swapped for a directory of links to all its
+    other entries, so the run sees a host without those runtimes even when this one has them (#1354)."""
+    parts: list[str] = []
+    shadows: dict[pathlib.Path, pathlib.Path] = {}
+    for d in os.environ["PATH"].split(os.pathsep):
+        p = pathlib.Path(d)
+        if not d or not p.is_dir() or not any((p / n).exists() for n in names):
+            parts.append(d)
+            continue
+        real = p.resolve()
+        if real not in shadows:
+            shadow = scratch / f"path-{len(shadows)}"
+            shadow.mkdir()
+            for entry in p.iterdir():
+                if entry.name not in names:
+                    (shadow / entry.name).symlink_to(entry)
+            shadows[real] = shadow
+        parts.append(str(shadows[real]))
+    return os.pathsep.join(parts)
+
+
+def host_runner(runtime: str | None, state: str, *tests: str) -> tuple[subprocess.CompletedProcess, str, bool]:
+    """Run `run-e2e-tools.sh [tests]` on this host, outside the image and unscoped, on a host whose one container
+    runtime is a stand-in `runtime` (podman or docker; None for neither, the other taken off PATH either way) whose image
+    is present, pullable, or neither, with curl and wget tripwires first on PATH. Returns the run, every logged call, and
+    whether verify/.tools was made."""
     with tempfile.TemporaryDirectory() as tmp:
         t = pathlib.Path(tmp)
         fakebin = t / "bin"
         fakebin.mkdir()
         log = t / "calls.log"
-        podman = f"""#!/bin/sh
-echo "podman $*" >> "{log}"
+        stubs = {"gh": "#!/bin/sh\nexit 0\n",
+                 "curl": f'#!/bin/sh\necho "curl $*" >> "{log}"\nexit 1\n',
+                 "wget": f'#!/bin/sh\necho "wget $*" >> "{log}"\nexit 1\n'}
+        if runtime is not None:
+            # `podman image exists <ref>` and `docker image inspect <ref>` both start with `image`.
+            stubs[runtime] = f"""#!/bin/sh
+echo "{runtime} $*" >> "{log}"
 case "$1" in
   image) [ "{state}" = present ] && exit 0; exit 1 ;;
-  pull) echo "Error: {REF}: manifest unknown" >&2; exit 125 ;;
+  pull) [ "{state}" = pullable ] && exit 0; echo "Error: {REF}: manifest unknown" >&2; exit 125 ;;
   run) exit 0 ;;
 esac
 exit 3
 """
-        stubs = {"podman": podman, "gh": "#!/bin/sh\nexit 0\n",
-                 "curl": f'#!/bin/sh\necho "curl $*" >> "{log}"\nexit 1\n',
-                 "wget": f'#!/bin/sh\necho "wget $*" >> "{log}"\nexit 1\n'}
         for name, body in stubs.items():
             (fakebin / name).write_text(body)
             (fakebin / name).chmod(0o755)
+        host_path = path_without(tuple(rt for rt in RUNTIMES if rt != runtime), t)
         cache = artifact_cache.scratch_dir("e2e-image-host-")
         tools_before = (HERE / ".tools").exists()
         env = {k: v for k, v in os.environ.items()
                if k not in ("HECATON_BASE_SHA", "HECATON_TEST_FILES", "WIB_E2E_TOOLS", "WIB_CONTAINER_RUNTIME")}
-        env.update(PATH=f"{fakebin}:{os.environ['PATH']}", TMPDIR=str(t), WIB_ARTIFACT_CACHE=str(cache),
+        env.update(PATH=f"{fakebin}:{host_path}", TMPDIR=str(t), WIB_ARTIFACT_CACHE=str(cache),
                    HECATON_TOOLS_CACHE="")
         # A runner that went back to downloading would reach the network through the artifact cache's own urllib, not
         # curl; every proxy here is a closed port on 127.0.0.1, so such a fetch fails at once instead of downloading.
@@ -251,7 +282,7 @@ exit 3
         return r, (log.read_text() if log.exists() else ""), made_tools
 
 
-r, calls, made_tools = host_runner("absent")
+r, calls, made_tools = host_runner("podman", "absent")
 check("with no image on the host and none pullable, run-e2e-tools.sh exits 1 naming the image and how to build it",
       r.returncode == 1 and REF in r.stderr and "bash verify/e2e-image.sh build" in r.stderr
       and "not a skip" in r.stderr, (r.stdout + r.stderr)[-1500:])
@@ -260,7 +291,7 @@ check("it tried the image once and fell back to nothing: one pull, no container,
       calls)
 check("no check ran and nothing was written to verify/.tools", "checks ran" not in r.stdout and not made_tools,
       r.stdout[-800:])
-r, calls, made_tools = host_runner("present", "test_ttyd_ws_auth.py")
+r, calls, made_tools = host_runner("podman", "present", "test_ttyd_ws_auth.py")
 runs = [ln for ln in calls.splitlines() if ln.startswith("podman run ")]
 check("with the image on the host, the named tier test runs inside it, and nothing is pulled or downloaded",
       r.returncode == 0 and len(runs) == 1 and f" {REF} " in runs[0]
@@ -270,6 +301,44 @@ check("with the image on the host, the named tier test runs inside it, and nothi
 check("and the runner says the tier runs inside the image",
       "the tools tier runs inside the wib-e2e-tools image: bash verify/e2e-image.sh run test_ttyd_ws_auth.py"
       in r.stdout, r.stdout[-800:])
+
+# #1354: the image pulled when the host lacks it, and docker on a host that has docker and no podman, through
+# run-e2e-tools.sh itself and not only the launcher.
+for rt in RUNTIMES:
+    other = next(o for o in RUNTIMES if o != rt)
+    if rt == "docker":
+        r, calls, made_tools = host_runner(rt, "present", "test_ttyd_ws_auth.py")
+        runs = [ln for ln in calls.splitlines() if ln.startswith(f"{rt} run ")]
+        check(f"on a host with {rt} alone, an image it holds runs the named tier test, under the lock's tag, with "
+              f"--pull=never, and nothing is pulled or downloaded",
+              r.returncode == 0 and len(runs) == 1 and f" {REF} " in runs[0] and "--pull=never" in runs[0]
+              and runs[0].endswith('run-e2e-tools.sh "$@" tier test_ttyd_ws_auth.py')
+              and f"{rt} pull" not in calls and other not in calls and "curl" not in calls and "wget" not in calls
+              and "checks ran" not in r.stdout and not made_tools, calls + r.stderr[-800:])
+        check(f"and the run says it used {rt}", f"already on this host ({rt})" in r.stdout, r.stdout[-800:])
+    r, calls, made_tools = host_runner(rt, "pullable", "test_ttyd_ws_auth.py")
+    runs = [ln for ln in calls.splitlines() if ln.startswith(f"{rt} run ")]
+    check(f"on a host with {rt} alone that lacks the image, run-e2e-tools.sh pulls it once, then runs the named tier "
+          f"test inside it, and downloads nothing",
+          r.returncode == 0 and calls.count(f"{rt} pull {REF}") == 1 and len(runs) == 1 and f" {REF} " in runs[0]
+          and runs[0].endswith('run-e2e-tools.sh "$@" tier test_ttyd_ws_auth.py')
+          and calls.index(f"{rt} pull ") < calls.index(f"{rt} run ")
+          and other not in calls and "curl" not in calls and "wget" not in calls
+          and "checks ran" not in r.stdout and not made_tools, calls + r.stderr[-800:])
+r, calls, made_tools = host_runner("docker", "absent")
+check("on a host with docker alone, no image and none pullable, run-e2e-tools.sh exits 1 naming the image and how to "
+      "build it",
+      r.returncode == 1 and REF in r.stderr and "bash verify/e2e-image.sh build" in r.stderr
+      and "not a skip" in r.stderr, (r.stdout + r.stderr)[-1500:])
+check("and falls back to nothing: one pull, no container, no curl, no wget, no check, no verify/.tools",
+      calls.count("docker pull ") == 1 and "docker run" not in calls and "podman" not in calls
+      and "curl" not in calls and "wget" not in calls and "checks ran" not in r.stdout and not made_tools, calls)
+r, calls, made_tools = host_runner(None, "absent")
+check("on a host with neither podman nor docker, run-e2e-tools.sh exits 1 naming the image the tier runs in",
+      r.returncode == 1 and "neither podman nor docker" in r.stderr and REF in r.stderr, (r.stdout + r.stderr)[-1500:])
+check("and downloads nothing instead: no curl, no wget, no check, no verify/.tools",
+      "curl" not in calls and "wget" not in calls and "checks ran" not in r.stdout and not made_tools,
+      calls + r.stdout[-800:])
 
 print("== 5. e2e-image.sh run: present is used, absent is pulled once, unpullable fails naming the image ==")
 
