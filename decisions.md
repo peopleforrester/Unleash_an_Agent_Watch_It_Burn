@@ -52368,3 +52368,54 @@ for each run. The script and its two result files stayed in this run's scratch d
 **Tests.** No code or test changed; the change is this entry alone, so the prose gate is the one check it needs.
 
 No dependency was added.
+## 2026-11-11 · #1332 · run 20272 · `transform/coc_mask` in a ConfigMap of its own: each collector ConfigMap under 75% of 1 MiB
+
+**What changed.** `transform/coc_mask` is no longer in `gitops/otel-collector/values.yaml`'s `config`. It is the
+`otel-collector-coc-mask` ConfigMap, `gitops/otel-collector/coc-mask/configmap.yaml`, whose `coc-mask.yaml` is a
+collector config file holding only that processor. Each of the three collector Applications deploys that directory as
+a source of its own, beside the chart and the `$values` ref. `values.yaml` mounts the ConfigMap at `/coc-mask`, not
+optionally, and loads it after relay.yaml with `--config=/coc-mask/coc-mask.yaml`, before the datadog-gate's file. The
+collector merges its config files the way it already merges the Datadog overlay, so the config it runs is the same as
+before, statement for statement.
+
+**Why this option and not the other the issue named.** The patterns sat in the relay four times because helm writes
+the span-event context's YAML alias out in full. A file shipped as a ConfigMap's data is not re-rendered, so the alias
+stays and each pattern sits in it twice. Masking span events without repeating the patterns would need OTTL to carry
+each event's attributes to its span and back by index. That changes what the mask does and how it is tested, where
+this change moves the same text to a second ConfigMap.
+
+**Sizes**, as `verify/test_collector_startup_budget.py` measures them (PyYAML writing every alias out, which comes out
+larger than helm's own render), against the 1,048,576 bytes a ConfigMap's data may hold:
+
+    relay.yaml   instructor 21,529   attendee 21,505   burn 23,161   (2%; 884,171 to 885,803 before, 84%)
+    coc-mask.yaml                    338,033                         (32%)
+
+`helm template` of chart 0.173.1 writes relay at 24,474 to 26,210 bytes on the three profiles. The test now fails when
+either ConfigMap reaches 75%. A mutant with the mask written back into relay.yaml, #1328's layout, must fail it, and
+does at 84%. The coc-mask file can take about 2.3 times today's patterns before it reaches 75%.
+
+**Rolling on a change.** Helm cannot hash a ConfigMap that another source deploys, and the collector reads its config
+only as it starts. So `values.yaml` carries `checksum/coc-mask`, the SHA-256 of `coc-mask.yaml`, as a pod annotation.
+`python3 verify/coc_pattern_copies.py write` rewrites it with the statements, the copies check reports a stale one,
+and `test_collector_coc_mask.py` holds it on every profile.
+
+**Tests changed.** `collector_render.collector_config()` now loads every `--config` in `command.extraArgs` in order and
+finds each file as the pod does (mount, volume, ConfigMap among `extraManifests` and the Application's directory
+sources, key), so every test that renders the collector sees the third file. `test_collector_coc_mask.py` checks the
+source, the mount, the `--config`, that relay.yaml no longer defines the mask, and the checksum.
+`test_collector_no_datadog.py` picks the gate's `--config` out of two. `test_collector_config.py` reads the
+processor from the ConfigMap. `test_scope_tests.py` pins `collector_render.py`'s second run-time read inside its bound.
+The copies registry's Site for the collector moves to the ConfigMap, at 14 spaces' indentation. The two tier tests now
+hand the pinned collector `coc-mask.yaml` as written, as a second `--config`.
+
+**Live check, 2026-11-11.** Neither cluster runs this change yet, so the check is what each would make of it. A
+server-side dry run of the new ConfigMap into `monitoring` (`kubectl apply --server-side --dry-run=server`) was
+admitted on both, `serverside-applied (server dry run)` on watch-it-burn-private. That dry run changes nothing. The
+live relay ConfigMaps hold 704,848 bytes on watch-it-burn-community and 703,136 on watch-it-burn-private, #1328's
+statements.
+
+**Not yet run on a cluster.** After Argo CD syncs this from staging, on both clusters: the `otel-collector`
+Application is Synced and Healthy with the `otel-collector-coc-mask` ConfigMap in `monitoring`. The relay ConfigMap
+should then read about 25 KB with no `transform/coc_mask` definition. The collector pods should roll on the new
+annotation and log `Everything is ready` with no restart, and
+`COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_collector_pii_scrub_live.py` should pass.
