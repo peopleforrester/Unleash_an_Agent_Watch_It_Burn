@@ -55128,3 +55128,113 @@ promotion: watch-it-burn-private's `console-src-5cdfmkh962` still holds "five QR
 **Not yet run on a cluster.** After promotion and Argo CD's sync, watch-it-burn-private's `console-src` ConfigMap in
 `agent` should hold "one QR" and "Take this home: one code opens a page" and no "five QR":
 `kubectl --context watch-it-burn-private -n agent get cm -o name | grep console-src`, then read its `kubecon.html` key.
+## 2026-11-11 · #1336 · run 20295 · The senders dropped spans at the room's ceiling; the traces processors now run behind a queued loopback on two consumers
+
+**The question.** #1334 (run 20287) found the community collector flat at one core through a 500-phone replay and
+working about 70 s past its last reply, but could not read the collector's own metrics, so whether any span was
+dropped was open. #1336 asked for that reading, and for the traces pipeline to use more than one core if spans drop
+or the backlog grows.
+
+**The reading.** On watch-it-burn-community this run ran #644's replay again, as #1334 did, under
+`verify/guard_lease.py hold`, with `--source catalog --users 500 --seed 1336`, from 07:02:40 to 07:05:10 UTC. The
+collector's :8888 metrics, which did not answer through the API server's pod proxy in #1334, did answer through
+`kubectl port-forward pod/<collector> 18889:8888`, and were scraped every 13 to 20 s with the kubelet's CPU stats,
+from 07:01:50 to 07:11:50.
+
+    replay        1,500 sent over 150.3 s, 384 served, 1,116 refused by guard-proxy's cluster window, 0 errors
+    spend         /cost $7.8353 before, $11.5497 after: this replay $3.7144, $0.00967 a served turn
+    collector     pod otel-collector-opentelemetry-collector-agent-9zznp, restarts 0 before and after
+    CPU           193.8 s from 07:02:50 to 07:06:38; each kubelet interval 0.86 to 1.03 CPU from 07:03:30 to
+                  07:05:51; idle again between 07:06:24 and 07:06:38, 74 to 88 s after the replay ended
+    throttling    container_cpu_cfs_throttled_periods_total 0 of 8,118 periods (4,773 since #1334's reading)
+    working set   190 MiB at most, of 512 MiB
+
+The collector's own counters over the replay (07:02:04 to 07:08:09):
+
+    otelcol_receiver_accepted_spans{receiver=otlp,transport=http}   11,620 to 20,895: 9,275 spans
+    otelcol_receiver_refused_spans{receiver=otlp}                    0 throughout
+    otelcol_receiver_failed_spans{receiver=otlp}                     0 throughout
+    otelcol_exporter_send_failed_spans, _enqueue_failed_spans        no series: no exporter failed or turned a span away
+    otelcol_exporter_sent_spans{exporter=datadog}                    9,116 to 16,639
+    otelcol_exporter_queue_size{traces}                              0 or 1 throughout (datadog, otlp_http/llmobs)
+
+The senders' logs from 07:01:00:
+
+    agentgateway (both containers)   4 exports cut at the SDK's 10 s deadline, two at 07:04:21 and two at 07:05:06:
+                                     Export.Failed.DeadlineExceeded ... "telemetry data will be lost"
+    workshop-agent (golang-adk)      no export error
+    guard-proxy, evil-mcp-shim       no export error, no "Queue is full"
+
+**Was a span dropped: yes, by a sender.** The collector refused and failed none, but agentgateway's SDK gave up four
+batches at its 10 s export deadline and counts their spans as lost. The accepted-spans counter stood still across
+those times (18,832 at 07:04:32 and 07:04:45; 20,853 from 07:05:26 to 07:05:53): the receiver was waiting on the batch
+processor. The counters cannot say whether the collector still took a batch after its sender gave up on it. #1334's
+replay did the same, read now from the logs it left: five agentgateway deadlines from 06:36:43 to 06:38:41, and the
+agent's `traces export: ... processor export timeout` at 06:38:32.
+
+**Why.** The batch processor runs one goroutine. It takes new batches from a channel only between exports, and its
+export ran every processor after `batch` and then the exporters. With about 20 ms of CPU a span in the masks (#1334),
+that goroutine was busy for minutes, the channel filled, the OTLP receiver blocked in it, and the senders' requests
+waited past their deadlines.
+
+**What changed.** The traces pipeline is now two pipelines in `gitops/otel-collector/values.yaml`:
+
+- `traces/intake` takes the senders' spans on `otlp` and runs `memory_limiter`, `k8s_attributes/intake` and `batch`,
+  nothing that reads span content, and exports only to `otlp_grpc/relay`.
+- `otlp_grpc/relay` sends to this pod's own `otlp/relay` receiver on localhost:4320, through a sending queue of
+  10,000 spans with two consumers, requests cut to at most 256 spans, a 60 s timeout and no retry.
+- `traces` takes `otlp/relay` alone and runs the same processors as before from `transform/kagent_service_name` on,
+  with the same exporters; only `memory_limiter` and `batch` moved out. Each relay request runs them on a goroutine of
+  its own, so two batches are masked at once.
+- `k8s_attributes/intake` is a passthrough that writes the sender's connection address as `k8s.pod.ip`. Behind the
+  loopback every connection comes from localhost, and the chart's `k8s_attributes`, which it still prepends to
+  `traces` (chart 0.173.1 checks for that exact name), finds the pod by that attribute first.
+- `values-burn.yaml` restates the traces processors without `memory_limiter` and `batch`. The Datadog overlays restate
+  only `traces`' exporters, which did not change.
+
+**Why this option and not the two the issue named.** Moving the masks ahead of `batch` puts them on the receiver's
+request goroutine. Each sender's SDK exports one request at a time, so the work would spread only across senders, and
+each request would wait for its own masking inside the sender's 10 s deadline. Most of the masked text is likely the
+agent's model-call content; that comes from the span shapes, and this run did not measure it. Shards by `metadata_keys` are per sender as
+well. The queue's consumers are a number the collector sets, whatever the senders do. Two consumers match the 2-CPU
+limit. A 256-span request is about 5 s of CPU at #1334's rate, hence the 60 s timeout, and a retry of a request the
+timeout cut would mask and export its spans twice. `filter/drop_noise` stays in `traces`, after the loopback, so the
+processor list the tests run stays whole; noise spans cross the loopback first, which costs a protobuf encode and
+decode, far below their masking.
+
+**What this trades.** A batch the full queue turns away is now dropped in the collector and counted in
+`otelcol_exporter_enqueue_failed_spans`, instead of stalling the senders until they drop it themselves; `memory_limiter`
+at the intake refuses new spans first if the queue's spans fill the pod's memory. Spans still in the queue when the pod
+stops are lost, since the collector stops `otlp/relay` with the other receivers before the exporter drains.
+
+**Tests.** New `verify/test_collector_relay.py` holds the shape on every profile, with and without the Datadog overlays,
+and four mutants fail it (`batch` back in `traces`, the mask in the intake, a retrying relay, one consumer). New tier
+test `verify/test_collector_relay_e2e.py` runs the burn processors over the loopback in the pinned otelcol-contrib:
+600 spans in one request come out once each, scrubbed, with `k8s.pod.ip` 127.0.0.1, in 3 relay calls, and none refused,
+failed or turned away. `test_collector_backends.py` counts `otlp_grpc/relay` as a sink with no backend, and
+`test_collector_coc_mask.py` passes a traces pipeline that sends every span into the masked one. With the two new
+tests 31 tests name `verify/collector_render.py`, so `scope-map.yaml` lists it in `full`.
+
+**Tests run**, each passing: `test_collector_relay.py`, `test_collector_backends.py`, `test_collector_coc_mask.py`,
+`test_scope_tests.py`, `test_test_map.py`, and the tier test alone,
+`bash verify/run-e2e-tools.sh test_collector_relay_e2e.py`: 1 check in 0m19s, `ALL E2E TOOLS TIER CHECKS GREEN`,
+`exit=0` (its first run failed on the test's own all-zero span id, fixed). `otelcol-contrib validate` on the burn
+relay.yaml as `helm template` of chart 0.173.1 writes it, with coc-mask.yaml and the Datadog overlay, passed in 4.7 s
+of CPU. The other tests the change selects, among them the collector tier tests, are left to validation.
+
+**Cluster state.** The replay added $3.71 to attackme's spend counter, now $11.55 of its $25 cap; the Night Before's
+`./fleet.sh reset-bot watch-it-burn-community` zeroes it. Its C6 asks made the bot deploy `joker-anonymous`,
+`joker-guest` and `joker-walk-in-customer` in `agent` (07:02:51 to 07:02:57, scaled to 0), which this run deleted;
+`joker-ichabod-the-werewolf` and `svc/jokers` were there before and stay. The guard lock was taken and released. The
+port-forward ended with the sampler. The replay report, the metrics scrapes and the senders' logs stayed in this run's
+scratch directory.
+
+**Not yet run on a cluster.** Neither cluster runs the change until hecaton promotes it and Argo CD syncs it. Then, on
+watch-it-burn-community: the collector pod rolls with no restart and logs `Everything is ready`; the same replay and
+sampler show the collector above one core or idle within about 15 s of the replay's end, no `DeadlineExceeded` or
+`export timeout` in the senders' logs, `otelcol_exporter_enqueue_failed_spans` and `otelcol_exporter_send_failed_spans`
+for `otlp_grpc/relay` at 0, and `otelcol_receiver_accepted_spans{receiver="otlp/relay"}` keeping pace with the intake's;
+spans in Datadog still carry `k8s.deployment.name`; and
+`COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_collector_pii_scrub_live.py` passes.
+
+No dependency was added.
