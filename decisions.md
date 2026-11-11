@@ -52310,3 +52310,61 @@ to validation.
 Application syncs (server-side, as #1316 set it) and is Synced and Healthy, the ConfigMap's relay.yaml holds 150
 `transform/coc_mask` statements, the collector pod rolls and logs `Everything is ready` within seconds with no
 restart, and `COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_collector_pii_scrub_live.py` passes.
+
+## 2026-11-11 · #1333 · run 20273 · The collector's CPU per /chat turn after #1328: 0.3 to 0.64 s, and the 2-CPU limit holds for the room
+
+**The question.** #1328 cut the code-of-conduct mask into 36 patterns, each scanned over every conversation attribute,
+and Go's regexp took 15.7 ms on a 2,480-character reply for the 36 first passes against 3.4 ms for #1316's single
+pattern. #1333 asked what that costs the collector per real /chat turn, and whether its 2-CPU limit holds for the room.
+
+**#1328 is live.** On 2026-11-11 both clusters' `otel-collector` Application read Synced and Healthy at d2ebbd3e
+(05:51:38Z community, 05:52:45Z private). Each collector pod rolled; community's logged `Everything is ready` 7 s after
+it was created, 0 restarts. The relay ConfigMap holds `transform/coc_mask` as 75 statements for span and 75 for
+spanevent, 36 patterns each, every pattern twice.
+
+**How it was measured.** On watch-it-burn-community, the room's cluster (one t3.2xlarge node, one collector pod with
+the 2-CPU limit), a scratch script sent real turns to `https://attackme.burritobot.co/chat`, each with the probe marker
+and its own session, one at a time, under `verify/guard_lease.py hold`. Every 3 s it read the collector container's
+cumulative CPU (`usageCoreNanoSeconds`) from the kubelet's stats summary, which refreshed about every 14 s. Each batch
+of turns had a window with 60 s after its last reply, and an idle window opened and closed each run. CPU per turn is
+the window's CPU, less the idle rate over the window, over its turns. The console's nginx log showed 26 and 6
+`POST /chat` in the two runs, the script's own, so no other traffic ran in the windows.
+
+    idle (4 windows, 145 to 180 s)       1.8 to 2.0 mCPU
+    12 fresh turns, on-topic asks         4,987 ms above idle   416 ms a turn   replies 167 to 999 chars
+    10 turns of one ordering conversation 2,889 ms              289 ms a turn   replies 106 to 323 chars
+    3 C5 asks (Challenge 1, one get_vault_entry call each)
+                                          1,761 ms              587 ms a turn
+    3 C7 asks (Challenge 4, the weather tool, weather-feed called)
+                                          1,927 ms              642 ms a turn
+    4 turns with a code-of-conduct term: 3 refused by the term floor before the model (0.3 to 0.5 s, 79-character
+    reply), 1 answered; 361 ms above idle for the four, 353 ms in the one interval holding the answered turn
+    collector working set: 80 MiB idle, 142 MiB at most, of its 512 MiB
+
+/cost read 10 requests and $0.0965 before and 39 requests and $0.3677 after, about 11,200 input tokens a request, so
+the two runs spent $0.27 of the $25 cap. The long conversation cost no more a turn than the fresh ones: at about
+11,000 tokens a request, the system prompt and tool list outweigh ten turns of history. The tool-calling turns cost about
+twice a plain one, which fits their second model call carrying the whole request again. This run did not split the
+mask's share from the collector's other work on the same spans: no measurement of this traffic before #1328 exists to
+set it against.
+
+**Does the 2-CPU limit hold? Yes.** However many phones the room holds (#644's replay plans 500), guard-proxy's
+`RATE_LIMIT_RPM` of 150 caps the cluster at 150 turns a minute, 2.5 a second. At that ceiling:
+
+    every turn a plain ask (289 to 416 ms)         0.72 to 1.04 CPU
+    every turn a tool-calling challenge ask (587 to 642 ms)   1.47 to 1.61 CPU
+
+The worst case, the whole room sending Challenge 4's ask at the ceiling, uses about 80% of the limit. The highest
+single kubelet interval was 1,243 ms of CPU over 18 s, with turns sent one at a time. The figures are per-turn
+measurements scaled to the ceiling, not a reading taken at it: Go's regexp is CPU-bound and linear in the text, so
+concurrent turns add their CPU, and the batch processor only groups spans. A turn that calls more tools than C7 would
+cost more and is not in this measurement. Reading the collector's CPU during #644's 500-phone load replay at the
+Night Before would confirm the ceiling figure; it is filed as a follow-up.
+
+**Cluster state.** Nothing on the cluster changed beyond the spend above and the turns' spans in Datadog under
+burritobot-public, which carry the probe marker and stay off the prompt wall. The guard lock was taken and released
+for each run. The script and its two result files stayed in this run's scratch directory.
+
+**Tests.** No code or test changed; the change is this entry alone, so the prose gate is the one check it needs.
+
+No dependency was added.
