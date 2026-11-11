@@ -32,4 +32,5 @@ from `infra/terraform/fleet/`, writes it to both clusters, and `bash verify/term
 terminal takes it and refuses the old one (#912 in the workshop repo).
 
 (Note kept in the workshop repo, not part of the body: on 2026-11-07 the login on both clusters was set by hand
-instead (#1069), and since #1074 `fleet.sh terminal-password` refuses those two clusters.)
+instead (#1069), and #1074 had `fleet.sh terminal-password` refuse those two clusters. Michael stored the login in
+mrf-secrets on 2026-11-09 (mrf-secrets#14) and lifted the hold on 2026-11-11, and #912 wrote it to both clusters.)

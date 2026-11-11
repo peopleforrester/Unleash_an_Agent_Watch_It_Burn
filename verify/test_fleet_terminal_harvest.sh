@@ -188,27 +188,34 @@ WIB_TERMINAL_USER="" WIB_TERMINAL_PASSWORD="" WIB_TERMINAL_ENV="${T}/no-such.env
   src "mkdir -p \"\${LOG_DIR}\"; bootstrap_terminal_auth ${A} accen-qa ${T}/kcfg"
 check "an attendee bootstrap does not need the presenter login" \
   'grep -qx "env-file TTYD_CREDENTIAL=agentic:agentic" "${CALLS}" && [[ -z "$(ledger)" ]]'
-echo "== the KubeCon pair's login is set by hand, and fleet.sh never writes it there (#1069, #1074) =="
+echo "== the KubeCon pair's login comes from mrf-secrets like every roster cluster's (#912 lifted #1074) =="
+printf 'WIB_TERMINAL_USER=placeholder-file-user\nWIB_TERMINAL_PASSWORD=placeholder-file-pw\n' >"${T}/pair.env"
 for n in "${COMMUNITY}" "${PRIVATE}"; do
   reset
-  src "mkdir -p \"\${LOG_DIR}\"; bootstrap_terminal_auth ${n} acct-default ${T}/kcfg"
-  check "${n}: a bring-up that finds no Secret creates none and restarts nothing" \
-    '! grep -q "create secret\| replace \| apply \|rollout" "${CALLS}" && ! grep -q "^env-file" "${CALLS}"'
-  check "${n}: and fails by name, saying a person sets the login by hand" \
-    'ledger | grep -qx "${n}:terminal-login-by-hand" && grep -q "terminal-auth NOT created for ${n}: its login is set by hand (#1069)" "${T}/stderr" && grep -q "until a person sets agent/terminal-auth on it by hand" "${T}/stderr"'
-  check "${n}: and harvests nothing" '! grep -q "^harvest" "${CALLS}"'
-  reset
-  LIVE_CRED='placeholder-hand:placeholder-hand-pw' HARVEST_CRED='placeholder-hand:placeholder-hand-pw' \
+  WIB_TERMINAL_USER="" WIB_TERMINAL_PASSWORD="" WIB_TERMINAL_ENV="${T}/pair.env" HARVEST_CRED='placeholder-file-user:placeholder-file-pw' \
     src "mkdir -p \"\${LOG_DIR}\"; bootstrap_terminal_auth ${n} acct-default ${T}/kcfg"
-  check "${n}: a Secret set by hand is left as it is, only read back" \
+  check "${n}: a bring-up that finds no Secret creates it from WIB_TERMINAL_ENV, on a file descriptor" \
+    'grep -q "create secret generic terminal-auth -n agent --from-env-file=/dev/fd/" "${CALLS}" && grep -qx "env-file TTYD_CREDENTIAL=placeholder-file-user:placeholder-file-pw" "${CALLS}" && ! grep "^kubectl " "${CALLS}" | grep -q "placeholder-file"'
+  check "${n}: then harvests it and restarts the terminal, failing nothing" \
+    'grep -q "^harvest ${n} " "${CALLS}" && grep -q "rollout restart deploy/web-terminal" "${CALLS}" && [[ -z "$(ledger)" ]]'
+  check "${n}: and the login is not logged" '! grep -q "placeholder-file" "${T}/stderr"'
+  reset
+  WIB_TERMINAL_USER="" WIB_TERMINAL_PASSWORD="" WIB_TERMINAL_ENV="${T}/no-such.env" \
+    src "mkdir -p \"\${LOG_DIR}\"; bootstrap_terminal_auth ${n} acct-default ${T}/kcfg"
+  check "${n}: with mrf-secrets' login absent no Secret is created and it fails by name" \
+    '! grep -q "create secret" "${CALLS}" && ledger | grep -qx "${n}:terminal-login"'
+  reset
+  LIVE_CRED='placeholder-live:placeholder-live-pw' HARVEST_CRED='placeholder-live:placeholder-live-pw' \
+    src "mkdir -p \"\${LOG_DIR}\"; bootstrap_terminal_auth ${n} acct-default ${T}/kcfg"
+  check "${n}: a Secret already there is left as it is, only read back" \
     '! grep -q "create secret\| replace \| apply \|rollout" "${CALLS}" && grep -q "^harvest ${n} " "${CALLS}" && [[ -z "$(ledger)" ]]'
-  check "${n}: and the login it holds is not logged" '! grep -q "placeholder-hand" "${T}/stderr"'
+  check "${n}: and the login it holds is not logged" '! grep -q "placeholder-live" "${T}/stderr"'
 done
 reset
 WIB_TERMINAL_USER="" WIB_TERMINAL_PASSWORD="" WIB_TERMINAL_ENV="${T}/no-such.env" \
   src "require_tools() { echo REQUIRE-TOOLS >&2; }; _provision_spec_fleet() { echo BUILD-RAN >&2; }; print_bootstrap_hints() { :; }; cmd_guardrails_link() { :; }; cmd_desk_link() { :; }; WIB_ROSTER_PROFILES=kubecon; rc=0; (cmd_instructors up all) || rc=\$?; echo rc=\${rc}" >"${T}/out"
-check "instructors up of only the KubeCon pair, which writes no login there, does not need the presenter login" \
-  'grep -qx "rc=0" "${T}/out" && grep -q "BUILD-RAN" "${T}/stderr" && ! grep -q "REFUSING instructors up" "${T}/stderr"'
+check "instructors up of only the KubeCon pair needs the presenter login too: absent, it exits 1 and builds nothing" \
+  'grep -qx "rc=1" "${T}/out" && grep -q "REFUSING instructors up" "${T}/stderr" && ! grep -q "BUILD-RAN" "${T}/stderr"'
 # A roster with a presenter cluster beside the pair: that one's Secret is written from mrf-secrets, so the check holds.
 printf 'watch-it-burn-community|community|||-1|burn|\nwatch-it-burn-whitney-admin|admin||||admin|whitney\n' >"${T}/roster.tsv"
 reset
