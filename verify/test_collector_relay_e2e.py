@@ -82,6 +82,19 @@ def metric(text: str, name: str, label: str) -> float:
     return total
 
 
+def read(path: pathlib.Path) -> tuple[dict[str, list[dict]], list[dict]]:
+    """The file exporter's spans by span id, each id with every copy of it, and every resource they came in."""
+    got: dict[str, list[dict]] = {}
+    resources: list[dict] = []
+    for line in (path.read_text().splitlines() if path.exists() else []):
+        for rs in json.loads(line)["resourceSpans"]:
+            resources.append(rs.get("resource", {}))
+            for ss in rs["scopeSpans"]:
+                for s in ss["spans"]:
+                    got.setdefault(s.get("spanId", ""), []).append(s)
+    return got, resources
+
+
 burn = collector_config("burn", datadog_secret=False)
 pipes = burn["service"]["pipelines"]
 intake, traces = pipes[INTAKE], pipes[TRACES]
@@ -97,7 +110,7 @@ processors = {p: copy.deepcopy(burn["processors"][p]) for p in intake["processor
 processors["batch"]["timeout"] = "200ms"  # the 5 s the room uses only slows the test
 
 trace = "5b8efff798038103d269b633813fc6"
-spans = [{"traceId": f"{trace}{i // 256:02x}", "spanId": f"{i:016x}", "name": f"chat {i}", "kind": 2,
+spans = [{"traceId": f"{trace}{i // 256:02x}", "spanId": f"{i + 1:016x}", "name": f"chat {i}", "kind": 2,
           "startTimeUnixNano": "1730000000000000000", "endTimeUnixNano": "1730000001000000000",
           "attributes": [kv("gen_ai.operation.name", "chat"),
                          kv("gen_ai.input.messages", json.dumps([{"role": "user", "parts": [
@@ -152,22 +165,10 @@ with tempfile.TemporaryDirectory() as d:
         deadline = time.time() + 60
         while sent and sum(map(len, got.values())) < SPANS and time.time() < deadline:
             time.sleep(0.5)
-            got, resources = {}, []
-            for line in (out.read_text().splitlines() if out.exists() else []):
-                for rs in json.loads(line)["resourceSpans"]:
-                    resources.append(rs.get("resource", {}))
-                    for ss in rs["scopeSpans"]:
-                        for s in ss["spans"]:
-                            got.setdefault(s["spanId"], []).append(s)
+            got, resources = read(out)
         if sent:
             time.sleep(1)  # one more read, so a span sent twice shows
-            got, resources = {}, []
-            for line in (out.read_text().splitlines() if out.exists() else []):
-                for rs in json.loads(line)["resourceSpans"]:
-                    resources.append(rs.get("resource", {}))
-                    for ss in rs["scopeSpans"]:
-                        for s in ss["spans"]:
-                            got.setdefault(s["spanId"], []).append(s)
+            got, resources = read(out)
             with urllib.request.urlopen(f"http://127.0.0.1:{metrics_port}/metrics", timeout=10) as r:
                 metrics = r.read().decode()
     finally:
