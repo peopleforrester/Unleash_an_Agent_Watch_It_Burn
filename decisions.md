@@ -53234,3 +53234,58 @@ filed on the desk's form is read by number by both bots, and each bot's deploy s
 `python3 verify/test_chat_phone_screen_e2e.py --live` (both live pages with the new buttons), and a browser read of
 `https://attackme.agenticburn.com/` landing on `attackme.burritobot.co` with a witch name, with
 `deployments.burritobot.co` tagging rows "from attackme" and "from presenters".
+
+## 2026-11-11 · #1347 · run 20415 · the run 20413 draft finished: the four-button layout test reworked for seven, and both entry points read by both bots live
+
+Run 20413's draft went to the doc lane and was moved off it for its code, so this run starts from its commit
+(73c37d20). Staging had not moved since that draft's base (a53c340d), so the draft stands as it was, with the
+change below.
+
+**The layout test.** `verify/test_mobile_titles_e2e.py` loads the page from the file with `event.js` beside it, so the
+draft's three buttons show and the bar has the private bot's seven. It held that four buttons show labels at 680px and
+760px, which seven cannot: it failed there, and `test_chat_wide_font_e2e.py`, which runs it in DejaVu, failed with
+it. The test now renders four copies: as shipped (seven buttons), a workshop copy whose `event.js` sets
+`deploymentsUrl`, `supportUrl` and `beaconUrl` to "" (four buttons, the 2-hour workshop's bar), and a 4px
+letter-spaced copy of each. The four-button bar keeps the 680px label threshold and the proof that the fit engages on
+the widest fonts; the seven-button bar shows icons at every width up to 760px and labels at 1280px; every copy passes
+the one-row, no-clip, one-size and no-sideways-scroll checks at every width. The test counts only the buttons the page
+shows, and it exits naming `event.js` when it cannot find the three URLs to blank. Both tests pass:
+`python3 verify/test_mobile_titles_e2e.py` (441 checks) and `python3 verify/test_chat_wide_font_e2e.py`.
+
+**Other tests run here**, each once and passing: the draft's seven (`test_desk_remote_reports.py`,
+`test_storefront_witch_name_e2e.py`, `test_audience_page_e2e.py`, `test_chat_no_desk_link.py`,
+`test_mobile_titles.py`, `test_private_chat_deployments.py`, `test_witch_name_vocab.py`), and, as readers of the page,
+`event.js` or the witch name, `test_agent_witch_name.py`, `test_audience_path.py`, `test_audience_event.py`,
+`test_event_tag.py`, `test_hostname_tag.py`, `test_chat_phone_screen_e2e.py`, `test_chat_pane_overlap_e2e.py` and
+`test_deployments_witch_line_e2e.py`. `python3 verify/scope_tests.py write` changed nothing.
+
+**Live, 2026-11-11 about 14:20Z, on watch-it-burn-community and watch-it-burn-private** (this run's `$KUBECONFIG`,
+profile accen-dev):
+
+- `python3 verify/one_desk_live.py --community-context watch-it-burn-community --private-context
+  watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile accen-dev` printed `12 checks: 12 PASS, 0 FAIL` and
+  `ONE DESK LIVE GREEN`: the desk's own form filed HC-2778, `read_support_ticket(HC-2778)` printed the ticket in both
+  clusters' workshop-mcp tool pods, each bot's deploy_app ConfigMap showed on the one page labelled community and
+  private, and the ConfigMaps, the two rows and the ticket were removed, with nothing of them left.
+- The presenters' path, read by both bots: a one-off driver over `presenter_ticket_live.py`'s own steps, with its read
+  step done as `one_desk_live.py`'s tool-pod read on each cluster in place of the chat ask, so no model call. It
+  printed `7 checks: 7 PASS, 0 FAIL`: the community cluster's identity matched attackme, `POST /presenter-ticket`
+  through `kubectl port-forward svc/fake-ticket` answered 201 with HC-900, `https://support.burritobot.co/ticket/HC-900`
+  showed it, `read_support_ticket(HC-900)` printed it on community and on private, and `/desk-forget` removed it, so
+  the desk answers 404 for HC-900 again.
+- So the room's form and the presenters' HC-9xx both land on the one desk, and both bots read each by number. The bots
+  file no ticket of their own (workshop-mcp has no tool that files one), so these are every entry point.
+- HTTP reads: `https://attackme.burritobot.co/event.js` answers 200 as `application/javascript` with no
+  Content-Security-Policy on `attackme.agenticburn.com`, so the agenticburn.com page's probe of its twin will load and
+  move it. `deployments-burritobot-private` and `support-burritobot-private` still answer 307 to the one page and the
+  one desk. The live chat page and `event.js` carry none of this change yet, and `/deployments.json`'s two rows (both
+  `private`) carry no `server` field yet.
+
+Each cluster was left as found: the checks' ticket, rows and ConfigMaps are gone, and no guard or Secret was touched.
+
+**Not yet run on a cluster.** The page and the deployments page take this change only once hecaton promotes it and
+Argo CD syncs it. The next run on the issue then runs `python3 verify/test_chat_phone_screen_e2e.py --live` and reads,
+in a browser at 390x844 and 1440x900, `https://attackme.agenticburn.com/` landing on `https://attackme.burritobot.co/`
+with a witch name and the Deployments, Support and Beacon buttons and no Terminal or Datadog, and
+`https://burritobot-private.burritobot.co/` with all seven; and reads `https://deployments.burritobot.co/deployments.json`
+for a `server` of `attackme` or `presenters` on each labelled row.

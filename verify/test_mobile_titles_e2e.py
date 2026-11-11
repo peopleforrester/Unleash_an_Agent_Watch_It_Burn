@@ -5,11 +5,15 @@
 """The rendered half of verify/test_mobile_titles.py.
 
 At each width the page is loaded from the file with every network request aborted (only layout is under
-test), so all four header buttons show and no witch name does. These must hold:
+test), so no witch name shows, and every header button the event names does: as shipped that is the private bot's
+seven (Terminal, BurritoBot, Datadog, the room's Deployments, Support and Beacon of #1347, and Feedback), and on a
+copy whose event.js sets those three URLs to "", as the 2-hour workshop does, the four it had before. These must
+hold:
 
 - the title "BurritoBot" is one line;
 - below 760px the bar is one row (#1214): every header button sits on the title's row, none clipped, none past
-  the right edge, all at one font size; with four buttons a phone shows their icons and 680px and up their labels;
+  the right edge, all at one font size; with four buttons a phone shows their icons and 680px and up their labels,
+  and with seven every width up to 760px shows their icons;
 - in the chat card, the avatar, "BurritoBot", the ⓘ toggle and Reset share one row, the title and Reset are one
   line each, and the tagline is folded;
 - nothing makes the page scroll sideways.
@@ -19,10 +23,11 @@ unchanged.
 
 Which fonts the host has decides how wide a label renders (#1047: a label fit on netcup and was cut off on Tanjiro's
 CI runner). So the page measures the bar and drops its domain, falls back to icons, closes its gaps, then steps to a
-smaller font (#1253), rather than resting on the host's fonts, and this test does not rest on them to prove it. It renders the page twice: as shipped, and as a copy
-whose header buttons carry 4px of letter-spacing, about 40px wider per label than any font the host could pick. That
-copy must still pass every check, and at 680px, where the shipped page keeps its four labels, it must show icons,
-so the fit is shown to work on the widest fonts, not only on the ones this host happens to have.
+smaller font (#1253), then halves the buttons' padding (#1347), rather than resting on the host's fonts, and this
+test does not rest on them to prove it. It renders each of the two bars twice: as it is, and as a copy whose header
+buttons carry 4px of letter-spacing, about 40px wider per label than any font the host could pick. That copy must
+still pass every check, and at 680px, where the four-button bar keeps its labels, its wide copy must show icons, so
+the fit is shown to work on the widest fonts, not only on the ones this host happens to have.
 
 Needs uv and network on a cold host: the playwright pinned in verify/python.lock comes from the host artifact cache
 through verify/package_cache.py (#1121), and `playwright install chromium` fetches a browser only when one is missing, because it locks the browsers
@@ -33,6 +38,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -72,11 +78,30 @@ if not_ready:
     print("FAILED: Chromium cannot run; this is a failure, not a skip:\n" + "\n".join(f"  - {p}" for p in not_ready))
     sys.exit(1)
 
-# The wide-font copy sits beside its own copy of event.js, which the page loads by a relative path.
+# Each copy sits beside its own copy of event.js, which the page loads by a relative path. The workshop's event.js
+# is the shipped one with the room's three page URLs set to "", which hides their buttons (#1347).
+event = EVENT_JS.read_text(encoding="utf-8")
+ROOM_URLS = re.compile(r'^(\s*(?:deploymentsUrl|supportUrl|beaconUrl): )"https://[^"]*"', re.M)
+if len(ROOM_URLS.findall(event)) != 3:
+    print(f"FAILED: {EVENT_JS} does not set deploymentsUrl, supportUrl and beaconUrl to an https URL each "
+          f"(found {len(ROOM_URLS.findall(event))}), so the four-button workshop copy cannot be built")
+    sys.exit(1)
 scratch = pathlib.Path(tempfile.mkdtemp(prefix="mobile-titles-"))
-WIDE = scratch / PAGE.name
-WIDE.write_text(html.replace(HEAD_END, WIDEN + HEAD_END), encoding="utf-8")
-shutil.copy(EVENT_JS, scratch / EVENT_JS.name)
+
+
+def copy_of(name: str, page_html: str, event_js: str) -> pathlib.Path:
+    d = scratch / name
+    d.mkdir()
+    (d / PAGE.name).write_text(page_html, encoding="utf-8")
+    (d / EVENT_JS.name).write_text(event_js, encoding="utf-8")
+    return d / PAGE.name
+
+
+wide_html = html.replace(HEAD_END, WIDEN + HEAD_END)
+workshop_js = ROOM_URLS.sub(r'\1""', event)
+WIDE = copy_of("wide", wide_html, event)
+WORKSHOP = copy_of("workshop", html, workshop_js)
+WORKSHOP_WIDE = copy_of("workshop-wide", wide_html, workshop_js)
 
 # Runs inside the uv environment. Prints one JSON object per width: the boxes the checks below need.
 MEASURE = r"""
@@ -86,7 +111,8 @@ pages, widths = json.loads(sys.argv[1]), json.loads(sys.argv[2])
 JS = '''() => {
   const box = e => { const r = e.getBoundingClientRect(); return {l:r.left, t:r.top, r:r.right, b:r.bottom, h:r.height}; };
   const hdr = document.querySelector('body>header'), ch = document.querySelector('.chathead');
-  const btns = [...hdr.querySelectorAll('a.hb')];
+  // The buttons the page shows: a button the event names no page for stays hidden and takes no room (#1347).
+  const btns = [...hdr.querySelectorAll('a.hb')].filter(a => !a.hidden && a.getClientRects().length > 0);
   // Line boxes, counted from the content itself: a Range's rects, where a rect that starts below the
   // current line's bottom opens a new line. Overlap, not equal tops, because the title mixes an icon and
   // two type sizes on one line.
@@ -121,7 +147,9 @@ with sync_playwright() as p:
             pg.close()
     b.close()
 """
-PAGES = [["as shipped", PAGE.as_uri()], ["wide fonts", WIDE.as_uri()]]
+PAGES = [["as shipped", PAGE.as_uri()], ["wide fonts", WIDE.as_uri()],
+         ["workshop", WORKSHOP.as_uri()], ["workshop, wide fonts", WORKSHOP_WIDE.as_uri()]]
+COUNT = {"as shipped": 7, "wide fonts": 7, "workshop": 4, "workshop, wide fonts": 4}
 run = subprocess.run([*UV, "python", "-I", "-c", MEASURE, json.dumps(PAGES), json.dumps(WIDTHS)],
                      capture_output=True, text=True)
 shutil.rmtree(scratch, ignore_errors=True)
@@ -141,6 +169,8 @@ for m in map(json.loads, run.stdout.splitlines()):
     icons[(label, w)] = m["icons"]
     tag = f"{w}" if label == "as shipped" else f"{w} {label}"
     print(f"== {w}px ==" if label == "as shipped" else f"== {w}px, {label} ==")
+    check(f"{tag}: the bar shows the {COUNT[label]} buttons its event names", len(btns) == COUNT[label],
+          f"{len(btns)} shown")
     check(f"{tag}: nothing scrolls sideways", m["docW"] <= w, f"scrollWidth {m['docW']}")
     check(f"{tag}: the title is one line", m["brandLines"] == 1, f"{m['brandLines']} lines")
     check(f"{tag}: no header button is clipped", not m["clipped"],
@@ -156,9 +186,11 @@ for m in map(json.loads, run.stdout.splitlines()):
         check(f"{tag}: desktop shows the tagline and no ⓘ toggle", m["sub"] and m["about"] is None,
               f"tagline {m['sub']}, toggle {m['about']}")
     else:
-        if label == "as shipped":
+        if label == "workshop":
             check(f"{tag}: four buttons show {'labels' if w >= 680 else 'icons'} at this width",
                   m["icons"] == (w < 680), f"icons {m['icons']}")
+        if label == "as shipped":
+            check(f"{tag}: seven buttons show icons at this width", m["icons"], f"icons {m['icons']}")
         check(f"{tag}: avatar, chat title, ⓘ and Reset share a row",
               m["about"] is not None and all(same_row(m["avatar"], x) for x in (m["h2"], m["about"], m["reset"])),
               f"avatar {m['avatar']}, title {m['h2']}, about {m['about']}, reset {m['reset']}")
@@ -168,9 +200,9 @@ for m in map(json.loads, run.stdout.splitlines()):
 
 print("== the fit engaged on the wide-font copy ==")
 for w in (680,):
-    check(f"at {w}px the shipped page keeps its labels and the wide-font copy falls back to icons, so the fit ran "
-          "and was measured", icons.get(("as shipped", w)) is False and icons.get(("wide fonts", w)) is True,
-          f"shipped icons {icons.get(('as shipped', w))}, wide-font icons {icons.get(('wide fonts', w))}")
+    check(f"at {w}px the four-button bar keeps its labels and its wide-font copy falls back to icons, so the fit ran "
+          "and was measured", icons.get(("workshop", w)) is False and icons.get(("workshop, wide fonts", w)) is True,
+          f"workshop icons {icons.get(('workshop', w))}, wide-font icons {icons.get(('workshop, wide fonts', w))}")
 
 print()
 if failures:
