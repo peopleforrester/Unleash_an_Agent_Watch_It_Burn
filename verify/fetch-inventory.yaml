@@ -537,6 +537,11 @@ sites:
     lines: 6
     class: none
     why: comments, docstrings or messages that name the command; none runs it
+  verify/ci-base-sha.sh:
+  - match: .
+    lines: 1
+    class: none
+    why: a comment naming curl's connect timeout, which git's fetch of staging waited out on staging 3da68e84 (#1330); the script runs no curl
   verify/ci_chromium_libs.py:
   - match: '"-q", "(update|download)"'
     lines: 2
@@ -1880,6 +1885,11 @@ sites:
     lines: 2
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_verify_suites_workflow.py:
+  - match: .
+    lines: 1
+    class: none
+    why: the docstring naming curl's connect timeout, which git's fetch of staging waited out on staging 3da68e84 (#1330); the test runs no curl
   verify/test_walkthrough_no_state.sh:
   - match: .
     lines: 1

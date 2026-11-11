@@ -52215,3 +52215,12 @@ next push.
 exit-as-skip. The guard is gone. Every logged timeout call is already held to the script's exact call, so a call in
 another shape fails that check by name. `python3 verify/test_verify_suites_workflow.py` exit 0, 89 checks PASS, the
 six #1330 checks among them. No live check: the change is to a CI script and its test under `verify/`.
+
+**Run 20266.** Run 20265's commits failed hecaton's `tests` gate on one test, `verify/test_fetch_inventory.py`: the
+draft's new comment in `verify/ci-base-sha.sh` and docstring in `verify/test_verify_suites_workflow.py` name curl's
+300 s connect timeout, the scan reads a line that names curl as a fetch call site, and `verify/fetch-inventory.yaml`
+had no entry for either file. Each file gets one entry of class `none`, since neither runs curl. The "--context is
+empty" line at the head of that gate's output is a message another test prints on purpose. The draft's two
+commits were cherry-picked onto c53df166 with no conflict. `python3 verify/test_fetch_inventory.py` exit 0, "All
+fetch inventory checks passed". No live check: the change is to CI scripts, their test and the inventory under
+`verify/`, which no cluster runs.
