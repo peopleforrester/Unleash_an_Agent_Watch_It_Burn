@@ -437,7 +437,9 @@
       <code>app.datadoghq.com/apm/traces</code> and search
       <code>service:burritobot @session.id:wib-stage-c3-pii-&lt;stamp&gt;</code> on Past 7 Days. The input guard keeps
       someone else's e-mail, card, SSN or phone number out of the model and the traces. Say "deterministic" only for
-      the Role, never for the classifier. <code>guard-agency-off</code> puts the scoped Role back.
+      the Role, never for the classifier. <code>guard-agency-off</code> gives the workload verbs back. Both commands
+      leave the Secret rule as they found it, so from the start state <code>guard-agency-on</code> then
+      <code>guard-agency-off</code> ends with RBAC still off.
       <code>support-attackme.burritobot.co</code> is the same desk, if the bare name ever fails.</p>
       <div class="fallback"><span class="lbl">If it wanders</span><code onclick="cp(this)">CONTEXT=&lt;private-context&gt; challenges/02-sanitization/fallback.curl.sh input<button class="cp">copy</button></code> turns the input guard on and calls <code>read_support_ticket</code> in the tool pod, so the withheld ticket is proven without the model. For least privilege, <code onclick="cp(this)">kubectl --context &lt;private-context&gt; -n agent auth can-i create deployments --as=system:serviceaccount:agent:workshop-mcp<button class="cp">copy</button></code> answers <code>no</code> once <code>guard-agency-on</code> has run.</div>
       </details>

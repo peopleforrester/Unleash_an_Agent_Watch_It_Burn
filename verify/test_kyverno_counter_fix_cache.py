@@ -84,7 +84,7 @@ def amd64_digest(dest: pathlib.Path) -> str:
 
 crane = os.environ.get("CRANE", "")
 if not crane or not os.access(crane, os.X_OK):
-    print(f"CRANE must name the pinned crane (verify/fetch-e2e-tools.sh puts it at verify/.tools/bin/crane); got {crane!r}")
+    print(f"CRANE must name the pinned crane (run-e2e.sh copies it out of the wib-e2e-tools image to verify/.tools/bin/crane); got {crane!r}")
     raise SystemExit(1)
 
 text = BUILD.read_text(encoding="utf-8")

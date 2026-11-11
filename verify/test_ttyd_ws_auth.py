@@ -30,8 +30,8 @@ What ttyd 1.7.7 does, and what this holds:
   * The positive control: the right Basic credential and the right AuthToken start exactly one shell, whose output
     arrives. Without it, a ttyd that could start no shell at all would pass every case above.
 
-Install: none. verify/fetch-e2e-tools.sh fetches ttyd from e2e-tools.lock, and run-e2e.sh and run-e2e-tools.sh point
-$TTYD at it. Run by hand: TTYD=verify/.tools/bin/ttyd python3 verify/test_ttyd_ws_auth.py
+Install: none. ttyd is e2e-tools.lock's, in the wib-e2e-tools image; run-e2e.sh copies it out (the e2e-image tools verb),
+and it and run-e2e-tools.sh point $TTYD at it. Run by hand: TTYD=verify/.tools/bin/ttyd python3 verify/test_ttyd_ws_auth.py
 """
 from __future__ import annotations
 
@@ -95,7 +95,7 @@ print("== the ttyd under test is the pod's ttyd, with the pod's flags ==")
 ttyd = os.environ.get("TTYD", "")
 if not ttyd or not os.access(ttyd, os.X_OK):
     check("TTYD names an executable ttyd (run-e2e-tools.sh points it at verify/.tools/bin/ttyd)", False,
-          f"TTYD={ttyd!r}: run bash verify/fetch-e2e-tools.sh, then TTYD=verify/.tools/bin/ttyd")
+          f"TTYD={ttyd!r}: run it through bash verify/run-e2e-tools.sh, or copy the image's tools out (the e2e-image tools verb), then TTYD=verify/.tools/bin/ttyd")
     finish()
 pinned = next((ln.split()[1] for ln in LOCK.read_text().splitlines() if ln.startswith("ttyd ")), "")
 version = subprocess.run([ttyd, "--version"], capture_output=True, text=True).stdout.strip()

@@ -83,9 +83,8 @@ for rel, entries in sites.items():
                 missing_pins.append(f"{rel}: pin {e['pin']!r} names {head}, which is not in the repo")
 check("each pinned site's pin that starts with a repo path names a file or directory that is there", not missing_pins,
       "; ".join(missing_pins))
-fetch_tools = [rel for rel in sites if rel == "verify/fetch-e2e-tools.sh"]
-check("the E2E tools fetch is listed, through the artifact cache", fetch_tools == ["verify/fetch-e2e-tools.sh"] and
-      all(e.get("class") == "pinned" and e.get("cached") is True for e in sites["verify/fetch-e2e-tools.sh"]))
+check("the E2E tools' per-file fetch is gone, and so is its entry: the image carries the lock's binaries (#1360)",
+      "verify/fetch-e2e-tools.sh" not in sites and not (VERIFY / "fetch-e2e-tools.sh").exists())
 
 print("== images/: the build scripts workflows and tier tests run are scanned and classed (#1251) ==")
 scanned = set(fi.tracked())

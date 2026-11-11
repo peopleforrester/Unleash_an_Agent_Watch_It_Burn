@@ -23,6 +23,11 @@ verify/e2e-tools.lock. What this holds:
   5. verify/e2e-image.sh run, with a podman stand-in: a host that holds the tag starts it with --pull=never and pulls
      nothing; a host that lacks it pulls once; a host where the pull fails exits 1 naming the image and
      `bash verify/e2e-image.sh build`, and runs no container, no curl and no fetch-e2e-tools.sh.
+  5c. verify/e2e-image.sh tools <dir> (#1360), with a podman stand-in whose image is a scratch directory: the image's
+     /opt/wib-e2e-tools/bin and tools.txt land in <dir>, replacing what was there, from a container that is created,
+     never started, and removed; an image of another lock, one missing a tool, and one the host lacks and cannot
+     pull each exit 1 naming why and leave <dir>'s old tools as they were, with nothing downloaded. run-e2e.sh,
+     iam-policy.yml copy their tools this way, and verify/fetch-e2e-tools.sh is gone.
   6. The workflow builds on a GitHub-hosted runner, only when the lock or a build input changes, checks the pins
      first, and pushes through scripts/ghcr_version_tag.py.
 """
@@ -407,6 +412,105 @@ check("and no container runs, and nothing is downloaded instead",
       "podman run" not in calls and "curl" not in calls and "wget" not in calls, calls)
 check("e2e-image.sh never runs fetch-e2e-tools.sh",
       "fetch-e2e-tools" not in (HERE / "e2e-image.sh").read_text(encoding="utf-8"))
+
+print("== 5c. e2e-image.sh tools copies the image's binaries out, held to the lock, or fails naming why (#1360) ==")
+image_sh = (HERE / "e2e-image.sh").read_text(encoding="utf-8")
+check("e2e-image.sh copies from the directory the Containerfile's WIB_E2E_TOOLS names",
+      "IMAGE_TOOLS=/opt/wib-e2e-tools\n" in image_sh
+      and re.search(r"^ENV DEBIAN_FRONTEND=noninteractive \\\n\s+WIB_E2E_TOOLS=/opt/wib-e2e-tools \\$", CF_TEXT, re.M)
+      is not None)
+TOOLS_PODMAN = """#!/bin/sh
+echo "podman $*" >> "$PODMAN_LOG"
+case "$1" in
+  image) [ "$PODMAN_STATE" = present ] ;;
+  pull) echo "Error: manifest unknown" >&2; exit 125 ;;
+  create) echo cid-fixture ;;
+  cp) exec cp -a "$PODMAN_IMAGE/${2#cid-fixture:/opt/wib-e2e-tools/}" "$3" ;;
+  rm) exit 0 ;;
+  *) exit 3 ;;
+esac
+"""
+
+
+def copier(state: str, tools_txt: str = TOOLS_TXT, drop: str | None = None
+           ) -> tuple[subprocess.CompletedProcess, str, pathlib.Path, dict[str, bytes]]:
+    """Run `e2e-image.sh tools <dir>` with a podman stand-in whose image (present, or neither present nor pullable)
+    holds tools.txt and one stand-in binary per lock tool, less `drop`. <dir> starts with an old bin/ and tools.txt.
+    Returns the run, every logged call, and <dir>'s files afterwards, by path under it."""
+    with tempfile.TemporaryDirectory() as tmp:
+        t = pathlib.Path(tmp)
+        fakebin, image, dest = t / "bin", t / "image", t / "dest"
+        for d in (fakebin, image / "bin", dest / "bin"):
+            d.mkdir(parents=True)
+        log = t / "calls.log"
+        (image / "tools.txt").write_text(tools_txt)
+        for name, *_ in LOCK:
+            if name != drop:
+                (image / "bin" / name).write_text(f"#!/bin/sh\necho {name} from the image\n")
+                (image / "bin" / name).chmod(0o755)
+        (dest / "bin" / "old-tool").write_text("an older copy")
+        (dest / "tools.txt").write_text("old tools.txt\n")
+        stubs = {"podman": TOOLS_PODMAN, "curl": f'#!/bin/sh\necho "curl $*" >> "{log}"\nexit 1\n',
+                 "wget": f'#!/bin/sh\necho "wget $*" >> "{log}"\nexit 1\n'}
+        for name, body in stubs.items():
+            (fakebin / name).write_text(body)
+            (fakebin / name).chmod(0o755)
+        env = {k: v for k, v in os.environ.items() if k != "WIB_CONTAINER_RUNTIME"}
+        env.update(PATH=f"{fakebin}:{os.environ['PATH']}", TMPDIR=str(t), PODMAN_LOG=str(log), PODMAN_STATE=state,
+                   PODMAN_IMAGE=str(image))
+        r = subprocess.run(["bash", str(HERE / "e2e-image.sh"), "tools", str(dest)], capture_output=True, text=True,
+                           env=env, timeout=120)
+        files = {p.relative_to(dest).as_posix(): p.read_bytes() for p in sorted(dest.rglob("*")) if p.is_file()}
+        modes = all(os.access(p, os.X_OK) for p in (dest / "bin").iterdir()) if (dest / "bin").is_dir() else False
+        files["<every bin file executable>"] = b"yes" if modes else b"no"
+        return r, (log.read_text() if log.exists() else ""), dest, files
+
+
+OLD = {"bin/old-tool": b"an older copy", "tools.txt": b"old tools.txt\n", "<every bin file executable>": b"no"}
+r, calls, dest, files = copier("present")
+names = [n for n, *_ in LOCK]
+check("an image on the host: every lock tool lands in <dir>/bin, executable, with the image's tools.txt beside it",
+      r.returncode == 0 and sorted(k for k in files if k.startswith("bin/")) == sorted(f"bin/{n}" for n in names)
+      and files["tools.txt"] == TOOLS_TXT.encode() and files["<every bin file executable>"] == b"yes"
+      and all(files[f"bin/{n}"] == f"#!/bin/sh\necho {n} from the image\n".encode() for n in names),
+      r.stdout + r.stderr + str(sorted(files)))
+check("what was in <dir> before is replaced, not kept beside it, and no staging directory is left",
+      "bin/old-tool" not in files and not any(k.startswith(".from-image") for k in files), str(sorted(files)))
+lines = calls.splitlines()
+check("it pulls nothing, creates one container without starting it, copies bin and tools.txt, and removes it",
+      lines[0] == f"podman image exists {REF}" and lines[1] == f"podman create --pull=never {REF} true"
+      and lines[2] == "podman cp cid-fixture:/opt/wib-e2e-tools/bin " + lines[2].split()[-1]
+      and lines[3].startswith("podman cp cid-fixture:/opt/wib-e2e-tools/tools.txt ")
+      and lines[-1] == "podman rm -f cid-fixture" and "podman pull" not in calls and " run " not in calls
+      and "start" not in calls and "curl" not in calls and "wget" not in calls, calls)
+check("it says how many tools it copied, from which image, to where",
+      f"{len(names)} pinned tools from {REF} in " in r.stdout, r.stdout)
+for label, kwargs, why in (
+        ("an image of another lock", {"tools_txt": TOOLS_TXT.replace(f" {first[1]} ", " v0.0.1 ")},
+         "tools.txt is not e2e-tools.lock's"),
+        ("an image missing a tool", {"drop": names[-1]}, f"has no executable /opt/wib-e2e-tools/bin/{names[-1]}")):
+    r, calls, dest, files = copier("present", **kwargs)
+    check(f"{label} exits 1 naming why, and leaves <dir>'s old tools as they were",
+          r.returncode == 1 and why in r.stderr and "nothing was put in" in r.stderr and files == OLD,
+          r.stderr + str(sorted(files)))
+    check(f"{label}: the container is still removed, and nothing is downloaded",
+          calls.splitlines()[-1] == "podman rm -f cid-fixture" and "curl" not in calls and "wget" not in calls, calls)
+r, calls, dest, files = copier("absent")
+check("an image the host lacks and cannot pull exits 1, naming it and how to build it",
+      r.returncode == 1 and REF in r.stderr and "bash verify/e2e-image.sh build" in r.stderr
+      and "not a skip" in r.stderr, r.stderr)
+check("and creates no container, downloads nothing, and leaves <dir> as it was",
+      calls.count("podman pull ") == 1 and "create" not in calls and "curl" not in calls and "wget" not in calls
+      and files == OLD, calls + str(sorted(files)))
+r = subprocess.run(["bash", str(HERE / "e2e-image.sh"), "tools"], capture_output=True, text=True, timeout=60)
+check("tools with no directory fails, naming the usage", r.returncode == 1 and "tools <dir>" in r.stderr, r.stderr)
+check("verify/fetch-e2e-tools.sh is gone (#1360)", not (HERE / "fetch-e2e-tools.sh").exists())
+for rel, want in (("verify/run-e2e.sh", 'bash "${SCRIPT_DIR}/e2e-image.sh" tools "${SCRIPT_DIR}/.tools"'),
+                  (".github/workflows/iam-policy.yml", "bash verify/e2e-image.sh tools verify/.tools")):
+    text = (REPO / rel).read_text(encoding="utf-8")
+    check(f"{rel} takes its tools from the image with e2e-image.sh tools", want in text)
+    check(f"{rel} runs no fetch-e2e-tools.sh", "fetch-e2e-tools" not in "\n".join(
+        ln for ln in text.splitlines() if not ln.lstrip().startswith("#")))
 
 print("== 5b. e2e-image.sh build uses the runtime WIB_CONTAINER_RUNTIME names, though podman is on PATH too (#1355) ==")
 

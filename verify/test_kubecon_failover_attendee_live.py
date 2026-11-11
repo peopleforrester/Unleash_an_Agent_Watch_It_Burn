@@ -19,7 +19,7 @@ Railway is not touched: the router is a local Caddy running its cluster leg (fai
 drill takes about two minutes and sends five chats carrying backups.py's probe marker, so none reaches the prompt wall.
 
 Usage: COMMUNITY_CONTEXT=watch-it-burn-community PRIVATE_CONTEXT=watch-it-burn-private \\
-       python3 verify/test_kubecon_failover_attendee_live.py      (after bash verify/fetch-e2e-tools.sh)
+       python3 verify/test_kubecon_failover_attendee_live.py      (after copying the image's tools to verify/.tools: the e2e-image tools verb)
 """
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ for tool in ("uv", "kubectl", "bash"):
     if shutil.which(tool) is None:
         problems.append(f"{tool} is not on PATH")
 if not os.access(CADDY, os.X_OK):
-    problems.append(f"no caddy at {CADDY}: run bash verify/fetch-e2e-tools.sh")
+    problems.append(f"no caddy at {CADDY}: copy the wib-e2e-tools image's tools to verify/.tools (the e2e-image tools verb)")
 else:
     v = subprocess.run([str(CADDY), "version"], capture_output=True, text=True, timeout=30).stdout.split()
     if not v or v[0] != CADDY_VERSION:

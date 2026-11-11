@@ -101,12 +101,6 @@ sites:
     kind: tool
     pin: '.github/workflows/verify-suites.yml (--python 3.13: uv fetches a 3.13 build when the runner has none)'
     cached: false
-  - match: setup-node
-    lines: 1
-    class: pinned
-    kind: tool
-    pin: .github/workflows/verify-suites.yml (the action's commit and its node-version)
-    cached: false
   .github/workflows/weaver-registry-check.yml:
   - match: artifact-cache
     lines: 1
@@ -424,13 +418,6 @@ sites:
     lines: 2
     class: none
     why: comments, docstrings or messages that name the command; none runs it
-  verify/fetch-e2e-tools.sh:
-  - match: get
-    lines: 1
-    class: pinned
-    kind: tool
-    pin: verify/e2e-tools.lock (each tool's SHA-256)
-    cached: true
   verify/app_render.py:
   - match: chart_fetch
     lines: 1
@@ -861,7 +848,7 @@ sites:
     pin: images/watch-it-burn-backstage/yarn.lock (the @playwright/test release, which names its Chromium build)
     cached: false
   - match: .
-    lines: 7
+    lines: 6
     class: none
     why: comments, the list of host tools it checks for, and messages
   verify/schemas/README.md:
@@ -1358,17 +1345,17 @@ sites:
     why: the command text fleet.sh prints, held as text
   verify/test_e2e_image.py:
   - match: .
-    lines: 27
+    lines: 33
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   verify/test_e2e_toolchain.py:
   - match: .
-    lines: 7
+    lines: 5
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   verify/test_e2e_tools_tier.py:
   - match: .
-    lines: 20
+    lines: 19
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   verify/test_enforce_floor.py:

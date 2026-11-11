@@ -463,12 +463,12 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
+    - verify/.tools
     - verify/.tools/bin/caddy
     - verify/artifact-cache.sh
     - verify/artifact_cache.py
     - verify/e2e-tools.lock
     - verify/failover_drill.py
-    - verify/fetch-e2e-tools.sh
     - verify/package_cache.py
     - verify/playwright_browsers.py
     - verify/python.lock
@@ -547,8 +547,8 @@ reads:
     - verify/artifact_cache.py
     - verify/collector_render.py
     - verify/e2e-tools.lock
-    - verify/fetch-e2e-tools.sh
     - verify/otelcol_local.py
+    - verify/run-e2e-tools.sh
     - verify/test_trace_shape_e2e.py
   test_admin_actions.sh:
     - agent
@@ -711,7 +711,7 @@ reads:
     - verify/artifact_cache.py
     - verify/collector_render.py
     - verify/e2e-tools.lock
-    - verify/fetch-e2e-tools.sh
+    - verify/run-e2e-tools.sh
   test_agent_probe_scoring.py:
     - agent
     - gitops/ai-layer/ticket_site.py
@@ -776,7 +776,6 @@ reads:
     - verify/artifact-cache.sh
     - verify/artifact_cache.py
     - verify/e2e-tools.lock
-    - verify/fetch-e2e-tools.sh
     - verify/run-e2e-tools.sh
   test_agentgateway_path.py:
     - agent/GATEWAY-NOTES.md
@@ -799,13 +798,18 @@ reads:
     - verify/artifact-cache.sh
     - verify/artifact_cache.py
     - verify/e2e-tools.lock
-    - verify/fetch-e2e-tools.sh
     - verify/run-e2e-tools.sh
   test_ai_layer_gates.py:
     - gitops/ai-layer
     - gitops/ai-layer/kubearmor-ordering-gate.yaml
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/otel-ordering-gate.yaml
+  test_ai_layer_role_sync.py:
+    - VERSIONS.lock
+    - gitops
+    - gitops/**.y*ml
+    - gitops/ai-layer/resources.yaml
+    - gitops/bootstrap/apps/ai-layer.yaml
   test_ai_layer_rollout.py:
     - gitops/ai-layer
     - gitops/ai-layer/kustomization.yaml
@@ -2181,8 +2185,8 @@ reads:
     - verify/artifact_cache.py
     - verify/collector_render.py
     - verify/e2e-tools.lock
-    - verify/fetch-e2e-tools.sh
     - verify/otelcol_local.py
+    - verify/run-e2e-tools.sh
     - verify/test_trace_shape_e2e.py
   test_collector_backends.py:
     - CLAUDE.md
@@ -2243,8 +2247,8 @@ reads:
     - verify/collector_render.py
     - verify/e2e-tools.lock
     - verify/ensure-submodules.sh
-    - verify/fetch-e2e-tools.sh
     - verify/git_mirror.py
+    - verify/run-e2e-tools.sh
     - verify/test_collector_coc_mask_e2e.py
     - verify/topic_cases.py
   test_collector_coc_mask_e2e.py:
@@ -2278,8 +2282,8 @@ reads:
     - verify/collector_render.py
     - verify/e2e-tools.lock
     - verify/ensure-submodules.sh
-    - verify/fetch-e2e-tools.sh
     - verify/git_mirror.py
+    - verify/run-e2e-tools.sh
     - verify/topic_cases.py
   test_collector_coc_mask_live_checks.py:
     - gitops/bootstrap/apps/otel-collector-attendee.yaml
@@ -2300,7 +2304,7 @@ reads:
     - verify/artifact_cache.py
     - verify/collector_render.py
     - verify/e2e-tools.lock
-    - verify/fetch-e2e-tools.sh
+    - verify/run-e2e-tools.sh
   test_collector_coc_split.py:
     - .gitmodules
     - challenges/PROMPT-CATALOG.md
@@ -2390,8 +2394,8 @@ reads:
     - verify/artifact_cache.py
     - verify/collector_render.py
     - verify/e2e-tools.lock
-    - verify/fetch-e2e-tools.sh
     - verify/otelcol_local.py
+    - verify/run-e2e-tools.sh
     - verify/test_trace_shape_e2e.py
   test_collector_no_datadog.py:
     - CLAUDE.md
@@ -2435,7 +2439,7 @@ reads:
     - verify/artifact_cache.py
     - verify/collector_render.py
     - verify/e2e-tools.lock
-    - verify/fetch-e2e-tools.sh
+    - verify/run-e2e-tools.sh
   test_collector_pii_scrub.py:
     - facilitation/kubecon-na-2026-run-of-show.md
     - gitops/ai-layer/resources.yaml
@@ -2464,8 +2468,8 @@ reads:
     - verify/artifact_cache.py
     - verify/collector_render.py
     - verify/e2e-tools.lock
-    - verify/fetch-e2e-tools.sh
     - verify/pii_scrub_cases.py
+    - verify/run-e2e-tools.sh
   test_collector_pods_ready_live_checks.py:
     - gitops/otel-collector/coc-mask
     - gitops/otel-collector/coc-mask/configmap.yaml
@@ -3455,6 +3459,7 @@ reads:
     - verify/test_drift_selfheal_live.py
   test_e2e_image.py:
     - .github/workflows/build-e2e-tools-image.yml
+    - .github/workflows/iam-policy.yml
     - agent
     - agent/*
     - agent/desk-report-token
@@ -5716,9 +5721,9 @@ reads:
     - verify/artifact-cache.sh
     - verify/artifact_cache.py
     - verify/e2e-tools.lock
-    - verify/fetch-e2e-tools.sh
     - verify/ghcr_pull.py
     - verify/image_cache.py
+    - verify/run-e2e.sh
   test_joker_web_busybox.py:
     - images/villains
     - images/villains/build.sh
@@ -5758,7 +5763,7 @@ reads:
     - verify/artifact_cache.py
     - verify/collector_render.py
     - verify/e2e-tools.lock
-    - verify/fetch-e2e-tools.sh
+    - verify/run-e2e-tools.sh
   test_kagent_version_pins.py:
     - VERSIONS.lock
     - docs/BUILD-SPEC.md
@@ -6190,7 +6195,6 @@ reads:
     - verify/artifact-cache.sh
     - verify/artifact_cache.py
     - verify/e2e-tools.lock
-    - verify/fetch-e2e-tools.sh
     - verify/git_mirror.py
     - verify/image_cache.py
   test_kyverno_profile_policies.py:
@@ -7104,8 +7108,8 @@ reads:
     - verify/artifact_cache.py
     - verify/collector_render.py
     - verify/e2e-tools.lock
-    - verify/fetch-e2e-tools.sh
     - verify/otelcol_local.py
+    - verify/run-e2e-tools.sh
     - verify/test_collector_act2_redaction_e2e.py
     - verify/test_trace_shape_e2e.py
   test_package_cache_e2e.py:
@@ -7730,6 +7734,7 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - security
+    - verify/.tools
     - verify/.tools/bin/caddy
     - verify/agent_probe.py
     - verify/artifact-cache.sh
@@ -7741,7 +7746,6 @@ reads:
     - verify/e2e-tools.lock
     - verify/ensure-submodules.sh
     - verify/failover_drill.py
-    - verify/fetch-e2e-tools.sh
     - verify/git_mirror.py
     - verify/guard_lease.py
     - verify/kubecon_probe.py
@@ -8321,7 +8325,6 @@ reads:
     - verify/artifact-cache.sh
     - verify/artifact_cache.py
     - verify/e2e-tools.lock
-    - verify/fetch-e2e-tools.sh
     - verify/room_reader_rbac.py
     - verify/run-e2e-tools.sh
   test_room_view.py:
@@ -9522,7 +9525,7 @@ reads:
     - verify/artifact_cache.py
     - verify/collector_render.py
     - verify/e2e-tools.lock
-    - verify/fetch-e2e-tools.sh
+    - verify/run-e2e-tools.sh
   test_tool_pin.py:
     - CLAUDE.md
     - docs/research/2026-10-24-tool-pin-spike
@@ -9758,7 +9761,7 @@ reads:
     - verify/artifact_cache.py
     - verify/collector_render.py
     - verify/e2e-tools.lock
-    - verify/fetch-e2e-tools.sh
+    - verify/run-e2e-tools.sh
   test_trace_walkthrough_view.py:
     - CLAUDE.md
     - agent
@@ -9884,7 +9887,6 @@ reads:
     - verify/artifact-cache.sh
     - verify/artifact_cache.py
     - verify/e2e-tools.lock
-    - verify/fetch-e2e-tools.sh
     - verify/run-e2e-tools.sh
     - verify/ttyd_ws.py
   test_turn_guard.py:
@@ -9907,7 +9909,6 @@ reads:
     - verify/artifact-cache.sh
     - verify/artifact_cache.py
     - verify/e2e-tools.lock
-    - verify/fetch-e2e-tools.sh
     - verify/package_cache.py
     - verify/playwright_browsers.py
     - verify/python.lock
@@ -10279,7 +10280,6 @@ reads:
     - verify/artifact-cache.sh
     - verify/artifact_cache.py
     - verify/e2e-tools.lock
-    - verify/fetch-e2e-tools.sh
     - verify/run-e2e-tools.sh
     - verify/run-e2e.sh
     - weaver/registry
@@ -10322,7 +10322,6 @@ reads:
     - verify/artifact_cache.py
     - verify/ci-artifact-cache.sh
     - verify/e2e-tools.lock
-    - verify/fetch-e2e-tools.sh
     - verify/package_cache.py
     - verify/playwright_browsers.py
     - verify/python.lock

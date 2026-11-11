@@ -146,7 +146,10 @@ spec:
     # vulnerability the attack exploits. The STUDENT applies a scoped Role (get on the recipe Secret by
     # name, no list); ignore drift on .rules so selfHeal keeps the tightened rules instead of reverting
     # to the broad committed default. resources.yaml stays broad so a fresh attendee cluster starts
-    # vulnerable.
+    # vulnerable. A sync keeps a switch's rules in both directions (#1358, measured on both KubeCon clusters on
+    # 2026-11-11): ServerSideApply moves kubectl's ownership of the Role to argocd-controller, and
+    # RespectIgnoreDifferences then applies the live rules back as they are. verify/test_ai_layer_role_sync.py holds
+    # these options and this ignore to what was measured.
     - group: rbac.authorization.k8s.io
       kind: Role
       name: workshop-agent

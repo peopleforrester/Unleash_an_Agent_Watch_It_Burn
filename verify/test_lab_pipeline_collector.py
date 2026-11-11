@@ -8,8 +8,8 @@
 # the lab route is public, so what matters about filter/lab_contract and transform/lab_contract is what they do to
 # a hostile payload, which only the real OTTL engine can say.
 #
-# Install: none. verify/fetch-e2e-tools.sh fetches otelcol-contrib OTELCOL_VERSION from e2e-tools.lock, and
-# run-e2e.sh and run-e2e-tools.sh point $OTELCOL_CONTRIB at it (#654). Run by hand, set it or put one on PATH.
+# Install: none. otelcol-contrib OTELCOL_VERSION is e2e-tools.lock's, in the wib-e2e-tools image, and run-e2e.sh
+# (which copies it out, #1360) and run-e2e-tools.sh point $OTELCOL_CONTRIB at it (#654). Run by hand, set it or put one on PATH.
 from __future__ import annotations
 
 import json

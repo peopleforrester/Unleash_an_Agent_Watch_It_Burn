@@ -54003,3 +54003,238 @@ entry's class stays `none` and only its count moves. `test_fetch_inventory.py`, 
 `test_package_cache.py` and `test_scope_tests.py` pass. `test_fleet_contract.py`, which also reads the inventory,
 could not run here: this workspace has the guard-proxy submodule uninitialised, and the test stops on its missing
 `proxy.py` before any check. The gate's run of it passed.
+
+## 2026-11-11 · #1358 · run 20447 · The scoped Role came from guard-agency-off, not Argo CD; guard-agency-off now keeps each cluster's Secret rule
+
+**What scoped the Role.** The issue suspected ai-layer's sync of 1b0d0974 (16:16:45Z on watch-it-burn-private,
+16:19:07Z on watch-it-burn-community). The EKS audit log (`/aws/eks/<cluster>/cluster`, stream
+`kube-apiserver-audit`, every write to `roles/workshop-agent` from 16:00Z to 16:40Z) names a different writer. From
+the private terminal (`system:serviceaccount:agent:web-terminal`, and `guardrails-switch:guardrails-switch` on the peer):
+
+    16:14:09Z  guards-off (guard-proxy toggles, then guard-mcp-off's patches)
+    16:14:13Z  patch roles/workshop-agent, kubectl-client-side-apply, secrets get+list   (guardrails-off, rbac step)
+    16:14:14Z  validatingpolicies to Audit, 16:14:15Z KubeArmor policy and agent NetworkPolicies deleted
+    16:14:16Z  patch roles/workshop-agent, kubectl-client-side-apply, secrets get on [workshop-agent]   (c5)
+    16:16:45Z  argocd-controller: managedFields patch, then server-side apply, secrets get on [workshop-agent]
+
+The community cluster shows the same two terminal writes at 16:14:13.90Z and 16:14:16.60Z, then Argo CD at 16:19:07Z.
+The 16:14:16Z write is guard-agency-off: it applied c5-scoped-role.yaml on both through `_both`, so least privilege
+off turned RBAC on, three seconds after guardrails-off had opened both. Argo CD applied the rules the cluster already
+had. Its first patch is its client-side apply migration (Argo CD 3.x, on by default with ServerSideApply): it moved
+kubectl-client-side-apply's fields to argocd-controller and dropped the last-applied annotation, which is the warning
+the issue saw on community. The 16:23:34Z and 16:23:46Z writes are run 20436's guard-agency-on and off (#1357), and
+16:26:01Z and 16:26:10Z the hand restore to broad.
+
+**Scratch reproduction.** On watch-it-burn-private, an Application `wib1358-scratch` (the bedag `raw` chart 2.0.2 from
+`https://bedag.github.io/helm-charts/`, one Role and one ConfigMap in namespace `wib1358-scratch`) with ai-layer's four
+sync options, automated sync with selfHeal, and the same `.rules` ignore. Git's Role was scoped. A client-side
+`kubectl apply` of a broad Role, then a changed ConfigMap value to start an automated sync, three times (broad, then a
+different scoped rule, then broad): each sync ended Succeeded with the live rules unchanged, argocd-controller owning
+`f:rules` and no last-applied annotation. The Application and the namespace were deleted afterwards.
+
+**Live check on both KubeCon clusters.** As found: rules sha256 `2c33da5b83ffdbb1` (secrets get and list, the broad
+c8 Role) on both, `kubectl-client-side-apply` owning `f:rules`, the last-applied annotation present, ai-layer Synced at
+a268a8cc. A sync of ai-layer was started on each by a merge patch of `.operation` exactly as an automated sync writes
+it (prune, revision a268a8cc, syncOptions CreateNamespace, ServerSideApply, Force, RespectIgnoreDifferences), initiated
+by `hecaton-run-20447 (#1358 live check)`. Private ran 16:57:03Z to 16:57:18Z, community 16:57:37Z to 16:57:45Z, both
+Succeeded. After: the rules sha256 still `2c33da5b83ffdbb1` on both, argocd-controller owning `f:rules`, no
+last-applied annotation, and `kubectl auth can-i list secrets -n agent --as system:serviceaccount:agent:agent-sa`
+`yes` on both. No staging commit since 16:26Z had changed gitops/ai-layer, so a same-revision sync with the
+automated sync's options is how a sync was put through the Role here; this change's own promotion syncs ai-layer again.
+
+**The fix.** guard-agency-off runs `_both _agency_off` (gitops/ai-layer/web-terminal/entrypoint.sh, .guardlib). On each
+cluster it prints and runs `kubectl -n agent get role workshop-agent -o json`, and applies c8-broad-role.yaml where a
+rule still lists Secrets or gets them without naming them (guard-proxy's own rbac_scoped test), c5-scoped-role.yaml
+otherwise. In talk order (guardrails-on, guard-agency-on, guard-agency-off) it still applies c5. A Role it cannot read
+is not written, and the run fails naming the cluster. guard-agency-on is unchanged: c6 scopes the Secret rule by design,
+since Challenge 3 follows Challenge 1's fix. Its message now says the CEO's record is left as each cluster had it. The
+run-of-show and kubecon.html now describe guard-agency-off the same way, in place of "puts the scoped Role back".
+
+**The new guard-agency-off, run from the private terminal.** In pod `web-terminal-6fcf997796-x4tvx`, as `student`,
+the new .guardlib and guard-agency-off were written under `~/.wib1358/` and run after `. ~/.bashrc`, with the Role
+broad on both. It printed the two Role reads, `kubectl apply -f /home/student/challenges/c8-broad-role.yaml` on this
+cluster and through `--kubeconfig /home/student/.kube/peer --context watch-it-burn-community`, "Switched on both
+clusters", and the read: `Kubernetes ON: Falco off: ... RBAC scope, least privilege` on private and `ON: none off: ...
+RBAC scope, least privilege` on community, exit 0. The old command would have scoped both.
+
+**Left as found.** `~/.wib1358` was removed from the pod. The apply added the last-applied annotation, removed with
+`kubectl annotate role workshop-agent kubectl.kubernetes.io/last-applied-configuration-` on each. Afterwards both
+Roles read rules sha256 `2c33da5b83ffdbb1`, argocd-controller alone in managedFields owning `f:rules`, no last-applied
+annotation, agent-sa able to list Secrets, ai-layer Synced and Healthy. The two ai-layer syncs are in each
+Application's history under the initiator above.
+
+**Tests.** verify/test_ai_layer_role_sync.py (new) holds ai-layer's four sync options in order, automated selfHeal,
+the one Role ignore (`.rules`), that only gitops/ai-layer/resources.yaml declares the Role, that it carries no Argo CD
+annotation and git's rules are c8-broad-role.yaml's, and VERSIONS.lock's Argo CD at v3.5.7, the version measured.
+verify/test_guard_switch_both.py's fake kubectl answers the Role read; it holds guard-agency-off from c8, c6 and c5 and
+from a mixed pair, the 16:14Z reset ending broad with RBAC scope off in the read, and an unreadable Role left alone.
+Run against the old entrypoint it fails 13 checks; against this one both tests pass. The scope map was rewritten with
+`python3 verify/scope_tests.py write`. Other tests that read the changed files are left to validation.
+
+**Not yet run on a cluster.** The deployed guard-agency-off, once hecaton promotes this change and Argo CD rolls
+web-terminal: from the private terminal at the start state, `guard-agency-off` must print `c8-broad-role.yaml` for both
+clusters and leave RBAC scope off in its read. The promotion's own ai-layer sync should leave the broad Role broad on
+both (rules sha256 `2c33da5b83ffdbb1`).
+## 2026-11-11 · #1360 · run 20454 · run-e2e.sh and iam-policy.yml copy the lock's binaries out of the wib-e2e-tools image; fetch-e2e-tools.sh is removed
+
+**Change.** `verify/e2e-image.sh` gains a `tools <dir>` verb. It finds the image this lock names the way `run` does
+(used when the host holds the tag, pulled once when not, a failure naming the image and `bash verify/e2e-image.sh
+build` when neither works), creates a container of it without starting it, and copies `/opt/wib-e2e-tools/bin` and
+`tools.txt` out into a staging directory inside `<dir>`. It holds that `tools.txt` to this checkout's lock
+(`e2e_image.py matches`) and checks that every tool it names is an executable in `bin`. Only then does it replace
+`<dir>/bin` and `<dir>/tools.txt`, and it removes the container either way. So `<dir>/bin` never holds another
+lock's binaries or a half copy. `run` and `tools` share one `ensure_image` function, so the two cannot drift apart.
+
+- `verify/run-e2e.sh`, the by-hand live suite, runs `e2e-image.sh tools verify/.tools` in its prerequisite check and
+  still puts `verify/.tools/bin` first on PATH and points the six path variables at it. It no longer asks for tar,
+  sha256sum or xz, which only the fetch used. It still asks for curl, since `backstage-footprint.sh` calls it. The
+  copy needs python3 and either podman or docker, and a host with neither gets that listed as missing.
+- `.github/workflows/iam-policy.yml` runs `bash verify/e2e-image.sh tools verify/.tools` with
+  `WIB_CONTAINER_RUNTIME: docker`, as build-e2e-tools-image.yml does (#1355). It watches `verify/e2e-image.sh` and
+  `verify/e2e_image.py` in place of the fetch script. The image pulls from ghcr.io with no login (run 20434's
+  anonymous token read), and the job's token stays `contents: read`.
+- `verify/scope_audit.py tools` copies the tools the same way.
+- `verify/fetch-e2e-tools.sh` is deleted, and so is its fetch-inventory entry. Nothing in the repo runs it.
+
+**One cost, stated once.** A change to `e2e-tools.lock` or to an image build input gets a new image tag, and
+ghcr.io has that tag only after build-e2e-tools-image.yml pushes it from staging. Until then, iam-policy.yml fails on
+that change, naming the image, the same way the tools tier already does (#1188). It passes once the build lands and
+the job is re-run. The old per-file fetch had no such wait, but keeping it would leave two ways to get the same
+binaries, which this issue removes.
+
+**Messages.** Twenty-two tests named the deleted script in a docstring or a failure message. They now point at
+`verify/run-e2e-tools.sh` (which runs them inside the image) or at "the e2e-image tools verb". They do not name
+`e2e-image.sh` by path: the scope extractor follows a named script, and `e2e-image.sh` pulls in `e2e_image.py`, which
+reads the whole of `verify/`. Naming it would have made each of those tier tests run on every `verify/` change. Each
+changed test still selects itself.
+
+**Tests.**
+- `verify/test_e2e_image.py` gains section 5c, which runs `e2e-image.sh tools` with a podman stand-in. An image on
+  the host copies every lock tool, executable, with its `tools.txt`. It replaces the old `bin` and leaves no staging
+  directory. The calls are exactly exists, `create --pull=never`, two `cp` and `rm -f`, with no pull, no start and no
+  download. An image of another lock, an image missing a tool, and an image the host lacks and cannot pull each
+  exit 1, naming why, with the old tools left as they were and the container removed.
+- `test_e2e_tools_tier.py` loses its fetch fixtures and cases. Its run-e2e.sh section now runs the real
+  `e2e-image.sh` in the scratch copy with a podman stand-in. The image's kubectl is what checks the cluster, and an
+  image of another lock, or an absent one, is listed as missing with no kubectl run.
+- `test_iam_policy_ci.py`, `test_workflow_artifact_cache.py` (its fetch pattern now reads `e2e-image.sh run|tools`,
+  so the image build job stays classed as not fetching), `test_fetch_inventory.py` and `test_e2e_toolchain.py` follow
+  the change. The inventory's counts for run-e2e.sh and the two tests are updated, and the scope map drops 24 stale
+  `verify/fetch-e2e-tools.sh` reads.
+- Each of these passed alone, as did `scope_tests.py check`, `test_scope_tests.py` and `test_test_map.py`.
+
+**Run for real on netcup.** As this run's pool user, whose podman held tag `51ec299b51b3558f-65501e27`:
+- `bash verify/e2e-image.sh tools "$TMPDIR/tools-live"` printed `already on this host (podman)` and `11 pinned tools
+  from ghcr.io/peopleforrester/wib-e2e-tools:51ec299b51b3558f-65501e27`, and exited 0 in 13 s. `conftest --version`
+  answered 0.71.1, `terraform version` v1.15.6 and `kubectl version --client` v1.36.2. No container was left behind.
+  A second run replaced a planted stale file in `bin`.
+- `bash verify/run-e2e.sh` with no context set copied the same 11 tools into `verify/.tools/bin` and stopped in its
+  prerequisite check, listing only the unset variables.
+- With `CONTEXT=watch-it-burn-private COMMUNITY_CONTEXT=watch-it-burn-community PRIVATE_CONTEXT=watch-it-burn-private`
+  and the IAM and drift variables left unset, it did the same, and neither cluster was listed as unreachable. So
+  the image's kubectl answered both clusters' `/readyz`. That was a read, and it changed nothing on either cluster.
+
+**The changed tier tests, run inside the image.** The 20 tier tests whose messages changed were run by name, as
+`bash verify/run-e2e-tools.sh <the 20>`, in the image (`20 checks ran (the 20 tier tests named, no offline suite) in
+4m52s`). Eighteen passed. `test_collector_coc_mask_e2e.py` and `test_collector_coc_parse_cpu_e2e.py` failed with
+`verify/.tools/bin/otelcol-contrib is missing`. Unlike their siblings, these two did not read `OTELCOL_CONTRIB`, which
+run-e2e-tools.sh sets. They found the binary only at the `verify/.tools` path the fetch used to fill, and the image
+has nothing there. So they have failed in the tier since #1188, whatever changed, and they hid behind the selection
+until a change named them. Both now read `OTELCOL_CONTRIB` first, as `test_collector_one_root_e2e.py` does. Rerun
+alone (`bash verify/run-e2e-tools.sh test_collector_coc_mask_e2e.py test_collector_coc_parse_cpu_e2e.py`), they ended
+`ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`, in 2m26s. The full tier was not run: `scope_tests.py select tools` says
+FULL for this change, because `e2e-image.sh` is in the map's full list, and a run never runs the full tier.
+
+**Not yet run.** iam-policy.yml on GitHub's runner with docker, which runs on the next push that touches its paths.
+This commit touches its paths.
+
+## 2026-11-11 · #1362 · run 20456 · guard-agency-on keeps each cluster's Secret rule too, so a rehearsal from the start state ends there
+
+**The choice.** The issue offered two ways out: a broad-Secret variant of the c6 Role that guard-agency-on picks where
+the live Role is broad, or leaving guard-agency-on alone and telling the reset steps to run guardrails-off after it.
+This takes the first. It is the same rule #1358 gave guard-agency-off, so the two commands read alike, and a reset step
+that depends on an extra command being remembered is the failure #1358 started from.
+
+**The change.** challenge-fixes (gitops/ai-layer/resources.yaml) gains `c6-broad-secrets-role.yaml`: c6's workload rules
+(get and list on Deployments and Pods, patch on deployments/scale, configmaps and services as before) with
+c8-broad-role.yaml's get and list on every Secret. In .guardlib, #1358's role read moved into `_keep_secrets <broad>
+<scoped>`, unchanged in what it reads (guard-proxy's own rbac_scoped test), and both steps are one line on it:
+`_agency_on` picks c6-broad-secrets-role.yaml or c6-least-privilege-role.yaml, `_agency_off` c8-broad-role.yaml or
+c5-scoped-role.yaml. guard-agency-on runs `_both _agency_on`. In talk order, after guardrails-on, it still applies c6.
+Its message now says the CEO's record is left as each cluster had it, as guard-agency-off's does. guard-proxy's
+/controls (submodule 0a3ca16, proxy.py) reads the new Role as rbac_scoped false and agency_scoped true. The peer's
+guardrails-switch grant (get, patch, escalate on the workshop-agent Role) already covers the read and the apply.
+`verify/agency_role_check.py` counts either c6 Role as applied and names which, and `verify/room_reader_rbac.py` lists
+the new Role among the swaps, so workshop-mcp's room reader is checked under it too. The run-of-show and kubecon.html
+say that both commands keep the Secret rule.
+
+**Live check on both KubeCon clusters.** As found at 17:49Z: both Roles c8-broad-role.yaml (rules sha256
+`2c33da5b83ffdbb1`), `agency_role_check.py` reading "not applied ... c8-broad-role.yaml" on both. The new .guardlib,
+guard-agency-on and guard-agency-off, taken from this commit's entrypoint, and the challenge-fixes files, were run from
+this run's host in a scratch HOME under $TMPDIR, with `kubectl` for watch-it-burn-private (every call naming
+`--context watch-it-burn-private`) and the community cluster reached through private's guardrails-peer Secret as the
+guardrails-switch ServiceAccount, the identity the private terminal uses there. guard-agency-on, 17:49:29Z: "Switched on
+both clusters", exit 0, and the read `Kubernetes ON: Falco, least privilege off: ... RBAC scope` on private and `ON:
+least privilege off: ... RBAC scope` on community; both Roles then held get and list on Deployments and Pods and get
+and list on Secrets. guard-agency-off, 17:49:58Z: "Switched on both clusters", exit 0, the read `ON: Falco off: ...
+RBAC scope, least privilege` on private and `ON: none off: ... RBAC scope, least privilege` on community, both Roles
+back to rules sha256 `2c33da5b83ffdbb1`. The old guard-agency-on would have left both scoped.
+
+**Left as found.** The client-side applies added the last-applied annotation, removed with `kubectl annotate role
+workshop-agent kubectl.kubernetes.io/last-applied-configuration-` on each, as #1358 did. Afterwards both Roles read
+rules sha256 `2c33da5b83ffdbb1` with only Argo CD's tracking-id annotation, agent-sa can list Secrets (`auth can-i`
+`yes`), and ai-layer is Synced and Healthy on both. kubectl-client-side-apply now owns `f:rules` until the next ai-layer
+sync, which #1358 measured migrating it back. The scratch HOME, with the peer kubeconfig, was removed.
+
+**Tests.** verify/test_guard_switch_both.py holds guard-agency-on from c8, c5 and a mixed pair (each cluster keeps
+its Secret rule and loses workload writes), an unreadable Role left unwritten, the new Role as c6's workload rules with
+c8's Secret rule, and the rehearsal: guardrails-off, guard-agency-on (c6-broad-secrets on both, the read showing least
+privilege on and RBAC scope off), guard-agency-off (c8 on both, the read showing both off). Against the old entrypoint
+it fails 15 checks. verify/test_guard_switch_controls.py's fake kubectl now answers the Role read. Run once each and
+passing: test_guard_switch_both, test_guard_switch_controls, test_agency_role_check, test_room_reader_rbac,
+test_guard_commands_echo, test_trace_walkthrough_view (with the guard-proxy submodule checked out), test_guards_all_both,
+test_kubecon_seg4_flow, test_ros_seg4_flow, test_stage_traces, test_ai_layer_role_sync, test_guardrails_switch,
+test_kubecon_probe, test_scope_tests. `scope_tests.py write` changed nothing. The rest of the scoped selection is left
+to validation.
+
+**Not yet run on a cluster.** The deployed commands, once hecaton promotes this change and Argo CD rolls web-terminal
+and the challenge-fixes ConfigMap: from the private terminal at the start state, `guard-agency-on` must print
+`c6-broad-secrets-role.yaml` for both clusters, then `guard-agency-off` `c8-broad-role.yaml` for both, and
+`python3 verify/agency_role_check.py watch-it-burn-community watch-it-burn-private` must read c8-broad-role.yaml on
+both afterwards.
+## 2026-11-11 · #1359 · run 20452 · verify-suites.yml's e2e job drops its Node and Chromium steps
+
+**What changed.** The e2e-tools job in `.github/workflows/verify-suites.yml` no longer has the `actions/setup-node`
+step (#1200) or the `python3 verify/ci_chromium_libs.py "$RUNNER_TEMP/chromium-libs"` step (#1047). Since #1188,
+`run-e2e-tools.sh` on a host hands any run that needs the tools to `verify/e2e-image.sh run` before its own tool
+checks, so the host's Node is never checked or used, and the tier's node scripts and Playwright renders run on the
+image's Node and Chromium. A push no tier test reads runs the offline suite on the host, and no offline test starts a
+real Node or Chromium: `test_e2e_toolchain.py` stubs node, and `test_ci_chromium_libs.py` and
+`test_package_cache.py` parse text. `verify/ci_chromium_libs.py` and its test stay, since
+`test_chat_wide_font_e2e.py` imports its `font_dirs`; nothing in CI runs the script now.
+
+**Tests.** `verify/test_verify_suites_workflow.py` now fails any job with an `actions/setup-node` step or a step
+whose `run` names `ci_chromium_libs.py`, in place of requiring both on the e2e job. Its four mutation cases put the
+setup-node step back on the e2e job, add one to the offline job, put the Chromium step back, and hide it in a
+multi-line `run`; the checker fails each. The fetch inventory's `setup-node` entry for verify-suites.yml went with the
+step (`test_fetch_inventory.py` failed on the stale entry until then). Passed alone: `test_verify_suites_workflow.py`,
+`test_fetch_inventory.py`, `test_workflow_artifact_cache.py`, `test_tf_plugin_cache.py`, `test_scope_tests.py`,
+`test_test_map.py`; `scope_tests.py write` changed nothing. The tools tier was not run here: validation runs the
+tier tests the change selects (`test_iam_policy_structural.py`, `test_image_version_tags.py`,
+`test_kyverno_counter_fix_cache.py`, `test_wib_digests_signed.py`, all reading the fetch inventory).
+
+**Live check.** None on a cluster: the change touches `.github/workflows/` and `verify/` files no cluster runs.
+
+**The issue's precondition, CI green through the image.** It has not happened yet, and the steps could not change
+that. Actions run 43063737491 (agent/1188-20434 at 769c04c8, the commits staging took as 5a3ab270) pulled
+`wib-e2e-tools:51ec299b51b3558f-65501e27` and ran `98 checks ran (the offline suite and 97 tier tests) in 35m45s`
+inside it, with both steps still in the job, and failed six: `test_collector_coc_mask_e2e.py` and
+`test_collector_coc_parse_cpu_e2e.py` (`verify/.tools/bin/otelcol-contrib is missing`), `test_chat_wide_font_e2e.py`
+(`no DejaVuSans.ttf under any font directory`), `test_mobile_titles_e2e.py` (`1280 wide fonts: no header button runs
+past the edge`), and `test_injection_classifier.py` and `test_topic_classifier.py` (a subprocess timeout). The two
+staging runs since (5a3ab270, 6840b2f0) were cancelled by newer pushes, and #1361 holds the heavy gate's red run of the
+tier on 6840b2f0. None of the six comes from the removed steps: `verify/e2e-image.sh` passes the container only
+`HECATON_BASE_SHA`, `HECATON_TEST_FILES`, `E2E_TOOLS_JOBS` and `TF_CACHE_LOCK_WAIT`, so the host's setup-node Node
+and the `LD_LIBRARY_PATH` and `FONTCONFIG_FILE` that `ci_chromium_libs.py` wrote to `GITHUB_ENV` never reached a tier
+test, and the image brings its own Node 24.22.2 and Chromium. With no fallback to the host's tools, keeping the steps
+would not make the job pass. The six failures are #1361's to fix.

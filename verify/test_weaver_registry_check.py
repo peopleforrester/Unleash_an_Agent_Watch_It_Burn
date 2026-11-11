@@ -32,7 +32,7 @@ def check(name: str, cond: bool, detail: str = "") -> None:
 weaver = shutil.which("weaver")
 if weaver is None:
     print("FAILED: weaver is not on PATH. run-e2e-tools.sh and run-e2e.sh put the pinned one there "
-          "(verify/fetch-e2e-tools.sh); this is a failure, not a skip.")
+          "(from the wib-e2e-tools image); this is a failure, not a skip.")
     sys.exit(1)
 
 
