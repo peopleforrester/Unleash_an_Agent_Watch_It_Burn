@@ -1344,6 +1344,10 @@ sites:
     class: none
     why: the command text fleet.sh prints, held as text
   verify/test_e2e_image.py:
+  - match: git\("clone"
+    lines: 3
+    class: none
+    why: clones of the repos the test builds in its own temp directory, from local paths, to lay out a checkout that borrows its objects (#1361); nothing leaves the host
   - match: .
     lines: 33
     class: none

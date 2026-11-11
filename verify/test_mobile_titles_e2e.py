@@ -134,6 +134,7 @@ JS = '''() => {
     about: shown(ch.querySelector('.about')) ? box(ch.querySelector('.about')) : null,
     sub: shown(ch.querySelector('.sub')),
     docW: document.documentElement.scrollWidth,
+    bar: {cls: hdr.className, sw: hdr.scrollWidth, cw: hdr.clientWidth, ...box(hdr)},
   };
 }'''
 with sync_playwright() as p:
@@ -176,7 +177,8 @@ for m in map(json.loads, run.stdout.splitlines()):
     check(f"{tag}: no header button is clipped", not m["clipped"],
           f"clipped {m['clipped']}, scrollWidth>clientWidth {m['over']}, font px {m['px']}")
     check(f"{tag}: the header buttons share one font size", len(set(m["px"])) == 1, f"font px {m['px']}")
-    check(f"{tag}: no header button runs past the edge", max(b["r"] for b in btns) <= w, "")
+    check(f"{tag}: no header button runs past the edge", max(b["r"] for b in btns) <= w,
+          f"right edges {[round(b['r'], 1) for b in btns]}, font px {m['px']}, bar {m['bar']}")
     check(f"{tag}: the bar is one row, every button on the title's row", all(same_row(m["brand"], b) for b in btns),
           f"title {m['brand']}, buttons {btns}")
     check(f"{tag}: the buttons show {'icons' if m['icons'] else 'labels'}, all of them alike",

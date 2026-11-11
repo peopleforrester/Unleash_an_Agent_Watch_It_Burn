@@ -25,10 +25,11 @@
 # checkout's lock (e2e_image.py matches) and every tool it names to an executable in bin, and only then puts them in
 # <dir>, replacing what was there, so <dir>/bin never holds a binary of another lock or a half copy.
 #
-# Inside, the tier sees this checkout at its own path (and the git directory it points into), the host's artifact
-# cache (Terraform providers, charts and Python wheels, verify/artifact_cache.py) at its own path, and a gh that asks
-# the host's gh for `gh issue view` alone (verify/gh_relay.py). HECATON_BASE_SHA, HECATON_TEST_FILES, E2E_TOOLS_JOBS
-# and TF_CACHE_LOCK_WAIT pass through. The AWS session, KUBECONFIG and the host's tools do not: the container has none of them.
+# Inside, the tier sees this checkout at its own path (and the git directory it points into, with every object
+# directory git borrows from through objects/info/alternates, #1361), the host's artifact cache (Terraform providers,
+# charts and Python wheels, verify/artifact_cache.py) at its own path, and a gh that asks the host's gh for
+# `gh issue view` alone (verify/gh_relay.py). HECATON_BASE_SHA, HECATON_TEST_FILES, E2E_TOOLS_JOBS and
+# TF_CACHE_LOCK_WAIT pass through. The AWS session, KUBECONFIG and the host's tools do not: the container has none of them.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -115,7 +116,10 @@ case "${cmd}" in
         ensure_image "${rt}" "${ref}"
 
         root="$(bash "${SCRIPT_DIR}/artifact-cache.sh" root)" || die "no usable artifact cache"
-        common="$(cd "${REPO_DIR}" && cd "$(git rev-parse --git-common-dir)" && pwd)"
+        # The git directory this checkout points into and every object directory it borrows from (a gate checkout's
+        # alternates name the host's mirror, #1361), each outside the checkout, so git inside reads what git here does.
+        git_dirs="$(python3 "${SCRIPT_DIR}/e2e_image.py" git-mounts "${REPO_DIR}")" \
+            || die "could not name the git directories ${REPO_DIR} reads"
         relay_dir="$(mktemp -d)"
         relay_pid=""
         container_pid=""
@@ -139,10 +143,9 @@ case "${cmd}" in
         args=(run --rm --pull=never -i --security-opt label=disable -w "${REPO_DIR}"
               -v "${REPO_DIR}:${REPO_DIR}" -v "${root}:${root}" -v "${relay_dir}:/run/wib-gh"
               -e HOME=/tmp/e2e-home -e TMPDIR=/tmp/e2e-tmp -e "WIB_ARTIFACT_CACHE=${root}" -e "WIB_E2E_IMAGE=${ref}")  # tmp-ok: the container's own /tmp
-        case "${common}/" in
-            "${REPO_DIR}/"*) ;;
-            *) args+=(-v "${common}:${common}") ;;
-        esac
+        while IFS= read -r d; do
+            [[ -z "${d}" ]] || args+=(-v "${d}:${d}")
+        done <<<"${git_dirs}"
         # HECATON_TEST_FILES is the gate's own pick of offline tests (#1319), which run-tests.sh inside runs exactly.
         for v in HECATON_BASE_SHA HECATON_TEST_FILES E2E_TOOLS_JOBS TF_CACHE_LOCK_WAIT; do
             [[ -z "${!v:-}" ]] || args+=(-e "${v}=${!v}")
