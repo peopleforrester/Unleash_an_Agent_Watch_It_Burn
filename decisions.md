@@ -53731,3 +53731,66 @@ none (the docstring, comments, the `which("curl")` lookup and check messages). A
 `.curlrc` in `CURL_HOME` the request sent `> X-Witch-Name: Agatha the Banshee`, without it none, curl 8.14.1; the
 scratch directory was removed. The Challenge 2C send above is still owed, and it waits only on this change's
 promotion, since #48 is merged.
+## 2026-11-11 · #1349 · run 20421 · guard-output, guard-budget and guard-topic reach both KubeCon clusters, and every stage switch ends with each cluster's /controls
+
+**What changed.** In the web terminal's `.guardlib` (`gitops/ai-layer/web-terminal/entrypoint.sh`, byte-identical to
+`images/web-terminal/entrypoint.sh`), guard-output-on/off and guard-budget-on/off now run `_both _toggle "<key>=on|off"`,
+as guard-input-on does, so from the private terminal they switch watch-it-burn-private and watch-it-burn-community,
+and on the 2-hour lab's lone cluster this one alone. guard-topic-on/off run `_both _topic on|off`, a new step: the same
+toggle (`_pxkey` here, the Service proxy on the peer), then what that cluster's guard-proxy reports for `topic`, so a
+guard-proxy without the topic stage still fails guard-topic-on, now naming the cluster, and passes guard-topic-off.
+The failure branches of output and budget used to exit 0; they now exit 1 like the input switches.
+
+**The closing read.** `_controls` reads guard-proxy's `/controls` on this cluster (`_gp`, the exec into
+deploy/guard-proxy) and on the peer (the Service proxy on guard-proxy:8080, already inside the guardrails-switch grant),
+and prints each cluster by name with its host and the AI guards and Kubernetes controls ON and off, plus "not measured"
+for a null. This cluster's name is `WIB_CLUSTER_NAME`, which the web-terminal Deployment now takes from
+cluster-identity's `cluster-name`, so the read adds no kubectl call; without it the line reads "This cluster". It uses
+the link `_both` or `_guardrails` already found (`_LINKED`, `_PEERNAME`), so the peer Secret is not read twice. Every
+stage switch ends with it: guardrails-on/off, guard-agency, guard-input, guard-mcp, guard-output, guard-budget,
+guard-topic and guards-on/off. Each keeps its own exit code: its early `exit 1` lines became `rc=1`, and it ends
+`_controls` then `exit "$rc"`; only a usage error exits before the read. guard-proxy caches the Kubernetes half of
+`/controls` for 5 s (`_CONTROLS_TTL` in proxy.py) and every chat page's poll fills that cache, so after a Kubernetes
+write (`_apply`, `_mcp`, `_guardrails`; not `_toggle` or `_topic`, whose guards are read live) the read waits until
+6 s after the write and says so.
+
+**Tests.** New: `verify/test_guard_switch_controls.py`, with its scope-map entry from `scope_tests.py write`. A
+kubectl playing two clusters holds the six switches on both clusters, the closing read last and by name, the unlinked
+and peer-down cases, a guard-proxy without the topic stage, the cache wait after guard-agency-on and none after a
+toggle, every stage switch ending with the read, and the peer asked for nothing beyond get on services/proxy
+guard-proxy:8080. Put back `_px "budget=on"` in guard-budget-on and it fails 11 checks. Changed to read the new
+behaviour: `test_guard_switch_both.py` (6 calls for guard-agency, its fake answers `/controls`, a pinned `date` and
+`sleep`), whose guardrails record `verify/fixtures/guardrails-switch-golden.json` was written again with
+`--write-golden`: every case is the old record with only the `/controls` read appended, the switch's own calls and
+lines unchanged; `test_guard_input_both.py` (6 calls, the fake answers `/controls`); `test_guard_mcp_both.py` (the
+peer's `/controls` read is held against guardrails-switch.yaml, not mcp-switch.yaml); `test_guards_all_both.py`
+(`_controls` last); `test_topic_guard.py` and `test_kubecon_probe.py` (`_both _topic`, `_both _toggle "output=on"`);
+`test_guardrails_switch.py` (the switch's five lines, then the read); and a no-op `sleep` in `test_c7_gateway_toggle.py`
+and `test_guard_commands_echo.py`. Run once each and passing: those ten, `test_terminal_quiet.py`,
+`test_scope_tests.py`, `test_test_map.py`, and the other readers that run these switches,
+`test_challenge_fallbacks.py`, `test_instructor_brief.py`, `test_stage_switch_run.py`,
+`test_stage_switch_night_before.py`, `test_evil_tools_by_name.py` and `test_finale_cap_peer.py`. The rest of the scoped
+`run-tests.sh` and `run-e2e-tools.sh` selection (resources.yaml and the entrypoint are widely read) is left to
+validation.
+
+**Live check, 2026-11-11.** Before deploy, the committed `.guardlib` and the six scripts were written to a scratch home
+in watch-it-burn-private's own web-terminal pod (`web-terminal-558b49d9f6-vcjvx`, its web-terminal ServiceAccount and
+its real guardrails-peer link), `WIB_CLUSTER_NAME` set there from cluster-identity as the Deployment will set it, and
+run in turn: guard-output-off, guard-output-on, guard-budget-off, guard-budget-on, guard-topic-on, guard-topic-off.
+Each exited 0, printed every kubectl it ran, and said `Switched on both clusters: this one and
+watch-it-burn-community.` Its read then showed the key moved on both, for example after guard-output-off:
+
+    watch-it-burn-private (this cluster), burritobot-private.agenticburn.com
+      AI guards   ON: input block-list, injection classifier, budget cap   off: output, on-topic
+    watch-it-burn-community, attackme.agenticburn.com
+      AI guards   ON: input block-list, injection classifier, budget cap   off: output, on-topic
+
+and output, budget cap and on-topic each read ON on both clusters after its -on and off after its -off. Both
+clusters' `/controls` `ai` read `input_blocklist`, `input_classifier`, `output` and `budget` true and `topic` false
+before and after, so both are left as found, and the scratch home was removed.
+
+**Not yet run on a cluster.** The deployed terminal: once hecaton promotes this change and Argo CD rolls web-terminal,
+the next run on the issue runs guard-output-off/on, guard-budget-off/on and guard-topic-on/off from the private
+terminal's own home and reads its first block as `watch-it-burn-private (this cluster)` from the Deployment's
+`WIB_CLUSTER_NAME`. The closing read after the Kubernetes switches (guardrails-on/off, guard-agency, guard-mcp,
+guards-on/off), with its 6 s wait, was run offline only; the live check above changed guard-proxy guards alone.

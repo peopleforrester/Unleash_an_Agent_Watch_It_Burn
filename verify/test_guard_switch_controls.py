@@ -366,7 +366,8 @@ for cmd in SWITCHES:
     missing = sorted(n for n in asked if n[3] not in GRANT.get(n[:3], set()))
     check(f"{cmd}: everything it asks of {PEER}, the toggle and the read, is get on services/proxy guard-proxy:8080",
           asked == {("agent", "services/proxy", "guard-proxy:8080", "get")} and not missing, f"{asked} {missing}")
-    q = parse_qs(urlparse(next(c["args"][2] for c in r["calls"] if c["cluster"] == PEER and kind(c) == "toggle")).query)
+    q = parse_qs(urlparse(next((c["args"][2] for c in r["calls"] if c["cluster"] == PEER and kind(c) == "toggle"),
+                               "")).query)
     check(f"{cmd}: the peer's /toggle sets {SWITCHES[cmd][1]} and no other guard", sorted(q) == [SWITCHES[cmd][1]],
           str(q))
 
