@@ -885,17 +885,15 @@ about 12 hours at 6 and 8 hours at 15: roughly $95, with the VPCs. The rehearsal
 credits if a standby runs hot (t3 launches Unlimited); and the self-check's
 Bedrock calls. Those are estimates, not measured.
 
-Terminal login on the private cluster is the presenter login set by hand on
-2026-11-07 on watch-it-burn-private and watch-it-burn-community (#1069), the same
-on both and one Michael and Whitney can remember; the attendee pool takes the
-student login. It lives in each cluster's `agent/terminal-auth` Secret, not in
-this repo, and no script or run rewrites it there (#1074). Nothing records whether
-a copy is in mrf-secrets, so read it off the cluster if in doubt:
+Terminal login on the private cluster is the presenter login in mrf-secrets
+(`projects/watch-it-burn-terminal.env`, keys `WIB_TERMINAL_USER` and `WIB_TERMINAL_PASSWORD`),
+the same on watch-it-burn-private, watch-it-burn-community and a standby (`-bNN`)
+that takes over a hostname on a failover; the attendee pool takes the student
+login. From 2026-11-07 the pair's login was set by hand (#1069, #1074); since
+2026-11-11 fleet.sh writes it there from mrf-secrets again (#912). It lives in
+each cluster's `agent/terminal-auth` Secret, not in this repo, so read it off
+the cluster if in doubt:
 `kubectl -n agent get secret terminal-auth -o jsonpath='{.data.TTYD_CREDENTIAL}' | base64 -d`.
-A standby (`-bNN`) that takes over a hostname on a failover is still built with
-the presenter login in mrf-secrets (`projects/watch-it-burn-terminal.env`, keys `WIB_TERMINAL_USER` and `WIB_TERMINAL_PASSWORD`),
-which may differ, until #1085 decides which login the standbys carry; read a
-standby's login off the standby the same way.
 
 Every stage switch is `guardrails-<name>-on` or `guardrails-<name>-off`, typed in the private
 cluster's terminal, and every one switches both KubeCon clusters, then ends on both clusters'
@@ -2913,6 +2911,19 @@ hosts at peak, down to 1 within three hours).
   naming `wib-pii-scrub-check`. `verify/test_dd_purge_public_live.py` reads that
   comment, runs `--verify` on its window and on `--service wib-pii-scrub-check`, and
   stays red until no Agent Observability or APM span is left (#1166).
+- With the purge, remove the stage's eight objects from Whitney's org (#1344): the
+  seven `WIB stage` saved views (ids 4819010 to 4819016) and the APM retention filter
+  `WIB stage seeds (#648)`, which keeps indexing every new `wib-stage-` session until
+  it is gone. From any checkout, with the accen-dev session, `--list` names the eight
+  and what it keeps, and `--apply` deletes those eight by id and nothing else:
+
+  ```bash
+  python3 infra/datadog-room/stage_views.py remove --profile accen-dev --region us-west-2 --list
+  python3 infra/datadog-room/stage_views.py remove --profile accen-dev --region us-west-2 --apply
+  ```
+
+  It must end `STAGE REMOVAL GREEN`. Record its `DELETED` lines and its `after:` line,
+  the org's listings once the eight are gone, in decisions.md under #1344.
 - Record the real spend once the fleet is down, with `teardown/delivery-cost.py
   --start <first build day> --end <day after the last teardown> --event kubecon-na-2026`
   and a `--profile` for each fleet account, saved as `cost/measured/kubecon-na-2026.txt`

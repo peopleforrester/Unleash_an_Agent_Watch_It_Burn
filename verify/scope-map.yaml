@@ -9221,10 +9221,11 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-  test_terminal_login_hand_set.py:
+  test_terminal_login_from_mrf_secrets.py:
     - CLAUDE.md
     - agent
-    - agent/terminal-auth
+    - agent/*
+    - agent/desk-report-token
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
     - docs/admin-console.md

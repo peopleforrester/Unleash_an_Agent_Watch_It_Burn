@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # ABOUTME: Saves the stage's Datadog views in Whitney's sandbox org (#648): one per challenge in presentation order on
-# ABOUTME: the seeded traces, the PII refusal in APM, burritobot-public and burritobot-private, plus the seeds' retention filter.
+# ABOUTME: the seeded traces, the PII refusal in APM, burritobot-public and burritobot-private, plus the seeds' retention filter;
+# ABOUTME: 'remove' deletes the seven and the filter after the talk (#1344).
 """The stage views and the seeds' retention filter (#648).
 
 `verify/stage_traces.py seed` runs the stage's seeds on the private bot the Night Before and writes
@@ -43,6 +44,8 @@ Usage:
     python3 infra/datadog-room/stage_views.py retention --profile accen-dev --region us-west-2 --apply
     python3 infra/datadog-room/stage_views.py views --profile accen-dev --region us-west-2 --list
     python3 infra/datadog-room/stage_views.py views --profile accen-dev --region us-west-2 --apply
+    python3 infra/datadog-room/stage_views.py remove --profile accen-dev --region us-west-2 --list
+    python3 infra/datadog-room/stage_views.py remove --profile accen-dev --region us-west-2 --apply   # after the talk
 """
 from __future__ import annotations
 
@@ -97,6 +100,16 @@ def sessions_of(traces: dict) -> dict[str, str]:
     if missing:
         raise ValueError(f"the traces file has no wib-stage session for {', '.join(missing)}")
     return out
+
+
+def stage_names() -> list[tuple[str, str]]:
+    """The seven views' (name, type), in presentation order: what `wanted` builds, with no seed file needed."""
+    out = []
+    for n, title, _ in CHALLENGES:
+        out.append((f"{PREFIX}{n}: {title}", LLMOBS[0]))
+        if n == "3":
+            out.append((PREFIX + PII_NAME, APM[0]))
+    return out + [(f"{PREFIX}{n}: {cluster}", LLMOBS[0]) for n, cluster in CLUSTERS]
 
 
 def wanted(traces: dict) -> list[dict]:
@@ -254,6 +267,87 @@ def apply_retention(dd: Datadog, write: bool, say=print) -> int:
     return 0
 
 
+# ---- removal after the talk (#1344) ---------------------------------------------------------------------
+
+def removal_plan(views: list[dict], filters: list[dict]) -> tuple[list[dict], list[dict], list[str]]:
+    """(views to delete, filters to delete, refusals): only the seven by name and type, only our filter."""
+    doomed, refusals = [], []
+    for name, kind in stage_names():
+        named = [v for v in views if v.get("name") == name and v.get("type") == kind]
+        if len(named) > 1:
+            refusals.append(f"{len(named)} {kind} views are named '{name}' (ids "
+                            f"{', '.join(str(v.get('id')) for v in named)}); none is deleted")
+        else:
+            doomed += named
+    gone_f = []
+    for f in filters:
+        a = f.get("attributes") or {}
+        if a.get("name") != RETENTION_NAME:
+            continue
+        if (a.get("filter") or {}).get("query") == RETENTION_QUERY:
+            gone_f.append(f)
+        else:
+            refusals.append(f"'{RETENTION_NAME}' holds another query: {describe_filter(f)}; it is not deleted")
+    return doomed, gone_f, refusals
+
+
+def list_filters(dd: Datadog) -> list[dict]:
+    data = dd.call("GET", RETENTION_PATH)
+    if not isinstance(data, dict) or not isinstance(data.get("data"), list):
+        raise ValueError("no data list in the retention filters' answer")
+    return data["data"]
+
+
+def remove(dd: Datadog, write: bool, say=print) -> int:
+    views, filters = list_views(dd), list_filters(dd)
+    say(f"  {len(views)} LLM Observability and APM saved view(s), {len(filters)} APM retention filter(s)")
+    doomed, gone_f, refusals = removal_plan(views, filters)
+    for r in refusals:
+        say(f"  FAILED   {r}")
+    if not (doomed or gone_f):
+        say("  none of the seven views or the seeds' filter is in the org")
+    for v in doomed:
+        say(f"  {'DELETE ' if write else '--apply would delete'} view {describe(v)}")
+    for f in gone_f:
+        say(f"  {'DELETE ' if write else '--apply would delete'} retention filter {describe_filter(f)}")
+    doomed_ids = {id(x) for x in doomed + gone_f}
+    say("  keeps: views " + ("; ".join(f"id {v.get('id')} '{v.get('name')}'" for v in views if id(v) not in doomed_ids)
+                             or "none")
+        + "; retention filters " + ("; ".join(f"id {f.get('id')} '{(f.get('attributes') or {}).get('name')}'"
+                                              for f in filters if id(f) not in doomed_ids) or "none"))
+    if not write:
+        return 1 if refusals else 0
+    failed = len(refusals)
+    for path in [f"{VIEWS_PATH}/{v['id']}" for v in doomed] + [f"{RETENTION_PATH}/{f['id']}" for f in gone_f]:
+        status, data = dd.http("DELETE", dd.base + path, dd.headers, None)
+        if status not in (200, 202, 204):
+            say(f"  FAILED   DELETE {path} -> {status}: {str((data or {}).get('errors', data))[:300]}")
+            failed += 1
+        else:
+            say(f"  DELETED  {path} -> {status}")
+    views2, filters2 = list_views(dd), list_filters(dd)
+    left, left_f, _ = removal_plan(views2, filters2)
+    for v in left:
+        say(f"  FAILED   view still there: {describe(v)}")
+    for f in left_f:
+        say(f"  FAILED   retention filter still there: {describe_filter(f)}")
+    failed += len(left) + len(left_f)
+    gone_ids = {v.get("id") for v in doomed} | {f.get("id") for f in gone_f}
+    for kind, before, after in (("view", views, views2), ("retention filter", filters, filters2)):
+        now = {x.get("id") for x in after}
+        lost = [x for x in before if x.get("id") not in gone_ids and x.get("id") not in now]
+        for x in lost:
+            say(f"  FAILED   another {kind} is gone: id {x.get('id')}")
+        failed += len(lost)
+    ours = sum(1 for v in views2 if str(v.get("name", "")).startswith(PREFIX))
+    say(f"  after: {len(views2)} LLM Observability and APM saved view(s), {ours} named '{PREFIX}...'; "
+        f"{len(filters2)} APM retention filter(s): "
+        + "; ".join(f"'{(f.get('attributes') or {}).get('name')}'" for f in filters2))
+    say(f"STAGE REMOVAL {'RED' if failed else 'GREEN'}: {len(doomed)} view(s) and {len(gone_f)} filter(s) deleted, "
+        f"{failed} problem(s)")
+    return 1 if failed else 0
+
+
 # ---- the command ----------------------------------------------------------------------------------------
 
 def write_key(profile: str, region: str, env, run=subprocess.run) -> str:
@@ -274,13 +368,14 @@ def write_key(profile: str, region: str, env, run=subprocess.run) -> str:
 
 def main(argv=None, keys=read_keys, http=None, env=None, run=subprocess.run, say=print) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("what", choices=("views", "retention"))
+    p.add_argument("what", choices=("views", "retention", "remove"))
     p.add_argument("--profile", help="AWS profile that can read " + SECRET_ID)
     p.add_argument("--region")
     p.add_argument("--traces", type=pathlib.Path, default=TRACES, help="the seed's views file (views only)")
     mode = p.add_mutually_exclusive_group()
     mode.add_argument("--list", action="store_true", help="read-only: what --apply would do")
-    mode.add_argument("--apply", action="store_true", help="write what is missing or stale (default: dry run)")
+    mode.add_argument("--apply", action="store_true",
+                      help="write what is missing or stale; for remove, delete the eight (default: dry run)")
     a = p.parse_args(argv)
     env = os.environ if env is None else env
     wants = []
@@ -297,6 +392,10 @@ def main(argv=None, keys=read_keys, http=None, env=None, run=subprocess.run, say
             say(f"  {w['name']}  [{w['type']}] {w['search']}")
         if a.what == "retention":
             say(f"  {json.dumps(retention_body())}")
+        if a.what == "remove":
+            for name, kind in stage_names():
+                say(f"  remove view '{name}' [{kind}]")
+            say(f"  remove retention filter '{RETENTION_NAME}' query '{RETENTION_QUERY}'")
         say("  dry run: nothing read or written")
         return 0
     if not (a.profile and a.region):
@@ -313,6 +412,8 @@ def main(argv=None, keys=read_keys, http=None, env=None, run=subprocess.run, say
         say(f"  org: {org} ({site}), api key from {SECRET_ID}, the unscoped application key")
         if a.what == "retention":
             return apply_retention(dd, a.apply, say)
+        if a.what == "remove":
+            return remove(dd, a.apply, say)
         return apply_views(dd, wants, a.apply, say)
     except (RuntimeError, ValueError) as e:
         say(f"FAILED: {e}")

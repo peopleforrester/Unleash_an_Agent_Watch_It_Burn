@@ -482,7 +482,7 @@ track them, so it neither heals them nor prunes them:
 | Argo CD itself (namespace `argocd`) | `infra/deploy-full-idp.sh` (Helm), or lab-platform's bootstrap | The GitOps engine is not an Application. Its config is `infra/argocd-values.yaml`, or lab-platform's copy of it. |
 | StorageClass `gp3` | `infra/deploy-full-idp.sh`, or lab-platform's bootstrap | |
 | Secret `datadog-secret` in `datadog`, `monitoring` and `security` | `fleet.sh`, `infra/deploy-full-idp.sh` | Per-org keys |
-| Secret `agent/terminal-auth` | `fleet.sh`, or by hand on watch-it-burn-community and watch-it-burn-private | The shared terminal credential. On those two it is set by hand (#1069), and fleet.sh never writes it there (#1074). |
+| Secret `agent/terminal-auth` | `fleet.sh` | The shared terminal credential: on every roster cluster, watch-it-burn-community and watch-it-burn-private included, the presenter login from mrf-secrets. From 2026-11-07 those two were set by hand (#1069, #1074) until #912 put the mrf-secrets login back on 2026-11-11. |
 | Secret `student-creds/student-aws-creds` | `fleet.sh` (`push_student_aws`) | The attendee key, see above |
 | The C1 NetworkPolicies and the C3 KubeArmor policy | the student, from `~/challenges` (the `challenge-fixes` ConfigMap) | On the profiles other than admin these are the challenge controls. Deleting one brings nothing back, and Argo CD does not remove it either. On the admin profile, the `network-policies` and `kubearmor-policies` apps manage them. |
 | Anything a student or presenter applies by hand during the session | hand | Argo CD prunes only what it tracks, so these stay until the cluster is destroyed. |

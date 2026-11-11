@@ -227,14 +227,14 @@ failure (#1190).
    `python3 verify/prose_gate.py /var/lib/hecaton/app/current/src/hecaton/run/aiisms.py origin/staging`: it reads
    the working tree against staging with the gate's own scanner, names each file, label and added line the gate
    would fail, and exits 1 on any.
-6. **No run touches the presenter terminal login on the two KubeCon clusters.** On 2026-11-07 Michael had the
-   presenter terminal login set by hand on both (#1069), to one he and Whitney can remember, and asked that it be
-   left alone (#1074). No run creates, rotates, regenerates or restores the `agent/terminal-auth` Secret
-   (`TTYD_CREDENTIAL`) on watch-it-burn-private or watch-it-burn-community, in converge, reset or bring-up paths
-   included. `infra/terraform/fleet/fleet.sh` refuses to write it there (`terminal_login_hand_set`): its
-   `terminal-password` verb fails on either name, and a bring-up that finds no Secret writes none and fails by
-   name. A live check reads the login from that Secret, never from an issue, a commit or a transcript, and never
-   prints it. Their standbys (`-bNN`) are not covered by this rule.
+6. **The presenter terminal login on the two KubeCon clusters comes from mrf-secrets, by fleet.sh alone.** From
+   2026-11-07 it was set by hand on both (#1069) and no run touched it (#1074). Michael stored the login in mrf-secrets
+   himself on 2026-11-09 (`projects/watch-it-burn-terminal.env`, keys `WIB_TERMINAL_USER` and `WIB_TERMINAL_PASSWORD`)
+   and lifted that hold on 2026-11-11 (#912). A run writes the `agent/terminal-auth` Secret
+   (`TTYD_CREDENTIAL`) on watch-it-burn-private or watch-it-burn-community only through
+   `infra/terraform/fleet/fleet.sh` (its `terminal-password` verb, or a bring-up that finds no Secret), from that
+   file, and never generates, invents or puts back any other login there. A live check reads the login from that
+   Secret or that file, never from an issue, a commit or a transcript, and never prints it.
 6. **A run tests what it changed, and never the whole tools tier.** Michael, 2026-11-08 (#1191): "it still sounds
    like we're running the end-to-end tools way too fucking much for reasons that aren't fucking clear, for fucking
    file edits." Both scripts scope to the change when `HECATON_BASE_SHA` is set (#1018, `verify/scope-map.yaml`), so
