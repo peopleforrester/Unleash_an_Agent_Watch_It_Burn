@@ -4,7 +4,7 @@
 
 gitops/namespaces/code-of-conduct-names.yaml is a native ValidatingAdmissionPolicy and its binding. It refuses a create
 or update in the `agent` namespace whose name or labels match the floor the spike chose (#1267,
-docs/research/2026-11-09-coc-floor), outside Kyverno so that guardrails-off leaves it on. This holds:
+docs/research/2026-11-09-coc-floor), outside Kyverno so that guardrails-k8s-off leaves it on. This holds:
 
 1. The shape: the policy and binding, Deny, failurePolicy Fail, CREATE and UPDATE of every namespaced kind, bound to
    `agent` alone, scoped to the room's and people's writes, in the namespaces Application that every profile lists.
@@ -15,8 +15,8 @@ docs/research/2026-11-09-coc-floor), outside Kyverno so that guardrails-off leav
    the 768 witch names, built as deploy_app builds it, every stage image's Deployment the agent prompt names, and every
    object under gitops/ passes, while every term the list holds, in a name or a label, is refused. The longest of
    those texts costs CEL's matches() well inside its 1,000,000 a call, so none is refused for its length.
-4. guardrails-off, guards-off and the reset scripts leave it in place: neither terminal entrypoint nor fleet.sh names
-   an admission policy, the files guardrails-off applies and deletes hold none, its Kyverno step patches Kyverno's
+4. guardrails-k8s-off, guardrails-ai-off and the reset scripts leave it in place: neither terminal entrypoint nor fleet.sh names
+   an admission policy, the files guardrails-k8s-off applies and deletes hold none, its Kyverno step patches Kyverno's
    ValidatingPolicy alone, and no Role or ClusterRole in the stage's bundles grants a write on admission policies.
 """
 from __future__ import annotations
@@ -56,7 +56,7 @@ VALIDATION = "!variables.text.matches(variables.floor)"
 WHO = ("!request.userInfo.username.startsWith('system:') || "
        "request.userInfo.username.startsWith('system:serviceaccount:agent:')")
 WRITE_VERBS = {"create", "update", "patch", "delete", "deletecollection", "*"}
-# What makes a manifest name an admission policy, in a script or a file guardrails-off applies.
+# What makes a manifest name an admission policy, in a script or a file guardrails-k8s-off applies.
 ADMISSION_WORDS = re.compile(r"admissionregistration|validatingadmissionpolic|code-of-conduct-names|"
                              r"validatingwebhookconfiguration", re.IGNORECASE)
 
@@ -272,29 +272,29 @@ joined = cel_text({"metadata": {"name": "a", "labels": {"x": "f", "y": "u"}}})
 check(joined == "a/x=f/y=u///", "label pairs join with '/', which ends a word for the pattern but is not one of its "
                                 "separators, so letters in different labels never spell a term together")
 
-print("== 4. guardrails-off, guards-off and the resets leave it in place ==")
+print("== 4. guardrails-k8s-off, guardrails-ai-off and the resets leave it in place ==")
 for path in (*ENTRYPOINTS, FLEET):
     text = path.read_text(encoding="utf-8")
     check(not ADMISSION_WORDS.search(text),
-          f"{path.relative_to(REPO)} names no admission policy, webhook or this policy (guardrails-off, guards-off, "
+          f"{path.relative_to(REPO)} names no admission policy, webhook or this policy (guardrails-k8s-off, guardrails-ai-off, "
           "reset-bot, desk-reset, beacon-reset, wall-reset)")
 entry = need(ENTRYPOINTS[0], '_kg() { local st="$1" g="$2" c a p; shift 2')
 kg = entry[entry.index("_kg() {"):entry.index("_guardrails() {")]
 off_files = re.findall(r"off:\w+\)\s+c=\(\"\$@\" (?:apply|delete --ignore-not-found) -f \"\$HOME/challenges/([\w.-]+)\"\)",
                        kg)
 check(sorted(off_files) == ["c1-network-policy.yaml", "c3-kubearmor-policy.yaml", "c8-broad-role.yaml"],
-      f"guardrails-off applies or deletes ~/challenges/ files and nothing else: {sorted(off_files)}")
+      f"guardrails-k8s-off applies or deletes ~/challenges/ files and nothing else: {sorted(off_files)}")
 fix_text = fixes["data"]
 check(all(f in fix_text and not ADMISSION_WORDS.search(fix_text[f]) for f in off_files),
       "none of those files, as the challenge-fixes ConfigMap ships them, holds an admission policy")
 patched = re.findall(r'patch (\w+) "\$p"', kg)
 check(patched == ["validatingpolicy"] and "for p in restrict-image-registries deny-external-registries" in kg,
-      "guardrails-off's Kyverno step patches Kyverno's ValidatingPolicy (restrict-image-registries, "
+      "guardrails-k8s-off's Kyverno step patches Kyverno's ValidatingPolicy (restrict-image-registries, "
       "deny-external-registries) alone, never a ValidatingAdmissionPolicy")
-guards_off = entry[entry.index('cat > "$HOME/guards-off"'):]
+guards_off = entry[entry.index('cat > "$HOME/guardrails-ai-off"'):]
 guards_off = guards_off[:guards_off.index("\nEOS\n")]
 check("kubectl" not in guards_off and "_both _toggle" in guards_off and "_both _mcp off" in guards_off,
-      "guards-off runs guard-proxy's /toggle and the MCP tool switch alone, no kubectl of its own")
+      "guardrails-ai-off runs guard-proxy's /toggle and the MCP tool switch alone, no kubectl of its own")
 
 rbac_files = [*sorted(AI.glob("*.yaml")), *sorted((REPO / "gitops/guardrails-switch").glob("*.yaml"))]
 grants, roles = [], []

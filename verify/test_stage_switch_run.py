@@ -173,7 +173,11 @@ check(all(ssr.terminal_command(n)[:len(kp.TERMINAL_EXEC)] == kp.TERMINAL_EXEC fo
       "every command runs through the probe's TERMINAL_EXEC")
 for entry in ("gitops/ai-layer/web-terminal/entrypoint.sh", "images/web-terminal/entrypoint.sh"):
     text = (REPO / entry).read_text(encoding="utf-8")
-    missing = [n for n in [*TALK_ORDER, *ssr.CLOSE] if f'cat > "$HOME/{n}" <<' not in text]
+    # The run types the old names; since #1350 each is an alias the ALIASES table writes, of a heredoc the terminal has.
+    if "<<'ALIASES'\n" not in text:
+        sys.exit(f"ANCHOR MISSING: the <<'ALIASES' table of old switch names in {entry}")
+    aliases = dict(ln.split() for ln in text.split("<<'ALIASES'\n", 1)[1].split("\nALIASES\n", 1)[0].splitlines())
+    missing = [n for n in [*TALK_ORDER, *ssr.CLOSE] if f'cat > "$HOME/{aliases.get(n, n)}" <<' not in text]
     check(not missing, f"{entry} writes every command the run types into /home/student (missing: {missing})")
 src = (REPO / "verify/stage_switch_run.py").read_text(encoding="utf-8")
 check("terminal-auth" not in src.replace("agent/terminal-auth Secret: it runs", "")

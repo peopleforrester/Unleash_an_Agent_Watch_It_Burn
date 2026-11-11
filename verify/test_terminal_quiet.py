@@ -89,7 +89,9 @@ check("the removal is explained", "No AI coding CLIs" in DOCKER)
 print("== the guard toggles still EXIST, they are just not advertised ==")
 # Removing the banner must not remove the commands: the lab's fix cards invoke them by name.
 for name, t in COPIES.items():
-    check(f"{name}: guards-status is still installed", '"$HOME/guards-status"' in t)
+    # guardrails-status since #1350, and guards-status its alias, from the ALIASES table.
+    check(f"{name}: guards-status is still installed, as guardrails-status and its alias",
+          '"$HOME/guardrails-status"' in t and "\nguards-status guardrails-status\n" in t)
 
 print()
 if failures:

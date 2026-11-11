@@ -2,7 +2,7 @@
 # ABOUTME: name on the live Agent, never at a fixed tools index and never from a copy of the whole tools array (#708).
 """Two writers set the workshop-agent Agent's evil-mcp toolNames, C7's control on a workshop cluster. Before #708 the
 terminal's _evil JSON-patched /spec/declarative/tools/1/..., so a reorder of the tools in
-gitops/workshop-agent/agent.yaml would have made guard-mcp-on narrow workshop-mcp instead, and toggle-mcp-authz-on.sh
+gitops/workshop-agent/agent.yaml would have made guardrails-mcp-on narrow workshop-mcp instead, and toggle-mcp-authz-on.sh
 merge-patched the whole tools array from its own copy, which every git change to any tool had to follow.
 
 Both now read the Agent, find the one entry whose mcpServer.name is evil-mcp, and send a JSON patch that tests that
@@ -54,7 +54,7 @@ if "guardrails-peer" in args:
         sys.exit(0)
     sys.stderr.write('Error from server (NotFound): secrets "guardrails-peer" not found\n'); sys.exit(1)
 if "get" in args and "deployment" in args:
-    # The Deployment kagent rolls for each new toolNames list, read by guard-mcp-on's wait (#1149): rolled at once.
+    # The Deployment kagent rolls for each new toolNames list, read by guardrails-mcp-on's wait (#1149): rolled at once.
     g = str(1 + state["patches"])
     sys.stdout.write(g if args[-1] == "jsonpath={.metadata.generation}" else f"{g} {g} 1 1 1"); sys.exit(0)
 if "get" in args and "workshop-agent" in args and args[-2:] == ["-o", "json"]:
@@ -204,27 +204,27 @@ with tempfile.TemporaryDirectory() as tmp:
         rc, out, after, n = run([*toggle, "--off"], with_evil(agent, ["get_weather"]), **ctx)
         check(f"{label}: --off gives evil-mcp its rogue tools back, and nothing else changes",
               rc == 0 and after == open_agent, out)
-        print(f"== the web terminal's guard-mcp-on and guard-mcp-off, {label} ==")
-        rc, out, after, n = run(["bash", str(home / "guard-mcp-on")], open_agent)
-        check(f"{label}: guard-mcp-on narrows evil-mcp to get_weather and touches nothing else",
+        print(f"== the web terminal's guardrails-mcp-on and guardrails-mcp-off, {label} ==")
+        rc, out, after, n = run(["bash", str(home / "guardrails-mcp-on")], open_agent)
+        check(f"{label}: guardrails-mcp-on narrows evil-mcp to get_weather and touches nothing else",
               rc == 0 and after == with_evil(open_agent, ["get_weather"]), out)
-        rc, out, after, n = run(["bash", str(home / "guard-mcp-off")], with_evil(agent, ["get_weather"]))
-        check(f"{label}: guard-mcp-off gives evil-mcp its rogue tools back and touches nothing else",
+        rc, out, after, n = run(["bash", str(home / "guardrails-mcp-off")], with_evil(agent, ["get_weather"]))
+        check(f"{label}: guardrails-mcp-off gives evil-mcp its rogue tools back and touches nothing else",
               rc == 0 and after == open_agent, out)
 
     print("== a missing evil-mcp, and a reorder between the read and the patch ==")
     rc, out, after, n = run([*toggle, "--on"], NO_EVIL, **ctx)
     check("toggle, no evil-mcp entry: fails and patches nothing", rc != 0 and n == 0 and after == NO_EVIL, out)
-    rc, out, after, n = run(["bash", str(home / "guard-mcp-on")], NO_EVIL)
-    check("guard-mcp-on, no evil-mcp entry: fails and patches nothing", rc != 0 and n == 0 and after == NO_EVIL, out)
+    rc, out, after, n = run(["bash", str(home / "guardrails-mcp-on")], NO_EVIL)
+    check("guardrails-mcp-on, no evil-mcp entry: fails and patches nothing", rc != 0 and n == 0 and after == NO_EVIL, out)
     open_agent = with_evil(AGENT, EVIL_ALL)
     raced = copy.deepcopy(open_agent)
     raced["spec"]["declarative"]["tools"].reverse()
     rc, out, after, n = run([*toggle, "--on"], open_agent, FAKE_REORDER_AFTER_GET="1", **ctx)
     check("toggle, tools reordered after its read: the test op refuses the patch, workshop-mcp is not narrowed",
           rc != 0 and n == 0 and after == raced, out)
-    rc, out, after, n = run(["bash", str(home / "guard-mcp-on")], open_agent, FAKE_REORDER_AFTER_GET="1")
-    check("guard-mcp-on, tools reordered after its read: the patch is refused, workshop-mcp is not narrowed",
+    rc, out, after, n = run(["bash", str(home / "guardrails-mcp-on")], open_agent, FAKE_REORDER_AFTER_GET="1")
+    check("guardrails-mcp-on, tools reordered after its read: the patch is refused, workshop-mcp is not narrowed",
           rc != 0 and n == 0 and after == raced, out)
 
     # The lab text is a third writer, by hand: a student copies the by-hand C7 fix and the reset line out of

@@ -1,16 +1,17 @@
-# ABOUTME: Offline gate for #1132: guards-on and guards-off send every AI guard through _both, so the terminal's
-# ABOUTME: one-command reset reaches this cluster and the KubeCon peer, and each runs every step, then names each that failed.
-"""guards-on and guards-off used to set the guard-proxy guards with _px and C7 with _mcp, on this cluster alone. Since
-#1132 they run `_both _toggle <query>` and `_both _mcp on|off`, the same steps guard-input-on and guard-mcp-on use, so
+# ABOUTME: Offline gate for #1132: guardrails-ai-on and guardrails-ai-off (guards-on and guards-off before #1350) send every
+# ABOUTME: AI guard but on-topic through _both, to this cluster and the KubeCon peer, run every step, and name each that failed.
+"""guards-on and guards-off, guardrails-ai-on and guardrails-ai-off since #1350, used to set the guard-proxy guards with _px and C7 with _mcp, on this cluster alone. Since
+#1132 they run `_both _toggle <query>` and `_both _mcp on|off`, the same steps guardrails-input-on and guardrails-mcp-on use, so
 the room's public bot is reset too. What _both, _toggle and _mcp do on two clusters is held by
 verify/test_guard_switch_both.py, verify/test_guard_input_both.py and verify/test_guard_mcp_both.py; this test holds
-that guards-on and guards-off call them, and nothing else:
+that guardrails-ai-on and guardrails-ai-off call them, and nothing else:
 
-  * guards-on calls `_both _toggle` once with output, both input stages and budget on, then `_both _mcp on`;
-  * guards-off calls `_both _toggle` once with output, both input stages, budget and topic off, then `_both _mcp off`;
+  * guardrails-ai-on calls `_both _toggle` once with output, both input stages and budget on, then `_both _mcp on`;
+  * guardrails-ai-off calls `_both _toggle` once with output, both input stages and budget off, then `_both _mcp off`:
+    the on-topic guard is its own switch since #1350, so neither of the two touches it;
   * neither calls _px or _mcp outside _both;
   * a refused toggle still runs C7 after it (#1203), and each refused step is named in the closing line with exit 1;
-  * a refused C7 step exits 1 naming guard-mcp-on/off;
+  * a refused C7 step exits 1 naming guardrails-mcp-on/off;
   * each ends with the /controls read (_controls, #1349), whether its steps switched or not;
   * the images/ twin is byte-identical.
 
@@ -40,7 +41,7 @@ def check(name: str, ok: bool, detail: str = "") -> None:
 
 text = ENTRYPOINT.read_text(encoding="utf-8")
 scripts = dict(re.findall(r'cat > "\$HOME/([^"]+)" <<\'EOS\'\n(.*?)\nEOS\n', text, re.S))
-for name in ("guards-on", "guards-off"):
+for name in ("guardrails-ai-on", "guardrails-ai-off"):
     if name not in scripts:
         sys.exit(f"ANCHOR MISSING: no `cat > \"$HOME/{name}\"` heredoc in {ENTRYPOINT}")
 
@@ -67,22 +68,23 @@ def run(name: str, fail: str = "none") -> tuple[int, str, list[str]]:
 
 
 ON_Q = "_toggle output=on&input_blocklist=on&input_classifier=on&budget=on"
-OFF_Q = "_toggle output=off&input_blocklist=off&input_classifier=off&budget=off&topic=off"
+OFF_Q = "_toggle output=off&input_blocklist=off&input_classifier=off&budget=off"
 
-rc, out, got = run("guards-on")
-check("guards-on sends the guard-proxy guards, then C7, through _both, reads /controls back, and exits 0",
+rc, out, got = run("guardrails-ai-on")
+check("guardrails-ai-on sends the guard-proxy guards, then C7, through _both, reads /controls back, and exits 0",
       rc == 0 and got == [ON_Q, "_mcp on", "_controls"], f"exit {rc}, calls {got}: {out}")
-rc, out, got = run("guards-off")
-check("guards-off sends the guard-proxy guards, topic included, then C7, through _both, reads /controls back, and "
-      "exits 0", rc == 0 and got == [OFF_Q, "_mcp off", "_controls"], f"exit {rc}, calls {got}: {out}")
-for name in ("guards-on", "guards-off"):
+rc, out, got = run("guardrails-ai-off")
+check("guardrails-ai-off sends the guard-proxy guards, on-topic left alone, then C7, through _both, reads /controls "
+      "back, and exits 0", rc == 0 and got == [OFF_Q, "_mcp off", "_controls"], f"exit {rc}, calls {got}: {out}")
+for name in ("guardrails-ai-on", "guardrails-ai-off"):
     body = scripts[name]
+    check(f"{name} sends nothing to the on-topic guard (#1350)", "topic=" not in body and "_topic" not in body)
     bare = [ln for ln in body.splitlines() if re.search(r"(^|[;&|]\s*|if !?\s*)_(px|mcp)\b", ln.strip())]
     check(f"{name} calls neither _px nor _mcp outside _both", not bare, str(bare))
 
 # #1203: a failing first step does not stop the run. The toggle refused, C7 still runs, and the closing line names
 # the step that failed, for each script.
-for name, query, word, mcp in (("guards-on", ON_Q, "on", "_mcp on"), ("guards-off", OFF_Q, "off", "_mcp off")):
+for name, query, word, mcp in (("guardrails-ai-on", ON_Q, "on", "_mcp on"), ("guardrails-ai-off", OFF_Q, "off", "_mcp off")):
     rc, out, got = run(name, fail="_toggle")
     check(f"a refused guard-proxy toggle still runs {name}'s C7 step after it, and the /controls read",
           got == [query, mcp, "_controls"], f"exit {rc}, calls {got}: {out}")
@@ -93,29 +95,29 @@ for name, query, word, mcp in (("guards-on", ON_Q, "on", "_mcp on"), ("guards-of
     check(f"{name} with both steps refused runs both and names both",
           rc == 1 and got == [query, mcp, "_controls"]
           and f"these did not switch {word}: the guard-proxy guards, the MCP tool restriction." in out
-          and f"guard-mcp-{word}" in out, f"exit {rc}, calls {got}: {out}")
+          and f"guardrails-mcp-{word}" in out, f"exit {rc}, calls {got}: {out}")
     check(f"{name} does not claim success when a step was refused", "ALL AI guards" not in out, out)
-rc, out, got = run("guards-off", fail="_mcp")
-check("a refused C7 step makes guards-off exit 1 and name guard-mcp-off",
-      rc == 1 and "guard-mcp-off" in out, f"exit {rc}, calls {got}: {out}")
-rc, out, got = run("guards-on", fail="_mcp")
-check("a refused C7 step makes guards-on exit 1 and name guard-mcp-on",
-      rc == 1 and "guard-mcp-on" in out, f"exit {rc}, calls {got}: {out}")
+rc, out, got = run("guardrails-ai-off", fail="_mcp")
+check("a refused C7 step makes guardrails-ai-off exit 1 and name guardrails-mcp-off",
+      rc == 1 and "guardrails-mcp-off" in out, f"exit {rc}, calls {got}: {out}")
+rc, out, got = run("guardrails-ai-on", fail="_mcp")
+check("a refused C7 step makes guardrails-ai-on exit 1 and name guardrails-mcp-on",
+      rc == 1 and "guardrails-mcp-on" in out, f"exit {rc}, calls {got}: {out}")
 
 check("images/web-terminal/entrypoint.sh is kept byte-identical", TWIN.read_bytes() == ENTRYPOINT.read_bytes())
 
-# The check can fail: guards-off with its pre-#1203 early exit put back stops before C7, which the check above reads.
-early = scripts["guards-off"].replace(
+# The check can fail: guardrails-ai-off with its pre-#1203 early exit put back stops before C7, which the check above reads.
+early = scripts["guardrails-ai-off"].replace(
     '  failed="${failed:+$failed, }the guard-proxy guards"\n', '  exit 1\n', 1)
-if early == scripts["guards-off"]:
-    sys.exit(f"ANCHOR MISSING: guards-off's guard-proxy failure line in {ENTRYPOINT}")
+if early == scripts["guardrails-ai-off"]:
+    sys.exit(f"ANCHOR MISSING: guardrails-ai-off's guard-proxy failure line in {ENTRYPOINT}")
 scripts["guards-off-early"] = early
 rc, out, got = run("guards-off-early", fail="_toggle")
-check("self-check: a guards-off that exits on its first failing step is caught", got == [OFF_Q], f"calls {got}")
+check("self-check: a guardrails-ai-off that exits on its first failing step is caught", got == [OFF_Q], f"calls {got}")
 
-# The check can fail: guards-off with its old bare _px line put back.
-old = scripts["guards-off"].replace(
-    'if ! _both _toggle "output=off&input_blocklist=off&input_classifier=off&budget=off&topic=off"; then',
+# The check can fail: guardrails-ai-off with its old bare _px line put back.
+old = scripts["guardrails-ai-off"].replace(
+    'if ! _both _toggle "output=off&input_blocklist=off&input_classifier=off&budget=off"; then',
     '_px "output=off" && _px "input_blocklist=off&input_classifier=off"\nif false; then', 1)
 bare_old = [ln for ln in old.splitlines() if re.search(r"(^|[;&|]\s*|if !?\s*)_(px|mcp)\b", ln.strip())]
 check("self-check: the pre-#1132 bare _px line is caught", bool(bare_old))
@@ -123,4 +125,4 @@ check("self-check: the pre-#1132 bare _px line is caught", bool(bare_old))
 if failures:
     print(f"\n{len(failures)} check(s) failed")
     sys.exit(1)
-print("\nguards-on and guards-off send every AI guard through _both (#1132) and run every step (#1203)")
+print("\nguards-on and guardrails-ai-off send every AI guard through _both (#1132) and run every step (#1203)")

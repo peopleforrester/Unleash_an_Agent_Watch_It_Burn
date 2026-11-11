@@ -166,7 +166,7 @@ if "patch" in args and "configmap" in args:
     state["rv"] += 1
     done()
 if "logs" in args:
-    # guard-mcp-on's wait (#1149): agentgateway-c7 logs this line each time it reloads its file.
+    # guardrails-mcp-on's wait (#1149): agentgateway-c7 logs this line each time it reloads its file.
     print('2026-11-08T05:35:31.361287Z\tinfo\tstate_manager\tloaded config from File("/etc/agentgateway-c7/config.yaml")')
     done()
 if "get" in args and "deployment" in args:
@@ -223,7 +223,7 @@ def run(cluster: str, *commands: str, race: bool = False) -> tuple[dict, list[su
 
 
 # Each fake kubectl call starts python3, and a toggle makes up to 19 of them. On the shared host at a load of 40
-# that took 15 seconds for guards-off on its own and over 60 inside the offline suite, and the old fixed 60-second
+# that took 15 seconds for guardrails-ai-off on its own and over 60 inside the offline suite, and the old fixed 60-second
 # limit raised a traceback that ended the whole test (run 17968). The limit only catches a toggle that hangs, so it
 # is 300 seconds, and a toggle that reaches it exits naming the toggle and the limit.
 TOGGLE_LIMIT_SECONDS = 300
@@ -248,7 +248,7 @@ def gateway_pod_left_running(state: dict) -> bool:
     return not any(set(c) & {"delete", "rollout", "restart", "scale", "replace"} for c in state["calls"])
 
 
-TOGGLES = ("guard-mcp-on", "guard-mcp-off", "guards-on", "guards-off")
+TOGGLES = ("guardrails-mcp-on", "guardrails-mcp-off", "guardrails-ai-on", "guardrails-ai-off")
 
 print("== the toggles exist where the entrypoint writes them, in both copies ==")
 docs = heredocs()
@@ -258,9 +258,9 @@ check("images/web-terminal/entrypoint.sh is byte-identical to gitops/ai-layer/we
       (REPO / "images/web-terminal/entrypoint.sh").read_bytes()
       == (REPO / "gitops/ai-layer/web-terminal/entrypoint.sh").read_bytes())
 
-print("== admin cluster: guard-mcp-on narrows the gateway rule and leaves the allow-list full ==")
-state, (on,) = run("admin", "guard-mcp-on")
-check("guard-mcp-on exits 0", on.returncode == 0, on.stdout + on.stderr)
+print("== admin cluster: guardrails-mcp-on narrows the gateway rule and leaves the allow-list full ==")
+state, (on,) = run("admin", "guardrails-mcp-on")
+check("guardrails-mcp-on exits 0", on.returncode == 0, on.stdout + on.stderr)
 check("and says the guard is on at the gateway", "ON, at the gateway" in on.stdout, on.stdout)
 check(f"the rule is now {ON_RULE!r}", rules_of(state["config"]) == [ON_RULE], f"{rules_of(state['config'])}")
 check("only the `# c7-rule` line changed",
@@ -280,41 +280,41 @@ check("that tests the resourceVersion it read before replacing config.yaml",
       and ops[0] == {"op": "test", "path": "/metadata/resourceVersion", "value": "7"}
       and ops[1]["path"] == "/data/config.yaml", f"{ops}")
 
-print("== admin cluster: guard-mcp-off opens it again, back to the committed file byte for byte ==")
-state, (on, off) = run("admin", "guard-mcp-on", "guard-mcp-off")
-check("guard-mcp-off exits 0 and says it is off at the gateway",
+print("== admin cluster: guardrails-mcp-off opens it again, back to the committed file byte for byte ==")
+state, (on, off) = run("admin", "guardrails-mcp-on", "guardrails-mcp-off")
+check("guardrails-mcp-off exits 0 and says it is off at the gateway",
       off.returncode == 0 and "OFF, at the gateway" in off.stdout, off.stdout + off.stderr)
 check("the rule is 'true' again", rules_of(state["config"]) == ["true"], f"{rules_of(state['config'])}")
 check("and the config is the committed one exactly", state["config"] == COMMITTED)
 check("toolNames stays full", state["toolNames"] == ALL, f"{state['toolNames']}")
 check("nothing deleted, restarted or rolled out the gateway pod", gateway_pod_left_running(state))
 
-print("== admin cluster: guards-on and guards-off flip the gateway rule too ==")
-state, (gon,) = run("admin", "guards-on")
-check("guards-on exits 0 and narrows the gateway rule", gon.returncode == 0 and rules_of(state["config"]) == [ON_RULE],
+print("== admin cluster: guardrails-ai-on and guardrails-ai-off flip the gateway rule too ==")
+state, (gon,) = run("admin", "guardrails-ai-on")
+check("guardrails-ai-on exits 0 and narrows the gateway rule", gon.returncode == 0 and rules_of(state["config"]) == [ON_RULE],
       gon.stdout + gon.stderr)
-check("guards-on leaves toolNames full", state["toolNames"] == ALL, f"{state['toolNames']}")
-check("guards-on leaves the on-topic guard alone (#455)", not any("topic" in " ".join(c) for c in state["calls"]))
-check("guards-on reports no C7 failure", "did not switch" not in gon.stdout, gon.stdout)
-state, (_, goff) = run("admin", "guards-on", "guards-off")
-check("guards-off exits 0 and puts the committed config back byte for byte",
+check("guardrails-ai-on leaves toolNames full", state["toolNames"] == ALL, f"{state['toolNames']}")
+check("guardrails-ai-on leaves the on-topic guard alone (#455)", not any("topic" in " ".join(c) for c in state["calls"]))
+check("guardrails-ai-on reports no C7 failure", "did not switch" not in gon.stdout, gon.stdout)
+state, (_, goff) = run("admin", "guardrails-ai-on", "guardrails-ai-off")
+check("guardrails-ai-off exits 0 and puts the committed config back byte for byte",
       goff.returncode == 0 and state["config"] == COMMITTED, goff.stdout + goff.stderr)
-check("guards-off leaves toolNames full", state["toolNames"] == ALL, f"{state['toolNames']}")
+check("guardrails-ai-off leaves toolNames full", state["toolNames"] == ALL, f"{state['toolNames']}")
 check("neither deleted, restarted or rolled out the gateway pod", gateway_pod_left_running(state))
 
 print("== workshop cluster: the toolNames toggle, unchanged, and the gateway ConfigMap never edited ==")
-state, (on,) = run("attendee", "guard-mcp-on")
-check("guard-mcp-on exits 0 and narrows toolNames to get_weather",
+state, (on,) = run("attendee", "guardrails-mcp-on")
+check("guardrails-mcp-on exits 0 and narrows toolNames to get_weather",
       on.returncode == 0 and state["toolNames"] == ["get_weather"], f"{state['toolNames']} {on.stdout}")
 check("and says the rogue tools left the allow-list", "removed from the agent's allow-list" in on.stdout, on.stdout)
-state, (_, off) = run("attendee", "guard-mcp-on", "guard-mcp-off")
-check("guard-mcp-off exits 0 and restores the full toolNames list",
+state, (_, off) = run("attendee", "guardrails-mcp-on", "guardrails-mcp-off")
+check("guardrails-mcp-off exits 0 and restores the full toolNames list",
       off.returncode == 0 and state["toolNames"] == ALL, f"{state['toolNames']} {off.stdout}")
-state, (gon,) = run("attendee", "guards-on")
-check("guards-on narrows toolNames", gon.returncode == 0 and state["toolNames"] == ["get_weather"],
+state, (gon,) = run("attendee", "guardrails-ai-on")
+check("guardrails-ai-on narrows toolNames", gon.returncode == 0 and state["toolNames"] == ["get_weather"],
       f"{state['toolNames']} {gon.stdout}")
-state, (_, goff) = run("attendee", "guards-on", "guards-off")
-check("guards-off restores the full toolNames list", goff.returncode == 0 and state["toolNames"] == ALL,
+state, (_, goff) = run("attendee", "guardrails-ai-on", "guardrails-ai-off")
+check("guardrails-ai-off restores the full toolNames list", goff.returncode == 0 and state["toolNames"] == ALL,
       f"{state['toolNames']} {goff.stdout}")
 state, _ = run("attendee", *TOGGLES)
 check("none of the four toggles reads or edits the gateway ConfigMap on a workshop cluster",

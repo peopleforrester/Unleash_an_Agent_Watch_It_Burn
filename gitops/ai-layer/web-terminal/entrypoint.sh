@@ -145,7 +145,7 @@ _who() { local a p=""
   for a in "$@"; do [ "$p" = --context ] && { printf '%s\n' "$a"; return; }; p="$a"; done
   echo "This cluster"; }
 # _mcp on|off [kubectl...] : flip C7 on one cluster through that cluster's own control, the one _c7gw picks there.
-# guards-on and guards-off call it bare, for this cluster; guard-mcp-on and guard-mcp-off call it through _both, so it
+# guardrails-mcp-on/-off, guardrails-ai-on/-off and guardrails-all-on/-off call it through _both (#1350), so it
 # runs here and then on the other KubeCon cluster, each with its own control (#1149). Prints one line naming the
 # cluster and the control it used, or what did not switch, failing then. On an admin cluster the rule is written
 # first, so a refused patch (a stale read) leaves the allow-list as it was too; nothing here deletes, restarts or rolls
@@ -196,7 +196,7 @@ _c7served() { local o g ob r u a
     *) read -r g ob r u a <<<"$o"
        [ -n "$2" ] && [ -n "$a" ] && [ "$g" != "$2" ] && [ "$ob" = "$g" ] && [ "$r" = "$u" ] && [ "$u" = "$a" ] ;;
   esac; }
-# _c7wait <seconds> : after guard-mcp-on, wait on each cluster _mcp wrote to until it serves the change, every 2 s
+# _c7wait <seconds> : after guardrails-mcp-on, wait on each cluster _mcp wrote to until it serves the change, every 2 s
 # and at most <seconds> after that cluster's write, and print how long each took (#1149: one probe run's guard-mcp-on
 # timed out after 90 s, and the delay had never been measured). Each read is printed once, before the first. A
 # cluster whose write changed nothing has nothing to reload, and says so. Fails, naming the cluster and the bound,
@@ -241,7 +241,7 @@ _c7wait() { local bound="$1" e ctl new t0 ts gen rest k left=() next=() who n ba
 # terminal. The other cluster is reached with the kubeconfig `fleet.sh guardrails-link` writes into the
 # guardrails-switch/guardrails-peer Secret: its endpoint, its CA and the token of its guardrails-switch ServiceAccount,
 # whose grant is these guardrails' objects, what _both's steps need, and nothing else (gitops/guardrails-switch/, with
-# C7's part, for guard-mcp-on and guard-mcp-off, in mcp-switch.yaml since #1149).
+# C7's part, for guardrails-mcp-on and guardrails-mcp-off, in mcp-switch.yaml since #1149).
 # _peer : write that kubeconfig to ~/.kube/peer and print the other cluster's name. Prints nothing, failing, when this
 # cluster has not been linked.
 _peer() { local c k n
@@ -277,13 +277,14 @@ _kg() { local st="$1" g="$2" c a p; shift 2
     *) return 1 ;;
   esac
   _show "${c[@]}"; "${c[@]}" >/dev/null 2>&1; }
-# _guardrails on|off [seconds] : the switch itself. One guardrail at a time, here and then on the other cluster, so
-# each badge lights (or goes dark) on both chat pages together; [seconds] waits between guardrails, so the room can
-# watch each one arrive (the page polls every 12 seconds). Says what changed, names anything that did not, and fails
-# when either cluster missed a guardrail or the other cluster could not be reached at all. Leaves the peer it found in
-# _LINKED and _PEERNAME, as _both does, for _controls, and the time of its last write in _WROTE.
-_guardrails() { local st="$1" pause="${2:-0}" peer g bad=() line
-  case "$pause" in ''|*[!0-9]*) echo "Usage: guardrails-$st [seconds between guardrails, default 0]"; return 2 ;; esac
+# _guardrails on|off [seconds] [command] : the switch itself. One guardrail at a time, here and then on the other
+# cluster, so each badge lights (or goes dark) on both chat pages together; [seconds] waits between guardrails, so the
+# room can watch each one arrive (the page polls every 12 seconds). Says what changed, names anything that did not, and
+# fails when either cluster missed a guardrail or the other cluster could not be reached at all. [command] is the one
+# its usage and retry lines name: guardrails-k8s-on or guardrails-k8s-off unless given (#1350). Leaves the peer it found
+# in _LINKED and _PEERNAME, as _both does, for _controls, and the time of its last write in _WROTE.
+_guardrails() { local st="$1" pause="${2:-0}" me="${3:-guardrails-k8s-$1}" peer g bad=() line
+  case "$pause" in ''|*[!0-9]*) echo "Usage: $me [seconds between guardrails, default 0]"; return 2 ;; esac
   peer="$(_peer)" || peer=""
   for g in rbac kyverno kubearmor egress; do
     _kg "$st" "$g" kubectl || bad+=("$g on this cluster")
@@ -310,7 +311,7 @@ _guardrails() { local st="$1" pause="${2:-0}" peer g bad=() line
     return 1
   fi
   if [ "${#bad[@]}" -gt 0 ]; then
-    echo "⚠️  These did not switch $st: ${bad[*]}. Run 'guardrails-$st' again; it is safe to repeat."
+    echo "⚠️  These did not switch $st: ${bad[*]}. Run '$me' again; it is safe to repeat."
     return 1
   fi
   echo "Both clusters, this one and $peer: all four Kubernetes guardrails are $st."; }
@@ -318,11 +319,11 @@ _guardrails() { local st="$1" pause="${2:-0}" peer g bad=() line
 _apply() { local f="$1" c; shift
   c=("$@" apply -f "$HOME/challenges/$f")
   _show "${c[@]}"; "${c[@]}" >/dev/null 2>&1; }
-# _keep_secrets <broad> <scoped> <kubectl...> : a switch step for _both, guard-agency-on's and guard-agency-off's. It
+# _keep_secrets <broad> <scoped> <kubectl...> : a switch step for _both, guardrails-agency-on's and -off's. It
 # reads the live workshop-agent Role on that cluster and applies ~/challenges/<broad> where the Role still lists Secrets
 # or gets them without naming them (the RBAC guardrail is off, guard-proxy's rbac_scoped false), otherwise <scoped>, so
-# least privilege switches without touching the cluster's Secret rule. RBAC is its own switch: guardrails-on/off and
-# guard-rbac-on/off. A Role it cannot read changes nothing.
+# least privilege switches without touching the cluster's Secret rule. RBAC is its own switch: guardrails-k8s-on/off
+# and guardrails-rbac-on/off. A Role it cannot read changes nothing.
 _keep_secrets() { local b="$1" s="$2" c r f; shift 2
   c=("$@" -n agent get role workshop-agent -o json)
   _show "${c[@]}"; r="$("${c[@]}" 2>/dev/null)" || return 1
@@ -336,15 +337,24 @@ broad = any("" in (x.get("apiGroups") or []) and "secrets" in (x.get("resources"
             for x in rules)
 print(sys.argv[1] if broad else sys.argv[2])' "$b" "$s" 2>/dev/null)" || return 1
   _apply "$f" "$@"; }
-# _agency_on <kubectl...> : guard-agency-on's step (#1362). c6-broad-secrets-role.yaml where RBAC is off,
+# _agency_on <kubectl...> : guardrails-agency-on's step (guard-agency-on's before #1350; #1362). c6-broad-secrets-role.yaml where RBAC is off,
 # c6-least-privilege-role.yaml where it is on. It used to apply c6-least-privilege-role.yaml everywhere, whose Secret
 # rule is scoped, so from the start state guard-agency-on turned RBAC on, and since #1358 guard-agency-off kept it on.
 _agency_on() { _keep_secrets c6-broad-secrets-role.yaml c6-least-privilege-role.yaml "$@"; }
-# _agency_off <kubectl...> : guard-agency-off's step (#1358). It gives the workload verbs back: c8-broad-role.yaml where
+# _agency_off <kubectl...> : guardrails-agency-off's step (guard-agency-off's before #1350; #1358). It gives the workload verbs back: c8-broad-role.yaml where
 # RBAC is off, c5-scoped-role.yaml where it is on. It used to apply c5-scoped-role.yaml everywhere, so turning least
 # privilege off turned RBAC on: on 2026-11-11 at 16:14:16Z, guards-off, guardrails-off and guard-agency-off from the
 # private terminal left both KubeCon clusters scoped three seconds after guardrails-off had opened them.
 _agency_off() { _keep_secrets c8-broad-role.yaml c5-scoped-role.yaml "$@"; }
+# _admission on|off <kubectl...> : a switch step for _both, guardrails-admission-on's and -off's (#1350). Sets
+# restrict-image-registries' validationActions to Deny (on) or Audit (off) on one cluster and reads the action back
+# there; only what was read back passes. The peer's guardrails-switch grant covers get and patch on that policy.
+_admission() { local a=Deny c; [ "$1" = off ] && a=Audit; shift
+  c=("$@" patch validatingpolicy restrict-image-registries --type=json \
+    -p "[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"$a\"]}]")
+  _show "${c[@]}"; "${c[@]}" >/dev/null 2>&1
+  c=("$@" get validatingpolicy restrict-image-registries -o 'jsonpath={.spec.validationActions[0]}')
+  _show "${c[@]}"; [ "$("${c[@]}" 2>/dev/null)" = "$a" ]; }
 # _toggle <query> <kubectl...> : a switch step for _both. guard-proxy's /toggle?<query> on one cluster (#1148). Here,
 # with plain kubectl, it is _px, the kubectl exec into deploy/guard-proxy it always was. On the peer it is a GET through
 # the API server's Service proxy on guard-proxy:8080, the one guard-proxy grant guardrails-switch holds there
@@ -355,7 +365,7 @@ _toggle() { local q="$1" c; shift
   if [ "$*" = kubectl ]; then _px "$q"; return; fi
   c=("$@" get --raw "/api/v1/namespaces/agent/services/guard-proxy:8080/proxy/toggle?$q" --request-timeout=20s)
   _show "${c[@]}"; "${c[@]}" >/dev/null 2>&1; }
-# _topic on|off <kubectl...> : a switch step for _both, guard-topic-on's and guard-topic-off's (#1349). /toggle?topic=
+# _topic on|off <kubectl...> : a switch step for _both, guardrails-topic-on's and -off's (#1349). /toggle?topic=
 # on that cluster, as _toggle reaches it (here _pxkey, the exec, which prints the one key; on the peer the Service
 # proxy, whose JSON answer is read for it), then what that guard-proxy now reports for topic. A guard-proxy without
 # the topic stage ignores the key, so on needs True: anything else is a failure naming the cluster, never a confident
@@ -596,7 +606,7 @@ row "NetworkPolicy" "kubectl -n agent get networkpolicy"
 
 b "THE AI LAYER"
 row "kagent"      "kubectl -n agent get agent workshop-agent -o yaml"
-row "guard-proxy" "guards-status        (your AI guardrails + spend cap)"
+row "guard-proxy" "guardrails-status    (your AI guardrails + spend cap)"
 row "LLM Guard"   "in-cluster: llm-guard:8000"
 row "MCP servers" "kubectl -n agent get pods -l app=workshop-mcp"
 echo
@@ -604,14 +614,15 @@ echo "Full list with descriptions: open /platform in your browser."
 EOS
 
 # Read-only: which AI guards are currently on. The platform tour on the lab page points at this, and a
-# student who has flipped several toggles needs a way to see where they actually are without guessing.
-cat > "$HOME/guards-status" <<'EOS'
+# student who has flipped several toggles needs a way to see where they actually are without guessing. Its help names
+# the switches (#1350), and it ends on _controls, every control on this cluster and on the other KubeCon cluster.
+cat > "$HOME/guardrails-status" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 raw="$(kubectl -n agent exec deploy/guard-proxy -- python3 -c \
   "import urllib.request;print(urllib.request.urlopen('http://localhost:8080/guards',timeout=10).read().decode())" 2>/dev/null | tail -1)"
 if [ -z "$raw" ]; then
-  echo "⚠️  Could not reach the guard-proxy. Wait a moment and try 'guards-status' again."
+  echo "⚠️  Could not reach the guard-proxy. Wait a moment and try 'guardrails-status' again."
   exit 1
 fi
 echo "Your AI guardrails right now:"
@@ -628,32 +639,40 @@ for k in ("output","input_blocklist","input_classifier","budget","topic"):
     print(("  n/a  " if on is None else "  ON   " if on else "  off  ")+label.get(k,k))
 '
 echo
-echo "Flip them with: guard-output-on  guard-input-on  guard-mcp-on  guard-budget-on  guard-topic-on  (or guards-on / guards-off)"
-echo "Cluster fixes: guard-rbac-on (the CEO's record)  guard-admission-on (the support ticket's image)"
-echo "               guard-agency-on (the support ticket's Joker at KubeCon: the bot deploys nothing)"
-echo "KubeCon: guardrails-on / guardrails-off (the four Kubernetes guardrails, on both clusters at once)"
+echo "Switch them with guardrails-<name>-on and guardrails-<name>-off, on both KubeCon clusters at once:"
+echo "  input  output  mcp  budget  topic          one AI guard each"
+echo "  ai                                         input, output, mcp and budget; never topic"
+echo "  k8s                                        the four Kubernetes guardrails: RBAC, Kyverno, KubeArmor, egress"
+echo "  agency                                     least privilege (the support ticket's Joker at KubeCon: the bot deploys nothing)"
+echo "  all                                        k8s, agency and ai; never topic"
+echo "  rbac  admission                            the 2-hour lab's cluster fixes (the CEO's record, the support ticket's image)"
+echo "The old names (guards-on, guard-input-on, guardrails-on and the rest) still run: each says its new name, then runs it."
+echo
+_controls
 EOS
 
-# Combined: flip EVERY AI guard at once (the "reset and explore" convenience). guards-on leaves the on-topic
-# guard OFF on purpose: every challenge prompt is off-topic by design, so with it on it would refuse each one
-# before the guard that challenge teaches could fire. guards-off does turn it off, so off means wide open.
-cat > "$HOME/guards-on" <<'EOS'
+# Combined: the AI guards at once, input, output, mcp and budget (the "reset and explore" convenience, guards-on and
+# guards-off before #1350). Neither touches the on-topic guard: every challenge prompt is off-topic by design, so with
+# it on it would refuse each one before the guard that challenge teaches could fire, and guardrails-topic-on and
+# guardrails-topic-off are its own switch. guards-off turned it off too; its alias, guardrails-ai-off, does not (#1350).
+cat > "$HOME/guardrails-ai-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-# Both KubeCon clusters, as guard-input-on and guard-mcp-on do (#1132); a lone cluster alone. Every step runs even
-# when one before it fails, then each step that failed is named and the run exits 1 (#1203).
+# Both KubeCon clusters, as guardrails-input-on and guardrails-mcp-on do (#1132); a lone cluster alone. Every step runs
+# even when one before it fails, then each step that failed is named and the run exits 1 (#1203). Each step says which
+# clusters it changed, the MCP one each cluster's control too (#1350).
 failed=""
 if ! _both _toggle "output=on&input_blocklist=on&input_classifier=on&budget=on"; then
-  echo "⚠️  The guard-proxy guards did not switch on everywhere. Run 'guards-on' again; it is safe to repeat."
+  echo "⚠️  The guard-proxy guards did not switch on everywhere. Run 'guardrails-ai-on' again; it is safe to repeat."
   failed="${failed:+$failed, }the guard-proxy guards"
 fi
-if ! _both _mcp on >/dev/null; then
-  echo "⚠️  The MCP tool restriction did not switch on everywhere. Run 'guard-mcp-on' to retry it."
+if ! _both _mcp on; then
+  echo "⚠️  The MCP tool restriction did not switch on everywhere. Run 'guardrails-mcp-on' to retry it."
   failed="${failed:+$failed, }the MCP tool restriction"
 fi
 rc=0
 if [ -n "$failed" ]; then
-  echo "⚠️  guards-on ran every step; these did not switch on: $failed."
+  echo "⚠️  guardrails-ai-on ran every step; these did not switch on: $failed."
   rc=1
 else
   echo "🛡️  ALL AI guards ON: output scrubbing, input block-list + injection classifier, MCP tool"
@@ -663,37 +682,39 @@ fi
 _controls
 exit "$rc"
 EOS
-cat > "$HOME/guards-off" <<'EOS'
+cat > "$HOME/guardrails-ai-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 # Both KubeCon clusters back to wide open (#1132); a lone cluster alone. Every step runs even when one before it
 # fails, so a refused peer toggle still turns the MCP tool restriction off, then each step that failed is named and
-# the run exits 1 (#1203).
+# the run exits 1 (#1203). The on-topic guard is left as it is (#1350).
 failed=""
-if ! _both _toggle "output=off&input_blocklist=off&input_classifier=off&budget=off&topic=off"; then
-  echo "⚠️  The guard-proxy guards did not switch off everywhere. Run 'guards-off' again; it is safe to repeat."
+if ! _both _toggle "output=off&input_blocklist=off&input_classifier=off&budget=off"; then
+  echo "⚠️  The guard-proxy guards did not switch off everywhere. Run 'guardrails-ai-off' again; it is safe to repeat."
   failed="${failed:+$failed, }the guard-proxy guards"
 fi
-if ! _both _mcp off >/dev/null; then
-  echo "⚠️  The MCP tool restriction did not switch off everywhere. Run 'guard-mcp-off' to retry it."
+if ! _both _mcp off; then
+  echo "⚠️  The MCP tool restriction did not switch off everywhere. Run 'guardrails-mcp-off' to retry it."
   failed="${failed:+$failed, }the MCP tool restriction"
 fi
 rc=0
 if [ -n "$failed" ]; then
-  echo "⚠️  guards-off ran every step; these did not switch off: $failed."
+  echo "⚠️  guardrails-ai-off ran every step; these did not switch off: $failed."
   rc=1
 else
-  echo "🔓 ALL AI guards OFF: the agent is back to wide open. Re-run any challenge prompt to see the weakness."
+  echo "🔓 ALL AI guards OFF: output scrubbing, input block-list + injection classifier, MCP tool restriction and the"
+  echo "    spend budget. Re-run any challenge prompt to see the weakness. The on-topic guard is as it was:"
+  echo "    guardrails-topic-off turns it off."
 fi
 _controls
 exit "$rc"
 EOS
 
 # OUTPUT guard (scrubs the leaked Bat Spit Amazing Awesome Sauce from replies). Both set it on this cluster's
-# guard-proxy and on the other KubeCon cluster's (_both _toggle, #1349), as guard-input-on does; on the 2-hour lab's
+# guard-proxy and on the other KubeCon cluster's (_both _toggle, #1349), as guardrails-input-on does; on the 2-hour lab's
 # lone cluster, this one alone. Every stage switch, these and the ones below, ends with _controls: guard-proxy's
 # /controls read back on each cluster, printed by name.
-cat > "$HOME/guard-output-on" <<'EOS'
+cat > "$HOME/guardrails-output-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 rc=0
@@ -702,13 +723,13 @@ if _both _toggle "output=on"; then
   echo "    amounts, the ogre-toenails ingredient, and the signature are redacted before they reach you."
   echo "    Re-send the recipe prompt; the reply comes back scrubbed (and Datadog shows the guard fired)."
 else
-  echo "⚠️  The output guard did not change everywhere. Wait a moment and try 'guard-output-on' again; it is safe to repeat."
+  echo "⚠️  The output guard did not change everywhere. Wait a moment and try 'guardrails-output-on' again; it is safe to repeat."
   rc=1
 fi
 _controls
 exit "$rc"
 EOS
-cat > "$HOME/guard-output-off" <<'EOS'
+cat > "$HOME/guardrails-output-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 rc=0
@@ -716,7 +737,7 @@ if _both _toggle "output=off"; then
   echo "🔓 OUTPUT guard OFF. Replies are no longer scrubbed. Re-send the recipe prompt and the"
   echo "    full secret recipe leaks straight through."
 else
-  echo "⚠️  The output guard did not change everywhere. Wait a moment and try 'guard-output-off' again; it is safe to repeat."
+  echo "⚠️  The output guard did not change everywhere. Wait a moment and try 'guardrails-output-off' again; it is safe to repeat."
   rc=1
 fi
 _controls
@@ -727,7 +748,7 @@ EOS
 # Both set the two stages on this cluster's guard-proxy and on the other KubeCon cluster's (_both _toggle in .guardlib,
 # #1148), so from slide 50 on every prompt the room sends the public bot is checked too. On the 2-hour lab's lone
 # cluster, this one alone.
-cat > "$HOME/guard-input-on" <<'EOS'
+cat > "$HOME/guardrails-input-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 rc=0
@@ -738,13 +759,13 @@ if _both _toggle "input_blocklist=on&input_classifier=on"; then
   echo "    Re-send the ticket ask: the ticket comes back withheld, so the model never sees the hidden"
   echo "    instructions and nothing is deployed. A prompt the guards block never reaches the model at all."
 else
-  echo "⚠️  The input guards did not change everywhere. Wait a moment and try 'guard-input-on' again; it is safe to repeat."
+  echo "⚠️  The input guards did not change everywhere. Wait a moment and try 'guardrails-input-on' again; it is safe to repeat."
   rc=1
 fi
 _controls
 exit "$rc"
 EOS
-cat > "$HOME/guard-input-off" <<'EOS'
+cat > "$HOME/guardrails-input-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 rc=0
@@ -752,7 +773,7 @@ if _both _toggle "input_blocklist=off&input_classifier=off"; then
   echo "🔓 INPUT guards OFF. Prompts go straight to the model. Re-send the poisoned support ticket and"
   echo "    the injected instructions ride right in (and you pay tokens for it)."
 else
-  echo "⚠️  The input guards did not change everywhere. Wait a moment and try 'guard-input-off' again; it is safe to repeat."
+  echo "⚠️  The input guards did not change everywhere. Wait a moment and try 'guardrails-input-off' again; it is safe to repeat."
   rc=1
 fi
 _controls
@@ -764,19 +785,19 @@ EOS
 # stopped depends on the cluster (_mcp in .guardlib): at agentgateway on an admin cluster, in the agent's
 # allow-list everywhere else. Both commands switch this cluster and the other KubeCon cluster (_both, #1149), each
 # through its own control, so the fix run from the private terminal reaches the public bot the room plays on; on the
-# 2-hour lab's lone cluster, this one alone. guard-mcp-on then waits until each cluster serves the change and prints
+# 2-hour lab's lone cluster, this one alone. guardrails-mcp-on then waits until each cluster serves the change and prints
 # how long that took (_c7wait); its one argument is the bound in seconds, 180 unless given.
-cat > "$HOME/guard-mcp-on" <<'EOS'
+cat > "$HOME/guardrails-mcp-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 bound="${1:-180}"
-case "$bound" in ''|*[!0-9]*) echo "Usage: guard-mcp-on [seconds to wait for each cluster to serve it, default 180]"; exit 2 ;; esac
+case "$bound" in ''|*[!0-9]*) echo "Usage: guardrails-mcp-on [seconds to wait for each cluster to serve it, default 180]"; exit 2 ;; esac
 switched=1; served=1
 _both _mcp on || switched=0
 _c7wait "$bound" || served=0
 rc=0
 if [ "$switched" != 1 ]; then
-  echo "⚠️  The MCP tool restriction did not switch on everywhere. Wait a moment and try 'guard-mcp-on' again; it is safe to repeat."; rc=1
+  echo "⚠️  The MCP tool restriction did not switch on everywhere. Wait a moment and try 'guardrails-mcp-on' again; it is safe to repeat."; rc=1
 elif [ "$served" != 1 ]; then
   echo "⚠️  The restriction is written, but not every cluster serves it yet: the ones named above had not, within $bound s. Give them a moment before the re-ask."; rc=1
 else
@@ -793,20 +814,20 @@ else
       echo "    BurritoBot tools are untouched. Re-ask the weather question: the poisoned description still tries,"
       echo "    but the rogue tool is gone, so the sentinel never appears." ;;
     *)
-      echo "⚠️  The MCP tool restriction did not switch on. Wait a moment and try 'guard-mcp-on' again."; rc=1 ;;
+      echo "⚠️  The MCP tool restriction did not switch on. Wait a moment and try 'guardrails-mcp-on' again."; rc=1 ;;
   esac
 fi
 _controls
 exit "$rc"
 EOS
-cat > "$HOME/guard-mcp-off" <<'EOS'
+cat > "$HOME/guardrails-mcp-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 switched=1
 _both _mcp off || switched=0
 rc=0
 if [ "$switched" != 1 ]; then
-  echo "⚠️  The MCP tool restriction did not switch off everywhere. Wait a moment and try 'guard-mcp-off' again; it is safe to repeat."; rc=1
+  echo "⚠️  The MCP tool restriction did not switch off everywhere. Wait a moment and try 'guardrails-mcp-off' again; it is safe to repeat."; rc=1
 else
   case "$_C7HERE" in
     gateway)
@@ -818,7 +839,7 @@ else
       echo "    Re-ask the weather question and the agent gets chained into read_internal_config, leaking the"
       echo "    sentinel." ;;
     *)
-      echo "⚠️  The MCP tool restriction did not switch off. Wait a moment and try 'guard-mcp-off' again."; rc=1 ;;
+      echo "⚠️  The MCP tool restriction did not switch off. Wait a moment and try 'guardrails-mcp-off' again."; rc=1 ;;
   esac
 fi
 _controls
@@ -828,8 +849,8 @@ EOS
 # run up the bill. On the community cluster there is no cap and the cost counter on BurritoBot climbs
 # with no ceiling. The control is a per-agent budget at the gateway: once this cluster's spend crosses
 # its cap, further requests are refused BEFORE the model is called, so a blocked request costs nothing.
-# guard-budget-on and guard-budget-off set it on this cluster and the other KubeCon cluster (_both _toggle, #1349).
-cat > "$HOME/guard-budget-on" <<'EOS'
+# guardrails-budget-on and guardrails-budget-off set it on this cluster and the other KubeCon cluster (_both _toggle, #1349).
+cat > "$HOME/guardrails-budget-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 rc=0
@@ -839,13 +860,13 @@ if _both _toggle "budget=on"; then
   echo "    the cost counter stops dead and a blocked request costs \$0. The agent is not down; the bill is"
   echo "    capped. That is denial-of-wallet stopped at the platform, not in the app."
 else
-  echo "⚠️  The budget guard did not change everywhere. Wait a moment and try 'guard-budget-on' again; it is safe to repeat."
+  echo "⚠️  The budget guard did not change everywhere. Wait a moment and try 'guardrails-budget-on' again; it is safe to repeat."
   rc=1
 fi
 _controls
 exit "$rc"
 EOS
-cat > "$HOME/guard-budget-off" <<'EOS'
+cat > "$HOME/guardrails-budget-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 rc=0
@@ -853,7 +874,7 @@ if _both _toggle "budget=off"; then
   echo "Budget limits are now removed. You should be able to proceed with the lab."
   echo "(The meter keeps counting; only the limit is gone.)"
 else
-  echo "⚠️  The budget guard did not change everywhere. Wait a moment and try 'guard-budget-off' again; it is safe to repeat."
+  echo "⚠️  The budget guard did not change everywhere. Wait a moment and try 'guardrails-budget-off' again; it is safe to repeat."
   rc=1
 fi
 _controls
@@ -925,7 +946,7 @@ EOS
 # proxy says rather than assuming the flip worked, because a guard-proxy without the topic stage ignores the
 # key and would otherwise print a confident ON for a guard that does not exist. Both switch this cluster and the
 # other KubeCon cluster (_both _topic in .guardlib, #1349), each read back the same way.
-cat > "$HOME/guard-topic-on" <<'EOS'
+cat > "$HOME/guardrails-topic-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 rc=0
@@ -934,101 +955,108 @@ if _both _topic on; then
   echo "    and anything else (salsa dance moves, a hot dog party, karaoke for a wedding) is turned back to the"
   echo "    menu, politely, before the model is called. Re-send your weirdest off-topic question."
 else
-  echo "⚠️  The on-topic guard did not switch on everywhere. Wait a moment and try 'guard-topic-on' again; it is safe to repeat."
+  echo "⚠️  The on-topic guard did not switch on everywhere. Wait a moment and try 'guardrails-topic-on' again; it is safe to repeat."
   rc=1
 fi
 _controls
 exit "$rc"
 EOS
-cat > "$HOME/guard-topic-off" <<'EOS'
+cat > "$HOME/guardrails-topic-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 rc=0
 if _both _topic off; then
   echo "🔓 On-topic guard OFF. BurritoBot will chat about anything again. Ask it for salsa dance moves."
 else
-  echo "⚠️  The on-topic guard did not switch off everywhere. Wait a moment and try 'guard-topic-off' again; it is safe to repeat."
+  echo "⚠️  The on-topic guard did not switch off everywhere. Wait a moment and try 'guardrails-topic-off' again; it is safe to repeat."
   rc=1
 fi
 _controls
 exit "$rc"
 EOS
-# The cluster fixes, beside the AI guards. Each prints its kubectl before it runs, as the AI guards do.
+# The cluster fixes, beside the AI guards. Each prints its kubectl before it runs, as the AI guards do, and since
+# #1350 each switches this cluster and the other KubeCon cluster (_both), on the 2-hour lab's lone cluster this one
+# alone, and ends with _controls, as every other guardrails-<name> switch does.
 #
-# guard-rbac-on: the CEO's record. agent-sa ships with get and list on every Secret in the namespace, so the bot
+# guardrails-rbac-on: the CEO's record. agent-sa ships with get and list on every Secret in the namespace, so the bot
 # reads ceo-personal-record. The fix is a Role that names the one Secret the agent reads, its own workshop-agent
-# config; c5-scoped-role.yaml is that Role. guard-rbac-off puts back the shipped Role (c8-broad-role.yaml). The
-# workshop-agent Application ignores the Role's rules, so Argo CD leaves the live Role as applied.
-cat > "$HOME/guard-rbac-on" <<'EOS'
+# config; c5-scoped-role.yaml is that Role. guardrails-rbac-off puts back the shipped Role (c8-broad-role.yaml). The
+# workshop-agent Application ignores the Role's rules, so Argo CD leaves the live Role as applied. The peer's
+# guardrails-switch grant covers the Role (gitops/guardrails-switch/guardrails-switch.yaml), as guardrails-k8s-on's
+# RBAC step needs.
+cat > "$HOME/guardrails-rbac-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-c=(kubectl apply -f "$HOME/challenges/c5-scoped-role.yaml")
-_show "${c[@]}"
-if "${c[@]}" >/dev/null 2>&1; then
+rc=0
+if _both _apply c5-scoped-role.yaml; then
   echo "🛡️  RBAC fix ON for the CEO's record. agent-sa's Role now reads one Secret by name, the agent's own"
   echo "    workshop-agent config, and lists none. Re-ask for the CEO's record: the read comes back Forbidden"
   echo "    from the Kubernetes API, so there is nothing for the bot to repeat."
 else
-  echo "⚠️  The Role did not change. Wait a moment and try 'guard-rbac-on' again."; exit 1
+  echo "⚠️  The Role did not change everywhere. Wait a moment and try 'guardrails-rbac-on' again; it is safe to repeat."
+  rc=1
 fi
+_controls
+exit "$rc"
 EOS
-cat > "$HOME/guard-rbac-off" <<'EOS'
+cat > "$HOME/guardrails-rbac-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-c=(kubectl apply -f "$HOME/challenges/c8-broad-role.yaml")
-_show "${c[@]}"
-if "${c[@]}" >/dev/null 2>&1; then
+rc=0
+if _both _apply c8-broad-role.yaml; then
   echo "🔓 RBAC fix OFF for the CEO's record. agent-sa can read every Secret in the namespace again, so the"
   echo "    CEO's record is back in reach."
 else
-  echo "⚠️  The Role did not change. Wait a moment and try 'guard-rbac-off' again."; exit 1
+  echo "⚠️  The Role did not change everywhere. Wait a moment and try 'guardrails-rbac-off' again; it is safe to repeat."
+  rc=1
 fi
+_controls
+exit "$rc"
 EOS
-# guard-admission-on: the support ticket's second tier. Kyverno's restrict-image-registries denies the Joker image
-# the ticket asks deploy_app for. On sets its validationActions to Deny, off to Audit (admitted, only reported);
-# both read the action back. Argo CD ignores /spec/validationActions, so the live flip stays.
-cat > "$HOME/guard-admission-on" <<'EOS'
+# guardrails-admission-on: the support ticket's second tier. Kyverno's restrict-image-registries denies the Joker image
+# the ticket asks deploy_app for. On sets its validationActions to Deny, off to Audit (admitted, only reported), on
+# each cluster, and reads the action back there (_admission in .guardlib). Argo CD ignores /spec/validationActions, so
+# the live flip stays.
+cat > "$HOME/guardrails-admission-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-c=(kubectl patch validatingpolicy restrict-image-registries --type=json \
-  -p '[{"op":"replace","path":"/spec/validationActions","value":["Deny"]}]')
-g=(kubectl get validatingpolicy restrict-image-registries -o 'jsonpath={.spec.validationActions[0]}')
-_show "${c[@]}"; "${c[@]}" >/dev/null 2>&1
-_show "${g[@]}"
-if [ "$("${g[@]}" 2>/dev/null)" = Deny ]; then
+rc=0
+if _both _admission on; then
   echo "🛡️  Admission control ON for the support ticket. Kyverno's registry allow-list now denies any image"
   echo "    from outside the allowed registries, so the Joker the ticket asks for is refused at admission."
   echo "    Re-send the ticket ask: the deploy is denied, and the deny message names restrict-image-registries."
 else
-  echo "⚠️  restrict-image-registries is not in Deny. Wait a moment and try 'guard-admission-on' again."; exit 1
+  echo "⚠️  restrict-image-registries is not in Deny everywhere. Wait a moment and try 'guardrails-admission-on' again; it is safe to repeat."
+  rc=1
 fi
+_controls
+exit "$rc"
 EOS
-cat > "$HOME/guard-admission-off" <<'EOS'
+cat > "$HOME/guardrails-admission-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-c=(kubectl patch validatingpolicy restrict-image-registries --type=json \
-  -p '[{"op":"replace","path":"/spec/validationActions","value":["Audit"]}]')
-g=(kubectl get validatingpolicy restrict-image-registries -o 'jsonpath={.spec.validationActions[0]}')
-_show "${c[@]}"; "${c[@]}" >/dev/null 2>&1
-_show "${g[@]}"
-if [ "$("${g[@]}" 2>/dev/null)" = Audit ]; then
+rc=0
+if _both _admission off; then
   echo "🔓 Admission control OFF for the support ticket. The registry allow-list only reports now, so the"
   echo "    Joker the ticket asks for is admitted and lands on the wall."
 else
-  echo "⚠️  restrict-image-registries is not in Audit. Wait a moment and try 'guard-admission-off' again."; exit 1
+  echo "⚠️  restrict-image-registries is not in Audit everywhere. Wait a moment and try 'guardrails-admission-off' again; it is safe to repeat."
+  rc=1
 fi
+_controls
+exit "$rc"
 EOS
-# guard-agency-on: the support ticket's cluster fix at KubeCon (#775), least privilege (OWASP LLM06, Excessive Agency).
+# guardrails-agency-on: the support ticket's cluster fix at KubeCon (#775), least privilege (OWASP LLM06, Excessive Agency).
 # HC-666's Joker comes from registry.burritobot.co, which Kyverno trusts, so admission passes it. This Role,
 # c6-least-privilege-role.yaml, takes create and patch on Deployments and Pods away from agent-sa, so deploy_app comes
 # back Forbidden whatever the image. Both commands keep each cluster's Secret rule (_agency_on and _agency_off, #1358,
-# #1362): where RBAC is on (guard-rbac-on or guardrails-on ran, talk order) guard-agency-on applies c6 and
-# guard-agency-off c5-scoped-role.yaml; where it is off (the start state, after guardrails-off) guard-agency-on applies
-# c6-broad-secrets-role.yaml and guard-agency-off c8-broad-role.yaml, so a rehearsal of the two from the start state
-# ends at the start state. The 2-hour lab's second tier stays guard-admission-on, above.
+# #1362): where RBAC is on (guardrails-rbac-on or guardrails-k8s-on ran, talk order) guardrails-agency-on applies c6
+# and guardrails-agency-off c5-scoped-role.yaml; where it is off (the start state, after guardrails-k8s-off)
+# guardrails-agency-on applies c6-broad-secrets-role.yaml and guardrails-agency-off c8-broad-role.yaml, so a rehearsal
+# of the two from the start state ends at the start state. The 2-hour lab's second tier stays guardrails-admission-on.
 # Both apply their Role on this cluster and on the other KubeCon cluster (_both in .guardlib, #1147), so the fix run
 # from the private terminal reaches the public bot the room plays on. On the 2-hour lab's lone cluster, this one alone.
-cat > "$HOME/guard-agency-on" <<'EOS'
+cat > "$HOME/guardrails-agency-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 rc=0
@@ -1038,13 +1066,13 @@ if _both _agency_on; then
   echo "    comes back Forbidden from the Kubernetes API. The CEO's record is left as each cluster had it:"
   echo "    RBAC is its own switch."
 else
-  echo "⚠️  The Role did not change everywhere. Wait a moment and try 'guard-agency-on' again; it is safe to repeat."
+  echo "⚠️  The Role did not change everywhere. Wait a moment and try 'guardrails-agency-on' again; it is safe to repeat."
   rc=1
 fi
 _controls
 exit "$rc"
 EOS
-cat > "$HOME/guard-agency-off" <<'EOS'
+cat > "$HOME/guardrails-agency-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 rc=0
@@ -1052,15 +1080,15 @@ if _both _agency_off; then
   echo "🔓 Least privilege OFF for the support ticket. agent-sa can create Deployments and Pods again, so the"
   echo "    ticket's Joker lands. The CEO's record is left as each cluster had it: RBAC is its own switch."
 else
-  echo "⚠️  The Role did not change everywhere. Wait a moment and try 'guard-agency-off' again; it is safe to repeat."
+  echo "⚠️  The Role did not change everywhere. Wait a moment and try 'guardrails-agency-off' again; it is safe to repeat."
   rc=1
 fi
 _controls
 exit "$rc"
 EOS
-# guardrails-on / guardrails-off: the KubeCon breakout's one command for the four Kubernetes guardrails on both
+# guardrails-k8s-on / guardrails-k8s-off: the KubeCon breakout's one command for the four Kubernetes guardrails on both
 # clusters (#774; _guardrails in .guardlib). An optional number of seconds waits between guardrails.
-cat > "$HOME/guardrails-on" <<'EOS'
+cat > "$HOME/guardrails-k8s-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 _guardrails on "${1:-0}"
@@ -1069,7 +1097,7 @@ rc=$?
 [ "$rc" = 2 ] || _controls
 exit "$rc"
 EOS
-cat > "$HOME/guardrails-off" <<'EOS'
+cat > "$HOME/guardrails-k8s-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 _guardrails off "${1:-0}"
@@ -1078,13 +1106,100 @@ rc=$?
 [ "$rc" = 2 ] || _controls
 exit "$rc"
 EOS
-chmod +x "$HOME/platform" "$HOME/guards-status" "$HOME/guards-on" "$HOME/guards-off" \
-  "$HOME"/guardrails-on "$HOME"/guardrails-off \
-  "$HOME"/guard-output-on "$HOME"/guard-output-off "$HOME"/guard-input-on "$HOME"/guard-input-off \
-  "$HOME"/guard-mcp-on "$HOME"/guard-mcp-off "$HOME"/guard-budget-on "$HOME"/guard-budget-off \
-  "$HOME"/guard-topic-on "$HOME"/guard-topic-off "$HOME"/guard-rbac-on "$HOME"/guard-rbac-off \
-  "$HOME"/guard-admission-on "$HOME"/guard-admission-off "$HOME"/guard-agency-on "$HOME"/guard-agency-off \
+# guardrails-all-on / guardrails-all-off (#1350): k8s, agency and the AI guards (ai) together, on both clusters; never
+# the on-topic guard, which is its own switch. guardrails-k8s-on applies c5-scoped-role.yaml and guardrails-k8s-off
+# c8-broad-role.yaml, and either overwrites agency's c6 Role, so on runs k8s before agency (which then reads the scoped
+# Role and applies c6-least-privilege-role.yaml), and off runs agency off before k8s off, which leaves the shipped
+# Role. Every step runs even when one before it fails, then each step that
+# failed is named and the run exits 1, as guardrails-ai-on does (#1203). Neither takes an argument.
+cat > "$HOME/guardrails-all-on" <<'EOS'
+#!/bin/bash
+source "$HOME/.guardlib"
+failed=""
+echo "1/4  k8s: the four Kubernetes guardrails"
+_guardrails on 0 guardrails-all-on || failed="${failed:+$failed, }k8s"
+echo "2/4  agency: least privilege"
+_both _agency_on || failed="${failed:+$failed, }agency"
+echo "3/4  ai: the guard-proxy guards, input, output and budget"
+_both _toggle "output=on&input_blocklist=on&input_classifier=on&budget=on" || failed="${failed:+$failed, }the guard-proxy guards"
+echo "4/4  ai: the MCP tool restriction"
+_both _mcp on || failed="${failed:+$failed, }mcp"
+rc=0
+if [ -n "$failed" ]; then
+  echo "⚠️  guardrails-all-on ran every step; these did not switch on: $failed. Run 'guardrails-all-on' again; it is safe to repeat."
+  rc=1
+else
+  echo "🛡️  EVERY guardrail ON but the on-topic guard: RBAC, Kyverno, KubeArmor, egress, least privilege, output"
+  echo "    scrubbing, input block-list + injection classifier, MCP tool restriction and the spend budget."
+fi
+_controls
+exit "$rc"
+EOS
+cat > "$HOME/guardrails-all-off" <<'EOS'
+#!/bin/bash
+source "$HOME/.guardlib"
+failed=""
+echo "1/4  ai: the MCP tool restriction"
+_both _mcp off || failed="${failed:+$failed, }mcp"
+echo "2/4  ai: the guard-proxy guards, input, output and budget"
+_both _toggle "output=off&input_blocklist=off&input_classifier=off&budget=off" || failed="${failed:+$failed, }the guard-proxy guards"
+echo "3/4  agency: least privilege, off before k8s so the shipped Role is the one left"
+_both _agency_off || failed="${failed:+$failed, }agency"
+echo "4/4  k8s: the four Kubernetes guardrails"
+_guardrails off 0 guardrails-all-off || failed="${failed:+$failed, }k8s"
+rc=0
+if [ -n "$failed" ]; then
+  echo "⚠️  guardrails-all-off ran every step; these did not switch off: $failed. Run 'guardrails-all-off' again; it is safe to repeat."
+  rc=1
+else
+  echo "🔓 EVERY guardrail OFF but the on-topic guard, which is as it was: guardrails-topic-off turns it off."
+fi
+_controls
+exit "$rc"
+EOS
+chmod +x "$HOME/platform" "$HOME/guardrails-status" "$HOME/guardrails-ai-on" "$HOME/guardrails-ai-off" \
+  "$HOME"/guardrails-k8s-on "$HOME"/guardrails-k8s-off "$HOME"/guardrails-all-on "$HOME"/guardrails-all-off \
+  "$HOME"/guardrails-output-on "$HOME"/guardrails-output-off "$HOME"/guardrails-input-on "$HOME"/guardrails-input-off \
+  "$HOME"/guardrails-mcp-on "$HOME"/guardrails-mcp-off "$HOME"/guardrails-budget-on "$HOME"/guardrails-budget-off \
+  "$HOME"/guardrails-topic-on "$HOME"/guardrails-topic-off "$HOME"/guardrails-rbac-on "$HOME"/guardrails-rbac-off \
+  "$HOME"/guardrails-admission-on "$HOME"/guardrails-admission-off "$HOME"/guardrails-agency-on "$HOME"/guardrails-agency-off \
   "$HOME"/finale-cap-on "$HOME"/finale-cap-off "$HOME"/cost-watch
+
+# The old names (#1350). Michael, 2026-11-11: every switch name in use before the rename keeps working on both clusters,
+# as an alias for its guardrails-<name> form, since the deck, the rehearsal script and the run-of-show still name them
+# for the talk on 2026-11-12; removing them is a separate issue after it. Each alias says its new name, then runs it
+# (exec, so it does exactly what the new name does, arguments and exit code included). guards-off is guardrails-ai-off,
+# which leaves the on-topic guard as it is, so it says that too. verify/test_guardrails_names.py runs every one.
+# finale-cap-on, finale-cap-off and cost-watch keep their names: they set the room's spend cap, not a guardrail.
+while read -r old new; do
+  note=""
+  [ "$old" = guards-off ] && note=" It leaves the on-topic guard as it is: guardrails-topic-off turns that off."
+  printf '#!/bin/bash\necho "(%s is now %s; running that.%s)"\nexec "$HOME/%s" "$@"\n' \
+    "$old" "$new" "$note" "$new" > "$HOME/$old"
+  chmod +x "$HOME/$old"
+done <<'ALIASES'
+guardrails-on guardrails-k8s-on
+guardrails-off guardrails-k8s-off
+guards-on guardrails-ai-on
+guards-off guardrails-ai-off
+guards-status guardrails-status
+guard-agency-on guardrails-agency-on
+guard-agency-off guardrails-agency-off
+guard-input-on guardrails-input-on
+guard-input-off guardrails-input-off
+guard-output-on guardrails-output-on
+guard-output-off guardrails-output-off
+guard-mcp-on guardrails-mcp-on
+guard-mcp-off guardrails-mcp-off
+guard-budget-on guardrails-budget-on
+guard-budget-off guardrails-budget-off
+guard-topic-on guardrails-topic-on
+guard-topic-off guardrails-topic-off
+guard-rbac-on guardrails-rbac-on
+guard-rbac-off guardrails-rbac-off
+guard-admission-on guardrails-admission-on
+guard-admission-off guardrails-admission-off
+ALIASES
 
 # No banner. The shell opens on a prompt and nothing else (#342).
 #

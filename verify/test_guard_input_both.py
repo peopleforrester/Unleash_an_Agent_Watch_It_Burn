@@ -1,6 +1,6 @@
-# ABOUTME: Offline gate for #1148: guard-input-on and guard-input-off set the input block-list and classifier on this
+# ABOUTME: Offline gate for #1148: guardrails-input-on and guardrails-input-off set the input block-list and classifier on this
 # ABOUTME: cluster's guard-proxy and the KubeCon peer's, the peer through a Service proxy grant held to that one Service.
-"""#1148, the second piece of #1132. guard-input-on and guard-input-off used to call /toggle only on the guard-proxy of
+"""#1148, the second piece of #1132. guardrails-input-on and guardrails-input-off used to call /toggle only on the guard-proxy of
 the cluster whose terminal ran them, while the room plays on the public bot. They now run `_both _toggle <query>` from
 ~/.guardlib (gitops/ai-layer/web-terminal/entrypoint.sh): on this cluster the kubectl exec into deploy/guard-proxy it
 always was (_px), and on the other KubeCon cluster a GET through the API server's Service proxy,
@@ -163,10 +163,10 @@ def toggles(r: dict) -> list[tuple[str, str]]:
     return out
 
 
-QUERY = {"guard-input-on": "input_blocklist=on&input_classifier=on",
-         "guard-input-off": "input_blocklist=off&input_classifier=off"}
-ON = {"guard-input-on": True, "guard-input-off": False}
-EXPLAINS = {"guard-input-on": "INPUT guards ON", "guard-input-off": "INPUT guards OFF"}
+QUERY = {"guardrails-input-on": "input_blocklist=on&input_classifier=on",
+         "guardrails-input-off": "input_blocklist=off&input_classifier=off"}
+ON = {"guardrails-input-on": True, "guardrails-input-off": False}
+EXPLAINS = {"guardrails-input-on": "INPUT guards ON", "guardrails-input-off": "INPUT guards OFF"}
 
 
 def inputs(r: dict, cluster: str) -> tuple:
@@ -174,10 +174,10 @@ def inputs(r: dict, cluster: str) -> tuple:
     return g.get("input_blocklist"), g.get("input_classifier")
 
 
-print("== guard-input-on and guard-input-off run _both _toggle, from the entrypoint the KubeCon terminals run ==")
+print("== guardrails-input-on and guardrails-input-off run _both _toggle, from the entrypoint the KubeCon terminals run ==")
 lib = helpers.get(".guardlib", "")
-check("the terminal ships .guardlib, guard-input-on and guard-input-off",
-      {".guardlib", "guard-input-on", "guard-input-off"} <= set(helpers))
+check("the terminal ships .guardlib, guardrails-input-on and guardrails-input-off",
+      {".guardlib", "guardrails-input-on", "guardrails-input-off"} <= set(helpers))
 check(".guardlib defines _toggle beside _both and _px", all(re.search(rf"^{f}\(\) \{{", lib, re.M)
                                                            for f in ("_toggle", "_both", "_px")))
 for cmd, q in QUERY.items():

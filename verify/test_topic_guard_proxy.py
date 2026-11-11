@@ -1,5 +1,5 @@
 # ABOUTME: The on-topic guard in the running path (#504, from #455): the pinned proxy.py, on its deployed settings,
-# ABOUTME: refuses every off-topic ask and passes every on-topic one once guard-topic-on flips it, on /chat and on A2A.
+# ABOUTME: refuses every off-topic ask and passes every on-topic one once guardrails-topic-on flips it, on /chat and on A2A.
 """BurritoBot ends selling burritos only, checked against guard-proxy itself rather than the test's own rule.
 
 verify/test_topic_guard.py holds the deployed phrase lists to verify/topic_cases.py's copy of the rule. This file
@@ -10,7 +10,7 @@ off-topic paraphrases the phrase step leaves to it. The real classifier's scores
 verify/test_topic_classifier.py (E2E suite); what is judged here is that the proxy asks it, asks it alone, and
 acts on its answer.
 
-The guard is flipped the way the room sees it flipped: the web terminal's own guard-topic-on and guard-topic-off,
+The guard is flipped the way the room sees it flipped: the web terminal's own guardrails-topic-on and guardrails-topic-off,
 taken from web-terminal/entrypoint.sh, with a stub kubectl whose `exec deploy/guard-proxy` runs the helper's
 python against this proxy. No cluster, no model.
 """
@@ -200,12 +200,12 @@ def heredoc(name: str) -> str:
 work = pathlib.Path(tempfile.mkdtemp(prefix="topic-guard-"))
 atexit.register(shutil.rmtree, work, ignore_errors=True)
 (work / "bin").mkdir()
-for name in (".guardlib", "guard-topic-on", "guard-topic-off"):
+for name in (".guardlib", "guardrails-topic-on", "guardrails-topic-off"):
     (work / name).write_text(heredoc(name))
 (work / "bin/kubectl").write_text(f"""#!{sys.executable}
 import subprocess, sys
 a = sys.argv[1:]
-# guard-topic-on and guard-topic-off go through _both since #1349, which first reads guardrails-switch/guardrails-peer.
+# guardrails-topic-on and guardrails-topic-off go through _both since #1349, which first reads guardrails-switch/guardrails-peer.
 # This is the 2-hour lab's lone cluster: no such Secret, so NotFound, and nothing for --ignore-not-found.
 if a[:5] == ["-n", "guardrails-switch", "get", "secret", "guardrails-peer"]:
     if "--ignore-not-found" in a:
@@ -230,9 +230,9 @@ for ask in tc.CANONICAL_OFF:
     check(f"guard off: the off-topic ask reaches the model: {ask!r}",
           to_agent == [ask] and reply.get("reply") == AGENT_REPLY and reply.get("guarded") is False, json.dumps(reply))
 
-print("== guard-topic-on flips the proxy's guard ==")
-on = helper("guard-topic-on")
-check("guard-topic-on succeeds against this proxy", on.returncode == 0, on.stdout + on.stderr)
+print("== guardrails-topic-on flips the proxy's guard ==")
+on = helper("guardrails-topic-on")
+check("guardrails-topic-on succeeds against this proxy", on.returncode == 0, on.stdout + on.stderr)
 check("and says the on-topic guard is on", "On-topic guard ON" in on.stdout, on.stdout)
 check("on this lone cluster it switches here alone, then reads this guard-proxy's /controls back with on-topic ON",
       "Switched on this cluster alone" in on.stdout and "Read back from guard-proxy's /controls" in on.stdout
@@ -291,9 +291,9 @@ reply, to_agent, _ = turn(tc.CANONICAL_ON[0])
 check("and an on-topic ask still passes on its phrase", to_agent == [tc.CANONICAL_ON[0]], json.dumps(reply))
 guard_state["fail"] = False
 
-print("== guard-topic-off opens it again ==")
-off = helper("guard-topic-off")
-check("guard-topic-off succeeds and says the guard is off", off.returncode == 0 and "On-topic guard OFF" in off.stdout,
+print("== guardrails-topic-off opens it again ==")
+off = helper("guardrails-topic-off")
+check("guardrails-topic-off succeeds and says the guard is off", off.returncode == 0 and "On-topic guard OFF" in off.stdout,
       off.stdout + off.stderr)
 check("the proxy reports the on-topic guard off", guards().get("topic") is False, json.dumps(guards()))
 reply, to_agent, _ = turn(tc.CANONICAL_OFF[0])
