@@ -23,8 +23,8 @@ This test holds that, in three steps.
    When either does not hold, no probe runs and no model call is spent: a green probe then would say nothing about
    the floor.
 2. The probes, admin first, then community, each as `python3 verify/kubecon_probe.py ... --json`: each exits 0 and
-   prints KUBECON PROBE GREEN, and every beat of its run (kubecon_probe.ADMIN with guards-off, kubecon_probe.COMMUNITY
-   with guardrails-off) is reported and PASS, every challenge beat (a Beat with a stage) among them. The lists are read
+   prints KUBECON PROBE GREEN, and every beat of its run (kubecon_probe.ADMIN with guardrails-all-off,
+   kubecon_probe.COMMUNITY with guardrails-k8s-off) is reported and PASS, every challenge beat (a Beat with a stage) among them. The lists are read
    off the probe, so a challenge beat added there is required here.
 3. The end, on both clusters: the floor is still on, and every guardrail is off again.
 
@@ -65,8 +65,8 @@ import guard_lease  # noqa: E402
 import kubecon_probe as kp  # noqa: E402
 
 PROBE = HERE / "kubecon_probe.py"
-# The infrastructure badges of /controls that a stage switch turns on: guardrails-on (networkpolicy, kyverno, kubearmor,
-# rbac_scoped), guard-agency-on (agency_scoped) and guard-mcp-on (tool_allowlist). Falco's badge is left out on purpose.
+# The infrastructure badges of /controls that a stage switch turns on: guardrails-k8s-on (networkpolicy, kyverno, kubearmor,
+# rbac_scoped), guardrails-agency-on (agency_scoped) and guardrails-mcp-on (tool_allowlist). Falco's badge is left out on purpose.
 INFRA_SWITCHED = ("networkpolicy", "kyverno", "kubearmor", "tool_allowlist", "rbac_scoped", "agency_scoped")
 FLOOR_LAYERS = ("admission", "deploy_check", "collector_mask")
 FLOOR_EVENTS = ("conduct_refused", "conduct_masked")
