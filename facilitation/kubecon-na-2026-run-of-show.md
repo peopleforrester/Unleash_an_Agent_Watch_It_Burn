@@ -2505,7 +2505,7 @@ is merely slow rather than rebuilding:
   15 minutes only when a retention filter indexes it. A filter applies as spans
   arrive, so it goes in before the seed. It has been in place since 2026-11-11
   (run 20202), so this prints `OK` and writes nothing; it uses the secret's
-  unscoped `write-app-key`, as `fleet.sh monitors --apply` does:
+  unscoped `write-app-key`, the key the fleet monitors' apply writes with:
 
   ```bash
   python3 infra/datadog-room/stage_views.py retention --profile accen-dev --region us-west-2 --apply
