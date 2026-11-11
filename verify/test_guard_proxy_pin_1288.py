@@ -4,7 +4,8 @@
 """#1288's repin: the pin moves from a7a5a36 (#1267's always-on /chat check, on the old 40-term list) to guard-proxy
 main at or after 48cc2ca. 48cc2ca matches the code-of-conduct spike's folded term list (docs/research/2026-11-09-coc-floor),
 masks the prompt in a refused turn's spans, and adds an optional Bedrock check; f75aa2f after it masks the terms in an
-answered turn's chat span (guard-proxy-agenticburn#82). The chat page's list is that same 144-entry list since #1280,
+answered turn's chat span (guard-proxy-agenticburn#82), and 0627502 builds the pattern in linear time
+(guard-proxy-agenticburn#83), which test_coc_pattern_linear.py holds; the pin is 0627502. The chat page's list is that same 144-entry list since #1280,
 and test_chat_coc.py holds every PROFANITY term of the pinned proxy.py to it. A repin back to a7a5a36 would keep every
 test from #1267 green, since its floor is a7a5a36, and put the stage back on the 40-term list that misses spaced and
 fullwidth spellings. This test is the floor that stops it.
