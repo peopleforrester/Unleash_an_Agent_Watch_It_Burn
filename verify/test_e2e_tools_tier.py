@@ -1,11 +1,13 @@
 # ABOUTME: The cluster-free E2E tier (#572): its pins are VERSIONS.lock's, its tools land in a gitignored directory,
-# ABOUTME: no tier test needs CONTEXT or IAM_PIPELINE_*, and a failed or tampered fetch fails loudly, never skips.
+# ABOUTME: no tier test needs CONTEXT or IAM_PIPELINE_*, a failed or tampered fetch fails loudly, and the runner checks.
 """Holds what verify/run-e2e-tools.sh, the gate's E2E command, relies on. Offline: no download is made.
 
 #543 took run-e2e.sh off the gate because the gate host has no cluster, no AWS and none of the cluster tools.
 #572 declared the part of the E2E suite that host can run: tests marked `# E2E TIER: tools`, run with the
-binaries in verify/e2e-tools.lock, which verify/fetch-e2e-tools.sh downloads into verify/.tools and checks
-against the lock's SHA-256 before use.
+binaries in verify/e2e-tools.lock. Since #1188 those come from the wib-e2e-tools image, built from the lock, and
+run-e2e-tools.sh on a host hands the tier to `verify/e2e-image.sh run` (verify/test_e2e_image.py holds that hand-off
+and that it never downloads). verify/fetch-e2e-tools.sh, which downloads the lock's binaries into verify/.tools and
+checks each against its SHA-256, stays for run-e2e.sh, the by-hand live suite.
 
 The fetch is run here for real, in a scratch copy of the scripts, against a file server on 127.0.0.1 that serves
 fixture archives and counts each request, with `uname` stubbed so the run does not depend on the host. Since #1118 the
@@ -15,9 +17,12 @@ python3's zipfile since #1047, and `unzip` is a stub that logs any call and fail
 is caught on a host that has one; `curl` is a stub that logs any call and fails, so a fetch that bypasses the cache is
 caught too. A good lock installs every binary, a second run downloads nothing, and so does a run from a fresh worktree
 on the same cache (#1004); a cached file that no longer matches fails by name and is not fetched again, and a missing
-artifact or a checksum mismatch exits 1 naming each failure and leaves no binary behind. run-e2e-tools.sh stops on a
-failed fetch or a missing prerequisite before any test runs, and that includes Playwright browsers that are missing
-from a directory `playwright install` cannot write (#658), with `uv` stubbed to list them.
+artifact or a checksum mismatch exits 1 naming each failure and leaves no binary behind.
+
+The runner's own checks run as inside the image: WIB_E2E_TOOLS names a scratch directory holding the fixture lock's
+tools.txt and binaries, as verify/e2e-image/install.sh writes them. run-e2e-tools.sh stops on an image of another lock
+or a missing prerequisite before any test runs, and that includes Playwright browsers that are missing from a
+directory `playwright install` cannot write (#658), with `uv` stubbed to list them.
 
 run-e2e.sh, the by-hand live suite, runs the same fetch in its prerequisite check (#585), so a cluster build runs
 the gate's binaries, otelcol-contrib included since #654 and ttyd since #770. Its scratch copy is run with a fixture lock of the seven tools: the fetched kubectl, not one
@@ -217,8 +222,8 @@ check("run-e2e-tools.sh runs each tier test with KUBECONFIG=/dev/null", "KUBECON
 for var, tool in (("KYVERNO_CLI", "kyverno"), ("CONFTEST", "conftest"), ("TERRAFORM", "terraform"),
                   ("OTELCOL_CONTRIB", "otelcol-contrib"), ("TTYD", "ttyd"), ("CRANE", "crane"),
                   ("AGENTGATEWAY", "agentgateway")):
-    check(f"run-e2e-tools.sh points {var} at the fetched {tool}", f'{var}="${{TOOLS_BIN}}/{tool}"' in code)
-check("run-e2e-tools.sh puts the fetched tools first on PATH, behind only the aws and eksctl stubs (#865)",
+    check(f"run-e2e-tools.sh points {var} at the image's {tool}", f'{var}="${{TOOLS_BIN}}/{tool}"' in code)
+check("run-e2e-tools.sh puts the image's tools first on PATH, behind only the aws and eksctl stubs (#865)",
       'PATH="${NO_CLOUD_BIN}:${TOOLS_BIN}:${PATH}"' in code)
 check("run-e2e-tools.sh stubs aws and eksctl, and only those two, with no-cloud.sh, in each check's own directory "
       "(#865, #1005)",
@@ -379,7 +384,8 @@ def scratch(tmp: pathlib.Path, lock: str, scripts: tuple[pathlib.Path, ...]) -> 
     artifact-cache.sh, so those come with them."""
     vdir = tmp / "verify"
     vdir.mkdir(parents=True, exist_ok=True)
-    helpers = ((VERIFY / "tf_plugin_cache.py", VERIFY / "artifact_cache.py") if RUNNER in scripts else ()) + \
+    helpers = ((VERIFY / "tf_plugin_cache.py", VERIFY / "artifact_cache.py", VERIFY / "e2e_image.py")
+               if RUNNER in scripts else ()) + \
         ((VERIFY / "artifact-cache.sh", VERIFY / "artifact_cache.py") if FETCH in scripts else ())
     for s in scripts + tuple(dict.fromkeys(h for h in helpers if h not in scripts)):
         shutil.copy2(s, vdir / s.name)
@@ -388,7 +394,35 @@ def scratch(tmp: pathlib.Path, lock: str, scripts: tuple[pathlib.Path, ...]) -> 
         # stand-in makes that prefix the stubbed `uv` alone, which answers the dry run, so no environment is built.
         (vdir / "package_cache.py").write_text(STUB_PACKAGE_CACHE)
     (vdir / "e2e-tools.lock").write_text(lock)
+    if RUNNER in scripts:
+        # e2e_image.py names the image it wants from the lock and the build inputs, so those come too.
+        shutil.copytree(VERIFY / "e2e-image", vdir / "e2e-image", dirs_exist_ok=True)
+        for name in ("python.lock", "package_cache.py", ".dockerignore"):
+            if not (vdir / name).exists():
+                shutil.copy2(VERIFY / name, vdir / name)
+        image_tools(tmp, lock)
     return vdir
+
+
+def image_tools(tmp: pathlib.Path, lock: str) -> pathlib.Path:
+    """The scratch stand-in for the wib-e2e-tools image's tool directory (#1188): tools.txt holds each lock row's name,
+    version and sum, and bin/ each fixture the lock names whole (member `-`), as install.sh writes them at build."""
+    tools = tmp / "image-tools"
+    (tools / "bin").mkdir(parents=True, exist_ok=True)
+    rows = [ln.split() for ln in lock.splitlines() if ln.strip() and not ln.lstrip().startswith("#")]
+    (tools / "tools.txt").write_text("".join(f"{r[0]} {r[1]} {r[2]}\n" for r in rows))
+    for name, _version, _sha, url, member in rows:
+        fixture = FIXTURES.get(url.rsplit("/", 1)[-1])
+        if member == "-" and fixture is not None:
+            (tools / "bin" / name).write_bytes(fixture)
+            (tools / "bin" / name).chmod(0o755)
+    return tools
+
+
+def image_env(tmp: pathlib.Path) -> dict[str, str]:
+    """WIB_E2E_TOOLS, as the image's ENV sets it, when the scratch checkout has an image tool directory."""
+    tools = tmp / "image-tools"
+    return {"WIB_E2E_TOOLS": str(tools)} if tools.is_dir() else {}
 
 
 STUB_PACKAGE_CACHE = """import types
@@ -401,11 +435,11 @@ def run_cmd(env, root=None):
 
 
 def run(script: pathlib.Path, tmp: pathlib.Path, bindir: pathlib.Path,
-        cache: pathlib.Path | None = None) -> subprocess.CompletedProcess:
+        cache: pathlib.Path | None = None, extra: dict[str, str] | None = None) -> subprocess.CompletedProcess:
     # TMPDIR is the fixture's own (#909): run-tests.sh and no-cloud.sh mktemp, and on 2026-11-05 run 17593's host temp
     # directory was unlinked (stat Links: 0), so a mktemp falling back to the system's temp directory failed and this test with it.
     env = {"PATH": f"{bindir}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp), **TF_CACHE_ENV,
-           **fetch_env(tmp, cache)}
+           **fetch_env(tmp, cache), **image_env(tmp), **(extra or {})}
     return subprocess.run([BASH, str(script)], capture_output=True, text=True, timeout=120, env=env)
 
 
@@ -537,7 +571,7 @@ with tempfile.TemporaryDirectory() as t:
           r.returncode == 1 and "pins Linux x86_64 binaries; this host is Darwin arm64" in r.stderr
           and not curl_calls(tmp), r.stderr)
 
-print("== run-e2e-tools.sh stops before any test when it cannot have its tools ==")
+print("== run-e2e-tools.sh, inside the image, stops before any test when it cannot have its tools ==")
 NODE24 = '#!/bin/sh\ncase "$1" in -p) echo 24 ;; --version) echo v24.22.0 ;; esac\n'
 NODE26 = '#!/bin/sh\ncase "$1" in -p) echo 26 ;; --version) echo v26.12.0 ;; esac\n'
 NODE22 = '#!/bin/sh\ncase "$1" in -p) echo 22 ;; --version) echo v22.11.0 ;; esac\n'
@@ -559,52 +593,55 @@ def uv_listing(browsers: pathlib.Path, installed: bool) -> str:
 
 with tempfile.TemporaryDirectory() as t:
     tmp = pathlib.Path(t)
-    vdir = scratch(tmp, BAD_LOCK, (FETCH, RUNNER, BROWSERS))
+    vdir = scratch(tmp, GOOD_LOCK, (RUNNER, BROWSERS))
+    # The image was built from another lock: its tools.txt is BAD_LOCK's rows.
+    image_tools(tmp, BAD_LOCK)
     make_stubs(tmp / "bin", {**PREREQS, "uv": uv_listing(tmp / "ms-playwright", True), "node": NODE24})
     r = run(vdir / RUNNER.name, tmp, tmp / "bin")
-    check(f"a failed fetch fails the tier (exit {r.returncode})", r.returncode == 1)
+    check(f"an image of another lock fails the tier (exit {r.returncode})", r.returncode == 1)
     check("it says the tier cannot run, as a failure and not a skip",
-          "E2E TOOLS TIER CANNOT RUN; this is a failure, not a skip: the pinned tools could not be fetched"
-          in r.stderr, r.stderr)
-    check("the fetch's own reasons are shown", "delta v4: fetch of " in r.stderr, r.stderr)
-    check("no test ran", "== " not in r.stdout, r.stdout)
+          "E2E TOOLS TIER CANNOT RUN; this is a failure, not a skip: the image is not e2e-tools.lock's" in r.stderr,
+          r.stderr)
+    check("it names what differs", "delta v4 " in r.stderr and "which the image lacks" in r.stderr, r.stderr)
+    check("no test ran, and nothing was fetched", "== " not in r.stdout and not curl_calls(tmp), r.stdout)
 
 with tempfile.TemporaryDirectory() as t:
     tmp = pathlib.Path(t)
-    vdir = scratch(tmp, GOOD_LOCK, (FETCH, RUNNER, BROWSERS))
+    vdir = scratch(tmp, GOOD_LOCK, (RUNNER, BROWSERS))
     make_stubs(tmp / "bin", {**PREREQS, "uv": uv_listing(tmp / "ms-playwright", True), "node": NODE22})
     r = run(vdir / RUNNER.name, tmp, tmp / "bin")
-    check(f"a Node below 24 fails the tier before any fetch (exit {r.returncode})",
+    check(f"a Node below 24 fails the tier before any test (exit {r.returncode})",
           r.returncode == 1 and "node v22.11.0 is on PATH; the node harnesses run on Node 24 or later" in r.stderr
           and not curl_calls(tmp), r.stderr)
     check("no test ran", "== " not in r.stdout, r.stdout)
 
-# The tier runs on the Node on PATH (#1200): Node 24 and Node 26 both pass the Node check and reach the fetch, which
-# the bad lock then fails, so the only reason the tier stops is the fetch.
+# The tier runs on the Node on PATH (#1200): Node 24 and Node 26 both pass the Node check. E2E_TOOLS_JOBS=0 is the one
+# prerequisite left wrong, so the only reason the tier stops is that, and no node line is listed beside it.
 for label, stub in (("24", NODE24), ("26", NODE26)):
     with tempfile.TemporaryDirectory() as t:
         tmp = pathlib.Path(t)
-        vdir = scratch(tmp, BAD_LOCK, (FETCH, RUNNER, BROWSERS))
+        vdir = scratch(tmp, GOOD_LOCK, (RUNNER, BROWSERS))
         make_stubs(tmp / "bin", {**PREREQS, "uv": uv_listing(tmp / "ms-playwright", True), "node": stub})
-        r = run(vdir / RUNNER.name, tmp, tmp / "bin")
-        check(f"Node {label} on PATH passes the Node check and the tier goes on to the fetch (exit {r.returncode})",
-              r.returncode == 1 and "the pinned tools could not be fetched" in r.stderr
+        r = run(vdir / RUNNER.name, tmp, tmp / "bin", extra={"E2E_TOOLS_JOBS": "0"})
+        check(f"Node {label} on PATH passes the Node check (exit {r.returncode})",
+              r.returncode == 1 and "E2E_TOOLS_JOBS is '0'" in r.stderr
               and "node v" not in r.stderr and "node is not on PATH" not in r.stderr, r.stderr)
 
 # With no node on PATH at all, the tier says what to install and names no major. PATH here is only the fixture's bin,
 # holding the real python3, git and dirname and stubs for the rest, so the host's own node is not found.
 with tempfile.TemporaryDirectory() as t:
     tmp = pathlib.Path(t)
-    vdir = scratch(tmp, GOOD_LOCK, (FETCH, RUNNER, BROWSERS))
+    vdir = scratch(tmp, GOOD_LOCK, (RUNNER, BROWSERS))
     bindir = tmp / "bin"
     make_stubs(bindir, {**PREREQS, "uv": uv_listing(tmp / "ms-playwright", True),
                         **{n: "#!/bin/sh\nexit 0\n" for n in ("tar", "sha256sum", "flock")}})
     for real in ("python3", "git", "dirname"):
         os.symlink(shutil.which(real), bindir / real)
-    env = {"PATH": str(bindir), "HOME": str(tmp), "TMPDIR": str(tmp), **TF_CACHE_ENV, **fetch_env(tmp, None)}
+    env = {"PATH": str(bindir), "HOME": str(tmp), "TMPDIR": str(tmp), **TF_CACHE_ENV, **fetch_env(tmp, None),
+           **image_env(tmp)}
     r = subprocess.run([BASH, str(vdir / RUNNER.name)], capture_output=True, text=True, timeout=120, env=env)
     lines = [ln for ln in r.stderr.splitlines() if "node" in ln.lower()]
-    check(f"with no node on PATH the tier fails before any fetch (exit {r.returncode})",
+    check(f"with no node on PATH the tier fails before any test (exit {r.returncode})",
           r.returncode == 1 and "E2E TOOLS TIER CANNOT RUN; this is a failure, not a skip" in r.stderr
           and not curl_calls(tmp), r.stderr)
     check("it says to install the current Node.js release, naming no major",
@@ -614,7 +651,7 @@ with tempfile.TemporaryDirectory() as t:
 
 with tempfile.TemporaryDirectory() as t:
     tmp = pathlib.Path(t)
-    vdir = scratch(tmp, GOOD_LOCK, (FETCH, RUNNER, BROWSERS))
+    vdir = scratch(tmp, GOOD_LOCK, (RUNNER, BROWSERS))
     browsers = tmp / "ms-playwright"
     make_stubs(tmp / "bin", {**PREREQS, "uv": uv_listing(browsers, False), "node": NODE24})
     browsers.chmod(0o555)
@@ -622,7 +659,7 @@ with tempfile.TemporaryDirectory() as t:
         r = run(vdir / RUNNER.name, tmp, tmp / "bin")
     finally:
         browsers.chmod(0o755)
-    check(f"Playwright browsers missing from a directory it cannot write fail the tier before any fetch "
+    check(f"Playwright browsers missing from a directory it cannot write fail the tier before any test "
           f"(exit {r.returncode})",
           r.returncode == 1 and "E2E TOOLS TIER CANNOT RUN; this is a failure, not a skip" in r.stderr
           and not curl_calls(tmp), r.stderr)
@@ -648,14 +685,14 @@ TIER_TESTS = {
 HOST_CLOUD = '#!/bin/sh\necho "host $(basename "$0") $*" >>"$HOST_LOG"\nexit 0\n'
 with tempfile.TemporaryDirectory() as t:
     tmp = pathlib.Path(t)
-    vdir = scratch(tmp, TIER_LOCK, (FETCH, RUNNER, BROWSERS, VERIFY / "no-cloud.sh", VERIFY / "ensure-submodules.sh"))
+    vdir = scratch(tmp, TIER_LOCK, (RUNNER, BROWSERS, VERIFY / "no-cloud.sh", VERIFY / "ensure-submodules.sh"))
     (vdir / "run-tests.sh").write_text("#!/usr/bin/env bash\nexit 0\n")
     for name, body in TIER_TESTS.items():
         (vdir / name).write_text(f"# SUITE: e2e\n# E2E TIER: tools\n{body}")
     make_stubs(tmp / "bin", {**PREREQS, "uv": uv_listing(tmp / "ms-playwright", True), "node": NODE24,
                              "aws": HOST_CLOUD, "eksctl": HOST_CLOUD})
     env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp), **TF_CACHE_ENV, "AWS_PROFILE": "accen-dev",
-           **fetch_log_env(tmp),
+           **fetch_log_env(tmp), **image_env(tmp),
            "KUBECTL_LOG": str(tmp / "kubectl.log"), "HOST_LOG": str(tmp / "host.log")}
     r = subprocess.run([BASH, str(vdir / RUNNER.name)], capture_output=True, text=True, timeout=120, env=env)
     out = r.stdout + r.stderr
@@ -678,7 +715,7 @@ with tempfile.TemporaryDirectory() as t:
     host = (tmp / "host.log").read_text() if (tmp / "host.log").exists() else ""
     check("nothing reached the host's aws or eksctl", host == "", host)
     kube = (tmp / "kubectl.log").read_text().splitlines() if (tmp / "kubectl.log").exists() else []
-    check("the fetched kubectl is what the kubectl test ran, unstubbed", kube == ["fetched version --client"], str(kube))
+    check("the image's kubectl is what the kubectl test ran, unstubbed", kube == ["fetched version --client"], str(kube))
 
 print("== a tier test gets an empty Helm home of its own, never the host's (#921's run) ==")
 # Run 17641's tier failed six tests on the host's Helm home, which listed a `cilium` repository with no cached
@@ -694,7 +731,7 @@ HELM_PROBE = ("import json, os, pathlib, sys\n"
               "sys.exit(0)\n")
 with tempfile.TemporaryDirectory() as t:
     tmp = pathlib.Path(t)
-    vdir = scratch(tmp, TIER_LOCK, (FETCH, RUNNER, BROWSERS, VERIFY / "no-cloud.sh", VERIFY / "ensure-submodules.sh"))
+    vdir = scratch(tmp, TIER_LOCK, (RUNNER, BROWSERS, VERIFY / "no-cloud.sh", VERIFY / "ensure-submodules.sh"))
     (vdir / "run-tests.sh").write_text("#!/usr/bin/env bash\nexit 0\n")
     (vdir / "test_helm_home.py").write_text(f"# SUITE: e2e\n# E2E TIER: tools\n{HELM_PROBE}")
     host_helm = tmp / ".config" / "helm"
@@ -702,7 +739,7 @@ with tempfile.TemporaryDirectory() as t:
     (host_helm / "repositories.yaml").write_text("repositories:\n- name: cilium\n  url: https://helm.cilium.io\n")
     make_stubs(tmp / "bin", {**PREREQS, "uv": uv_listing(tmp / "ms-playwright", True), "node": NODE24})
     env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp), **TF_CACHE_ENV,
-           **fetch_log_env(tmp), "HELM_LOG": str(tmp / "helm.json"),
+           **fetch_log_env(tmp), **image_env(tmp), "HELM_LOG": str(tmp / "helm.json"),
            "HELM_CONFIG_HOME": str(host_helm)}
     r = subprocess.run([BASH, str(vdir / RUNNER.name)], capture_output=True, text=True, timeout=120, env=env)
     out = r.stdout + r.stderr
@@ -748,14 +785,14 @@ def pool_run(tmp: pathlib.Path, extra: dict[str, str]) -> subprocess.CompletedPr
     shutil.rmtree(pair, ignore_errors=True)
     pair.mkdir()
     env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp), **TF_CACHE_ENV,
-           **fetch_log_env(tmp), "PAIR_DIR": str(pair), **extra}
+           **fetch_log_env(tmp), **image_env(tmp), "PAIR_DIR": str(pair), **extra}
     return subprocess.run([BASH, str(tmp / "verify" / RUNNER.name)], capture_output=True, text=True, timeout=240,
                           env=env)
 
 
 with tempfile.TemporaryDirectory() as t:
     tmp = pathlib.Path(t)
-    vdir = scratch(tmp, TIER_LOCK, (FETCH, RUNNER, BROWSERS, VERIFY / "no-cloud.sh", VERIFY / "ensure-submodules.sh"))
+    vdir = scratch(tmp, TIER_LOCK, (RUNNER, BROWSERS, VERIFY / "no-cloud.sh", VERIFY / "ensure-submodules.sh"))
     (vdir / "run-tests.sh").write_text("#!/usr/bin/env bash\necho offline suite ran\nexit 0\n")
     for name, (mark, body) in POOL_TESTS.items():
         (vdir / name).write_text(f"# SUITE: e2e\n# E2E TIER: tools\n{mark}{body}")
@@ -802,7 +839,7 @@ print("== a terraform test waits for the shared provider cache's lock, and fails
 # run passes.
 with tempfile.TemporaryDirectory() as t:
     tmp = pathlib.Path(t)
-    vdir = scratch(tmp, TIER_LOCK, (FETCH, RUNNER, BROWSERS, VERIFY / "no-cloud.sh", VERIFY / "ensure-submodules.sh"))
+    vdir = scratch(tmp, TIER_LOCK, (RUNNER, BROWSERS, VERIFY / "no-cloud.sh", VERIFY / "ensure-submodules.sh"))
     (vdir / "run-tests.sh").write_text("#!/usr/bin/env bash\nexit 0\n")
     (vdir / "test_tf_locked.sh").write_text("# SUITE: e2e\n# E2E TIER: tools\n# E2E SERIAL: terraform\n"
                                             "echo terraform test ran\n")
@@ -834,7 +871,7 @@ SLEEPER = ("echo \"sleeper started\"\nsleep 300 &\necho $! >\"$PAIR_DIR/sleep.pi
            "touch \"$PAIR_DIR/ready\"\nwait\n")
 with tempfile.TemporaryDirectory() as t:
     tmp = pathlib.Path(t)
-    vdir = scratch(tmp, TIER_LOCK, (FETCH, RUNNER, BROWSERS, VERIFY / "no-cloud.sh", VERIFY / "ensure-submodules.sh"))
+    vdir = scratch(tmp, TIER_LOCK, (RUNNER, BROWSERS, VERIFY / "no-cloud.sh", VERIFY / "ensure-submodules.sh"))
     (vdir / "run-tests.sh").write_text("#!/usr/bin/env bash\nexit 0\n")
     (vdir / "test_ends.sh").write_text("# SUITE: e2e\n# E2E TIER: tools\necho ended\n")
     (vdir / "test_sleeper.sh").write_text(f"# SUITE: e2e\n# E2E TIER: tools\n{SLEEPER}")
@@ -842,7 +879,7 @@ with tempfile.TemporaryDirectory() as t:
     pair = tmp / "pair"
     pair.mkdir()
     env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp), **TF_CACHE_ENV,
-           **fetch_log_env(tmp), "PAIR_DIR": str(pair)}
+           **fetch_log_env(tmp), **image_env(tmp), "PAIR_DIR": str(pair)}
     proc = subprocess.Popen([BASH, str(vdir / RUNNER.name)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                             env=env, start_new_session=True)
     # The signal waits for the runner to have printed test_ends.sh as ended, not only for the sleeper: on a loaded

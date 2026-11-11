@@ -8,14 +8,17 @@ The real runner, run-tests.sh and scope_tests.py are copied into a fixture repo 
 committed, and driven on each range with HECATON_BASE_SHA on the commit before it:
 
 1. A doc-only range (decisions.md, PROGRESS.md, the run-of-show, the /kubecon page's copy) runs the offline tests that
-   read those files and no tier test, the always one included, and the fetch script, curl and the Terraform cache are
-   never reached. A tier test reads each of those files, so this holds the prose rule and not an empty map.
+   read those files and no tier test, the always one included, and the image (e2e-image.sh), curl and the Terraform
+   cache are never reached. A tier test reads each of those files, so this holds the prose rule and not an empty map.
 2. A code range (a chart value and the page's event.js, beside the page's copy) runs the tier tests that read the code
-   and the always one, and leaves the one that reads only decisions.md; the tools are fetched.
+   and the always one, and leaves the one that reads only decisions.md; they run in the image (#1188).
 3. A change to verify/e2e-tools.lock runs every tier test and the whole offline suite, naming the lock.
 4. A tier test that fails is named first, before the timings, with its kept log and the command that reruns it alone;
    that command runs it alone, with no offline suite, and passes once the cause is fixed. A failing offline test is
-   named the same way, its rerun its own python3 command, and still nothing is fetched on a doc-only range.
+   named the same way, its rerun its own python3 command, and still no image is reached on a doc-only range.
+
+The fixture's verify/e2e-image.sh stands in for the image: it logs its call, then runs the runner again with
+WIB_E2E_TOOLS set, as the container does, so the runner's hand-off on a host and its run inside are both driven.
 
 It also holds scope_tests.PROSE to prose_gate.PUBLIC_PROSE, the ai-isms gate's own list, the kept logs out of git,
 and CLAUDE.md's word to a dispatched run: scope the tier to the change, and fix and rerun one failed test alone.
@@ -113,7 +116,8 @@ MAP = """full:
   - verify/scope_tests.py
   - verify/no-cloud.sh
   - verify/ensure-submodules.sh
-  - verify/fetch-e2e-tools.sh
+  - verify/e2e-image.sh
+  - verify/e2e_image.py
   - verify/e2e-tools.lock
   - verify/playwright_browsers.py
   - verify/tf_plugin_cache.py
@@ -129,7 +133,11 @@ reads: {}
 LOGGING_STUB = '#!/bin/sh\necho "$(basename "$0") $*" >>"$CALL_LOG"\nexit 0\n'
 NODE24 = ('#!/bin/sh\necho "node $*" >>"$CALL_LOG"\n'
           'case "$1" in -p) echo 24 ;; --version) echo v24.22.0 ;; esac\n')
-FETCH_STUB = '#!/usr/bin/env bash\necho "fixture fetch ran" >>"$CALL_LOG"\n'
+# The image's stand-in: logs the call, then runs the runner as the container does, with WIB_E2E_TOOLS set.
+IMAGE_STUB = ('#!/usr/bin/env bash\necho "fixture image ran $*" >>"$CALL_LOG"\nshift\n'
+              'mkdir -p "${TMPDIR}/image-tools/bin"\n'
+              'WIB_E2E_TOOLS="${TMPDIR}/image-tools" exec bash "$(dirname "$0")/run-e2e-tools.sh" "$@"\n')
+IMAGE_PY_STUB = "import sys\nsys.exit(0)\n"
 TF_STUB = 'import os, sys\nopen(os.environ["CALL_LOG"], "a").write("tf_plugin_cache.py\\n")\nprint(sys.argv[0] + ".cache")\n'
 
 
@@ -143,7 +151,8 @@ def fixture(tmp: pathlib.Path) -> pathlib.Path:
     v.mkdir(parents=True)
     for name in ("run-tests.sh", "run-e2e-tools.sh", "scope_tests.py", "no-cloud.sh", "ensure-submodules.sh"):
         shutil.copy2(VERIFY / name, v / name)
-    (v / "fetch-e2e-tools.sh").write_text(FETCH_STUB)
+    (v / "e2e-image.sh").write_text(IMAGE_STUB)
+    (v / "e2e_image.py").write_text(IMAGE_PY_STUB)
     (v / "playwright_browsers.py").write_text("import sys\nsys.exit(0)\n")
     (v / "tf_plugin_cache.py").write_text(TF_STUB)
     (v / "artifact_cache.py").write_text("")
@@ -228,7 +237,7 @@ with tempfile.TemporaryDirectory() as t:
     root = fixture(tmp)
     vdir = root / "verify"
 
-    print("== a doc-only range runs the offline tests that read it, no tier test, and fetches nothing ==")
+    print("== a doc-only range runs the offline tests that read it, no tier test, and reaches no image ==")
     base = change(root, {"decisions.md": "\nA record.\n", "PROGRESS.md": "\n- a line\n",
                          "facilitation/kubecon-run-of-show.md": "\nRow 9.\n",
                          "gitops/ai-layer/web/kubecon.html": "<p>New copy for the room.</p>\n"})
@@ -238,8 +247,8 @@ with tempfile.TemporaryDirectory() as t:
     check(f"the runner passes, running the offline suite alone (exit {rc})",
           rc == 0 and ran(out) == {OFFLINE_CHECK, "test_records.py", "test_page.py"}, out)
     check("no tier test runs, the always one included", not ran(out) & ALL_TIER, out)
-    check("nothing is fetched, no tool is called and no Terraform cache is named", calls == []
-          and "Terraform provider cache:" not in out and "fixture fetch ran" not in out, "\n".join(calls) + "\n" + out)
+    check("no image is run, no tool is called and no Terraform cache is named", calls == []
+          and "Terraform provider cache:" not in out and "fixture image ran" not in out, "\n".join(calls) + "\n" + out)
     check("it says why: the paths are prose, and no tier test reads what is left",
           "4 of the changed paths are prose (.md, .mdx, .html), which selects no tier test" in out
           and "no tier test reads what the change touched, so the tools are neither checked for nor fetched" in out
@@ -257,7 +266,7 @@ with tempfile.TemporaryDirectory() as t:
           rc == 0 and ran(out) == {OFFLINE_CHECK, "test_values.py", "test_page.py", "test_tier_always.py",
                                    "test_tier_page.py", "test_tier_render.py"}, out)
     check("the tier test that reads only decisions.md does not run", "test_tier_records.py" not in ran(out), out)
-    check("the tools are fetched, since tier tests run", "fixture fetch ran" in calls, "\n".join(calls))
+    check("the tier runs in the image, since tier tests run", any(c.startswith("fixture image ran") for c in calls), "\n".join(calls))
     check("and it says 3 of the 4 tier tests ran", "3 of the 4 tier tests; the other 1 read nothing it touched" in out,
           out)
 
@@ -268,8 +277,8 @@ with tempfile.TemporaryDirectory() as t:
     rc, out, calls = run(root, tmp, base)
     check(f"the runner runs every tier test and every offline test (exit {rc})",
           rc == 0 and ran(out) == {OFFLINE_CHECK, *OFFLINE, *ALL_TIER}, out)
-    check("naming the lock as why, and fetching the tools",
-          "verify/e2e-tools.lock: it is in the map's full list" in out and "fixture fetch ran" in calls, out)
+    check("naming the lock as why, and running in the image",
+          "verify/e2e-tools.lock: it is in the map's full list" in out and any(c.startswith("fixture image ran") for c in calls), out)
 
     print("== a failed tier test is named first with its log, and rerun alone ==")
     base = change(root, {"gitops/app/values.yaml": "broken: true\n"})
@@ -290,7 +299,7 @@ with tempfile.TemporaryDirectory() as t:
     rc, out, calls = run(root, tmp, base, "test_tier_render.py")
     check(f"the rerun command runs that test alone, with no offline suite, and still fails (exit {rc})",
           rc == 1 and ran(out) == {"test_tier_render.py"}
-          and "1 checks ran (the 1 tier tests named, no offline suite)" in out and "fixture fetch ran" in calls, out)
+          and "1 checks ran (the 1 tier tests named, no offline suite)" in out and any(c.startswith("fixture image ran") for c in calls), out)
     (root / "gitops/app/values.yaml").write_text("replicas: 1\nimage: app:2\n")
     git(root, "commit", "-qam", "fix values")
     rc, out, calls = run(root, tmp, base, "test_tier_render.py")
@@ -300,7 +309,7 @@ with tempfile.TemporaryDirectory() as t:
     check(f"a name that is not a tier test fails, naming it, before anything runs (exit {rc})",
           rc == 1 and "test_records.py is not a `# E2E TIER: tools` test" in out and not ran(out), out)
 
-    print("== a failed offline test on a doc-only range is named with its own rerun command, and nothing is fetched ==")
+    print("== a failed offline test on a doc-only range is named with its own rerun command, and no image is run ==")
     base = change(root, {"decisions.md": "BROKEN RECORD\n"})
     rc, out, calls = run(root, tmp, base)
     kept = tmp / "kept-logs" / "run-tests.sh.log"
@@ -310,7 +319,7 @@ with tempfile.TemporaryDirectory() as t:
           f"FAILED: {OFFLINE_CHECK} (exit 1); its log: {kept}" in out
           and f"    rerun it alone: python3 {vdir}/test_records.py\n" in out
           and kept.is_file() and "decisions.md holds BROKEN RECORD" in kept.read_text(), out)
-    check("and nothing is fetched", calls == [], "\n".join(calls))
+    check("and no image is run", calls == [], "\n".join(calls))
 
 print()
 if failures:

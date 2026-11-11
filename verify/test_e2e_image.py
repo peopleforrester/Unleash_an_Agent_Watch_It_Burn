@@ -14,6 +14,10 @@ verify/e2e-tools.lock. What this holds:
      one whose sum is not, installing nothing. Its fetches are of file:// URLs this test writes.
   4. tools.txt is held to the lock the same way inside the image (`e2e_image.py matches`), and run-e2e-tools.sh runs
      that check first in the image and fails on a tools.txt that is not the lock's, and fetches nothing there.
+  4b. On a host, run-e2e-tools.sh refuses to download: it never names fetch-e2e-tools.sh, curl or wget, and a run that
+     needs the tools goes to `e2e-image.sh run`, the tier tests named passed on. Run for real with a podman stand-in,
+     a host that holds the image starts it and nothing else; one whose pull fails exits 1 naming the image and
+     `bash verify/e2e-image.sh build`, with no container, no curl, no wget and no verify/.tools written.
   5. verify/e2e-image.sh run, with a podman stand-in: a host that holds the tag starts it with --pull=never and pulls
      nothing; a host that lacks it pulls once; a host where the pull fails exits 1 naming the image and
      `bash verify/e2e-image.sh build`, and runs no container, no curl and no fetch-e2e-tools.sh.
@@ -174,9 +178,7 @@ check("a tools.txt with another version does not",
 check("a tools.txt missing a tool does not",
       e2e_image.tools_txt_problems(LOCK_TEXT, "".join(TOOLS_TXT.splitlines(True)[1:])) != [])
 runner = (HERE / "run-e2e-tools.sh").read_text(encoding="utf-8")
-check("run-e2e-tools.sh fetches only outside the image",
-      re.search(r'in_image}" -eq 0 \]\] && ! bash "\$\{SCRIPT_DIR\}/fetch-e2e-tools\.sh"', runner) is not None)
-check("and runs the image's tools from WIB_E2E_TOOLS", 'TOOLS_BIN="${WIB_E2E_TOOLS}/bin"' in runner)
+check("run-e2e-tools.sh runs the image's tools from WIB_E2E_TOOLS", 'TOOLS_BIN="${WIB_E2E_TOOLS}/bin"' in runner)
 with tempfile.TemporaryDirectory() as tmp:
     t = pathlib.Path(tmp)
     (t / "tools.txt").write_text(TOOLS_TXT.replace(f" {first[1]} ", " v0.0.1 "), encoding="utf-8")
@@ -195,8 +197,81 @@ with tempfile.TemporaryDirectory() as tmp:
           and "checks ran" not in r.stdout, (r.stdout + r.stderr)[-800:])
     check("and calls no curl or wget", not log.exists(), log.read_text() if log.exists() else "")
 
-print("== 5. e2e-image.sh run: present is used, absent is pulled once, unpullable fails naming the image ==")
+print("== 4b. on a host, run-e2e-tools.sh refuses to download: the tier goes to the image or fails naming it ==")
+runner_code = "\n".join(ln for ln in runner.splitlines() if not ln.lstrip().startswith("#"))
+check("run-e2e-tools.sh's code names no fetch-e2e-tools.sh, curl, wget or verify/.tools",
+      re.search(r"fetch-e2e-tools|\bcurl\b|\bwget\b|\.tools/", runner_code) is None,
+      "\n".join(ln for ln in runner_code.splitlines() if re.search(r"fetch-e2e|curl|wget|\.tools/", ln)))
+check("on a host, a run that needs the tools is handed to e2e-image.sh run, with the tests named",
+      'if [[ "${need_tools}" -eq 1 && "${in_image}" -eq 0 ]]; then' in runner_code
+      and 'exec bash "${SCRIPT_DIR}/e2e-image.sh" run "$@"' in runner_code)
 REF = e2e_image.ref()
+
+
+def host_runner(state: str, *tests: str) -> tuple[subprocess.CompletedProcess, str, bool]:
+    """Run `run-e2e-tools.sh [tests]` on this host, outside the image and unscoped, with a podman stand-in whose
+    image is present, or neither present nor pullable, and curl and wget tripwires first on PATH. Returns the run, every
+    logged call, and whether verify/.tools was made."""
+    with tempfile.TemporaryDirectory() as tmp:
+        t = pathlib.Path(tmp)
+        fakebin = t / "bin"
+        fakebin.mkdir()
+        log = t / "calls.log"
+        podman = f"""#!/bin/sh
+echo "podman $*" >> "{log}"
+case "$1" in
+  image) [ "{state}" = present ] && exit 0; exit 1 ;;
+  pull) echo "Error: {REF}: manifest unknown" >&2; exit 125 ;;
+  run) exit 0 ;;
+esac
+exit 3
+"""
+        stubs = {"podman": podman, "gh": "#!/bin/sh\nexit 0\n",
+                 "curl": f'#!/bin/sh\necho "curl $*" >> "{log}"\nexit 1\n',
+                 "wget": f'#!/bin/sh\necho "wget $*" >> "{log}"\nexit 1\n'}
+        for name, body in stubs.items():
+            (fakebin / name).write_text(body)
+            (fakebin / name).chmod(0o755)
+        cache = artifact_cache.scratch_dir("e2e-image-host-")
+        tools_before = (HERE / ".tools").exists()
+        env = {k: v for k, v in os.environ.items()
+               if k not in ("HECATON_BASE_SHA", "HECATON_TEST_FILES", "WIB_E2E_TOOLS", "WIB_CONTAINER_RUNTIME")}
+        env.update(PATH=f"{fakebin}:{os.environ['PATH']}", TMPDIR=str(t), WIB_ARTIFACT_CACHE=str(cache),
+                   HECATON_TOOLS_CACHE="")
+        # A runner that went back to downloading would reach the network through the artifact cache's own urllib, not
+        # curl; every proxy here is a closed port on 127.0.0.1, so such a fetch fails at once instead of downloading.
+        dead = "http://127.0.0.1:9"
+        env.update(http_proxy=dead, https_proxy=dead, HTTP_PROXY=dead, HTTPS_PROXY=dead, no_proxy="", NO_PROXY="")
+        try:
+            r = subprocess.run(["bash", str(HERE / "run-e2e-tools.sh"), *tests], capture_output=True, text=True,
+                               env=env, timeout=120)
+        finally:
+            shutil.rmtree(cache, ignore_errors=True)
+        made_tools = not tools_before and (HERE / ".tools").exists()
+        return r, (log.read_text() if log.exists() else ""), made_tools
+
+
+r, calls, made_tools = host_runner("absent")
+check("with no image on the host and none pullable, run-e2e-tools.sh exits 1 naming the image and how to build it",
+      r.returncode == 1 and REF in r.stderr and "bash verify/e2e-image.sh build" in r.stderr
+      and "not a skip" in r.stderr, (r.stdout + r.stderr)[-1500:])
+check("it tried the image once and fell back to nothing: one pull, no container, no curl, no wget",
+      calls.count("podman pull ") == 1 and "podman run" not in calls and "curl" not in calls and "wget" not in calls,
+      calls)
+check("no check ran and nothing was written to verify/.tools", "checks ran" not in r.stdout and not made_tools,
+      r.stdout[-800:])
+r, calls, made_tools = host_runner("present", "test_ttyd_ws_auth.py")
+runs = [ln for ln in calls.splitlines() if ln.startswith("podman run ")]
+check("with the image on the host, the named tier test runs inside it, and nothing is pulled or downloaded",
+      r.returncode == 0 and len(runs) == 1 and f" {REF} " in runs[0]
+      and runs[0].endswith('run-e2e-tools.sh "$@" tier test_ttyd_ws_auth.py')
+      and "podman pull" not in calls and "curl" not in calls and "wget" not in calls and not made_tools,
+      calls + r.stderr[-800:])
+check("and the runner says the tier runs inside the image",
+      "the tools tier runs inside the wib-e2e-tools image: bash verify/e2e-image.sh run test_ttyd_ws_auth.py"
+      in r.stdout, r.stdout[-800:])
+
+print("== 5. e2e-image.sh run: present is used, absent is pulled once, unpullable fails naming the image ==")
 
 
 def launcher(state: str, *tests: str) -> tuple[subprocess.CompletedProcess, str]:
