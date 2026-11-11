@@ -7988,11 +7988,13 @@ rules:
       - scripts/reload-routes.sh/**
     tests:
       - verify/test_terminal_kubeconfig.py
-  - name: test_terminal_login_hand_set.py
+  - name: test_terminal_login_from_mrf_secrets.py
     paths:
       - CLAUDE.md
       - agent
       - agent/**
+      - agent/**/*
+      - agent/**/*/**
       - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
       - cost
       - cost/**
@@ -8022,7 +8024,7 @@ rules:
       - verify/no-cloud.sh
       - verify/no_cloud.py
     tests:
-      - verify/test_terminal_login_hand_set.py
+      - verify/test_terminal_login_from_mrf_secrets.py
   - name: test_terminal_quiet.py
     paths:
       - agent

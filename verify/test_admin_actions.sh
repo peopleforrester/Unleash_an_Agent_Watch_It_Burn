@@ -159,15 +159,16 @@ check "an admin cluster gets the presenter login, on a file descriptor" \
   'grep -qx "env-file TTYD_CREDENTIAL=placeholder-presenter:placeholder-presenter-pw" "${CALLS}" && ! grep "^kubectl " "${CALLS}" | grep -q "placeholder-presenter"'
 check "the presenter login is never logged, the user included" '! grep -q "placeholder-presenter" "${T}/stderr"'
 
-echo "== terminal-password is refused on the KubeCon pair, whose login is set by hand (#1069, #1074) =="
+echo "== terminal-password writes the mrf-secrets presenter login on the KubeCon pair too (#912 lifted #1074) =="
 for n in watch-it-burn-community watch-it-burn-private; do
   : >"${CALLS}"; : >"${T}/stderr"; rm -f "${T}/applied" "${T}/replaced" "${T}/created" "${T}/pool/${n}.terminal"
   KCTX="$(ctx_of "${n}")" src "cmd_terminal_password ${n}"; rc=$?
-  check "${n}: exits non-zero, naming the refusal" \
-    '[[ "${rc}" -ne 0 ]] && grep -q "${n}: REFUSED: its terminal login is set by hand (#1069) and fleet.sh never writes it (#1074)" "${T}/stderr"'
-  check "${n}: writes no Secret by any verb, and reads no login to write" \
-    '! grep -q "create secret\| replace \| apply \|create -f" "${CALLS}" && [[ ! -e "${T}/applied" && ! -e "${T}/replaced" && ! -e "${T}/created" ]] && ! grep -q "^env-file" "${CALLS}"'
-  check "${n}: restarts no terminal and harvests nothing" '! grep -q "web-terminal\|delete pod\|^harvest" "${CALLS}"'
+  check "${n}: exits 0, refusing nothing" '[[ "${rc}" -eq 0 ]] && ! grep -q "REFUSED" "${T}/stderr"'
+  check "${n}: the Secret is replaced with the presenter login, handed over on a file descriptor" \
+    'grep -q "kubectl --context $(ctx_of "${n}") -n agent replace -f -" "${CALLS}" && grep -qx "TTYD_CREDENTIAL=placeholder-presenter:placeholder-presenter-pw" "${T}/replaced" && ! grep "^kubectl " "${CALLS}" | grep -q "placeholder-presenter"'
+  check "${n}: never applied, so no annotation copies the login" '[[ ! -e "${T}/applied" ]]'
+  check "${n}: the terminal is restarted so ttyd reads it" 'grep -q -- "-n agent get pods -l app.kubernetes.io/name=web-terminal" "${CALLS}" && grep -q "delete pod" "${CALLS}"'
+  check "${n}: the presenter login is never logged" '! grep -q "placeholder-presenter" "${T}/stderr"'
 done
 
 echo "== the presenter login comes from mrf-secrets, with no default (#910) =="
