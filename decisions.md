@@ -53322,3 +53322,51 @@ from one address got through nginx, which refused none; the probe turn was answe
 the cluster. The #644 load replays were not rerun; nothing here changes what they test.
 
 No dependency was added.
+## 2026-11-11 · #1348 · run 20422 · The run-of-show and /kubecon follow rounds#172's deck: the desk slides in Challenge 3, a bottom-line slide, the 2026 OWASP edition, and the close without the finale
+
+**What changed in the deck.** rounds-agenticburn#172 reached rounds main as `4627d95` from Michael's rehearsal of
+2026-11-11; `https://rounds.agenticburn.com/attendee.html` serves it, 127 slides. Old `#/8`, "BurritoBot has a support
+desk.", is now Challenge 3's `#/44`, after "AI guardrails"; `#/45` is new, "You've got access to a support desk."; old
+`#/45` is `#/46` without "Remember BurritoBot's support desk?"; `#/67` is new, "Bottom line: an AI guardrail classified
+the ticket as malicious and blocked it."; `#/102`'s note now keeps get_weather on the gateway's list; the deck uses
+the OWASP GenAI LLM Top 10 2026 (`#/12` links it, `#/73` is "LLM04: Supply Chain", `#/118` is the list); the
+CNCF-floor slide and "We couldn't show everything in 30 minutes.", "Now break it." and "Nothing crashed..." are gone,
+so the close ends take-home (`#/124`, five QR codes), speakers (`#/125`), "Thank you" (`#/126`). Mapped by diffing
+every slide's face and notes at rounds `8f53ce2` against `4627d95`: old 9 to 44 moved down one, old 45 to 65 up one,
+old 66 to 121 up two.
+
+**The run-of-show and /kubecon.** Segments 1 to 3 cite slides from 1, so every number from 10 up is one lower; the
+opening loses its support-desk step, and its hand-off is the BurritoBot slide's last line. Segment 4 runs `#/42` to
+`#/67` with steps for `#/44`, `#/45` and `#/67`, segment 5 `#/68` to `#/117`, segment 6 `#/118` to `#/126`. Excessive
+Agency is LLM03 and Supply Chain LLM04 wherever the two files name them, and the close's list is the 2026 one, Unbounded
+Consumption now further reading. The 2026 numbering was read from GenAI-Security-Project/GenAI-LLM-Top10's
+`2026/final` file names, which match the deck's `#/118` row for row. The Kubernetes Top 10 is still 2025's. Segments 1
+to 3 were checked by hand: 57 quoted slide lines sit on the slide the text cites, and the 19 a script flagged were
+words between quotes or quotes from no slide (section names, link text), each read.
+
+**The finale.** Segment 6 runs no `finale-cap-on`, `cost-watch` or `finale-cap-off` step and says so, on both pages;
+the Challenge-cut table marks denial-of-wallet cut, and `docs/KUBECON-ABSTRACT-READINESS.md`'s spend note says the
+talk no longer shows spend control. **The three switches stay in the terminal**: `entrypoint.sh` is untouched,
+`test_finale_cap.py` and `test_finale_cap_peer.py` still drive them against the pinned guard-proxy, and the first now
+also holds that the close runs none of them. The Night Before probe (`verify/kubecon_probe.py`) and its tests had no
+finale expectation to remove: they read `COST_CAP_USD`, which stays $25. The segment titles in the fallback
+`assets.yaml` and screenshots `deck.html` say "the take-home". Timings were left as they are.
+
+**Tests.** `verify/test_ros_deck_live.py` printed "The run-of-show and /kubecon follow the 127-slide deck rounds
+serves (#1270)." against the live deck, its anchors moved to segment 4 starting `#/42` and the close at `#/118` to
+`#/126`. The offline tests holding the old numbers follow the new deck: `test_ros_seg4_flow.py` (its deck copy now
+`4627d95`'s, with the new beats and `#/102`'s note), `test_kubecon_seg4_flow.py`, `test_ros_seed_step_links.py` and
+`test_stage_seed_links.py` (the four Datadog links are `#/11`, `#/26`, `#/50` and `#/72`), `test_instructor_brief.py`,
+`test_ros_seg3_switch_step.py`, `test_ros_segments_table_seg3.py`, `test_seg3_timing.py`, `test_c3_fallback.py`,
+`test_fleet_routes_roster.sh`, `test_kubecon_probe.py`, `test_mcp_vetting_handout.py`, `test_finale_cap.py` and
+`test_finale_cap_peer.py`; each passes, as does every other test that names either file. Seven of them failed on the
+base too, only because the guard-proxy submodule was not checked out in this worktree; with it, they pass.
+
+**Live check.** On watch-it-burn-private and watch-it-burn-community, `kubectl -n agent exec deploy/web-terminal`
+found `finale-cap-on`, `finale-cap-off` and `cost-watch` executable in the terminal's home. On the private cluster,
+`https://burritobot-private.burritobot.co/kubecon` answered 200 with the base commit's `kubecon.html` byte for byte,
+"Now break it" still in it. Nothing was changed on either cluster.
+
+**Not yet run on a cluster.** The new `/kubecon` reaches the private cluster only after hecaton promotes this change
+and Argo CD syncs it; the next run on the issue fetches `https://burritobot-private.burritobot.co/kubecon` and finds
+"the take-home" in segment 6's heading and no "Now break it".

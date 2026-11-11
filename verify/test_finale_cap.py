@@ -1,7 +1,9 @@
 # ABOUTME: Drives the terminal's finale commands (#690) against the real guard-proxy: finale-cap-on lowers the cluster
 # ABOUTME: cap to spend plus headroom, the room is then refused, finale-cap-off restores COST_CAP_USD, cost-watch shows it.
-"""The KubeCon close invites the room to drive the public cluster's spend to its cap. COST_CAP_USD is $25, so
-finale-cap-on lowers the cap live through guard-proxy's /toggle?cost_cap=N (guard-proxy-agenticburn#23).
+"""The KubeCon close invited the room to drive the public cluster's spend to its cap (#690). COST_CAP_USD is $25, so
+finale-cap-on lowers the cap live through guard-proxy's /toggle?cost_cap=N (guard-proxy-agenticburn#23). Michael cut
+that finale at the rehearsal of 2026-11-11 (rounds-agenticburn#172, #1348): the switches stay in the terminal and are
+driven here as before, and the run-of-show's and /kubecon's close no longer run them.
 
 Here the pinned proxy.py serves on localhost with COST_CAP_USD=25, and the terminal's own heredocs
 (gitops/ai-layer/web-terminal/entrypoint.sh) run against a kubectl on PATH that runs each `exec ... python3 -c`
@@ -166,32 +168,49 @@ with tempfile.TemporaryDirectory() as tmp:
           and len(calls.read_text().splitlines()) == n, r.stdout)
     check("the cap is still $25", cost()["cap_usd"] == 25.0)
 
-print("== the close tells the presenters the finale ==")
+print("== the close no longer runs the finale, and says the switches stay (#1348) ==")
 ros = (REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text(encoding="utf-8")
-# Since rounds-agenticburn#170 the close and the take-home come before the break-it line, so the finale runs to
-# the speakers' close-out (#1327).
-close = ros[ros.index("- **Break it (the last minutes, #690):**"):ros.index("- **Close out (both):**")]
-check("the run-of-show's close runs finale-cap-on, shows cost-watch and ends with finale-cap-off",
-      all(f"`{c}" in close for c in ("finale-cap-on", "cost-watch", "finale-cap-off")))
-check("it says what the room sees when the cap trips, guard-proxy's own reply, and that Reset does not help "
-      "(guard-proxy-agenticburn#25)",
-      "CAP HIT" in close and '"The kitchen is closed: this cluster hit\n    its $X spend cap' in close
-      and "Reset does not help" in close and "guard-proxy-agenticburn#25" in close and "Press Reset" not in close)
-check("it carries the 2026-10-30 measurement, labeled, and the estimate as an estimate",
-      "Measured 2026-10-30 on attackme" in close and "an estimate" in close)
-check("it no longer says the cap is not built", "not built yet" not in close)
+SEG6, AFTER = "### Segment 6:", "## Abstract points to segments"
+for lit in (SEG6, AFTER):
+    if lit not in ros:
+        sys.exit(f"ANCHOR MISSING: {lit!r} is not in facilitation/kubecon-na-2026-run-of-show.md; this test cuts on it")
+seg6 = " ".join(ros.split(SEG6, 1)[1].split(AFTER, 1)[0].split())
+STAY = ("`finale-cap-on`, `cost-watch` or `finale-cap-off`. Those three stay in the private terminal, unused in the "
+        "talk")
+
+
+def ros_close_ok(seg: str) -> bool:
+    return ("Now break it" not in seg.replace('cut "Now break it"', "") and "**Break it" not in seg
+            and "run `finale-cap-on`" not in seg and "Afterwards run `finale-cap-off`" not in seg and STAY in seg)
+
+
+check("the run-of-show's segment 6 has no break-it step and runs no finale command, and says the three stay in the "
+      "private terminal", ros_close_ok(seg6))
+check("self-check: the old break-it step put back fails it",
+      not ros_close_ok(seg6 + " - **Break it (the last minutes, #690):** run `finale-cap-on`"))
 kc = (REPO / "gitops/ai-layer/web/kubecon.html").read_text(encoding="utf-8")
-kclose = kc[kc.index("<b>Break it (the last minutes, #690):</b>"):]
-kclose = kclose[:kclose.index("</div>")]
-check("/kubecon's close names the same three commands",
-      all(f"<code>{c}</code>" in kclose for c in ("finale-cap-on", "cost-watch", "finale-cap-off"))
-      and "not built yet" not in kclose)
-check("/kubecon quotes the same capped reply and does not tell the phones to press Reset",
-      '"The kitchen is closed: this cluster\n    hit its $X spend cap"' in kclose and "press Reset" not in kclose)
+KSEG6 = '<span class="n">SEGMENT 6'
+if KSEG6 not in kc:
+    sys.exit(f"ANCHOR MISSING: {KSEG6!r} is not in gitops/ai-layer/web/kubecon.html; this test cuts on it")
+kseg6 = " ".join(kc.split(KSEG6, 1)[1].split("</section>", 1)[0].split())
+KSTAY = ("nobody runs <code>finale-cap-on</code>, <code>cost-watch</code> or <code>finale-cap-off</code> in the talk. "
+         "They stay in the private terminal")
+
+
+def page_close_ok(seg: str) -> bool:
+    return "Now break it" not in seg and "<b>Break it" not in seg and "You have our permission." not in seg and KSTAY in seg
+
+
+check("/kubecon's segment 6 has no break-it step and says the three stay in the private terminal",
+      page_close_ok(kseg6))
+check("self-check: /kubecon's old break-it control put back fails it",
+      not page_close_ok(kseg6 + ' <div class="control"><b>Break it (the last minutes, #690):</b>'))
+check("the switches themselves are still in the terminal",
+      all(f'cat > "$HOME/{c}"' in ENTRYPOINT for c in ("finale-cap-on", "finale-cap-off", "cost-watch")))
 
 srv.shutdown()
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")
     sys.exit(1)
-print("The finale cap lowers, trips, shows and restores as the close needs.")
+print("The finale cap lowers, trips, shows and restores, and the close no longer runs it (#1348).")

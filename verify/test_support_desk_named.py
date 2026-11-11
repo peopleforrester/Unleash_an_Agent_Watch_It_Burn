@@ -57,8 +57,8 @@ check(f"segment 4 says the admin bot reads the same desk, `{private}`",
 check(f"segment 4 names the one desk and the one deployments page, `{sd.DEPLOYMENTS}`, for both clusters",
       f"Both clusters' bots read the one support desk, `{community}`, and deploy to the one deployments page, "
       f"`{sd.DEPLOYMENTS}`," in SEG)
-check(f"#/48's deploy opens the one deployments page, `https://{sd.DEPLOYMENTS}`",
-      f"\"deploy\" opens the same deployments page as on `#/47`, `https://{sd.DEPLOYMENTS}`, the one both bots "
+check(f"#/49's deploy opens the one deployments page, `https://{sd.DEPLOYMENTS}`",
+      f"\"deploy\" opens the same deployments page as on `#/48`, `https://{sd.DEPLOYMENTS}`, the one both bots "
       "deploy to" in SEG)
 named_private = [h for h in sd.PRIVATE_DESK_HOSTS if h in SEG]
 check("segment 4 names neither of the admin cluster's own desk hosts", not named_private, str(named_private))
