@@ -53794,3 +53794,30 @@ the next run on the issue runs guard-output-off/on, guard-budget-off/on and guar
 terminal's own home and reads its first block as `watch-it-burn-private (this cluster)` from the Deployment's
 `WIB_CLUSTER_NAME`. The closing read after the Kubernetes switches (guardrails-on/off, guard-agency, guard-mcp,
 guards-on/off), with its 6 s wait, was run offline only; the live check above changed guard-proxy guards alone.
+
+## 2026-11-11 · #1349 · run 20432 · Run 20421's tests gate failure: the guardrails record in the fetch inventory, and the lone-cluster topic test's stub kubectl
+
+**Why run 20421 failed.** The tests gate ran the whole offline suite (the change touched `verify/scope-map.yaml`) and
+two tests failed. `test_fetch_inventory.py`: the rewritten `verify/fixtures/guardrails-switch-golden.json` now holds
+the closing `/controls` read's exec, `urllib.request ... localhost:8080/controls`, and the `$ kubectl` lines around it,
+12 lines in all. The fetch inventory had no entry for that file. They are recorded output that runs nothing, so the
+file's entry in `verify/fetch-inventory.yaml` classes them `none`. `test_topic_guard_proxy.py` runs guard-topic-on and
+guard-topic-off against a real guard-proxy as the 2-hour lab's lone cluster. Its stub kubectl answered only
+`exec deploy/guard-proxy` and refused the guardrails-peer reads `_both` now makes first, so `_both` read the Secret as
+unreadable and both switches failed. The stub now answers those reads as a cluster with no Secret
+(NotFound, and nothing for `--ignore-not-found`). A new check holds that on that cluster guard-topic-on switches it
+alone and its `/controls` read shows on-topic ON. Run 20421 missed both because it chose which other tests to run by
+searching for the path `web-terminal/entrypoint.sh`, which this test builds in two pieces; the fixture's inventory
+entry was never searched for.
+
+**Tests run**, each once and passing: `test_fetch_inventory.py`, `test_topic_guard_proxy.py`, and every other offline
+test that names the entrypoint, `.guardlib`, the golden record or the changed switches and that run 20421 had not run:
+`test_c7_badge_grants`, `test_c7_control_comments`, `test_coc_admission`, `test_console_no_toggle`, `test_finale_cap`,
+`test_manifest_contract`, `test_recipe_block_coverage`, `test_room_reader_rbac`, `test_service_links`,
+`test_stage_switch_check`, `test_student_aws_creds_namespace`, `test_terminal_kubeconfig`, `test_two_domains`,
+`test_backstage_catalog`, `test_trace_walkthrough_view`, `test_room_view`, `test_falco_badge_measured`,
+`test_kyverno_profile_policies`, `test_datadog_sandbox_names` and `test_lab_events`. `scope_tests.py check` reports 0
+problems. The full scoped suites, the tools tier among them, are left to validation.
+
+**Live check.** None this run: it touched only files under `verify/` and decisions.md, which no cluster runs. Run
+20421's live check of the six switches, and its Not yet run items, stand.

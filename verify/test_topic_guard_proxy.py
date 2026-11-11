@@ -205,6 +205,12 @@ for name in (".guardlib", "guard-topic-on", "guard-topic-off"):
 (work / "bin/kubectl").write_text(f"""#!{sys.executable}
 import subprocess, sys
 a = sys.argv[1:]
+# guard-topic-on and guard-topic-off go through _both since #1349, which first reads guardrails-switch/guardrails-peer.
+# This is the 2-hour lab's lone cluster: no such Secret, so NotFound, and nothing for --ignore-not-found.
+if a[:5] == ["-n", "guardrails-switch", "get", "secret", "guardrails-peer"]:
+    if "--ignore-not-found" in a:
+        sys.exit(0)
+    sys.exit('Error from server (NotFound): secrets "guardrails-peer" not found')
 if a[:4] != ["-n", "agent", "exec", "deploy/guard-proxy"] or a[4:7] != ["--", "python3", "-c"]:
     sys.exit("stub kubectl: only exec deploy/guard-proxy -- python3 -c is answered here: " + " ".join(a))
 sys.exit(subprocess.call([sys.executable, "-c", a[7].replace("http://localhost:8080", {PROXY!r})]))
@@ -228,6 +234,9 @@ print("== guard-topic-on flips the proxy's guard ==")
 on = helper("guard-topic-on")
 check("guard-topic-on succeeds against this proxy", on.returncode == 0, on.stdout + on.stderr)
 check("and says the on-topic guard is on", "On-topic guard ON" in on.stdout, on.stdout)
+check("on this lone cluster it switches here alone, then reads this guard-proxy's /controls back with on-topic ON",
+      "Switched on this cluster alone" in on.stdout and "Read back from guard-proxy's /controls" in on.stdout
+      and "ON: " in on.stdout and "on-topic" in on.stdout.split("Read back", 1)[-1].split("off:", 1)[0], on.stdout)
 check("the proxy now reports the on-topic guard on", guards().get("topic") is True, json.dumps(guards()))
 
 print("== /chat refuses every off-topic ask, before the model ==")

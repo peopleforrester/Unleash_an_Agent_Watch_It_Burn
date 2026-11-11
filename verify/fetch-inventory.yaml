@@ -641,6 +641,12 @@ sites:
     class: live
     kind: lab-endpoint
     target: the lab's public endpoint (https://<host>/chat, /cost, /controls and the pages) on a workshop cluster
+  verify/fixtures/guardrails-switch-golden.json:
+  - match: .
+    lines: 12
+    class: none
+    why: 'recorded output of guardrails-on and guardrails-off, held by verify/test_guard_switch_both.py: the kubectl calls
+      and printed `$` lines of the closing /controls read (#1349), stored as JSON strings; nothing here runs them'
   verify/gateway_forward.py:
   - match: urlopen
     lines: 1
