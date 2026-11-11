@@ -53821,3 +53821,63 @@ problems. The full scoped suites, the tools tier among them, are left to validat
 
 **Live check.** None this run: it touched only files under `verify/` and decisions.md, which no cluster runs. Run
 20421's live check of the six switches, and its Not yet run items, stand.
+
+## 2026-11-11 · #1357 · run 20436 · The guard switches run from the deployed private terminal: both clusters, the closing read by name, the cache wait
+
+**What ran.** #1349's Not yet run item, on the deployed copy. Both clusters' Argo CD Applications (lab-bootstrap,
+ai-layer, workshop-agent, guardrails-switch) were Synced and Healthy at staging 1b0d0974, which holds #1349 and its gate
+fix. watch-it-burn-private's web-terminal had rolled to `web-terminal-6fcf997796-x4tvx`, its Deployment takes
+`WIB_CLUSTER_NAME` from cluster-identity's `cluster-name`, and the pod's env read `WIB_CLUSTER_NAME=watch-it-burn-private`.
+Its `/entrypoint.sh` had the same SHA-256 as `gitops/ai-layer/web-terminal/entrypoint.sh` (c4a74320...), so the
+`/home/student` switches are the committed ones. Each switch ran through `kubectl exec` into that pod as `student`, in
+its own home after `. ~/.bashrc`, as the ttyd shell starts: guard-output-on, guard-output-off, guard-budget-on,
+guard-budget-off, guard-topic-on, guard-topic-off, guard-agency-on, guard-agency-off. Each was run on first and then
+off, so each ends where the clusters were found. No file changed; this entry is the change.
+
+**As found.** On both clusters guard-proxy's `/controls` `ai` read every guard false (output, input_blocklist,
+input_classifier, budget, topic), `infra` read `rbac_scoped` true and `agency_scoped` false, `falco` true on the
+private cluster and false on the community one. agent-sa's Role `workshop-agent` in `agent` held the c5 scoped rules
+(create, get, list and patch on Deployments, Pods, ConfigMaps and Services; get on the one Secret `workshop-agent`), so
+guard-agency-off, which applies c5-scoped-role.yaml, puts back what was there.
+
+**What each printed.** All eight exited 0. Each read the guardrails-peer Secret, printed the kubectl it ran on this
+cluster (the exec into deploy/guard-proxy, or `kubectl apply -f` for guard-agency) and on the peer (`--kubeconfig
+/home/student/.kube/peer --context watch-it-burn-community`, the Service proxy on guard-proxy:8080 or the apply), said
+`Switched on both clusters: this one and watch-it-burn-community.`, and ended with the read. guard-output-on's read:
+
+    Read back from guard-proxy's /controls, what each chat page's badges show:
+      watch-it-burn-private (this cluster), burritobot-private.agenticburn.com
+        AI guards   ON: output   off: input block-list, injection classifier, budget cap, on-topic
+        Kubernetes  ON: Falco, RBAC scope   off: NetworkPolicy, Kyverno, KubeArmor, tool allow-list, least privilege
+      watch-it-burn-community, attackme.agenticburn.com
+        AI guards   ON: output   off: input block-list, injection classifier, budget cap, on-topic
+        Kubernetes  ON: RBAC scope   off: NetworkPolicy, Kyverno, KubeArmor, Falco, tool allow-list, least privilege
+
+guard-budget-on read `AI guards ON: budget cap` on both, and guard-topic-on `AI guards ON: on-topic` on both (its
+`_topic` step read the topic key back as True on each). Each -off read `AI guards ON: none` with the key under off on
+both. None of the six printed the cache wait line, since they set guard-proxy's own guards. guard-agency-on:
+
+    Switched on both clusters: this one and watch-it-burn-community.
+    🛡️  Least privilege ON for the support ticket. ...
+    Waiting out guard-proxy's 5-second cache of the Kubernetes controls, so the read shows them as they are now.
+    Read back from guard-proxy's /controls, what each chat page's badges show:
+      watch-it-burn-private (this cluster), burritobot-private.agenticburn.com
+        AI guards   ON: none   off: output, input block-list, injection classifier, budget cap, on-topic
+        Kubernetes  ON: Falco, RBAC scope, least privilege   off: NetworkPolicy, Kyverno, KubeArmor, tool allow-list
+      watch-it-burn-community, attackme.agenticburn.com
+        AI guards   ON: none   off: output, input block-list, injection classifier, budget cap, on-topic
+        Kubernetes  ON: RBAC scope, least privilege   off: NetworkPolicy, Kyverno, KubeArmor, Falco, tool allow-list
+
+guard-agency-off printed the same wait line, then least privilege under off on both and the rest unchanged. So the
+deployed `WIB_CLUSTER_NAME` names this cluster's block, and the 6-second wait after a Kubernetes write gives a read
+that shows the Role as just applied on both clusters.
+
+**Left as found.** Afterwards both clusters' `/controls` JSON equalled the as-found JSON, and the `workshop-agent`
+Role's rules and labels equalled it. `kubectl apply` had added a `kubectl.kubernetes.io/last-applied-configuration`
+annotation to the Role on both clusters, which the as-found Role did not carry; it was removed with `kubectl annotate
+role workshop-agent kubectl.kubernetes.io/last-applied-configuration-` on each, after which the annotations matched
+too. The workshop-agent Application stayed Synced and Healthy on both. A presenter's guard-agency-on/off leaves that
+annotation behind on every run, which is harmless: Argo CD ignores the Role's rules and the next apply overwrites it.
+
+**Tests.** None changed, so none run; this entry is the only change, and the prose gate was run on it. The scoped
+offline tests that read decisions.md are left to validation.
