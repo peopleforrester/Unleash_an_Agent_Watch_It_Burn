@@ -65,12 +65,12 @@ def _cel_raw(regex: str) -> str:
 
 
 _OTTL = (f'replace_all_patterns({coc_mask_cases.CACHE}, "value", "', f'", "{coc_mask_cases.REPLACEMENT}")')
-_OTTL_INDENT = " " * 12  # the statements' indentation in values.yaml
+_OTTL_INDENT = " " * 14  # the statements' indentation in the coc-mask ConfigMap's block scalar (#1332)
 _OTTL_FIRST = "'" + _OTTL[0]
 
 
 def _ottl_block(patterns: str) -> str:
-    """The collector's patterns (coc_mask_cases.collector_patterns(), one a line) as values.yaml writes them in
+    """The collector's patterns (coc_mask_cases.collector_patterns(), one a line) as the coc-mask ConfigMap writes them in
     transform/coc_mask's span statements: each pattern's replace_all_patterns statement, then the same with
     coc_mask_cases.SECOND_PASS, so the collector applies each twice before the next; the span-event context aliases
     the whole list."""
@@ -96,9 +96,9 @@ SITES = (
          "- name: floor",
          re.compile(r"^(?P<i> +)- name: floor\n(?P=i)  expression: \|-\n(?P=i)    r'(?P<w>[^'\n]+)'$", re.M),
          _cel_raw, lambda written: written, ("test_coc_admission",), floor.name_pattern),
-    Site("gitops/otel-collector/values.yaml",
-         "transform/coc_mask's replace_all_patterns statements, OTTL strings in collector config ($$ for $, \\\\ for "
-         "\\), two a pattern",
+    Site("gitops/otel-collector/coc-mask/configmap.yaml",
+         "transform/coc_mask's replace_all_patterns statements, OTTL strings in the collector config file the "
+         "otel-collector-coc-mask ConfigMap holds ($$ for $, \\\\ for \\), two a pattern",
          "- " + _OTTL_FIRST,
          re.compile(r"^(?P<i> +)- (?P<w>" + re.escape(_OTTL_FIRST) + r"[^\n]*'(?:\n(?P=i)- " + re.escape(_OTTL_FIRST)
                     + r"[^\n]*')*)$", re.M),
@@ -270,6 +270,42 @@ def regenerate(files: dict[str, str], sites: tuple[Site, ...] = SITES) -> dict[s
     return out
 
 
+# The collector reads its config only as it starts, and the coc-mask ConfigMap is another source's than the chart's, so
+# Helm cannot hash it: values.yaml carries its SHA-256 as a pod annotation, and a new one rolls the DaemonSet (#1332).
+CHECKSUM_PATH = "gitops/otel-collector/values.yaml"
+CHECKSUM_LINE = re.compile(r"^(  checksum/coc-mask: )(\S*)$", re.M)
+COC_MASK_MANIFEST = "gitops/otel-collector/coc-mask/configmap.yaml"
+COC_MASK_KEY = "coc-mask.yaml"
+
+
+def coc_mask_checksum(files: dict[str, str]) -> str:
+    """The SHA-256 of the file the coc-mask ConfigMap holds, as the collector reads it."""
+    import hashlib
+
+    import yaml
+    data = yaml.safe_load(files[COC_MASK_MANIFEST])["data"][COC_MASK_KEY]
+    return hashlib.sha256(data.encode("utf-8")).hexdigest()
+
+
+def checksum_problems(files: dict[str, str]) -> list[str]:
+    """values.yaml's checksum/coc-mask annotation missing, or not the SHA-256 of the ConfigMap's file."""
+    found = CHECKSUM_LINE.findall(files.get(CHECKSUM_PATH, ""))
+    want = coc_mask_checksum(files)
+    if len(found) != 1:
+        return [f"{CHECKSUM_PATH}: {len(found)} checksum/coc-mask pod annotations where one is expected"]
+    if found[0][1] != want:
+        return [f"{CHECKSUM_PATH}: checksum/coc-mask is {found[0][1]!r}, not {want}, the SHA-256 of {COC_MASK_MANIFEST}'s "
+                f"{COC_MASK_KEY}, so the collector would keep running the old statements"]
+    return []
+
+
+def rechecksum(files: dict[str, str]) -> dict[str, str]:
+    """values.yaml with checksum/coc-mask set to the ConfigMap's file's SHA-256, if that changes it."""
+    text = files[CHECKSUM_PATH]
+    new = CHECKSUM_LINE.sub(lambda m: m.group(1) + coc_mask_checksum(files), text)
+    return {CHECKSUM_PATH: new} if new != text else {}
+
+
 def main(argv: list[str]) -> int:
     if argv not in ([], ["write"]):
         print(__doc__)
@@ -279,8 +315,11 @@ def main(argv: list[str]) -> int:
         for path, text in regenerate(gitops_files()).items():
             paths[path].write_text(text, encoding="utf-8")
             print(f"rewrote the copy in {path}")
+        for path, text in rechecksum(gitops_files()).items():
+            paths[path].write_text(text, encoding="utf-8")
+            print(f"rewrote checksum/coc-mask in {path}")
     copies, problems = scan(gitops_files())
-    problems += stale(copies)
+    problems += stale(copies) + checksum_problems(gitops_files())
     for c in copies:
         print(f"{c.site.path}: {c.site.what}, {c.site.form}, {len(c.decoded)} characters")
     for p in problems:

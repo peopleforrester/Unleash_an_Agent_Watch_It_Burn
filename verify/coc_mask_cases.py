@@ -2,8 +2,8 @@
 # ABOUTME: decoding back to the RE2 pattern, and the texts it must mask and leave alone, for the offline and tier tests.
 """One source for both halves of the mask's tests.
 
-transform/coc_mask in gitops/otel-collector/values.yaml runs replace_all_patterns with the spike's term floor in its
-RE2 form, cut into short patterns (docs/research/2026-11-09-coc-floor/floor.py's portable_patterns(), #1328): the
+transform/coc_mask in gitops/otel-collector/coc-mask/configmap.yaml (#1332) runs replace_all_patterns with the
+spike's term floor in its RE2 form, cut into short patterns (docs/research/2026-11-09-coc-floor/floor.py's portable_patterns(), #1328): the
 collector parses an OTTL string in time that grows with the square of its length, and portable_pattern() whole cost
 about 46 s of CPU at every start. Each pattern is written into the collector config through three layers of escaping,
 undone here in the reverse order a cluster applies them:
@@ -13,7 +13,7 @@ undone here in the reverse order a cluster applies them:
   OTTL       the pattern is a double-quoted string literal, where `\\\\` is one backslash
   RE2        what Go's regexp compiles
 
-The copies registry's `write` (coc_pattern_copies) writes the statements into values.yaml after the list changes, and
+The copies registry's `write` (coc_pattern_copies) writes the statements into that ConfigMap after the list changes, and
 test_collector_coc_mask.py fails until the config and statements() agree. Run as a script, this prints them.
 
 test_collector_coc_mask.py checks the statements and their placement offline and applies the decoded patterns with
