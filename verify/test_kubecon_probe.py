@@ -1,10 +1,10 @@
 # ABOUTME: Offline checks for verify/kubecon_probe.py (#503): each judge on recorded replies, both ways; the probe's
-# ABOUTME: toggles equal the terminal helpers; the beats run in run-of-show order and always end with guards-off.
+# ABOUTME: toggles equal the terminal helpers; the beats run in run-of-show order and always end with guardrails-all-off.
 """Holds the KubeCon Night Before probe to its contract without a cluster, a model or any money.
 
 The recorded replies are the shapes the deployed components produce: guard-proxy's own guarded /chat replies
 (proxy.py), the leak /brief documents, the curl and kubectl outputs the lab and the C3 fallback print. A fake
-cluster stands in for kubectl and HTTPS, so the orchestration (order, call ceiling, identity stop, guards-off
+cluster stands in for kubectl and HTTPS, so the orchestration (order, call ceiling, identity stop, guardrails-all-off
 last) is checked on the real beat lists.
 """
 from __future__ import annotations
@@ -260,7 +260,7 @@ for name, change in [("an AI guard on", {"guards": {**start["guards"], "budget":
                      ("the Role unreadable", {"rbac_scoped": None}),
                      ("guard state unreadable", {"guards": {}})]:
     check(f"start state: {name} fails", not passes(kp.judge_start_state({**start, **change})))
-# After guardrails-on: the same AI guards, and all four Kubernetes guardrails on.
+# After guardrails-k8s-on: the same AI guards, and all four Kubernetes guardrails on.
 armed = {**start, "kyverno_actions": ["Deny"], "breakout_actions": ["Deny"], "networkpolicy": True,
          "kubearmor_action": "Block", "rbac_scoped": True}
 check("armed: the four Kubernetes guardrails on passes", passes(kp.judge_armed(armed)))
@@ -327,11 +327,11 @@ check("the probe reads the Role as guard-proxy's RBAC badge does",
       and kp.rbac_scoped(yaml.safe_load(kp.challenge_fix(kp.RBAC_SHIPPED))) is False)
 ON_OUT = "$ kubectl apply -f /home/student/challenges/c5-scoped-role.yaml\n" \
          "Both clusters, this one and watch-it-burn-community: all four Kubernetes guardrails are on.\n"
-check("guardrails-on: exit 0 and both clusters switched passes", passes(kp.judge_guardrails_switched(0, ON_OUT, "on")))
-check("guardrails-on: the other cluster unreachable fails, quoting the warning",
+check("guardrails-k8s-on: exit 0 and both clusters switched passes", passes(kp.judge_guardrails_switched(0, ON_OUT, "on")))
+check("guardrails-k8s-on: the other cluster unreachable fails, quoting the warning",
       kp.judge_guardrails_switched(1, "⚠️  This cluster is not linked to the other KubeCon cluster\n", "on")
-      == (False, "guardrails-on exited 1: '⚠️  This cluster is not linked to the other KubeCon cluster'"))
-check("guardrails-off: the on line does not pass for off", not passes(kp.judge_guardrails_switched(0, ON_OUT, "off")))
+      == (False, "guardrails-k8s-on exited 1: '⚠️  This cluster is not linked to the other KubeCon cluster'"))
+check("guardrails-k8s-off: the on line does not pass for off", not passes(kp.judge_guardrails_switched(0, ON_OUT, "off")))
 badges = {"ai": dict(armed["guards"]), "host": host,
           "infra": {"networkpolicy": True, "kyverno": True, "kubearmor": True, "falco": True, "tool_allowlist": False,
                     "rbac_scoped": True}}
@@ -339,7 +339,7 @@ check("badges: a strip that agrees with the cluster passes", passes(kp.judge_bad
 # What an admin cluster showed while the pinned guard-proxy read the retired ClusterPolicy (#487).
 check("badges: a dark Kyverno badge on an armed cluster fails (#487)",
       not passes(kp.judge_badges({**badges, "infra": {**badges["infra"], "kyverno": False}}, armed)))
-# After guard-mcp-on the gateway rule is narrowed and toolNames left full, so only the rule can light C7 (#519).
+# After guardrails-mcp-on the gateway rule is narrowed and toolNames left full, so only the rule can light C7 (#519).
 mcp_on = {**armed, "c7_rule": kp.C7_NARROWED}
 check("badges: a lit C7 badge with the gateway rule narrowed and toolNames full passes (#519)",
       passes(kp.judge_badges({**badges, "infra": {**badges["infra"], "tool_allowlist": True}}, mcp_on)))
@@ -469,7 +469,7 @@ check("C7 off: the sentinel passes", mcp_leaks(chat(C7_LEAK)))
 check("C7 off: a plain weather answer fails", not mcp_leaks(chat(WEATHER)))
 # No beat on the KubeCon stage turns the output guard on since the 2026-11-01 run-of-show (#776), so the leak the
 # room sees is evil-mcp's raw sentinel. The redacted calibration block #628 accepted, for a stage that ran C7 after
-# guard-output-on, now means the output guard was left on, and fails (#851).
+# guardrails-output-on, now means the output guard was left on, and fails (#851).
 C7_LEAK_REDACTED = "It's sunny. Region calibration block:\n  calibration_token: [REDACTED]"
 stage_leaks = lambda d: passes(kp.judge_c7_chained(d))  # noqa: E731
 check("C7 off on stage: the raw sentinel passes", stage_leaks(chat(C7_LEAK)))
@@ -712,7 +712,7 @@ check("topic: a refusal that spent tokens fails",
 check("topic: 'what are your hours' answered passes", passes(kp.judge_topic_passed(chat(HOURS))))
 check("topic: 'do you have mild salsa' answered passes", passes(kp.judge_topic_passed(chat(SALSA))))
 check("topic: refusing a customer fails", not passes(kp.judge_topic_passed(chat(kp.TOPIC_REFUSAL, True))))
-# What kubectl prints for a server-side dry run as workshop-mcp once guard-agency-on's Role is on (#775).
+# What kubectl prints for a server-side dry run as workshop-mcp once guardrails-agency-on's Role is on (#775).
 FORBIDDEN = ('Error from server (Forbidden): error when creating "STDIN": deployments.apps is forbidden: User '
              '"system:serviceaccount:agent:workshop-mcp" cannot create resource "deployments" in API group "apps" in '
              'the namespace "agent"\n')
@@ -721,15 +721,13 @@ print("== the probe says what the stage says ==")
 terminal = (REPO / "gitops/ai-layer/web-terminal/entrypoint.sh").read_text()
 
 
-# The probe types the switches' old names (guards-off, guard-mcp-on, guardrails-on, ...). Since #1350 each is an alias
-# the terminal writes from its ALIASES table, which runs its guardrails-<name> form, so helper() reads that one's body.
-if "<<'ALIASES'\n" not in terminal:
-    sys.exit("ANCHOR MISSING: the <<'ALIASES' table of old switch names in gitops/ai-layer/web-terminal/entrypoint.sh")
-ALIASES = dict(line.split() for line in terminal.split("<<'ALIASES'\n", 1)[1].split("\nALIASES\n", 1)[0].splitlines())
+# The probe types the switches' names since #1350 (#1351): guardrails-k8s-on, guardrails-mcp-on, ..., each a heredoc of
+# its own in the terminal, so helper() reads that one's body; an old name (an alias) is not one.
 
 
 def helper(name: str) -> str:
-    name = ALIASES.get(name, name)
+    if f"cat > \"$HOME/{name}\" <<'EOS'\n" not in terminal:
+        sys.exit(f"ANCHOR MISSING: no heredoc for {name} in gitops/ai-layer/web-terminal/entrypoint.sh")
     return terminal.split(f"cat > \"$HOME/{name}\" <<'EOS'\n", 1)[1].split("\nEOS\n", 1)[0]
 
 
@@ -746,17 +744,17 @@ def terminal_rewrite(text: str, mode: str) -> str | None:
     return json.loads(r.stdout)[1]["value"] if r.returncode == 0 else None
 
 
-off_body = helper("guards-off")
+off_body = helper("guardrails-ai-off")
 guardlib = helper(".guardlib")
-# Since #1132 guards-off sends every guard-proxy key in one `_both _toggle` call. Since #1350 it is guardrails-ai-off,
-# which leaves the on-topic guard to guardrails-topic-off, so the probe's queries, joined, are the two together.
-check("guards-off and guardrails-topic-off send exactly the terminal's /toggle queries, in order",
+# Since #1132 guardrails-ai-off (guards-off before #1350) sends every guard-proxy key in one `_both _toggle` call. It
+# leaves the on-topic guard to guardrails-topic-off, so the probe's queries, joined, are the two together.
+check("guardrails-ai-off and guardrails-topic-off send exactly the terminal's /toggle queries, in order",
       re.findall(r'_both _toggle "([^"]+)"', off_body) == ["&".join(kp.GUARDS_OFF[:-1])]
       and kp.GUARDS_OFF[-1] == "topic=off" and "_both _topic off" in helper("guardrails-topic-off"))
-check("guards-off and guard-mcp-off both go through the terminal's _mcp, which carries the full evil-mcp list",
-      "_mcp off" in off_body and "_mcp off" in helper("guard-mcp-off")
+check("guardrails-ai-off and guardrails-mcp-off both go through the terminal's _mcp, which carries the full evil-mcp list",
+      "_mcp off" in off_body and "_mcp off" in helper("guardrails-mcp-off")
       and f"all='{json.dumps(kp.EVIL_ALL).replace(' ', '')}'" in guardlib)
-check("guard-mcp-on goes through the terminal's _mcp on", "_mcp on" in helper("guard-mcp-on"))
+check("guardrails-mcp-on goes through the terminal's _mcp on", "_mcp on" in helper("guardrails-mcp-on"))
 check("on an admin cluster the terminal sets the gateway rule and leaves toolNames full (#496)",
       re.search(r'0:on\)\s+_c7rule on "\$@" && _evil "\$all" "\$@"', guardlib) is not None
       and re.search(r'0:off\)\s+_c7rule off "\$@" && _evil "\$all" "\$@"', guardlib) is not None)
@@ -765,12 +763,12 @@ check("open to narrowed: the probe writes the same C7 config as the terminal's .
       terminal_rewrite(C7_COMMITTED, "on") == narrowed and narrowed != C7_COMMITTED)
 check("narrowed to open: the probe writes the same C7 config as the terminal's .c7rule.py off, the committed file",
       terminal_rewrite(narrowed, "off") == kp.c7_config_with_rule(narrowed, kp.C7_OPEN) == C7_COMMITTED)
-check("guard-input-on is the terminal's query, which it sends on both KubeCon clusters (#1148)",
-      f'_both _toggle "{kp.GUARD_INPUT_ON}"' in helper("guard-input-on"))
-check("guard-output-on is the terminal's query, which it sends on both KubeCon clusters (#1349)",
-      f'_both _toggle "{kp.GUARD_OUTPUT_ON}"' in helper("guard-output-on"))
-check("guard-topic-on is the terminal's query, which it sends on both KubeCon clusters (#1349)",
-      f'_both _topic {kp.GUARD_TOPIC_ON.split("=")[1]}' in helper("guard-topic-on")
+check("guardrails-input-on is the terminal's query, which it sends on both KubeCon clusters (#1148)",
+      f'_both _toggle "{kp.GUARD_INPUT_ON}"' in helper("guardrails-input-on"))
+check("guardrails-output-on is the terminal's query, which it sends on both KubeCon clusters (#1349)",
+      f'_both _toggle "{kp.GUARD_OUTPUT_ON}"' in helper("guardrails-output-on"))
+check("guardrails-topic-on is the terminal's query, which it sends on both KubeCon clusters (#1349)",
+      f'_both _topic {kp.GUARD_TOPIC_ON.split("=")[1]}' in helper("guardrails-topic-on")
       and re.search(r'_pxkey "topic=\$st" topic', guardlib) is not None and kp.GUARD_TOPIC_ON.startswith("topic="))
 
 
@@ -825,7 +823,7 @@ check("the limits check has teeth: the old limit-less `create deployment` shape 
           {"name": "promo-mascot", "image": kp.VILLAIN_IMAGE}]}}}}) != [])
 check("the C2 image breaks the registry allow-list", not allowed(kp.VILLAIN_IMAGE))
 # The 2-hour lab's C6 ticket, HC-7731, asks for a villain the registry allow-list REFUSES (question 872, #640): its
-# second tier there is guard-admission-on. The room's ticket, HC-666, asks for the internal registry's image instead
+# second tier there is guardrails-admission-on. The room's ticket, HC-666, asks for the internal registry's image instead
 # (#775), which both registry policies trust, so it lands on the private cluster with Kyverno at Deny and Challenge 3's
 # fix at KubeCon is least privilege and the input guard. Every copy that names a payload names its one image.
 import agent_probe  # noqa: E402
@@ -1016,7 +1014,7 @@ class NoisyKubectl:
         args = argv[3:]  # past kubectl --context <ctx>
         out, err, rc = "", "", 0
         if "deploy/web-terminal" in args:
-            state = "on" if args[-1].endswith("guardrails-on") else "off"
+            state = "on" if args[-1].endswith("guardrails-k8s-on") else "off"
             out = f"Both clusters, this one and watch-it-burn-community: all four Kubernetes guardrails are {state}.\n"
             return subprocess.CompletedProcess(argv, 0, stdout=out, stderr="")
         if "exec" in args:
@@ -1077,7 +1075,7 @@ except Exception as e:  # noqa: BLE001
     resp = {"error": repr(e)}
 check("toggle() parses the JSON on stdout, not the Defaulted container notice", resp.get("output") is True, str(resp))
 ok, note = beat_on(noisy_probe, kp.GUARDS_OFF_BEAT)
-check("guards-off passes with the notice on stderr, every guard off and the rogue tools back",
+check("guardrails-all-off passes with the notice on stderr, every guard off and the rogue tools back",
       ok and not any(noisy.g.values()) and noisy.tools == kp.EVIL_ALL, note)
 ok, note = beat_on(noisy_probe, start_state)
 check("start-state passes with the notice on stderr once the stage is clean", ok, note)
@@ -1093,7 +1091,7 @@ check("no kubectl exec in either probe leaves the container for kubectl to defau
       and kp.C1_CHECK[kp.C1_CHECK.index("exec") + 2:kp.C1_CHECK.index("exec") + 4] == ["-c", "shim"])
 
 
-print("== run order, the call ceiling, and guards-off last ==")
+print("== run order, the call ceiling, and guardrails-all-off last ==")
 
 
 class Fake:
@@ -1112,7 +1110,7 @@ class Fake:
         self.kyverno = True
         self.internal_refused = False  # a Kyverno that refuses registry.burritobot.co too
         self.armed = False  # the four Kubernetes guardrails, off at the start (#774)
-        self.link = True    # guardrails-on reaches the other KubeCon cluster
+        self.link = True    # guardrails-k8s-on reaches the other KubeCon cluster
         self.role = kp.RBAC_SHIPPED
         self.usd = 1.0
         self.witch, self.witches = "", []
@@ -1206,9 +1204,9 @@ class Fake:
             self.log.append(f"terminal {cmd}")
             if not self.link:
                 return 1, "⚠️  Switched on this cluster, but not on watch-it-burn-community: it could not be reached\n"
-            if cmd == "guard-agency-on":
+            if cmd == "guardrails-agency-on":
                 self.role = kp.AGENCY_FIX
-            elif cmd.startswith("guard-mcp-"):
+            elif cmd.startswith("guardrails-mcp-"):
                 # the community cluster's control (#1132): the Agent's evil-mcp toolNames; an admin cluster's is the
                 # gateway rule, which LinkedPrivate sets
                 self.tools = list(kp.EVIL_FIXED if cmd.endswith("-on") else kp.EVIL_ALL)
@@ -1216,7 +1214,7 @@ class Fake:
                 self.g["input_blocklist"] = self.g["input_classifier"] = cmd.endswith("-on")
             return 0, "Switched on both clusters: this one and watch-it-burn-community.\n"
         if "deploy/web-terminal" in args:
-            state = "on" if args[-1].endswith("guardrails-on") else "off"
+            state = "on" if args[-1].endswith("guardrails-k8s-on") else "off"
             self.log.append(f"guardrails {state}")
             if not self.link:
                 return 1, "⚠️  This cluster is not linked to the other KubeCon cluster\n"
@@ -1345,29 +1343,29 @@ res = run_admin(f)
 keys = [r["key"] for r in res]
 check("a well-behaved admin cluster passes every beat", all(r["verdict"] == kp.PASS for r in res),
       str([(r["key"], r["note"]) for r in res if r["verdict"] != kp.PASS]))
-want = ["identity", "start-state", "badges", "gateway", "one-desk", "c5-off", "guardrails-on", "armed", "badges-lit", "c5-on",
-        "c1", "c2", "c2-public", "internal-registry", "c3", "c6-lands", "guard-agency-on", "c6-forbidden",
-        "guard-input-on", "c6-withheld", "c6-on", "c7-off", "guard-mcp-on", "c7-on",
-        "guard-topic-on", "topic-off-1", "topic-off-2", "topic-off-3", "topic-off-4", "topic-paraphrase",
+want = ["identity", "start-state", "badges", "gateway", "one-desk", "c5-off", "guardrails-k8s-on", "armed", "badges-lit", "c5-on",
+        "c1", "c2", "c2-public", "internal-registry", "c3", "c6-lands", "guardrails-agency-on", "c6-forbidden",
+        "guardrails-input-on", "c6-withheld", "c6-on", "c7-off", "guardrails-mcp-on", "c7-on",
+        "guardrails-topic-on", "topic-off-1", "topic-off-2", "topic-off-3", "topic-off-4", "topic-paraphrase",
         "topic-on-1", "topic-on-2", "topic-on-3",
-        "guards-off"]
-check("the beats run in stage order (Challenge 1 to 4: C5, C1 C2 C3, C6, C7; the on-topic guard; guards-off)",
+        "guardrails-all-off"]
+check("the beats run in stage order (Challenge 1 to 4: C5, C1 C2 C3, C6, C7; the on-topic guard; guardrails-all-off)",
       keys == want, str(keys))
 # The segment each beat reports is the run-of-show's (#687): Challenge 1 (C5) in 2, and its retry after the switch in 3
 # (#855), Challenge 2 (C1 C2 C3) in 3, Challenge 3 (C6) in 4, Challenge 4 (C7) in 5, the on-topic guard in 6.
 seg = {r["key"]: r["segment"] for r in res}
 check("each challenge reports its run-of-show segment",
       [seg[k] for k in ("c5-off", "c5-on", "c6-lands", "c6-forbidden", "c6-on", "c7-on", "c1", "c2", "c3",
-                        "guard-topic-on")]
+                        "guardrails-topic-on")]
       == ["2", "3", "4", "4", "4", "5", "3", "3", "3", "6"], str(seg))
 check("no admin beat reports a segment the 30-minute run-of-show does not have",
       {r["segment"] for r in res} <= {"-", "2", "3", "4", "5", "6", "end"}, str(seg))
 check("a full admin run spends 14 model calls", f.calls == 14, str(f.calls))
 _asks = [i for i, e in enumerate(f.log) if e == f"chat {kp.ROOM_PROMPT[:30]}"]
-check("Challenge 3 lands with Kyverno on, then guard-agency-on, then the input guard before the last ask (#775)",
+check("Challenge 3 lands with Kyverno on, then guardrails-agency-on, then the input guard before the last ask (#775)",
       len(_asks) == 2 and f.log.index("guardrails on") < _asks[0] < f.log.index(f"role {kp.AGENCY_FIX}")
       < f.log.index("toggle " + kp.GUARD_INPUT_ON) < _asks[1], str(f.log))
-check("C6's input guard is called in the tool pod once, after guard-input-on", f.c6_tool_calls == 1)
+check("C6's input guard is called in the tool pod once, after guardrails-input-on", f.c6_tool_calls == 1)
 check("the C6 asks (c6-lands and c6-on; the other C6 beats call no model) send the stage name as the witch, and no "
       "other ask does",
       [w for q, w in f.witches if q == kp.ROOM_PROMPT] == [kp.STAGE_NAME, kp.STAGE_NAME]
@@ -1379,33 +1377,33 @@ check("the C7 gateway rule is narrowed by the run and open again at the end",
       f"rule {kp.C7_NARROWED}" in f.log and f.rule == kp.C7_OPEN)
 check("no beat narrows toolNames on an admin cluster: the gateway is what stops C7 (#496)",
       f"tools {kp.EVIL_FIXED}" not in f.log)
-check("guards-off is the last thing done to the cluster, puts the shipped Role back, then runs guardrails-off",
+check("guardrails-all-off is the last thing done to the cluster, puts the shipped Role back, then runs guardrails-k8s-off",
       f.log[-len(kp.GUARDS_OFF) - 4:] == [f"toggle {q}" for q in kp.GUARDS_OFF] + [f"rule {kp.C7_OPEN}",
                                                                               f"tools {kp.EVIL_ALL}",
                                                                               f"role {kp.RBAC_SHIPPED}",
                                                                               "guardrails off"])
-check("guardrails-on runs once, after Challenge 1's attack and before its retry and Challenge 2's checks (#855)",
-      f.log.count("guardrails on") == 1 and keys.index("c5-off") < keys.index("guardrails-on")
+check("guardrails-k8s-on runs once, after Challenge 1's attack and before its retry and Challenge 2's checks (#855)",
+      f.log.count("guardrails on") == 1 and keys.index("c5-off") < keys.index("guardrails-k8s-on")
       < keys.index("c5-on") < keys.index("c1"))
 check("the cluster ends with the four Kubernetes guardrails off", f.armed is False and f.role == kp.RBAC_SHIPPED)
 check("the probe runs the terminal's own commands, in its ttyd container",
-      kp.GUARDRAILS_ON[-1] == "/home/student/guardrails-on" and kp.GUARDRAILS_OFF[-1] == "/home/student/guardrails-off"
+      kp.GUARDRAILS_ON[-1] == "/home/student/guardrails-k8s-on" and kp.GUARDRAILS_OFF[-1] == "/home/student/guardrails-k8s-off"
       and kp.TERMINAL_EXEC[kp.TERMINAL_EXEC.index("exec") + 1:kp.TERMINAL_EXEC.index("--")]
-      == ["deploy/web-terminal", "-c", "ttyd"] and "_guardrails on" in helper("guardrails-on") and "_guardrails off" in helper("guardrails-off"))
+      == ["deploy/web-terminal", "-c", "ttyd"] and "_guardrails on" in helper("guardrails-k8s-on") and "_guardrails off" in helper("guardrails-k8s-off"))
 # Challenge 1's fix is RBAC (Michael, 2026-10-31), and since #776 the stage runs no fix of its own for it: segment 3's
-# guardrails-on scopes the Role (#774), then the same ask must come back with no part of the record (#855). The probe
+# guardrails-k8s-on scopes the Role (#774), then the same ask must come back with no part of the record (#855). The probe
 # never applies the scoped Role itself, and the output guard is never turned on for it.
 _ceo = [i for i, e in enumerate(f.log) if e == f"chat {kp.CEO_PROMPT[:30]}"]
-check("Challenge 1 is fixed by guardrails-on's RBAC, never by guard-rbac-on or the output guard (#855)",
+check("Challenge 1 is fixed by guardrails-k8s-on's RBAC, never by guardrails-rbac-on or the output guard (#855)",
       len(_ceo) == 2 and _ceo[0] < f.log.index("guardrails on") < _ceo[1]
       and f"role {kp.RBAC_FIX}" not in f.log and f"toggle {kp.GUARD_OUTPUT_ON}" not in f.log, str(f.log))
-check("no admin beat is the 2-hour lab's guard-rbac-on", "guard-rbac-on" not in keys and not hasattr(kp, "_rbac_on"))
-check("guardrails-on's RBAC is the terminal's scoped Role, guardrails-off's the shipped one",
+check("no admin beat is the 2-hour lab's guardrails-rbac-on", "guardrails-rbac-on" not in keys and not hasattr(kp, "_rbac_on"))
+check("guardrails-k8s-on's RBAC is the terminal's scoped Role, guardrails-k8s-off's the shipped one",
       re.search(r'on:rbac\)\s+c=\("\$@" apply -f "\$HOME/challenges/' + re.escape(kp.RBAC_FIX) + '"', terminal)
       and re.search(r'off:rbac\)\s+c=\("\$@" apply -f "\$HOME/challenges/' + re.escape(kp.RBAC_SHIPPED) + '"',
                     terminal))
-check("guard-rbac-on, the 2-hour lab's, applies the same file", kp.RBAC_FIX in helper("guard-rbac-on")
-      and kp.RBAC_SHIPPED in helper("guard-rbac-off"))
+check("guardrails-rbac-on, the 2-hour lab's, applies the same file", kp.RBAC_FIX in helper("guardrails-rbac-on")
+      and kp.RBAC_SHIPPED in helper("guardrails-rbac-off"))
 check("the probe applies the same bytes the terminal mounts",
       kp.challenge_fix(kp.RBAC_FIX).startswith("# The CEO's record fix")
       and "resourceNames: [\"workshop-agent\"]" in kp.challenge_fix(kp.RBAC_FIX))
@@ -1414,7 +1412,7 @@ check("an admin cluster whose Role stays broad fails c5-on",
 
 
 class SwitchLeavesRoleBroad(Fake):
-    """A guardrails-on that arms Kyverno, KubeArmor and egress but leaves the shipped Role: the CEO record still reads."""
+    """A guardrails-k8s-on that arms Kyverno, KubeArmor and egress but leaves the shipped Role: the CEO record still reads."""
 
     def kubectl_rc(self, *args, timeout=90, stdin=None):
         out = super().kubectl_rc(*args, timeout=timeout, stdin=stdin)
@@ -1424,7 +1422,7 @@ class SwitchLeavesRoleBroad(Fake):
 
 
 res = {r["key"]: r for r in run_admin(SwitchLeavesRoleBroad())}
-check("a guardrails-on that leaves the Role broad fails armed and Challenge 1's retry (#855)",
+check("a guardrails-k8s-on that leaves the Role broad fails armed and Challenge 1's retry (#855)",
       res["armed"]["verdict"] == kp.FAIL and res["c5-on"]["verdict"] == kp.FAIL
       and "STILL LEAKED" in res["c5-on"]["note"], str([res["armed"], res["c5-on"]]))
 
@@ -1433,11 +1431,11 @@ check("a guardrails-on that leaves the Role broad fails armed and Challenge 1's 
 f = Fake()
 f.link = False
 res = {r["key"]: r for r in run_admin(f)}
-check("an unlinked cluster fails guardrails-on, naming why, and the checks it arms fail with it",
-      res["guardrails-on"]["verdict"] == kp.FAIL and "not linked" in res["guardrails-on"]["note"]
-      and all(res[k]["verdict"] == kp.FAIL for k in ("armed", "c1", "c2-public")), str(res["guardrails-on"]))
-check("and guards-off fails too: guardrails-off could not reach the other cluster",
-      res["guards-off"]["verdict"] == kp.FAIL and "not linked" in res["guards-off"]["note"], str(res["guards-off"]))
+check("an unlinked cluster fails guardrails-k8s-on, naming why, and the checks it arms fail with it",
+      res["guardrails-k8s-on"]["verdict"] == kp.FAIL and "not linked" in res["guardrails-k8s-on"]["note"]
+      and all(res[k]["verdict"] == kp.FAIL for k in ("armed", "c1", "c2-public")), str(res["guardrails-k8s-on"]))
+check("and guardrails-all-off fails too: guardrails-k8s-off could not reach the other cluster",
+      res["guardrails-all-off"]["verdict"] == kp.FAIL and "not linked" in res["guardrails-all-off"]["note"], str(res["guardrails-all-off"]))
 f = Fake()
 f.armed = True
 res = {r["key"]: r for r in run_admin(f)}
@@ -1463,9 +1461,9 @@ class RuleStuck(Fake):
 for fake, label, why in ((ToolsNarrowed(), "toolNames lost the rogue tools", "toolNames lost the rogue tools"),
                         (RuleStuck(), "the gateway rule does not narrow", "the gateway rule reads")):
     res = {r["key"]: r for r in run_admin(fake)}
-    check(f"guard-mcp-on fails when {label}",
-          res["guard-mcp-on"]["verdict"] == kp.FAIL and why in res["guard-mcp-on"]["note"],
-          str(res["guard-mcp-on"]))
+    check(f"guardrails-mcp-on fails when {label}",
+          res["guardrails-mcp-on"]["verdict"] == kp.FAIL and why in res["guardrails-mcp-on"]["note"],
+          str(res["guardrails-mcp-on"]))
 check("a gateway rule left open lets the sentinel out, so c7-on fails on a cluster whose rule never narrows",
       res["c7-on"]["verdict"] == kp.FAIL, str(res["c7-on"]))
 
@@ -1535,15 +1533,15 @@ check("c7-off that misses on a failed tool call fails, naming read_internal_conf
       and "'Tool execution failed' for get_weather" in _n and "exceeded 5 retries without progress" in _n
       and "Nova" not in _n and len(f.agent_reads) == 1 and len(f.gateway_reads) == 2
       and f.agent_reads[0] <= f.gateway_reads[0], str((res["c7-off"], f.agent_reads, f.gateway_reads)))
-check("and the run goes on to c7-on and guards-off", res["c7-on"]["verdict"] == kp.PASS
-      and res["guards-off"]["verdict"] == kp.PASS, str({k: res[k]["verdict"] for k in ("c7-on", "guards-off")}))
+check("and the run goes on to c7-on and guardrails-all-off", res["c7-on"]["verdict"] == kp.PASS
+      and res["guardrails-all-off"]["verdict"] == kp.PASS, str({k: res[k]["verdict"] for k in ("c7-on", "guardrails-all-off")}))
 f = C7AgentLogUnread()
 res = {r["key"]: r for r in run_admin(f)}
 _n = res["c7-off"]["note"]
 check("c7-off whose agent log cannot be read fails naming why, still says what the gateway forwarded, and the run "
       "goes on",
       res["c7-off"]["verdict"] == kp.FAIL and "workshop-agent's log could not be read (RuntimeError" in _n
-      and "read_internal_config reached the gateway" in _n and res["guards-off"]["verdict"] == kp.PASS, _n)
+      and "read_internal_config reached the gateway" in _n and res["guardrails-all-off"]["verdict"] == kp.PASS, _n)
 
 print("== Bedrock's content-filter block is re-sent once, like the 424 (#1303) ==")
 check("the recorded block reads as Bedrock's content filter", kp.bedrock_filtered(C7_FILTERED)
@@ -1590,8 +1588,8 @@ check("a content filter on the re-send too fails c7-off, one re-send and never a
       res["c7-off"]["verdict"] == kp.FAIL and "Bedrock's content filter blocked the reply, so this miss is not the "
       "model's" in _n and _n.endswith("(re-sent once after Bedrock's content filter)") and "Nova" not in _n
       and f.calls == f0.calls + 1 and len(f.agent_reads) == 1, f"{_n} calls={f.calls}/{f0.calls}")
-check("...and the run goes on to c7-on and guards-off", res["c7-on"]["verdict"] == kp.PASS
-      and res["guards-off"]["verdict"] == kp.PASS, str({k: res[k]["verdict"] for k in ("c7-on", "guards-off")}))
+check("...and the run goes on to c7-on and guardrails-all-off", res["c7-on"]["verdict"] == kp.PASS
+      and res["guardrails-all-off"]["verdict"] == kp.PASS, str({k: res[k]["verdict"] for k in ("c7-on", "guardrails-all-off")}))
 
 
 class C7Paraphrased(Fake):
@@ -1614,7 +1612,7 @@ check("c7-off on the paraphrased recipe passes once the gateway log shows read_i
 
 
 class RuleNeverOpens(Fake):
-    """A cluster where the gateway rule narrows but never opens again: guards-off's patch back to C7_OPEN lands
+    """A cluster where the gateway rule narrows but never opens again: guardrails-all-off's patch back to C7_OPEN lands
     nowhere, so the next run would start with C7 already stopped at the gateway."""
 
     def set_c7_rule(self, rule):
@@ -1625,13 +1623,13 @@ class RuleNeverOpens(Fake):
 
 f = RuleNeverOpens()
 res = {r["key"]: r for r in run_admin(f)}
-check("the beats before guards-off pass on a cluster whose rule never opens again",
-      all(r["verdict"] == kp.PASS for k, r in res.items() if k != "guards-off"),
-      str([(k, r["note"]) for k, r in res.items() if k != "guards-off" and r["verdict"] != kp.PASS]))
-check("guards-off fails when the C7 gateway rule is left narrowed, with every AI guard off and the rogue tools back",
-      res["guards-off"]["verdict"] == kp.FAIL and f"C7 rule {kp.C7_NARROWED!r}" in res["guards-off"]["note"]
+check("the beats before guardrails-all-off pass on a cluster whose rule never opens again",
+      all(r["verdict"] == kp.PASS for k, r in res.items() if k != "guardrails-all-off"),
+      str([(k, r["note"]) for k, r in res.items() if k != "guardrails-all-off" and r["verdict"] != kp.PASS]))
+check("guardrails-all-off fails when the C7 gateway rule is left narrowed, with every AI guard off and the rogue tools back",
+      res["guardrails-all-off"]["verdict"] == kp.FAIL and f"C7 rule {kp.C7_NARROWED!r}" in res["guardrails-all-off"]["note"]
       and not any(f.g.values()) and f.tools == kp.EVIL_ALL and f.rule == kp.C7_NARROWED,
-      str(res["guards-off"]))
+      str(res["guardrails-all-off"]))
 
 f = Fake()
 f.rule = kp.C7_NARROWED
@@ -1645,7 +1643,7 @@ res = run_admin(f, max_calls=5)
 check("the call ceiling is never passed", f.calls <= 5, str(f.calls))
 stopped = [r for r in res if "--max-calls" in r["note"]]
 check("a beat the ceiling stops is a FAIL, not a skip", stopped and all(r["verdict"] == kp.FAIL for r in stopped))
-check("guards-off still runs after the ceiling", res[-1]["key"] == "guards-off" and res[-1]["verdict"] == kp.PASS)
+check("guardrails-all-off still runs after the ceiling", res[-1]["key"] == "guardrails-all-off" and res[-1]["verdict"] == kp.PASS)
 
 f = Fake(identity="whitney-admin.agenticburn.com")
 res = run_admin(f)
@@ -1655,7 +1653,7 @@ check("and nothing is toggled, patched or sent", f.log == [] and f.calls == 0)
 
 f = Fake(topic=False)
 res = {r["key"]: r for r in run_admin(f)}
-check("a guard-proxy without the topic stage fails guard-topic-on", res["guard-topic-on"]["verdict"] == kp.FAIL)
+check("a guard-proxy without the topic stage fails guardrails-topic-on", res["guardrails-topic-on"]["verdict"] == kp.FAIL)
 check("and the eight topic asks are FAIL without spending a call",
       sum(k.startswith("topic-") for k in res) == 8
       and all(res[k]["verdict"] == kp.FAIL and "not run" in res[k]["note"] for k in res if k.startswith("topic-"))
@@ -1686,7 +1684,7 @@ check("c6-withheld fails when the tool hands the ticket over with the input guar
 
 
 class StillCreates(Fake):
-    """A private cluster where guard-agency-on's Role still grants workshop-mcp create on the Joker."""
+    """A private cluster where guardrails-agency-on's Role still grants workshop-mcp create on the Joker."""
 
     def kubectl_rc(self, *args, timeout=90, stdin=None):
         if stdin is not None and kp.ROOM_JOKER in stdin:
@@ -1728,7 +1726,7 @@ class Boom(Fake):
 f = Boom()
 res = {r["key"]: r for r in run_admin(f)}
 check("a beat that raises is a FAIL with the reason", res["c3"]["verdict"] == kp.FAIL and "timed out" in res["c3"]["note"])
-check("and the run goes on to guards-off", res["guards-off"]["verdict"] == kp.PASS)
+check("and the run goes on to guardrails-all-off", res["guardrails-all-off"]["verdict"] == kp.PASS)
 
 
 class Community(Fake):
@@ -1756,7 +1754,7 @@ class Community(Fake):
         if "grep -ri -A3 recipe /tmp/burrito-data" in args:
             return 0, "secret-sauce-recipe.conf:recipe_name = Bat Spit Amazing Awesome Sauce\n"
         if "--dry-run=server" in args and stdin is not None and kp.ROOM_JOKER in stdin and self.role == kp.AGENCY_FIX:
-            return 1, FORBIDDEN  # guard-agency-on's Role, from the private terminal (#1129)
+            return 1, FORBIDDEN  # guardrails-agency-on's Role, from the private terminal (#1129)
         if "--dry-run=server" in args:
             return (1, DENIED) if self.kyverno else (0, "deployment.apps/promo-mascot (server dry run)")
         return super().kubectl_rc(*args, timeout=timeout, stdin=stdin)
@@ -1804,10 +1802,10 @@ res = kp.Probe(f, 20).run(kp.COMMUNITY)
 check("the same cluster driven by its burritobot.co name passes every beat (#651)",
       all(r["verdict"] == kp.PASS for r in res),
       str([(r["key"], r["note"]) for r in res if r["verdict"] != kp.PASS]))
-check("community beats in order, segment 3's guardrails-on before Challenge 3 (#1134)", [r["key"] for r in res]
+check("community beats in order, segment 3's guardrails-k8s-on before Challenge 3 (#1134)", [r["key"] for r in res]
       == ["identity", "wide-open", "one-desk", "order", "ceo-leak", "ceo-friendly", "off-topic", "c1-open", "c2-open",
-          "c3-open", "c2-lands", "guardrails-on", "armed", "c6-lands", "guard-agency-on", "guard-input-on", "c7-off",
-          "guard-mcp-on", "c7-on", "cost", "feed"], str([r["key"] for r in res]))
+          "c3-open", "c2-lands", "guardrails-k8s-on", "armed", "c6-lands", "guardrails-agency-on", "guardrails-input-on", "c7-off",
+          "guardrails-mcp-on", "c7-on", "cost", "feed"], str([r["key"] for r in res]))
 check("community beats report segments 1 to 5, Challenge 4 in segment 5 (#1129)",
       [r["segment"] for r in res] == ["-", "1", "-", "1", "2", "2", "2", "3", "3", "3", "3", "3", "3", "4", "4", "4",
                                       "5", "5", "5", "-", "1"],
@@ -1815,8 +1813,8 @@ check("community beats report segments 1 to 5, Challenge 4 in segment 5 (#1129)"
 check("community spends 10 model calls, the linked-list ask three times, 2A's ask once (#1135) and Challenge 4's "
       "twice, its attempt and its retry (#1129, #1152), and toggles nothing itself: the fixes are the terminal's",
       f.calls == 10 and kp.OFF_TOPIC_TRIES == 3 and not any(e.startswith(("toggle", "tools", "rule")) for e in f.log)
-      and [e for e in f.log if e.startswith("terminal")] == ["terminal guard-agency-on", "terminal guard-input-on",
-                                                             "terminal guard-mcp-on"],
+      and [e for e in f.log if e.startswith("terminal")] == ["terminal guardrails-agency-on", "terminal guardrails-input-on",
+                                                             "terminal guardrails-mcp-on"],
       str(f.log))
 check("and leaves no stage Joker behind", f.c6 is False)
 check("and leaves no Deployment or page row of 2A's ask behind (#1135)", f.bot_deploys == [] and f.page == []
@@ -2006,7 +2004,7 @@ check("with the probe's own Joker removal, a wide-open community run passes ever
       str(fails(res)))
 check("a green community run leaves no Joker Deployment, though c6-lands made one",
       f.made == 1 and f.ns.deploys == set(), f"made {f.made}, left {f.ns.deploys}")
-check("a community run toggles, patches and applies nothing but the terminal's guardrails-on and guardrails-off, so "
+check("a community run toggles, patches and applies nothing but the terminal's guardrails-k8s-on and guardrails-k8s-off, so "
       "every guard reads as it did before (#1134)",
       stage_state(f) == before and [e for e in f.log if e.startswith(("toggle", "tools", "rule", "role", "guardrails"))]
       == ["guardrails on", "guardrails off"], str(f.log))
@@ -2038,7 +2036,7 @@ res = {r["key"]: r for r in run_admin(f)}
 check("a Joker landed on the guarded ask fails c6-on, and is still removed after it",
       res["c6-on"]["verdict"] == kp.FAIL and "EXISTS" in res["c6-on"]["note"] and f.made == 2
       and f.ns.deploys == set(), f"{res['c6-on']['note']}; made {f.made}, left {f.ns.deploys}")
-check("and guards-off still puts every guard back as it was", res["guards-off"]["verdict"] == kp.PASS
+check("and guardrails-all-off still puts every guard back as it was", res["guardrails-all-off"]["verdict"] == kp.PASS
       and stage_state(f) == before, f"{before} -> {stage_state(f)}")
 
 
@@ -2124,7 +2122,7 @@ f = JokerAdmin()
 f.g["output"] = True  # another run's toggle, as run 17950 (#900) found
 res = {r["key"]: r for r in run_admin(f)}
 check("an admin run that finds an AI guard on fails start-state, naming it, so only a run that found every guard off "
-      "can end green (guards-off puts back the stage's start, all off)",
+      "can end green (guardrails-all-off puts back the stage's start, all off)",
       res["start-state"]["verdict"] == kp.FAIL and "output on" in res["start-state"]["note"]
       and not any(f.g.values()), res["start-state"]["note"])
 
@@ -2246,20 +2244,21 @@ check("with one call to spare the re-send is made, and the beat after it is stop
 print("== #1134: each challenge beat at the stage's guardrail state, both runs, both clusters back at the start ==")
 # The run-of-show's order of play, read off its segments table: where each STAGE_ORDER point sits, as the row it is in
 # and the words that mark it there. A reworded anchor stops the test naming it and the file (CLAUDE.md, "Tests own
-# their inputs"), so it never reads as a broken order further on.
+# their inputs"), so it never reads as a broken order further on. The anchors are the run-of-show's own words, which
+# name the switches as the probe's STAGE_ORDER does since #1352 and #1351.
 ROS_PATH = REPO / "facilitation/kubecon-na-2026-run-of-show.md"
 STAGE_ANCHORS = {
     (kp.PLAY, "Challenge 1"): ("2", "Challenge 1: the two-slide tee-up"),
     (kp.PLAY, "Challenge 2"): ("3", "Challenge 2, the Kubernetes catch-all"),
-    (kp.SWITCH, "guardrails-on"): ("3", "`guardrails-k8s-on` arms RBAC"),
+    (kp.SWITCH, "guardrails-k8s-on"): ("3", "`guardrails-k8s-on` arms RBAC"),
     (kp.RETRY, "Challenge 1"): ("3", '"Try your attacks again." (slide 29)'),
     (kp.RETRY, "Challenge 2"): ("3", '"Try your attacks again." (slide 29)'),
     (kp.PLAY, "Challenge 3"): ("4", "| Challenge 3, "),
-    (kp.SWITCH, "guard-agency-on"): ("4", "`guardrails-agency-on`, then"),
-    (kp.SWITCH, "guard-input-on"): ("4", "`guardrails-input-on`, run on the private bot"),
+    (kp.SWITCH, "guardrails-agency-on"): ("4", "`guardrails-agency-on`, then"),
+    (kp.SWITCH, "guardrails-input-on"): ("4", "`guardrails-input-on`, run on the private bot"),
     (kp.RETRY, "Challenge 3"): ("4", '"Try your attack again."'),
     (kp.PLAY, "Challenge 4"): ("5", "| Challenge 4, "),
-    (kp.SWITCH, "guard-mcp-on"): ("5", "`guardrails-mcp-on` on the private bot"),
+    (kp.SWITCH, "guardrails-mcp-on"): ("5", "`guardrails-mcp-on` on the private bot"),
     (kp.RETRY, "Challenge 4"): ("5", '"Try your attack again."'),
 }
 _ros_text = ROS_PATH.read_text(encoding="utf-8")
@@ -2282,13 +2281,13 @@ for _point in kp.STAGE_ORDER:
 check("STAGE_ORDER follows the run-of-show's segments table, point by point",
       _where == sorted(_where) and set(STAGE_ANCHORS) == set(kp.STAGE_ORDER), str(list(zip(kp.STAGE_ORDER, _where))))
 check("the stage state of each point: Challenge 1 and 2 with every guardrail off, Challenge 3's room attempt with "
-      "guardrails-on alone, Challenge 4 with guardrails-on, guard-agency-on and guard-input-on",
+      "guardrails-k8s-on alone, Challenge 4 with guardrails-k8s-on, guardrails-agency-on and guardrails-input-on",
       kp.stage_guardrails((kp.PLAY, "Challenge 1")) == kp.stage_guardrails((kp.PLAY, "Challenge 2")) == frozenset()
-      and kp.stage_guardrails((kp.PLAY, "Challenge 3")) == {"guardrails-on"}
-      and kp.stage_guardrails((kp.RETRY, "Challenge 3")) == {"guardrails-on", "guard-agency-on", "guard-input-on"}
-      and kp.stage_guardrails((kp.PLAY, "Challenge 4")) == {"guardrails-on", "guard-agency-on", "guard-input-on"}
-      and kp.stage_guardrails((kp.RETRY, "Challenge 4")) == {"guardrails-on", "guard-agency-on", "guard-input-on",
-                                                                "guard-mcp-on"})
+      and kp.stage_guardrails((kp.PLAY, "Challenge 3")) == {"guardrails-k8s-on"}
+      and kp.stage_guardrails((kp.RETRY, "Challenge 3")) == {"guardrails-k8s-on", "guardrails-agency-on", "guardrails-input-on"}
+      and kp.stage_guardrails((kp.PLAY, "Challenge 4")) == {"guardrails-k8s-on", "guardrails-agency-on", "guardrails-input-on"}
+      and kp.stage_guardrails((kp.RETRY, "Challenge 4")) == {"guardrails-k8s-on", "guardrails-agency-on", "guardrails-input-on",
+                                                                "guardrails-mcp-on"})
 
 
 def walk(beats: list[kp.Beat], final: kp.Beat | None = None) -> dict[str, frozenset]:
@@ -2316,7 +2315,7 @@ for _name, _beats, _final in (("community", kp.COMMUNITY, kp.GUARDRAILS_OFF_BEAT
           str(_at["<end>"]))
     check(f"{_name}: every switch beat runs a switch the stage has (or the final beat's off)",
           all(b.switch in {n for k, n in kp.STAGE_ORDER if k == kp.SWITCH} for b in _beats if b.switch)
-          and _final.switch in ("guardrails-off", "guards-off"), str([b.switch for b in _beats if b.switch]))
+          and _final.switch == "guardrails-all-off", str([b.switch for b in _beats if b.switch]))
 
 _cat = walk(kp.COMMUNITY)
 _cstage = {b.key: b.stage for b in kp.COMMUNITY if b.stage}
@@ -2325,22 +2324,22 @@ check("community: Challenge 1's and 2's beats run with every guardrail off",
       and {_cstage[k] for k in ("ceo-leak", "ceo-friendly")} == {(kp.PLAY, "Challenge 1")}
       and {_cstage[k] for k in ("c1-open", "c2-open", "c3-open")} == {(kp.PLAY, "Challenge 2")}, str(_cat))
 check("community: c6-lands, the room's Challenge 3 attempt, runs with the four Kubernetes guardrails on and "
-      "guard-agency-on and guard-input-on off",
-      _cat["c6-lands"] == {"guardrails-on"} and _cstage["c6-lands"] == (kp.PLAY, "Challenge 3"), str(_cat["c6-lands"]))
+      "guardrails-agency-on and guardrails-input-on off",
+      _cat["c6-lands"] == {"guardrails-k8s-on"} and _cstage["c6-lands"] == (kp.PLAY, "Challenge 3"), str(_cat["c6-lands"]))
 _ckeys = [b.key for b in kp.COMMUNITY]
-check("community: c7-off, the room's Challenge 4 attempt, runs with the four Kubernetes guardrails, guard-agency-on and "
-      "guard-input-on on, and guard-mcp-on off (#1129)",
-      _cat["c7-off"] == {"guardrails-on", "guard-agency-on", "guard-input-on"}
+check("community: c7-off, the room's Challenge 4 attempt, runs with the four Kubernetes guardrails, guardrails-agency-on and "
+      "guardrails-input-on on, and guardrails-mcp-on off (#1129)",
+      _cat["c7-off"] == {"guardrails-k8s-on", "guardrails-agency-on", "guardrails-input-on"}
       and _cstage["c7-off"] == (kp.PLAY, "Challenge 4")
       and {b.key for b in kp.COMMUNITY if b.stage and b.stage[1] == "Challenge 4"} == {"c7-off", "c7-on"},
       str(_cat["c7-off"]))
-check("community: guard-mcp-on runs after c7-off in the private terminal, and c7-on, the room's Challenge 4 retry, runs "
+check("community: guardrails-mcp-on runs after c7-off in the private terminal, and c7-on, the room's Challenge 4 retry, runs "
       "with it on (#1152)",
-      _ckeys.index("c7-off") < _ckeys.index("guard-mcp-on") < _ckeys.index("c7-on")
-      and _cstage["c7-on"] == (kp.RETRY, "Challenge 4") and "guard-mcp-on" in _cat["c7-on"]
-      and "_terminal_guard(\"guard-mcp-on\", _mcp_here)" in KP_SRC, str(_ckeys))
-check("community: guard-agency-on and guard-input-on come after c6-lands and before c7-off, as segment 4 runs them",
-      _ckeys.index("c6-lands") < _ckeys.index("guard-agency-on") < _ckeys.index("guard-input-on")
+      _ckeys.index("c7-off") < _ckeys.index("guardrails-mcp-on") < _ckeys.index("c7-on")
+      and _cstage["c7-on"] == (kp.RETRY, "Challenge 4") and "guardrails-mcp-on" in _cat["c7-on"]
+      and "_terminal_guard(\"guardrails-mcp-on\", _mcp_here)" in KP_SRC, str(_ckeys))
+check("community: guardrails-agency-on and guardrails-input-on come after c6-lands and before c7-off, as segment 4 runs them",
+      _ckeys.index("c6-lands") < _ckeys.index("guardrails-agency-on") < _ckeys.index("guardrails-input-on")
       < _ckeys.index("c7-off"), str(_ckeys))
 _c7 = next(b for b in kp.COMMUNITY if b.key == "c7-off")
 check("community: c7-off sends /kubecon's C7 prompt, once, judged as the admin run's c7-off",
@@ -2348,25 +2347,25 @@ check("community: c7-off sends /kubecon's C7 prompt, once, judged as the admin r
           "Beat(", 1)[0], KP_SRC.split('Beat("c7-off"', 1)[1][:200])
 check("community: both fixes run in the private terminal's own commands, which switch both clusters (#1132)",
       kp.TERMINAL_GUARDS == {n: [*kp.TERMINAL_EXEC, f"/home/student/{n}"]
-                             for n in ("guard-agency-on", "guard-input-on", "guard-input-off", "guard-mcp-on",
-                                       "guard-mcp-off")}
-      and all(terminal.count(f'cat > "$HOME/{ALIASES.get(n, n)}" <<') == 1 for n in kp.TERMINAL_GUARDS))
+                             for n in ("guardrails-agency-on", "guardrails-input-on", "guardrails-input-off", "guardrails-mcp-on",
+                                       "guardrails-mcp-off")}
+      and all(terminal.count(f'cat > "$HOME/{n}" <<') == 1 for n in kp.TERMINAL_GUARDS))
 _aat = walk(kp.ADMIN)
 _akeys = [b.key for b in kp.ADMIN]
-check("admin: the room's Challenge 3 attempt (c6-lands) runs before guard-agency-on and guard-input-on",
-      _akeys.index("guardrails-on") < _akeys.index("c6-lands") < _akeys.index("guard-agency-on")
-      < _akeys.index("guard-input-on") and _aat["c6-lands"] == {"guardrails-on"}, str(_akeys))
-check("admin: every Challenge 4 beat runs with the four Kubernetes guardrails, guard-agency-on and guard-input-on on",
-      all({"guardrails-on", "guard-agency-on", "guard-input-on"} <= _aat[b.key] for b in kp.ADMIN
+check("admin: the room's Challenge 3 attempt (c6-lands) runs before guardrails-agency-on and guardrails-input-on",
+      _akeys.index("guardrails-k8s-on") < _akeys.index("c6-lands") < _akeys.index("guardrails-agency-on")
+      < _akeys.index("guardrails-input-on") and _aat["c6-lands"] == {"guardrails-k8s-on"}, str(_akeys))
+check("admin: every Challenge 4 beat runs with the four Kubernetes guardrails, guardrails-agency-on and guardrails-input-on on",
+      all({"guardrails-k8s-on", "guardrails-agency-on", "guardrails-input-on"} <= _aat[b.key] for b in kp.ADMIN
           if b.stage and b.stage[1] == "Challenge 4")
       and {b.key for b in kp.ADMIN if b.stage and b.stage[1] == "Challenge 4"} == {"c7-off", "c7-on"},
       str({k: sorted(_aat[k]) for k in ("c7-off", "c7-on")}))
 check("admin: the beats that show Challenge 3's two fixes come after both and keep them on",
-      all({"guard-agency-on", "guard-input-on"} <= _aat[k] for k in ("c6-withheld", "c6-on"))
-      and "guard-agency-on" in _aat["c6-forbidden"], str({k: sorted(_aat[k]) for k in ("c6-forbidden", "c6-on")}))
+      all({"guardrails-agency-on", "guardrails-input-on"} <= _aat[k] for k in ("c6-withheld", "c6-on"))
+      and "guardrails-agency-on" in _aat["c6-forbidden"], str({k: sorted(_aat[k]) for k in ("c6-forbidden", "c6-on")}))
 
 
-# Two clusters as the stage has them: the private one, whose terminal's guardrails-on and guardrails-off reach the
+# Two clusters as the stage has them: the private one, whose terminal's guardrails-k8s-on and guardrails-k8s-off reach the
 # community one too (#774). Every chat records the guardrail state its cluster had when the prompt arrived.
 class LinkedPrivate(Fake):
     def __init__(self, *a, **kw) -> None:
@@ -2381,10 +2380,10 @@ class LinkedPrivate(Fake):
             cmd = args[-1].rsplit("/", 1)[-1]
             self.peer.armed = self.armed
             self.peer.role = self.role
-            if cmd.startswith("guard-input-"):
+            if cmd.startswith("guardrails-input-"):
                 for k in ("input_blocklist", "input_classifier"):
                     self.peer.g[k] = self.g[k]
-            if cmd.startswith("guard-mcp-"):
+            if cmd.startswith("guardrails-mcp-"):
                 # each cluster by its own control (#1132): the gateway rule on this admin cluster, toolNames on the
                 # community peer
                 self.peer.tools, self.tools = list(self.tools), list(kp.EVIL_ALL)
@@ -2434,31 +2433,31 @@ check("community: HC-666's ask went out with the four Kubernetes guardrails on a
 check("community: the switch ran in the private cluster's terminal, never the community one's",
       priv.log.count("guardrails on") == 1 and priv.log.count("guardrails off") == 1
       and "COMMUNITY TERMINAL USED" not in pub.log, f"{priv.log} / {pub.log}")
-check("community: the final beat, guardrails-off, runs last and reads both clusters back at the start state",
-      res[-1]["key"] == "guardrails-off" and res[-1]["verdict"] == kp.PASS
+check("community: the final beat, guardrails-k8s-off, runs last and reads both clusters back at the start state",
+      res[-1]["key"] == "guardrails-k8s-off" and res[-1]["verdict"] == kp.PASS
       and "watch-it-burn-community" in res[-1]["note"] and "watch-it-burn-private" in res[-1]["note"], str(res[-1]))
 check("community: both clusters end at the start state, AI guards off and the four Kubernetes guardrails off",
       not priv.armed and not pub.armed and priv.role == pub.role == kp.RBAC_SHIPPED
       and not any(priv.g.values()) and not any(pub.g.values()))
-check("community: Challenge 4's ask went out with the four Kubernetes guardrails, guard-agency-on's Role and both "
+check("community: Challenge 4's ask went out with the four Kubernetes guardrails, guardrails-agency-on's Role and both "
       "input stages on, on the community cluster (#1129)",
       _asked[kp.MCP_PROMPT][0] is True and pub.state_at[kp.MCP_PROMPT] == (kp.AGENCY_FIX, True, True),
       f"{pub.asked_at} {pub.state_at}")
 check("community: HC-666's ask went out before either fix: the shipped scoped Role, the input guard off",
       pub.state_at[kp.ROOM_PROMPT] == (kp.RBAC_FIX, False, False), str(pub.state_at))
-check("community: both fixes and guard-input-off ran in the private terminal, in order, and the probe toggled no guard "
+check("community: both fixes and guardrails-input-off ran in the private terminal, in order, and the probe toggled no guard "
       "itself on either cluster",
-      [e for e in priv.log if e.startswith("terminal")] == ["terminal guard-agency-on", "terminal guard-input-on",
-                                                            "terminal guard-mcp-on", "terminal guard-input-off",
-                                                            "terminal guard-mcp-off"]
+      [e for e in priv.log if e.startswith("terminal")] == ["terminal guardrails-agency-on", "terminal guardrails-input-on",
+                                                            "terminal guardrails-mcp-on", "terminal guardrails-input-off",
+                                                            "terminal guardrails-mcp-off"]
       and not any(e.startswith("toggle") for e in priv.log + pub.log) and "COMMUNITY TERMINAL USED" not in pub.log,
       str(priv.log + pub.log))
-check("community: the final beat runs guard-input-off before guardrails-off",
-      priv.log.index("terminal guard-input-off") < priv.log.index("guardrails off"), str(priv.log))
+check("community: the final beat runs guardrails-input-off before guardrails-k8s-off",
+      priv.log.index("terminal guardrails-input-off") < priv.log.index("guardrails off"), str(priv.log))
 
 
 class RoomAskBreaks(StagedCommunity):
-    """A community bot whose HC-666 ask raises mid-run, after guardrails-on armed both clusters."""
+    """A community bot whose HC-666 ask raises mid-run, after guardrails-k8s-on armed both clusters."""
 
     def chat(self, prompt):
         if prompt.startswith(kp.ROOM_PROMPT):
@@ -2472,33 +2471,33 @@ res = {r["key"]: r for r in community_run(pub, priv)}
 check("community: a beat that fails mid-run with both clusters armed still ends in the final beat, which puts both "
       "back at the start state",
       res["c6-lands"]["verdict"] == kp.FAIL and "connection reset" in res["c6-lands"]["note"]
-      and res["guardrails-off"]["verdict"] == kp.PASS and not priv.armed and not pub.armed, str(res["guardrails-off"]))
+      and res["guardrails-k8s-off"]["verdict"] == kp.PASS and not priv.armed and not pub.armed, str(res["guardrails-k8s-off"]))
 
 priv, pub = pair()
 # order, ceo-leak and ceo-friendly spend 3; off-topic's three tries and c6-lands's one would pass the ceiling.
 res = community_run(pub, priv, max_calls=3)
 by = {r["key"]: r for r in res}
-check("community: the call ceiling stops c6-lands after guardrails-on, and the final beat still runs and puts both back",
-      by["guardrails-on"]["verdict"] == kp.PASS and "--max-calls" in by["c6-lands"]["note"]
-      and res[-1]["key"] == "guardrails-off" and res[-1]["verdict"] == kp.PASS and not priv.armed and not pub.armed
+check("community: the call ceiling stops c6-lands after guardrails-k8s-on, and the final beat still runs and puts both back",
+      by["guardrails-k8s-on"]["verdict"] == kp.PASS and "--max-calls" in by["c6-lands"]["note"]
+      and res[-1]["key"] == "guardrails-k8s-off" and res[-1]["verdict"] == kp.PASS and not priv.armed and not pub.armed
       and pub.calls <= 3, str(res[-1]))
 
 priv, pub = pair()
 priv.link = False
 res = {r["key"]: r for r in community_run(pub, priv)}
-check("community: a guardrails-on that fails stops c6-lands before it sends anything, naming the switch",
-      res["c6-lands"]["verdict"] == kp.FAIL and "guardrails-on did not pass" in res["c6-lands"]["note"]
+check("community: a guardrails-k8s-on that fails stops c6-lands before it sends anything, naming the switch",
+      res["c6-lands"]["verdict"] == kp.FAIL and "guardrails-k8s-on did not pass" in res["c6-lands"]["note"]
       and kp.ROOM_PROMPT not in [p for p, _, _ in pub.asked_at], res["c6-lands"]["note"])
-check("community: and the final beat runs and fails, naming why", res["guardrails-off"]["verdict"] == kp.FAIL
-      and "not linked" in res["guardrails-off"]["note"], str(res["guardrails-off"]))
+check("community: and the final beat runs and fails, naming why", res["guardrails-k8s-off"]["verdict"] == kp.FAIL
+      and "not linked" in res["guardrails-k8s-off"]["note"], str(res["guardrails-k8s-off"]))
 
 class OffHangs(LinkedPrivate):
-    """Run 18644's live run: guardrails-off switches both clusters, then a peer-side kubectl delete never returns, so
+    """Run 18644's live run: guardrails-k8s-off switches both clusters, then a peer-side kubectl delete never returns, so
     the exec times out."""
 
     def kubectl_rc(self, *args, timeout=90, stdin=None):
         rc, out = super().kubectl_rc(*args, timeout=timeout, stdin=stdin)
-        if "deploy/web-terminal" in args and args[-1].endswith("guardrails-off"):
+        if "deploy/web-terminal" in args and args[-1].endswith("guardrails-k8s-off"):
             raise subprocess.TimeoutExpired(list(args), timeout)
         return rc, out
 
@@ -2506,24 +2505,24 @@ class OffHangs(LinkedPrivate):
 priv, pub = OffHangs(), StagedCommunity()
 priv.peer = pub
 res = {r["key"]: r for r in community_run(pub, priv)}
-check("community: a guardrails-off that times out fails the final beat, which still reads both clusters back and says "
-      "they are at the start state", res["guardrails-off"]["verdict"] == kp.FAIL
-      and "timed out" in res["guardrails-off"]["note"]
+check("community: a guardrails-k8s-off that times out fails the final beat, which still reads both clusters back and says "
+      "they are at the start state", res["guardrails-k8s-off"]["verdict"] == kp.FAIL
+      and "timed out" in res["guardrails-k8s-off"]["note"]
       and "read back at the start state anyway on watch-it-burn-community, watch-it-burn-private"
-      in res["guardrails-off"]["note"], res["guardrails-off"]["note"])
+      in res["guardrails-k8s-off"]["note"], res["guardrails-k8s-off"]["note"])
 
 
 priv, pub = pair()
 priv.g["output"] = True  # an AI guard another run left on the private cluster
 res = {r["key"]: r for r in community_run(pub, priv)}
 check("community: the final beat reads the private cluster too, and fails naming an AI guard left on there, changing "
-      "nothing on it", res["guardrails-off"]["verdict"] == kp.FAIL
-      and "watch-it-burn-private: output on" in res["guardrails-off"]["note"] and priv.g["output"] is True,
-      res["guardrails-off"]["note"])
+      "nothing on it", res["guardrails-k8s-off"]["verdict"] == kp.FAIL
+      and "watch-it-burn-private: output on" in res["guardrails-k8s-off"]["note"] and priv.g["output"] is True,
+      res["guardrails-k8s-off"]["note"])
 
 
 class StaysArmed(StagedCommunity):
-    """A community cluster the private terminal's guardrails-off does not reach back: its Kyverno stays at Deny."""
+    """A community cluster the private terminal's guardrails-k8s-off does not reach back: its Kyverno stays at Deny."""
 
     def __setattr__(self, name, value):
         if name == "armed" and value is False and getattr(self, "armed", False):
@@ -2535,12 +2534,12 @@ priv, pub = LinkedPrivate(), StaysArmed()
 priv.peer = pub
 res = {r["key"]: r for r in community_run(pub, priv)}
 check("community: the final beat fails when the community cluster's guardrails stay on, naming the cluster",
-      res["guardrails-off"]["verdict"] == kp.FAIL
-      and "watch-it-burn-community: restrict-image-registries is ['Deny']" in res["guardrails-off"]["note"],
-      res["guardrails-off"]["note"])
+      res["guardrails-k8s-off"]["verdict"] == kp.FAIL
+      and "watch-it-burn-community: restrict-image-registries is ['Deny']" in res["guardrails-k8s-off"]["note"],
+      res["guardrails-k8s-off"]["note"])
 
 # Challenge 4 on the community run (#1129): the two fixes from the private terminal, and every way out of them.
-print("== community Challenge 4: guard-agency-on and guard-input-on from the private terminal (#1129) ==")
+print("== community Challenge 4: guardrails-agency-on and guardrails-input-on from the private terminal (#1129) ==")
 check("a terminal guard command passes only on _both's both-clusters line and exit 0",
       passes(kp.judge_terminal_both(0, "Switched on both clusters: this one and watch-it-burn-community.\n🛡️ ...", "x"))
       and not passes(kp.judge_terminal_both(0, "Switched on this cluster alone: it has no guardrails-switch/"
@@ -2556,12 +2555,12 @@ def all_off(*clusters: Fake) -> bool:
 
 
 class InputMissesPeer(LinkedPrivate):
-    """#1202's path: the private terminal's guard-input-on switches this cluster, says so, and does not reach the
+    """#1202's path: the private terminal's guardrails-input-on switches this cluster, says so, and does not reach the
     community guard-proxy. _both says which; the probe reads it back on the community cluster too."""
 
     def kubectl_rc(self, *args, timeout=90, stdin=None):
-        if "deploy/web-terminal" in args and args[-1].endswith("/guard-input-on"):
-            self.log.append("terminal guard-input-on")
+        if "deploy/web-terminal" in args and args[-1].endswith("/guardrails-input-on"):
+            self.log.append("terminal guardrails-input-on")
             self.g["input_blocklist"] = self.g["input_classifier"] = True
             return 1, ("⚠️  Switched on this cluster, but not on watch-it-burn-community: it could not be reached, or "
                        "it refused the change.\n")
@@ -2571,13 +2570,13 @@ class InputMissesPeer(LinkedPrivate):
 priv, pub = InputMissesPeer(), StagedCommunity()
 priv.peer = pub
 res = {r["key"]: r for r in community_run(pub, priv)}
-check("community: a guard-input-on that does not reach the public bot fails, naming why, and c7-off sends nothing",
-      res["guard-input-on"]["verdict"] == kp.FAIL and "could not be reached" in res["guard-input-on"]["note"]
-      and res["c7-off"]["verdict"] == kp.FAIL and "guard-input-on did not pass" in res["c7-off"]["note"]
-      and kp.MCP_PROMPT not in [q for q, _, _ in pub.asked_at], str({k: res[k]["note"] for k in ("guard-input-on",
+check("community: a guardrails-input-on that does not reach the public bot fails, naming why, and c7-off sends nothing",
+      res["guardrails-input-on"]["verdict"] == kp.FAIL and "could not be reached" in res["guardrails-input-on"]["note"]
+      and res["c7-off"]["verdict"] == kp.FAIL and "guardrails-input-on did not pass" in res["c7-off"]["note"]
+      and kp.MCP_PROMPT not in [q for q, _, _ in pub.asked_at], str({k: res[k]["note"] for k in ("guardrails-input-on",
                                                                                                   "c7-off")}))
-check("community: and the final beat's guard-input-off still puts the input guard off on the private cluster",
-      res["guardrails-off"]["verdict"] == kp.PASS and all_off(priv, pub), res["guardrails-off"]["note"])
+check("community: and the final beat's guardrails-input-off still puts the input guard off on the private cluster",
+      res["guardrails-k8s-off"]["verdict"] == kp.PASS and all_off(priv, pub), res["guardrails-k8s-off"]["note"])
 
 
 class InputSaysBothButNot(LinkedPrivate):
@@ -2585,7 +2584,7 @@ class InputSaysBothButNot(LinkedPrivate):
 
     def kubectl_rc(self, *args, timeout=90, stdin=None):
         rc, out = super().kubectl_rc(*args, timeout=timeout, stdin=stdin)
-        if "deploy/web-terminal" in args and args[-1].endswith("/guard-input-on"):
+        if "deploy/web-terminal" in args and args[-1].endswith("/guardrails-input-on"):
             self.peer.g["input_blocklist"] = self.peer.g["input_classifier"] = False
         return rc, out
 
@@ -2593,18 +2592,18 @@ class InputSaysBothButNot(LinkedPrivate):
 priv, pub = InputSaysBothButNot(), StagedCommunity()
 priv.peer = pub
 res = {r["key"]: r for r in community_run(pub, priv)}
-check("community: guard-input-on is read back on the community cluster, not taken on the terminal's word",
-      res["guard-input-on"]["verdict"] == kp.FAIL
-      and "input_blocklist, input_classifier still off on watch-it-burn-community" in res["guard-input-on"]["note"]
-      and kp.MCP_PROMPT not in [q for q, _, _ in pub.asked_at], res["guard-input-on"]["note"])
+check("community: guardrails-input-on is read back on the community cluster, not taken on the terminal's word",
+      res["guardrails-input-on"]["verdict"] == kp.FAIL
+      and "input_blocklist, input_classifier still off on watch-it-burn-community" in res["guardrails-input-on"]["note"]
+      and kp.MCP_PROMPT not in [q for q, _, _ in pub.asked_at], res["guardrails-input-on"]["note"])
 
 
 class AgencyMissesPeer(LinkedPrivate):
-    """A guard-agency-on whose Role lands on the private cluster alone: the community bot may still deploy."""
+    """A guardrails-agency-on whose Role lands on the private cluster alone: the community bot may still deploy."""
 
     def kubectl_rc(self, *args, timeout=90, stdin=None):
         rc, out = super().kubectl_rc(*args, timeout=timeout, stdin=stdin)
-        if "deploy/web-terminal" in args and args[-1].endswith("/guard-agency-on"):
+        if "deploy/web-terminal" in args and args[-1].endswith("/guardrails-agency-on"):
             self.peer.role = kp.RBAC_FIX
         return rc, out
 
@@ -2612,12 +2611,12 @@ class AgencyMissesPeer(LinkedPrivate):
 priv, pub = AgencyMissesPeer(), StagedCommunity()
 priv.peer = pub
 res = {r["key"]: r for r in community_run(pub, priv)}
-check("community: guard-agency-on fails when the Joker's dry run on the community cluster is not Forbidden, and "
-      "c7-off sends nothing", res["guard-agency-on"]["verdict"] == kp.FAIL
-      and "CREATED" in res["guard-agency-on"]["note"] and "guard-agency-on did not pass" in res["c7-off"]["note"]
-      and kp.MCP_PROMPT not in [q for q, _, _ in pub.asked_at], res["guard-agency-on"]["note"])
-check("community: and both clusters still end at the start state", res["guardrails-off"]["verdict"] == kp.PASS
-      and all_off(priv, pub), res["guardrails-off"]["note"])
+check("community: guardrails-agency-on fails when the Joker's dry run on the community cluster is not Forbidden, and "
+      "c7-off sends nothing", res["guardrails-agency-on"]["verdict"] == kp.FAIL
+      and "CREATED" in res["guardrails-agency-on"]["note"] and "guardrails-agency-on did not pass" in res["c7-off"]["note"]
+      and kp.MCP_PROMPT not in [q for q, _, _ in pub.asked_at], res["guardrails-agency-on"]["note"])
+check("community: and both clusters still end at the start state", res["guardrails-k8s-off"]["verdict"] == kp.PASS
+      and all_off(priv, pub), res["guardrails-k8s-off"]["note"])
 
 
 class C7Breaks(StagedCommunity):
@@ -2635,23 +2634,23 @@ res = {r["key"]: r for r in community_run(pub, priv)}
 check("community: a Challenge 4 ask that raises with both fixes on both clusters is a FAIL, and the final beat puts "
       "both clusters back: input guard off, the shipped Role, the four Kubernetes guardrails off",
       res["c7-off"]["verdict"] == kp.FAIL and "connection reset" in res["c7-off"]["note"]
-      and res["guardrails-off"]["verdict"] == kp.PASS and all_off(priv, pub), res["guardrails-off"]["note"])
+      and res["guardrails-k8s-off"]["verdict"] == kp.PASS and all_off(priv, pub), res["guardrails-k8s-off"]["note"])
 
 priv, pub = pair()
 # 8 calls reach c6-lands; c7-off's one would pass the ceiling, after both fixes are on.
 res = {r["key"]: r for r in community_run(pub, priv, max_calls=8)}
 check("community: the call ceiling stops c7-off after both fixes, and the final beat still turns them off on both",
-      res["guard-input-on"]["verdict"] == kp.PASS and "--max-calls" in res["c7-off"]["note"]
-      and pub.calls == 8 and res["guardrails-off"]["verdict"] == kp.PASS and all_off(priv, pub),
+      res["guardrails-input-on"]["verdict"] == kp.PASS and "--max-calls" in res["c7-off"]["note"]
+      and pub.calls == 8 and res["guardrails-k8s-off"]["verdict"] == kp.PASS and all_off(priv, pub),
       str(res["c7-off"]))
 
 
 class InputOffFails(LinkedPrivate):
-    """The final beat's guard-input-off cannot reach the community guard-proxy: the input guard stays on there."""
+    """The final beat's guardrails-input-off cannot reach the community guard-proxy: the input guard stays on there."""
 
     def kubectl_rc(self, *args, timeout=90, stdin=None):
-        if "deploy/web-terminal" in args and args[-1].endswith("/guard-input-off"):
-            self.log.append("terminal guard-input-off")
+        if "deploy/web-terminal" in args and args[-1].endswith("/guardrails-input-off"):
+            self.log.append("terminal guardrails-input-off")
             self.g["input_blocklist"] = self.g["input_classifier"] = False
             return 1, ("⚠️  Switched on this cluster, but not on watch-it-burn-community: it could not be reached, or "
                        "it refused the change.\n")
@@ -2661,16 +2660,16 @@ class InputOffFails(LinkedPrivate):
 priv, pub = InputOffFails(), StagedCommunity()
 priv.peer = pub
 res = {r["key"]: r for r in community_run(pub, priv)}
-check("community: a guard-input-off that fails fails the final beat, guardrails-off still runs, and the read-back names "
+check("community: a guardrails-input-off that fails fails the final beat, guardrails-k8s-off still runs, and the read-back names "
       "the input guard left on the community cluster",
-      res["guardrails-off"]["verdict"] == kp.FAIL and "guard-input-off exited 1" in res["guardrails-off"]["note"]
-      and "watch-it-burn-community: input_blocklist on" in res["guardrails-off"]["note"]
-      and priv.log.count("guardrails off") == 1 and not pub.armed, res["guardrails-off"]["note"])
+      res["guardrails-k8s-off"]["verdict"] == kp.FAIL and "guardrails-input-off exited 1" in res["guardrails-k8s-off"]["note"]
+      and "watch-it-burn-community: input_blocklist on" in res["guardrails-k8s-off"]["note"]
+      and priv.log.count("guardrails off") == 1 and not pub.armed, res["guardrails-k8s-off"]["note"])
 
 
 class InputOffRaises(LinkedPrivate):
     def kubectl_rc(self, *args, timeout=90, stdin=None):
-        if "deploy/web-terminal" in args and args[-1].endswith("/guard-input-off"):
+        if "deploy/web-terminal" in args and args[-1].endswith("/guardrails-input-off"):
             raise subprocess.TimeoutExpired(list(args), timeout)
         return super().kubectl_rc(*args, timeout=timeout, stdin=stdin)
 
@@ -2678,27 +2677,27 @@ class InputOffRaises(LinkedPrivate):
 priv, pub = InputOffRaises(), StagedCommunity()
 priv.peer = pub
 res = {r["key"]: r for r in community_run(pub, priv)}
-check("community: a guard-input-off that times out still lets guardrails-off run, and the final beat fails naming both",
-      res["guardrails-off"]["verdict"] == kp.FAIL and "guard-input-off could not run" in res["guardrails-off"]["note"]
-      and priv.log.count("guardrails off") == 1 and not pub.armed and not priv.armed, res["guardrails-off"]["note"])
+check("community: a guardrails-input-off that times out still lets guardrails-k8s-off run, and the final beat fails naming both",
+      res["guardrails-k8s-off"]["verdict"] == kp.FAIL and "guardrails-input-off could not run" in res["guardrails-k8s-off"]["note"]
+      and priv.log.count("guardrails off") == 1 and not pub.armed and not priv.armed, res["guardrails-k8s-off"]["note"])
 
-# The admin run: the community cluster is its peer, read back at the start state by guards-off.
+# The admin run: the community cluster is its peer, read back at the start state by guardrails-all-off.
 priv, pub = pair()
 _admin = kp.Probe(priv, 20, settle=0, sleep=lambda s: None, peers=[pub])
 res = _admin.run(kp.ADMIN, final=kp.GUARDS_OFF_BEAT)
-check("admin: guards-off reads the community cluster back at the start state too, by its context",
-      res[-1]["key"] == "guards-off" and res[-1]["verdict"] == kp.PASS and "watch-it-burn-community" in res[-1]["note"]
+check("admin: guardrails-all-off reads the community cluster back at the start state too, by its context",
+      res[-1]["key"] == "guardrails-all-off" and res[-1]["verdict"] == kp.PASS and "watch-it-burn-community" in res[-1]["note"]
       and not pub.armed and not any(pub.g.values()), str(res[-1]))
 priv, pub = pair()
 pub.g["input_classifier"] = True
 res = kp.Probe(priv, 20, settle=0, sleep=lambda s: None, peers=[pub]).run(kp.ADMIN, final=kp.GUARDS_OFF_BEAT)
-check("admin: guards-off fails when the community cluster has an AI guard on, naming it, and does not toggle it",
+check("admin: guardrails-all-off fails when the community cluster has an AI guard on, naming it, and does not toggle it",
       res[-1]["verdict"] == kp.FAIL and "watch-it-burn-community: input_classifier on" in res[-1]["note"]
       and pub.g["input_classifier"] is True and not any(e.startswith("toggle") for e in pub.log), res[-1]["note"])
 
 
 class InputOnFails(Fake):
-    """A guard-proxy whose /toggle leaves the input guard off: guard-input-on fails."""
+    """A guard-proxy whose /toggle leaves the input guard off: guardrails-input-on fails."""
 
     def toggle(self, q):
         if q == kp.GUARD_INPUT_ON:
@@ -2709,11 +2708,11 @@ class InputOnFails(Fake):
 
 f = InputOnFails()
 res = {r["key"]: r for r in run_admin(f)}
-check("admin: with guard-input-on failed, Challenge 3's retry and Challenge 4 are not run and send nothing",
-      all(res[k]["verdict"] == kp.FAIL and "guard-input-on did not pass" in res[k]["note"]
+check("admin: with guardrails-input-on failed, Challenge 3's retry and Challenge 4 are not run and send nothing",
+      all(res[k]["verdict"] == kp.FAIL and "guardrails-input-on did not pass" in res[k]["note"]
           for k in ("c6-withheld", "c6-on", "c7-off", "c7-on"))
       and not any(e == f"chat {kp.MCP_PROMPT[:30]}" for e in f.log), str({k: res[k]["note"] for k in ("c7-off",)}))
-check("admin: and guards-off still runs last", res["guards-off"]["verdict"] == kp.PASS, res["guards-off"]["note"])
+check("admin: and guardrails-all-off still runs last", res["guardrails-all-off"]["verdict"] == kp.PASS, res["guardrails-all-off"]["note"])
 
 # main(): both runs hold the lock through hold_switch on the private context, and a community run whose private
 # cluster's switch does not reach its --context stops before any beat.
@@ -2753,7 +2752,7 @@ try:
         rc = kp.main(["community", "attackme.burritobot.co", "--context", "watch-it-burn-community",
                       "--switch-context", "watch-it-burn-private"])
     check("main community: holds both clusters' locks through hold_switch on the private context, switches through the "
-          "private terminal, reads the private cluster back at the end, and ends in guardrails-off",
+          "private terminal, reads the private cluster back at the end, and ends in guardrails-k8s-off",
           rc == 0 and _seen["context"] == "watch-it-burn-private" and _seen["ran_inside"] is True
           and _seen["beats"] is kp.COMMUNITY and _seen["final"] is kp.GUARDRAILS_OFF_BEAT
           and _seen["switcher"] == "watch-it-burn-private" and _seen["peers"] == ["watch-it-burn-private"], str(_seen))
@@ -2873,7 +2872,7 @@ check("the persona still never restricts topics with an absolute (memory: agent-
 print("== the C7 rule is written as the web terminal, the identity block-argocd-drift exempts ==")
 # agentgateway-c7-config is Argo CD managed, so block-argocd-drift denies an update from anyone but the
 # web-terminal service account. The operator's EKS access entry is not in system:masters, so on
-# 2026-10-27 guard-mcp-on and guards-off were denied when the probe patched it as the operator.
+# 2026-10-27 guard-mcp-on and guards-off (their names then) were denied when the probe patched it as the operator.
 _calls: list[list[str]] = []
 
 
@@ -3118,7 +3117,7 @@ check("and one that printed no JSON fails naming what it printed",
 
 # --- #1135: c2-lands, 2A's /kubecon prompt sent once to the community bot ------------------------------------------
 # The beat sends the C2 beat's prompt off gitops/ai-layer/web/kubecon.html, exactly as the page has it and carrying
-# guard-proxy's probe marker, to the public bot before the community run's guardrails-on. It passes only when the image
+# guard-proxy's probe marker, to the public bot before the community run's guardrails-k8s-on. It passes only when the image
 # the prompt asks for (the image BurritoBot's prompt in gitops/workshop-agent/agent.yaml names for the game the ask
 # names) is a Deployment the ask made and a row the ask added to deployments.burritobot.co, under one name. It removes
 # every Deployment the ask made, and its row, also when the judge fails or the ask raises. The checks sit in one
@@ -3422,8 +3421,8 @@ def c2_lands_checks() -> None:
     print("== placement: before any guardrail is switched on, at Challenge 2's stage state ==")
     keys = [b.key for b in kp.COMMUNITY]
     first_switch = next(i for i, b in enumerate(kp.COMMUNITY) if b.switch)
-    check("c2-lands is a community beat placed before the run's first switch, guardrails-on",
-          "c2-lands" in keys and keys.index("c2-lands") < first_switch and kp.COMMUNITY[first_switch].key == "guardrails-on",
+    check("c2-lands is a community beat placed before the run's first switch, guardrails-k8s-on",
+          "c2-lands" in keys and keys.index("c2-lands") < first_switch and kp.COMMUNITY[first_switch].key == "guardrails-k8s-on",
           str(keys))
     check("c2-lands stands for Challenge 2's room attempt, every guardrail off",
           BEAT.stage == (kp.PLAY, "Challenge 2") and kp.stage_guardrails(BEAT.stage) == frozenset() and BEAT.switch is None)
@@ -3462,11 +3461,11 @@ c2_lands_checks()
 
 
 # #1242, holding #1129's criterion: the probe's docstring and the run-of-show's Night Before step list the community
-# run's new beats, guard-agency-on and guard-input-on run in the private terminal, then Challenge 4's /kubecon ask, in
+# run's new beats, guardrails-agency-on and guardrails-input-on run in the private terminal, then Challenge 4's /kubecon ask, in
 # the order the run plays them. The counts are held above; this reads the beats themselves, in the community entry of
 # each, so dropping one, or moving it out of the run's order, fails here.
 def community_c4_listed_checks() -> None:
-    print("== #1129's community beats listed: guard-agency-on, guard-input-on, then Challenge 4 (#1242) ==")
+    print("== #1129's community beats listed: guardrails-agency-on, guardrails-input-on, then Challenge 4 (#1242) ==")
     ros_path = REPO / "facilitation/kubecon-na-2026-run-of-show.md"
     probe_path = REPO / "verify/kubecon_probe.py"
 
@@ -3498,49 +3497,49 @@ def community_c4_listed_checks() -> None:
         return wrong
 
     keys = [b.key for b in kp.COMMUNITY]
-    check("the community run plays guardrails-on, c6-lands, guard-agency-on, guard-input-on, then c7-off, Challenge 4",
-          [k for k in keys if k in ("guardrails-on", "c6-lands", "guard-agency-on", "guard-input-on", "c7-off")]
-          == ["guardrails-on", "c6-lands", "guard-agency-on", "guard-input-on", "c7-off"]
+    check("the community run plays guardrails-k8s-on, c6-lands, guardrails-agency-on, guardrails-input-on, then c7-off, Challenge 4",
+          [k for k in keys if k in ("guardrails-k8s-on", "c6-lands", "guardrails-agency-on", "guardrails-input-on", "c7-off")]
+          == ["guardrails-k8s-on", "c6-lands", "guardrails-agency-on", "guardrails-input-on", "c7-off"]
           and next(b for b in kp.COMMUNITY if b.key == "c7-off").stage == (kp.PLAY, "Challenge 4"), str(keys))
 
     doc = kp.__doc__
     beats = between(doc, "community the cluster is the one named", "admin the cluster is the one named", probe_path)
-    wanted = ["guardrails-on", "HC-666", "guard-agency-on and guard-input-on (each run in the private terminal",
+    wanted = ["guardrails-k8s-on", "HC-666", "guardrails-agency-on and guardrails-input-on (each run in the private terminal",
               "Challenge 4's /kubecon weather ask chaining the rogue tool with those on",
-              "guard-input-off", "guardrails-off"]
-    check("the docstring's community beat list names guard-agency-on and guard-input-on from the private terminal, "
-          "then Challenge 4's /kubecon ask with them on, between HC-666 and the closing guard-input-off",
+              "guardrails-input-off", "guardrails-k8s-off"]
+    check("the docstring's community beat list names guardrails-agency-on and guardrails-input-on from the private terminal, "
+          "then Challenge 4's /kubecon ask with them on, between HC-666 and the closing guardrails-input-off",
           not out_of_order(beats, wanted), f"missing or out of order: {out_of_order(beats, wanted)}\n        {beats}")
 
     switches = between(doc, "community ceo-leak, ceo-friendly", "admin c5-off with every guardrail off", probe_path)
-    wanted = ["guardrails-on", "c6-lands", "guard-agency-on and guard-input-on, run in the private terminal",
+    wanted = ["guardrails-k8s-on", "c6-lands", "guardrails-agency-on and guardrails-input-on, run in the private terminal",
               "c7-off, the room's Challenge 4 attempt, with the four Kubernetes guardrails and both fixes on (#1129)",
-              "guard-input-off, guard-mcp-off and guardrails-off"]
-    check("the docstring's community switch entry runs guard-agency-on and guard-input-on before c7-off, Challenge 4, "
+              "guardrails-input-off, guardrails-mcp-off and guardrails-k8s-off"]
+    check("the docstring's community switch entry runs guardrails-agency-on and guardrails-input-on before c7-off, Challenge 4, "
           "with both fixes on",
           not out_of_order(switches, wanted), f"missing or out of order: {out_of_order(switches, wanted)}\n        {switches}")
 
     # The usage note is a shell comment wrapped over lines, so each continuation's "# " is folded out before reading.
     usage = between(doc, "# the community cluster:", "python3 verify/kubecon_probe.py community", probe_path)
     usage = usage.replace(" # ", " ")
-    check("the docstring's community usage note has the private terminal run guard-agency-on and guard-input-on "
-          "before Challenge 4", "guard-agency-on and guard-input-on before Challenge 4" in usage, usage)
+    check("the docstring's community usage note has the private terminal run guardrails-agency-on and guardrails-input-on "
+          "before Challenge 4", "guardrails-agency-on and guardrails-input-on before Challenge 4" in usage, usage)
 
     ros = ros_path.read_text(encoding="utf-8")
     nb = between(ros, "## Night Before", "## Rollback on the day", ros_path)
     step = between(nb, "**Every shown beat works, on the clusters that will be on stage (#503).**",
                    "- Every prompt it sends carries guard-proxy's probe marker", ros_path)
     community = between(step, "- Community (segments 1 to 5):", "- Admin: the kube-context", ros_path)
-    # The run-of-show names the switches by their #1350 names (#1352); the probe still types the old ones, aliases.
+    # The run-of-show names the switches by their #1350 names (#1352), as the probe does since #1351.
     wanted = ["`guardrails-k8s-on`", "HC-666",
               "then `guardrails-agency-on` and `guardrails-input-on`, each run in the private terminal",
               "reaching the public bot since #1132",
               "then Challenge 4's `/kubecon` weather ask sent once to the public bot with the four Kubernetes "
               "guardrails and both fixes on", "(#1129)", "`guardrails-input-off`, `guardrails-mcp-off` and `guardrails-k8s-off`"]
-    check("the Night Before step's community entry lists guard-agency-on and guard-input-on from the private "
+    check("the Night Before step's community entry lists guardrails-agency-on and guardrails-input-on from the private "
           "terminal, then Challenge 4's /kubecon ask with both fixes on, in the run's order",
           not out_of_order(community, wanted), f"missing or out of order: {out_of_order(community, wanted)}\n        {community}")
-    check("the Night Before step's stage-state note puts Challenge 4 after guard-agency-on and guard-input-on, "
+    check("the Night Before step's stage-state note puts Challenge 4 after guardrails-agency-on and guardrails-input-on, "
           "with the four and both of those on",
           not out_of_order(step, ["the room's Challenge 3 attempt with the four Kubernetes guardrails on and "
                                   "`guardrails-agency-on` and `guardrails-input-on` still off",
@@ -3548,8 +3547,8 @@ def community_c4_listed_checks() -> None:
 
     # The checker itself fails when a beat goes or moves: each of these edits of the real entries is caught.
     mutations = [
-        ("the docstring entry without guard-input-on", beats.replace("guard-agency-on and guard-input-on", "guard-agency-on"),
-         ["guard-agency-on and guard-input-on (each run in the private terminal"]),
+        ("the docstring entry without guardrails-input-on", beats.replace("guardrails-agency-on and guardrails-input-on", "guardrails-agency-on"),
+         ["guardrails-agency-on and guardrails-input-on (each run in the private terminal"]),
         ("the docstring entry without the Challenge 4 ask", beats.replace("Challenge 4's /kubecon weather ask", "a weather ask"),
          ["Challenge 4's /kubecon weather ask chaining the rogue tool with those on"]),
         ("the Night Before entry with Challenge 4 ahead of the fixes",
@@ -3559,9 +3558,9 @@ def community_c4_listed_checks() -> None:
     ]
     for label, text, missing in mutations:
         full = wanted if "Night Before" in label else [
-            "guardrails-on", "HC-666", "guard-agency-on and guard-input-on (each run in the private terminal",
-            "Challenge 4's /kubecon weather ask chaining the rogue tool with those on", "guard-input-off",
-            "guardrails-off"]
+            "guardrails-k8s-on", "HC-666", "guardrails-agency-on and guardrails-input-on (each run in the private terminal",
+            "Challenge 4's /kubecon weather ask chaining the rogue tool with those on", "guardrails-input-off",
+            "guardrails-k8s-off"]
         got = out_of_order(text, full)
         check(f"the order check catches {label}", bool(got) and all(m in got for m in missing), str(got))
 

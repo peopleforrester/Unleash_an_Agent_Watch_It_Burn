@@ -2319,25 +2319,32 @@ is merely slow rather than rebuilding:
 
   It holds both clusters' guard lock from its first read to its last, stops unless the
   context is the private cluster, and reads both clusters' `/controls`
-  (`burritobot-private.burritobot.co` and `attackme.burritobot.co`). Then it runs
+  (`burritobot-private.burritobot.co` and `attackme.burritobot.co`). It starts only
+  when every guard is off on both, the talk's start state. Then it runs
   `guardrails-k8s-on`, `guardrails-agency-on`, `guardrails-input-on` and `guardrails-mcp-on` in talk order
-  in the private terminal pod, as the presenter types them, printing what the terminal
-  prints, and after each reads both `/controls` again. Last it runs `guardrails-ai-off` and
-  `guardrails-k8s-off` from the same terminal, whatever happened before (a FAIL, a ^C), and
-  reads both clusters once more.
+  in the private terminal pod, as the presenter types them (the names since #1350;
+  the old ones are aliases), printing what the terminal prints, and after each reads
+  both `/controls` again. Last it runs each switch's `-off`, the last switch first:
+  `guardrails-mcp-off`, `guardrails-input-off`, `guardrails-agency-off` and `guardrails-k8s-off`, from
+  the same terminal, whatever happened before (a FAIL, a ^C), and reads both clusters
+  once more.
 
   - **PASS** on a switch's line for a cluster: every `/controls` field that switch
     owns read off before it and on after it on that cluster (`guardrails-k8s-on` the four
-    Kubernetes guardrails, `guardrails-agency-on` `agency_scoped`, `guardrails-input-on`
-    `input_blocklist` and `input_classifier`, `guardrails-mcp-on` `tool_allowlist`). The
+    Kubernetes guardrails, `rbac_scoped`, `kyverno`, `kubearmor` and `networkpolicy`,
+    `guardrails-agency-on` `agency_scoped`, `guardrails-input-on`
+    `input_blocklist` and `input_classifier`, `guardrails-mcp-on` `tool_allowlist`). Each
+    switch, and each `-off`, also gets a `private/printed` and a `community/printed`
+    line: the `/controls` read the switch prints at its end, for that cluster, shows
+    its fields ON (off for an `-off`). The
     closing lines are `start-state`, every one of those fields off again on that
-    cluster (Falco is not judged), and `as-found`, each field the closing pair turns
-    off reading what it read before the first switch.
+    cluster (Falco is not judged), and `as-found`, each start-state field
+    reading what it read before the first switch.
   - **FAIL** on a switch's line: that cluster did not get the switch, and a room's
     retry there would not meet the fix. A `terminal` FAIL line is the terminal's own
     command exiting non-zero or timing out; read what it printed above the line. A
-    FAIL on `start-state` or `as-found` means the closing pair left a guard on: run
-    the switch's own `-off` command (`guardrails-mcp-off`, `guardrails-input-off`) in the private
+    FAIL on `start-state` or `as-found` means an `-off` left a guard on: run
+    that switch's own `-off` command (`guardrails-mcp-off`, `guardrails-input-off`) in the private
     terminal before anything else.
   - It must end `STAGE SWITCH CHECK GREEN` (exit 0). `STAGE SWITCH CHECK RED` (exit 1)
     is any FAIL line; its summary names the lines that wait on #1132. `STAGE SWITCH

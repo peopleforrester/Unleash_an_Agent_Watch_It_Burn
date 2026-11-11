@@ -58,9 +58,9 @@
 # out of Tempo and held to no tasks/get poll span from guard-proxy, agentgateway or kagent, with the message/send hop
 # and the agent's spans under it, while the gateway's log shows the polls went out. One model call; policies as found.
 #
-# #954's recipe block (test_recipe_block_live.py) runs on PRIVATE_CONTEXT too: the terminal's guardrails-on, the card
+# #954's recipe block (test_recipe_block_live.py) runs on PRIVATE_CONTEXT too: the terminal's guardrails-k8s-on, the card
 # BurritoBot's prompt names read back Permission denied with KubeArmor's Block alert, one marked model call asking for
-# it, then guardrails-off. The switch reaches the community cluster as well, for the minute or two it runs.
+# it, then guardrails-k8s-off. The switch reaches the community cluster as well, for the minute or two it runs.
 #
 # #954's 2-hour flow (test_two_hour_flow_live.py, #970) runs on PRIVATE_CONTEXT as well: lab.html's own chat asks for
 # Challenges 1, 2, 3, 5, 6 and 7, each in a fresh marked conversation, judged on what the lab tells the student to look
