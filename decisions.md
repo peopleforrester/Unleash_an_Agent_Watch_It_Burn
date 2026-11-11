@@ -53519,3 +53519,40 @@ runner switch, CI and the gate using the image, and the host-side refusal test s
 after these commits reach staging, and on the package being pullable without a login.
 
 **Live check.** None: this change touches `verify/`, `.github/workflows/` and prose, and no cluster runs any of it.
+
+## 2026-11-11 · #1353 · run 20425 · #1347's chat pages and deployments page read live: both bars, the witch name, the agenticburn.com move and each row's server
+
+#1347 reached main at ca8e6f05, and on both clusters the `ai-layer` Application was Synced and Healthy at that
+revision. The live `burritbot.html` and `event.js` on `attackme.burritobot.co` and `burritobot-private.burritobot.co`
+were byte for byte the repo's. These are the reads run 20415's entry named under Not yet run on a cluster, made on
+2026-11-11 between 14:55Z and 15:05Z.
+
+- `python3 verify/test_chat_phone_screen_e2e.py --live` exited 0 with `All chat phone screen checks passed.` (195
+  PASS). attackme showed `bbbtn`, `depbtn`, `supbtn`, `bcnbtn` and `fbbtn` at every size; burritobot-private showed
+  those and `vttbtn` and `ddbtn`, seven, at every size; both bars were one row at 320, 360, 390, 412, 840 and 1280px.
+- A clean headless Chromium (a fresh context per read, no cookie, no storage) at 390x844 and 1440x900:
+  `https://attackme.agenticburn.com/` landed on `https://attackme.burritobot.co/` at both sizes and showed a witch
+  name ("Mortimer the Troll", "Elspeth the Banshee"), with BurritoBot, Deployments, Support, Beacon and Feedback, and
+  no Terminal and no Datadog. The only cookie was `wib_witch` on `.burritobot.co`.
+  `https://burritobot-private.burritobot.co/` showed a witch name ("Dorian the Phantom", "Octavia the Vampire") and
+  Terminal, BurritoBot, Datadog, Deployments, Support, Beacon and Feedback. At both sizes, on both pages, every button
+  sat at the same top, none was clipped, and the page was no wider than the window: icons at 390, labels at 1440.
+  Deployments, Support and Beacon pointed at `https://deployments.burritobot.co/`, `https://support.burritobot.co/`
+  and `https://beacon.burritobot.co/beacon/view`.
+- `https://deployments.burritobot.co/deployments.json` answered `[]`, because run 20415's check removed its rows.
+  To have a labelled row from each server, a one-off driver over `verify/one_desk_live.py`'s `DeskCheck` ran its
+  steps, then rendered the page in Chromium before its cleanup. It printed `14 checks: 14 PASS, 0 FAIL`. The desk
+  filed HC-2369 and both bots read it; each bot's deploy_app put up a ConfigMap. `/deployments.json` gave
+  `desk-check-150429-community` cluster `community`, server `attackme`, and `desk-check-150429-private` cluster
+  `private`, server `presenters`. The page read "Agatha the Gargoyle deployed desk-check-150429-community at 15:04:50
+  from attackme" and "... desk-check-150429-private at 15:04:57 from presenters". The cleanup deleted both ConfigMaps
+  and removed the two rows and HC-2369 from the desk, and `/deployments.json` answered `[]` again, so both clusters
+  were left as found. No guard and no Secret was touched.
+
+**The check holds the server now.** `one_desk_live.py`'s page step checked only each row's `cluster`; it now also
+requires the `server` the page shows (`SERVERS`, attackme for community and presenters for private). Two new checks in
+`verify/test_live_check_cleanup.py` hold `SERVERS` equal to `ticket_site.py`'s `SERVER_NAMES` and fail a row with no
+server or the other one. `python3 verify/test_live_check_cleanup.py` passed, run once. `python3 verify/scope_tests.py
+write` changed nothing. The live E2E tier was not run: nothing a tier test reads changed.
+
+No dependency was added.

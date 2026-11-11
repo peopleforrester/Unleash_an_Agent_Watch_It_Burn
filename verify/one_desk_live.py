@@ -15,7 +15,9 @@ What it checks, in this order:
             through desk-relay, the public bot its own cluster's desk.
   deploy    deploy_app is called in each tool pod with one harmless ConfigMap, desk-check-<stamp>-<cluster>, and
             answers that it is deployed.
-  page      https://deployments.burritobot.co/deployments.json lists both, labelled community and private.
+  page      https://deployments.burritobot.co/deployments.json lists both, labelled community and private, and
+            each row names its server as the page shows it: attackme for community, presenters for private
+            (#1347, #1353).
 
 Then, on every path out of the checks above, a failure or a raise included (#1215): both ConfigMaps are deleted, and
 the two rows and the filed ticket are removed from the one desk with its loopback-only POST /desk-forget, run in the
@@ -82,15 +84,22 @@ def plain_ticket(word: str, stamp: str) -> str:
             f"{word}. Both cantina bots should read this ticket by its number.")
 
 
+# The server each cluster's rows name on the one page, as ticket_site.py's SERVER_NAMES gives it (#1347): the page
+# tags a row "from attackme" or "from presenters". verify/test_live_check_cleanup.py holds the two tables equal.
+SERVERS = {"community": "attackme", "private": "presenters"}
+
+
 def judge_rows(rows, names: dict[str, str]) -> tuple[bool, str]:
-    """The one page lists each side's ConfigMap, labelled with the cluster whose bot deployed it."""
+    """The one page lists each side's ConfigMap, labelled with the cluster whose bot deployed it and naming the server
+    the page shows for that cluster."""
     if not isinstance(rows, list):
         return False, f"{DEPLOYMENTS} did not answer a list: {str(rows)[:200]}"
-    got = {r.get("name"): r.get("cluster") for r in rows if isinstance(r, dict)}
-    wrong = {side: got.get(name) for side, name in names.items() if got.get(name) != side}
+    got = {r.get("name"): (r.get("cluster"), r.get("server")) for r in rows if isinstance(r, dict)}
+    wrong = {side: got.get(name) for side, name in names.items() if got.get(name) != (side, SERVERS[side])}
     if wrong:
-        return False, f"the one page does not list each check row under its cluster: {wrong} (rows: {got})"
-    return True, "the one page lists " + ", ".join(f"{n} ({s})" for s, n in names.items())
+        return False, (f"the one page does not list each check row under its cluster and server: {wrong} "
+                       f"(rows as (cluster, server): {got})")
+    return True, "the one page lists " + ", ".join(f"{n} ({s}, from {SERVERS[s]})" for s, n in names.items())
 
 
 class DeskCheck:
