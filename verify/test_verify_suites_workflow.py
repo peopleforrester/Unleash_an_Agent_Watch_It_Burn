@@ -44,6 +44,11 @@ history or an unreachable origin fails.
 #1325: the e2e job failed in the base step on a TLS handshake timeout reading the Actions API, on staging 49387d36 and
 again on 92f5514c. A read that gets no answer, a 429 or a 5xx is tried again after waits of 5, 15, 30 and 60 s, five
 tries in all (a stub sleep stands in for the waits); a read GitHub answered with any other status fails at once.
+
+#1330: on staging 3da68e84 the base step's fetch of staging got no answer and git waited out curl's 300 s connect
+timeout. The fetch now runs under timeout with a 120 s limit and is tried again after the same waits. A stub git
+passes every call through to git but fails or hangs the first fetches, and a stub timeout logs its call and, for the
+hang, shortens the limit so the real timeout kills the hung fetch in seconds.
 """
 from __future__ import annotations
 
@@ -51,6 +56,7 @@ import copy
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -426,29 +432,65 @@ def http_error(status: int) -> str:
     return f"gh: Error (HTTP {status})"
 
 
+# What git printed when staging 3da68e84's e2e job's fetch got no answer (#1330).
+FETCH_NO_ANSWER = ("fatal: unable to access 'https://github.com/owner/repo/': "
+                   "Connection timed out after 300028 milliseconds")
+# The script's own limit on one fetch, and the call it makes under timeout; the stub timeout logs the call.
+FETCH_LIMIT_S = "120"
+FETCH_CALL = f"-k 10 {FETCH_LIMIT_S} git fetch --no-tags --prune origin +refs/heads/staging:refs/remotes/origin/staging"
+# The limit the stub timeout puts in place of the script's for a fetch made to hang, so the real timeout kills it in
+# seconds, not minutes; the fetches after it keep the script's own limit.
+HANG_LIMIT_S = "3"
+REAL = {name: shutil.which(name) for name in ("git", "timeout", "sleep")}
+for _name, _path in REAL.items():
+    if not _path:
+        sys.exit(f"{_name} is not on PATH; the base step's stubs pass through to it")
+
+
 def base_sha(cwd: Path, env_file: Path | None, runs: object | None = None, *, token: bool = True,
-             repo: bool = True, gh_fails: int = 0, gh_err: str = NO_ANSWER) -> tuple[int, str, str]:
+             repo: bool = True, gh_fails: int = 0, gh_err: str = NO_ANSWER, fetch_fails: int = 0,
+             fetch_hangs: bool = False) -> tuple[int, str, str]:
     """Runs ci-base-sha.sh in `cwd` with a stub gh first on PATH that logs its arguments to GH_LOG and prints `runs`
     as JSON. Its first `gh_fails` calls instead print `gh_err` on stderr and exit 1. A stub sleep logs each wait to
-    SLEEP_LOG and returns at once. Returns the exit code, the output and what the script wrote to `env_file`; the gh
-    calls and the waits are left on base_sha.gh_calls and base_sha.sleeps."""
+    SLEEP_LOG and returns at once. A stub git passes every call to the real git, but logs each fetch to FETCH_LOG and
+    makes its first `fetch_fails` fetches print FETCH_NO_ANSWER and exit 128, or, with `fetch_hangs`, wait until the
+    real timeout kills them. A stub timeout logs its arguments to TIMEOUT_LOG and runs the real timeout with them,
+    the limit replaced by HANG_LIMIT_S for those hanging fetches alone. Returns the exit code, the output and what the script wrote
+    to `env_file`; the gh calls, the waits, the fetches and the timeout calls are left on base_sha.gh_calls,
+    base_sha.sleeps, base_sha.fetches and base_sha.timeouts."""
     stub = cwd.parent / "stub"
     stub.mkdir(exist_ok=True)
     (stub / "gh").write_text('#!/usr/bin/env bash\nprintf "%s\\n" "$*" >>"$GH_LOG"\n'
                              'if (( $(wc -l <"$GH_LOG") <= GH_STUB_FAIL )); then\n'
                              '    printf "%s\\n" "$GH_STUB_ERR" >&2; exit 1\nfi\ncat "$GH_STUB_RUNS"\n')
     (stub / "sleep").write_text('#!/usr/bin/env bash\nprintf "%s\\n" "$*" >>"$SLEEP_LOG"\n')
-    for name in ("gh", "sleep"):
+    (stub / "git").write_text(
+        '#!/usr/bin/env bash\nif [[ "$1" == fetch ]]; then\n    printf "%s\\n" "$*" >>"$FETCH_LOG"\n'
+        '    if (( $(wc -l <"$FETCH_LOG") <= FETCH_STUB_FAIL )); then\n'
+        f'        [[ -z "$FETCH_STUB_HANG" ]] || exec "{REAL["sleep"]}" 600\n'
+        '        printf "%s\\n" "$FETCH_STUB_ERR" >&2; exit 128\n    fi\nfi\n'
+        f'exec "{REAL["git"]}" "$@"\n')
+    # The script calls `timeout -k <s> <limit> <command...>`; the stub keeps the kill-after and swaps the limit.
+    (stub / "timeout").write_text(
+        '#!/usr/bin/env bash\nprintf "%s\\n" "$*" >>"$TIMEOUT_LOG"\n'
+        '[[ "$1" == -k ]] || { echo "stub timeout: expected -k first, got: $*" >&2; exit 2; }\n'
+        'kill_after="$2" limit="$3"; shift 3\n'
+        'if [[ -n "$FETCH_STUB_HANG" ]] && (( $(wc -l <"$TIMEOUT_LOG") <= FETCH_STUB_FAIL )); then\n'
+        '    limit="$HANG_LIMIT_S"\nfi\n'
+        f'exec "{REAL["timeout"]}" -k "$kill_after" "$limit" "$@"\n')
+    for name in ("gh", "sleep", "git", "timeout"):
         (stub / name).chmod(0o755)
     (stub / "runs.json").write_text(runs if isinstance(runs, str) else json.dumps(runs or {"workflow_runs": []}))
-    log, sleeps = stub / "gh.log", stub / "sleep.log"
-    log.write_text("")
-    sleeps.write_text("")
+    log, sleeps, fetches, timeouts = stub / "gh.log", stub / "sleep.log", stub / "fetch.log", stub / "timeout.log"
+    for f in (log, sleeps, fetches, timeouts):
+        f.write_text("")
     drop = ("GITHUB_ENV", "PUSH_BEFORE", "GH_TOKEN", "GITHUB_TOKEN", "GITHUB_REPOSITORY", "GH_STUB_FAIL", "GH_STUB_ERR")
     env = {k: v for k, v in os.environ.items() if k not in drop}
     env.update({"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "PATH": f"{stub}:{env.get('PATH', '')}",
                 "GH_LOG": str(log), "GH_STUB_RUNS": str(stub / "runs.json"), "SLEEP_LOG": str(sleeps),
-                "GH_STUB_FAIL": str(gh_fails), "GH_STUB_ERR": gh_err})
+                "GH_STUB_FAIL": str(gh_fails), "GH_STUB_ERR": gh_err, "FETCH_LOG": str(fetches),
+                "TIMEOUT_LOG": str(timeouts), "FETCH_STUB_FAIL": str(fetch_fails), "FETCH_STUB_ERR": FETCH_NO_ANSWER,
+                "FETCH_STUB_HANG": "1" if fetch_hangs else "", "HANG_LIMIT_S": HANG_LIMIT_S})
     if token:
         env["GH_TOKEN"] = "stub-token"
     if repo:
@@ -458,6 +500,8 @@ def base_sha(cwd: Path, env_file: Path | None, runs: object | None = None, *, to
     r = subprocess.run(["bash", str(BASE_SCRIPT)], cwd=cwd, env=env, capture_output=True, text=True)
     base_sha.gh_calls = log.read_text().splitlines()
     base_sha.sleeps = sleeps.read_text().splitlines()
+    base_sha.fetches = fetches.read_text().splitlines()
+    base_sha.timeouts = timeouts.read_text().splitlines()
     return r.returncode, r.stdout + r.stderr, env_file.read_text() if env_file and env_file.exists() else ""
 
 
@@ -498,6 +542,31 @@ with tempfile.TemporaryDirectory() as tmp:
     check("an agent branch gets HECATON_BASE_SHA, the merge base with origin/staging",
           rc == 0 and env == f"HECATON_BASE_SHA={fork}\n", f"exit {rc}, wrote {env!r}: {out}")
     check("an agent branch past staging never calls gh", base_sha.gh_calls == [], f"gh got {base_sha.gh_calls}")
+    check(f"the fetch of staging runs under timeout with a {FETCH_LIMIT_S} s limit, once when it works (#1330)",
+          base_sha.timeouts == [FETCH_CALL] and len(base_sha.fetches) == 1 and base_sha.sleeps == [],
+          f"timeout got {base_sha.timeouts}, {len(base_sha.fetches)} fetch(es), slept {base_sha.sleeps}")
+
+    # #1330: a fetch that fails or gets no answer is tried again after each of these waits, five tries in all.
+    waits = ["5", "15", "30", "60"]
+    for fails in (1, 2, 4):
+        rc, out, env = base_sha(work, t / f"env-fetch-{fails}", token=False, repo=False, fetch_fails=fails)
+        check(f"a fetch of staging that failed {fails} time(s) gets the merge base on try {fails + 1} (#1330)",
+              rc == 0 and env == f"HECATON_BASE_SHA={fork}\n" and len(base_sha.fetches) == fails + 1
+              and base_sha.sleeps == waits[:fails] and "git fetch try 1 of 5 got exit 128" in out
+              and FETCH_NO_ANSWER in out,
+              f"exit {rc}, wrote {env!r}, {len(base_sha.fetches)} fetch(es), slept {base_sha.sleeps}: {out}")
+    rc, out, env = base_sha(work, t / "env-fetch-all", token=False, repo=False, fetch_fails=5)
+    check("a fetch of staging that fails on all five tries exits 1, naming the tries (#1330)",
+          rc == 1 and env == "" and len(base_sha.fetches) == 5 and base_sha.sleeps == waits
+          and "could not fetch staging from origin on 5 tries" in out,
+          f"exit {rc}, wrote {env!r}, {len(base_sha.fetches)} fetch(es), slept {base_sha.sleeps}: {out}")
+    # The fetch that hung on staging 3da68e84, here killed by the real timeout at HANG_LIMIT_S.
+    rc, out, env = base_sha(work, t / "env-fetch-hang", token=False, repo=False, fetch_fails=1, fetch_hangs=True)
+    check("a fetch of staging that hangs is cut off at the limit and tried again (#1330)",
+          rc == 0 and env == f"HECATON_BASE_SHA={fork}\n" and len(base_sha.fetches) == 2
+          and base_sha.timeouts == [FETCH_CALL] * 2 and base_sha.sleeps == waits[:1]
+          and f"git fetch try 1 of 5 got no answer in {FETCH_LIMIT_S} s" in out,
+          f"exit {rc}, wrote {env!r}, timeout got {base_sha.timeouts}, slept {base_sha.sleeps}: {out}")
 
     git(work, "checkout", "-q", "--detach", s4)
     # The answer as the API might give it, newest first: s4 still running, s3 failed, s2 cancelled, and green runs
@@ -536,9 +605,8 @@ with tempfile.TemporaryDirectory() as tmp:
         check(f"a staging tip with {label} fails, naming it", rc == 1 and env == "" and word in out,
               f"exit {rc}, wrote {env!r}: {out}")
 
-    # #1325: a read that gets no answer, a 429 or a 5xx is tried again after each of these waits, five tries in all;
+    # #1325: a read that gets no answer, a 429 or a 5xx is tried again after each of the same waits, five tries in all;
     # any other status GitHub answered fails at once.
-    waits = ["5", "15", "30", "60"]
     green = {"workflow_runs": [run(s3)] + noise + [run(fork)]}
     for case, (label, err) in enumerate((("no answer (a TLS handshake timeout)", NO_ANSWER),
                                          ("an HTTP 502", http_error(502)), ("an HTTP 429", http_error(429)))):
@@ -572,7 +640,9 @@ with tempfile.TemporaryDirectory() as tmp:
     git(work, "remote", "set-url", "origin", str(t / "missing.git"))
     git(work, "checkout", "-q", "agent/1020-2")
     rc, out, env = base_sha(work, t / "env6")
-    check("an origin that cannot be fetched fails", rc == 1 and env == "", f"exit {rc}: {out}")
+    check("an origin that cannot be fetched fails after five tries", rc == 1 and env == ""
+          and len(base_sha.fetches) == 5 and "could not fetch staging from origin on 5 tries" in out,
+          f"exit {rc}, {len(base_sha.fetches)} fetch(es): {out}")
 
     # A staging that is one root commit has no ancestor to scope by.
     origin2, work2 = t / "origin2.git", t / "work2"
