@@ -53028,3 +53028,22 @@ The scoped suites are left to the gate.
 202611110035`, or a fresh `seed` and `views --apply` if the stage changes before then.
 That a view opens on its query in the browser is not checked: it needs a Datadog session in a browser, and Michael's
 Chrome on Tanjiro had none on 2026-11-05 and 2026-11-08.
+
+## 2026-11-11 · #648 · run 20360 · Run 20202's tests gate failure: a `monitors --apply` with no session in the run-of-show
+
+Run 20202 ended failed on hecaton's tests gate with one red test, `verify/test_fleet_monitors.py`: `apply 2 in the
+run-of-show has a --session the loader accepts` failed. That test finds every `monitors --apply` in the run-of-show
+and requires each to carry the KubeCon session window, because an apply without one mutes the no-traces monitor
+indefinitely. Run 20202's retention step said the key is used "as `fleet.sh monitors --apply` does", which the test
+read as a second apply with no window. The sentence now names the key as "the key the fleet monitors' apply writes
+with", and no command. The run-of-show's meaning is unchanged. Run 20202 had run the run-of-show's readers it guessed,
+not the scoped suite, so it missed this one.
+
+**Tests.** `python3 verify/test_fleet_monitors.py` exits 0 alone. `HECATON_BASE_SHA=89125d24 bash
+verify/run-tests.sh`: 187 of 455 offline tests, `ALL OFFLINE RENDER-GATE TESTS GREEN`, exit 0.
+`HECATON_BASE_SHA=89125d24 bash verify/run-e2e-tools.sh`: `12 checks ran (the offline suite and 11 tier tests) in
+7m35s`, `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The prose gate passes.
+
+**Live, read-only, 13:03Z.** `python3 verify/stage_traces.py check --profile accen-dev --stamp 202611110035` read
+`STAGE TRACES GREEN`, and `stage_views.py views --list` read all seven `WIB stage` views `OK` with nothing to write.
+The change itself is prose in `facilitation/` and `decisions.md`, which no cluster runs, so there is no other live check.
