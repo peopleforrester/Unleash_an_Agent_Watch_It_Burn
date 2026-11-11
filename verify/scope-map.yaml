@@ -8902,6 +8902,11 @@ reads:
     - verify/stage_traces.py
     - verify/test_kubecon_probe.py
     - verify/topic_cases.py
+  test_stage_views.py:
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - infra/datadog-fleet/fleet_monitors.py
+    - infra/datadog-room
+    - infra/datadog-room/stage_views.py
   test_storefront_backend_check_order_e2e.py:
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js

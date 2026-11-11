@@ -7774,6 +7774,14 @@ rules:
       - verify/topic_cases.py
     tests:
       - verify/test_stage_traces.py
+  - name: test_stage_views.py
+    paths:
+      - facilitation/kubecon-na-2026-run-of-show.md
+      - infra/datadog-fleet/fleet_monitors.py
+      - infra/datadog-room
+      - infra/datadog-room/**
+    tests:
+      - verify/test_stage_views.py
   - name: test_stream.py
     paths:
       - gitops/ai-layer/guard-proxy
