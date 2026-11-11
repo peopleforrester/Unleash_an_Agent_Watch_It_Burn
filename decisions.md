@@ -51339,3 +51339,125 @@ the offline tests that read `image_cache.py`, exit 0, and `fetch_inventory.py ch
 to the gate and to CI on staging.
 
 **No live cluster check.** The change touches only `verify/` files that no cluster runs.
+## 2026-11-09 · #1288 · run 19749 · guard-proxy repinned to f75aa2f, the folded 144-term list, with the chat page's list held equal to it
+
+**The repin.** `gitops/ai-layer/guard-proxy` moves from a7a5a36 (#1267) to f75aa2f, guard-proxy main's head. It
+holds 48cc2ca (guard-proxy-agenticburn#81: the spike's 144-entry folded list for the `/chat` refusal, the reply mask
+and the prompt wall, the prompt masked in a refused turn's spans, and an optional Bedrock check that does nothing
+while `CONDUCT_GUARDRAIL_ID` is unset, as it is here) and f75aa2f itself (#82: the terms masked in an answered turn's
+`chat` span). `checksum/proxy-py` is `f5410e81173a`, sha256 of `proxy.py` at f75aa2f.
+
+**#1280 was already on staging.** The issue waited on #1280's page list; run 19662's draft of it is in staging
+(fdaa5d15, a71c6171), so this change is the repin alone. No earlier draft of #1288 existed (`prior-drafts.sh`: NONE).
+
+**The tests.** `verify/test_guard_proxy_pin_1288.py` is the new floor: the pin is on guard-proxy main at or after
+48cc2ca, the release-notes entry for 48cc2ca says to repin to it or later, the pinned `proxy.py` carries
+`conduct_fold` and `CONDUCT_GUARDRAIL_ID`, its default list has 144 entries, its `conduct_matches` catches the
+release notes' spaced-out and fullwidth spellings (and a7a5a36's misses both), and the annotation is the build's.
+Run on the a7a5a36 gitlink before the commit, it failed seven checks; on f75aa2f it passes. #1267's test stays: its
+floor is older and still holds. `verify/test_chat_coc.py` held the proxy's list as a subset of the page's while the
+wall had its own; it now holds `proxy.PROFANITY` and the Go build's `DefaultProfanity` equal to the page's list,
+entry for entry and in order. The Go build keeps that list ROT13 since 48cc2ca (`var DefaultProfanity =
+rot13(defaultProfanityROT13)`), so the test reads the ROT13 constant. Run here, each once: test_chat_coc.py,
+test_guard_proxy_pin_1288.py, test_guard_proxy_pin_1267.py, _1225, _1048, test_guard_proxy_pin_on_main.sh,
+test_proxy_checksum.py, test_prompt_wall_redaction.py, test_guard_toggle_record.py, test_pantry_shut_record.py and
+test_scope_tests.py, all exit 0. The rest of the 306 offline and 41 tier tests the selector names are left to
+validation.
+
+**Live check.** The change touches `gitops/`. Read on 2026-11-09, changing nothing: on watch-it-burn-community and
+watch-it-burn-private the `agent/guard-proxy` Deployment carries `checksum/proxy-py: 5caafc6044af` (a7a5a36), one
+ready replica, and the `ai-layer` Application is Synced to staging 6eaadbd3. The new build runs nowhere before
+promotion.
+
+Not yet run on a cluster: once Argo CD syncs the promoted staging, `checksum/proxy-py` reads `f5410e81173a` on both
+clusters, and with every guard toggled off, `/chat` refuses "f u c k" and its fullwidth spelling with the
+code-of-conduct reply on each, as guard-proxy's release notes for 48cc2ca say. The toggles are put back as found.
+
+## 2026-11-10 · #1288 · run 19825 · run 19749's tests gate: the weaver spans test did not know 48cc2ca's loop over two spans
+
+**The cause.** Run 19749's repin failed hecaton's tests gate on one test, `verify/test_weaver_guard_proxy_spans.py`:
+"every span variable proxy.py sets a literal attribute on is mapped to a group (['span'])". 48cc2ca's
+`_refuse_for_conduct` stamps a refused turn's attributes with `for span in (root, chat_span):`, where `root` is
+`trace.get_current_span()`, the `/chat` POST server span. The test maps each span by the variable name the
+attribute is set on, so the loop variable `span` and the new `root` were unmapped. The registry was already right:
+`span.witb.guard_proxy.http` and `span.witb.guard_proxy.chat` both declare the four attributes the loop sets.
+Run 19749 had run only the tests that read the term list, so it missed this one.
+
+**The fix.** The test maps `root` to the server span's group, as it maps `_root_span`, and expands a loop over a
+tuple of mapped span variables into one call per span, so each attribute is checked on both groups. A new check
+holds that the loop is over `root` and `chat_span`. No proxy or registry change. Run here once each:
+test_weaver_guard_proxy_spans.py, test_weaver_guard_proxy_stamps.py and test_scope_tests.py, all exit 0. The rest of
+the selection is left to validation.
+
+Live check: none changed since run 19749's read. This run changes only a file under `verify/` that no cluster runs.
+The post-sync check that entry names under "Not yet run on a cluster" is still owed.
+
+## 2026-11-10 · #1288 · run 19825 · f75aa2f is held: its /chat matcher takes time in the square of a leetspeak run, and the fix is not on guard-proxy main yet
+
+**What the merge showed.** Staging had moved 20 commits since run 19749's base, among them #1300 (d2846fef), which made
+the code-of-conduct pattern linear in floor.py and every copy in this repo, with `verify/test_coc_pattern_linear.py`
+to time them. Its docstring names the case this repin opens: "once guard-proxy runs the floor, /chat". This run
+merged staging into the branch (clean) and timed the pinned proxy.py's `conduct_matches()` on that test's 123 cases.
+f75aa2f builds each letter the pre-#1300 way. A run of `$` took 173 ms at 1,000 characters, 2,243 ms at 4,000 and
+35,150 ms at 16,000 on this host; a7a5a36, live now, took under 1 ms at all three. proxy.py is a Python
+`ThreadingHTTPServer` with no cap on a prompt's length, and since a7a5a36 `/chat` runs the check on every turn,
+whatever the toggles say, so one pasted run holds the interpreter and stalls every guest's `/chat`.
+
+**The fix exists upstream.** guard-proxy-agenticburn#83, closed 2026-11-09, applies #1300's rule to proxy.py and the
+Go build. Its commit 0627502da78f (after d666698) is on guard-proxy's staging, not its main, and this repo pins only
+guard-proxy main commits (`test_guard_proxy_pin_on_main.sh`, `test_guard_proxy_pin_1288.py`). With the submodule
+checked out at 0627502 here, `test_coc_pattern_linear.py` passed (the guard-proxy copy's slowest run 13.7 ms at
+4,000 characters) and `test_chat_coc.py` passed; sha256(proxy.py)[:12] there is `d7efbfee76b7`.
+
+**What this run did.** `test_coc_pattern_linear.py` now times the pinned guard-proxy's `conduct_matches()` beside the
+other copies, and stops timing a copy at its fifth failing run, so a quadratic copy fails in seconds, not most of an
+hour. At f75aa2f it fails on that copy alone (5 runs printed, 14.8 s); the other four copies pass. The branch is
+left on f75aa2f with that failure, so it cannot promote, and the issue waits on 0627502 reaching guard-proxy main.
+
+**For the next run.** Check `git -C gitops/ai-layer/guard-proxy fetch origin && git -C gitops/ai-layer/guard-proxy
+merge-base --is-ancestor 0627502da78f origin/main`. When it holds, repin to guard-proxy main's head, set
+`checksum/proxy-py` to its proxy.py's sha256[:12] (`d7efbfee76b7` if proxy.py is unchanged since 0627502), and
+consider raising `test_guard_proxy_pin_1288.py`'s floor to 0627502. Then run test_coc_pattern_linear.py,
+test_chat_coc.py, test_guard_proxy_pin_1288.py, test_weaver_guard_proxy_spans.py and test_proxy_checksum.py. Since
+the merge, `test_coc_pattern_linear.py` failed once on its first run here with three checks, at a host load of 20,
+then passed: noted as a followup, since this run did not keep that output.
+
+Run here once each: test_coc_pattern_linear.py (exit 1 at f75aa2f, the guard-proxy copy only; exit 0 at 0627502),
+test_scope_tests.py (exit 0). Live check: none; the clusters still run a7a5a36 and nothing promotes from this run.
+
+## 2026-11-11 · #1288 · run 20212 · guard-proxy repinned to 0627502, the folded 144-term list in linear time
+
+**What moved since run 19825.** guard-proxy-agenticburn#83's 0627502da78f is now on guard-proxy main
+(`merge-base --is-ancestor 0627502da78f origin/main` holds), which was the one thing run 19825 held the branch for.
+Main has one commit past it, 0a3ca16 (guard-proxy-agenticburn#84), which grows the default list from 144 entries to
+1,253. This run pins 0627502, not main's head: the chat page holds the 144-entry list from #1280, and
+`test_chat_coc.py` holds the page's list equal to the pinned proxy's, term for term. Moving to 0a3ca16 and porting
+its list to the page is #1316's work.
+
+**Ported from the draft.** `prior-drafts.sh 1288 origin/staging` named one draft, `origin/agent/1288-19749`, three
+edits in place and a decisions.md append; the two LATER base commits (8dc2f15d, 4924185d) are #1311 records that only
+name this repin as owed. Its five code commits cherry-picked onto staging 89125d24 with no conflict: the repin, the
+scope-map entry, `test_chat_coc.py`'s equality, `test_weaver_guard_proxy_spans.py`'s loop over two spans and
+`test_coc_pattern_linear.py` timing the pinned `proxy.py`. Its merge commit was dropped, and its three decisions.md
+entries are kept above. What differs from the draft: the draft pinned f75aa2f with `f5410e81173a`; this run pins 0627502
+with `checksum/proxy-py` `d7efbfee76b7`, sha256 of `proxy.py` at 0627502. `test_guard_proxy_pin_1288.py` now also requires
+0627502 as an ancestor of the pin, as run 19825 proposed, so a repin to f75aa2f fails it by name, not only by
+`test_coc_pattern_linear.py`'s timing. `verify/test-map.yaml` is rewritten from the scope map for the draft's two
+scope-map additions, which #1319's generated map did not have when the draft was cut.
+
+**Tests, each run once here.** test_guard_proxy_pin_1288.py, test_guard_proxy_pin_1267.py, test_guard_proxy_pin_1225.py,
+test_guard_proxy_pin_1048.py, test_guard_proxy_pin_on_main.sh (18 passed), test_proxy_checksum.py, test_chat_coc.py,
+test_weaver_guard_proxy_spans.py, test_weaver_guard_proxy_stamps.py, test_coc_pattern_linear.py (the guard-proxy copy's
+slowest run 13.9 ms at 4,000 characters), test_scope_tests.py and test_test_map.py: all exit 0. With the gitlink and
+checksum set back in a throwaway commit, test_guard_proxy_pin_1288.py exits 1 at a7a5a36 with `5caafc6044af` (six
+checks) and at f75aa2f with `f5410e81173a` (the pin check alone). The rest of the scoped selection is left to
+validation.
+
+**Live check.** The change touches `gitops/` and the guard-proxy submodule pointer. Read on 2026-11-11, changing
+nothing: on watch-it-burn-community and watch-it-burn-private the `agent/guard-proxy` Deployment carries
+`checksum/proxy-py: 5caafc6044af` (a7a5a36, staging's pin) with one ready replica, and the `ai-layer` Application is
+Synced to staging 89125d24. The new build runs on neither before promotion.
+
+Not yet run on a cluster: once Argo CD syncs the promoted staging, `checksum/proxy-py` reads `d7efbfee76b7` on both
+clusters, and with every guard toggled off, `/chat` refuses "f u c k" and its fullwidth spelling with the
+code-of-conduct reply on each, as guard-proxy's release notes for 48cc2ca say. The toggles are put back as found.
