@@ -160,7 +160,10 @@ check("it prints KUBECON PROBE GREEN with no FAIL and RED with one",
 check("it logs the spend before and after over the model calls",
       re.search(r'"spend on %s: \$%\.4f -> \$%\.4f over %d model calls', PROBE) is not None)
 check("the off-topic note reads `answered N of M`", 'f"answered {landed} of {len(attempts)}' in PROBE)
-check("the off-topic note names its re-sends", "re-sent once after a Bedrock ToolUse 424)" in PROBE)
+# Since #1303 the note names each re-send's cause, so the words the records quote ("re-sent once after a Bedrock
+# ToolUse 424") are the note's format with the 424's cause name in it.
+check("the off-topic note names its re-sends, a 424's as `re-sent once after a Bedrock ToolUse 424`",
+      "re-sent once after {' or '.join(causes)})" in PROBE and 'return "a Bedrock ToolUse 424"' in PROBE)
 
 # ---- the records as they stand ----
 anchor(DECISIONS, HEAD_DEC, "decisions.md")
