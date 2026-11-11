@@ -1,6 +1,6 @@
 # ABOUTME: Offline gate for #1271: finale-cap-on, finale-cap-off and cost-watch, run in the KubeCon private terminal,
 # ABOUTME: act on watch-it-burn-community's guard-proxy through guardrails-peer, and on this cluster anywhere else.
-"""#1271. The break-it finale caps the room's bot, on watch-it-burn-community, whose terminal no presenter can open. The
+"""#1271. The break-it finale capped the room's bot, on watch-it-burn-community, whose terminal no presenter can open. The
 three commands now pick the room's cluster with _room in ~/.guardlib (gitops/ai-layer/web-terminal/entrypoint.sh): on
 the cluster whose lab-bootstrap Application is labelled lab-platform/profile=kubecon-private it is the peer, reached
 with the guardrails-peer kubeconfig through the API server's Service proxy on guard-proxy:8080; anywhere else it is
@@ -20,7 +20,9 @@ Checked:
     the three act on this cluster by exec and never read guardrails-peer;
   * private with an unreadable peer Secret, Argo CD that cannot be asked, or a peer that cannot be reached: the
     command fails saying so, and neither cluster's cap moves;
-  * the run-of-show's close and /kubecon's close send the presenters to the private terminal.
+  * the run-of-show and /kubecon say the three stay in the private terminal. Since Michael cut the finale at the
+    rehearsal of 2026-11-11 (rounds-agenticburn#172, #1348) no step of the close runs them; verify/test_finale_cap.py
+    holds that.
 """
 from __future__ import annotations
 
@@ -354,24 +356,14 @@ with tempfile.TemporaryDirectory() as tmp:
         r = box.run("finale-cap-on", bad)
         check(f"a headroom of {bad!r} is a usage error and runs nothing", r["rc"] == 2 and not r["calls"], r["stdout"])
 
-print("== the close sends the presenters to the private terminal ==")
-ros = ROS.read_text(encoding="utf-8")
-anchor_a, anchor_b = "- **Break it (the last minutes, #690):**", "- **Close out (both):**"  # the close precedes it (#1327)
-for a in (anchor_a, anchor_b):
-    if a not in ros:
-        sys.exit(f"FAILED: the anchor {a!r} is not in {ROS.relative_to(REPO)}")
-close = ros[ros.index(anchor_a):ros.index(anchor_b)]
-flat = " ".join(close.split())
-check("the run-of-show's close runs finale-cap-on in the private terminal, and says it reaches the room's cluster",
-      "in the private terminal" in flat and PEER in flat and "public cluster's terminal" not in flat, close[:600])
-kanchor = "<b>Break it (the last minutes, #690):</b>"
-kc = KUBECON.read_text(encoding="utf-8")
-if kanchor not in kc:
-    sys.exit(f"FAILED: the anchor {kanchor!r} is not in {KUBECON.relative_to(REPO)}")
-kclose = kc[kc.index(kanchor):]
-kclose = " ".join(kclose[:kclose.index("</div>")].split())
-check("/kubecon's close says the private terminal, not the public one",
-      "in the private terminal" in kclose and "public terminal" not in kclose, kclose[:400])
+print("== the run-of-show and /kubecon say the three stay in the private terminal (#1348) ==")
+ros = " ".join(ROS.read_text(encoding="utf-8").split())
+kc = " ".join(KUBECON.read_text(encoding="utf-8").split())
+ROS_STAY = "Those three stay in the private terminal"
+PAGE_STAY = "They stay in the private terminal"
+check("the run-of-show says the finale's three commands stay in the private terminal", ROS_STAY in ros)
+check("/kubecon says the same, and neither names the public terminal for them",
+      PAGE_STAY in kc and "public cluster's terminal" not in ros and "public terminal" not in kc)
 
 here_srv.shutdown()
 peer_srv.shutdown()
@@ -379,4 +371,4 @@ print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")
     sys.exit(1)
-print("From the private terminal the finale caps, shows and restores the room's cluster, and only that one.")
+print("From the private terminal the finale commands cap, show and restore the room's cluster, and only that one.")

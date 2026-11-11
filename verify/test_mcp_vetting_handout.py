@@ -9,7 +9,8 @@ everything below the marker still hashes to it. Refresh the copy from the source
 hand-edit the body.
 
 The close is where the room is pointed at the handout, so the run-of-show's close and the /kubecon page's
-close both have to carry the public link to it.
+close both have to carry the public link to it. Since rounds 4627d95 (rounds-agenticburn#172, #1348) the take-home
+slide after the close carries it as a QR code, so the close is read from its step to the segment's end.
 """
 from __future__ import annotations
 
@@ -56,12 +57,12 @@ check("every gate has something to verify", len(re.findall(r"^Verify:$", body, f
 
 print("== the close links it ==")
 ros = RUN_OF_SHOW.read_text(encoding="utf-8")
-close = ros.partition("- **The close (Michael):**")[2].partition("\n- **Delivers:**")[0]
+close = ros.partition("### Segment 6:")[2].partition("- **The close (")[2].partition("\n- **Delivers:**")[0]
 check("the run-of-show's close carries the handout's public link", PUBLIC_URL in close)
 c7 = ros.partition("### Segment 5: Challenge 4")[2].partition("### Segment 6")[0]
 check("C7's hand-out line names the handout file", "docs/mcp-server-vetting-checklist.md" in c7)
 page = KUBECON_PAGE.read_text(encoding="utf-8")
-page_close = page.partition("<b>The close (Michael")[2].partition("</div>")[0]
+page_close = page.partition("<b>The close (Michael")[2].partition("</section>")[0]
 check("the /kubecon page's close links the handout", f'href="{PUBLIC_URL}"' in page_close)
 
 if failures:

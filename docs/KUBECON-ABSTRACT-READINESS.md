@@ -78,9 +78,11 @@ The accepted text does not mention spend. The archived BurritoBot CFP draft prom
 C4 budget cap (`COST_CAP_USD` 25 with `guard-budget-on`) and the live cost counter priced at `MODEL_TIER` nova,
 both in `gitops/ai-layer/resources.yaml`. The counter's pricing is checked against the pin by
 `verify/model_pin_check.py` (#453). C4 is not a challenge: Whitney, on the 2026-10-28 planning call, because
-the number never moved convincingly. Since #690 it is folded into the close instead: in segment 6 `finale-cap-on`
-lowers the public cluster's cap to what the room has spent plus a little headroom, and the room tries to drive the
-bill to it (run-of-show "Challenges shown live, and challenges cut").
+the number never moved convincingly. From #690 it was folded into the close, where `finale-cap-on` lowered the
+public cluster's cap and the room tried to drive the bill to it; Michael cut that finale at the rehearsal of
+2026-11-11 (rounds-agenticburn#172, #1348), so the talk no longer shows spend control. `finale-cap-on`,
+`cost-watch` and `finale-cap-off` stay in the private terminal, and the $25 cap holds unshown (run-of-show
+"Challenges shown live, and challenges cut").
 
 ## The scope calls from talks-knowledge#29
 

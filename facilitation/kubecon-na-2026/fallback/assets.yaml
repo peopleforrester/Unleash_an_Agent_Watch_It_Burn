@@ -24,7 +24,7 @@ segments:
   - { segment: 3, title: "Challenge 2, the Kubernetes catch-all" }
   - { segment: 4, title: "Challenge 3, prompt injection through a support ticket" }
   - { segment: 5, title: "Challenge 4, the poisoned weather tool" }
-  - { segment: 6, title: "The OWASP close, burritos only, and break it" }
+  - { segment: 6, title: "The OWASP close, burritos only, and the take-home" }
 screenshots:
   - segment: 1
     file: screenshots/01-1-order.png

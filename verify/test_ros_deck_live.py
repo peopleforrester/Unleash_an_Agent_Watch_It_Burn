@@ -14,7 +14,7 @@ fails naming each slide the run-of-show no longer matches:
   3. In segments 4 to 6, every quote in a step whose bold lead cites `(`#/N`)`, `(`#/N` and `#/M`)` or
      `(`#/N` to `#/M`)` is on one of those slides, on its face or in its notes; and every quote followed at once by a
      hash, `"..." (`#/N`)`, in those segments and in the segments table, is on that slide.
-  4. The steps of segments 4 and 5 cite the deck from `#/43` without a gap, and segment 6 opens on the next slide and
+  4. The steps of segments 4 and 5 cite the deck from `#/42` without a gap, and segment 6 opens on the next slide and
      runs to the deck's last.
   5. Every `"..." (#/N)` on `/kubecon` (`gitops/ai-layer/web/kubecon.html`) is on slide N.
 
@@ -43,13 +43,14 @@ SEGMENTS, ABSTRACT = "## The segments, in order", "## Abstract points to segment
 SEG4, SEG5, SEG6 = "### Segment 4:", "### Segment 5:", "### Segment 6:"
 ROWS = ("| 4 | 7 |", "| 5 | 5 |", "| 6 | 5 |")
 PAGE_SEG4, PAGE_SEG6 = "<!-- SEGMENT 4:", "<!-- SEGMENT 6:"
-FIRST = 43  # segment 4's first slide, Challenge 3's title card since rounds 8f53ce2 (rounds-agenticburn#170)
+FIRST = 42  # segment 4's first slide, Challenge 3's title card: #/43 at rounds 8f53ce2 (rounds-agenticburn#170), #/42
+# since rounds 4627d95 moved the desk slide from #/8 into Challenge 3 (rounds-agenticburn#172, #1348)
 # The checks, by name, so a self-check names the one it expects to fail.
 COUNTED = "every \"the deck has N slides\" gives the deck's count"
 NOTED = "each diagram note the run-of-show quotes is the slide's Say note, word for word"
 STEPPED = "every quote in a step is on a slide its bold lead cites"
 HASHED = "every \"...\" (#/N) in segments 4 to 6 and the segments table is on slide N"
-RANGED = "segments 4 and 5 cite the deck from #/43 without a gap, and segment 6 runs from the next slide to the last"
+RANGED = "segments 4 and 5 cite the deck from #/42 without a gap, and segment 6 runs from the next slide to the last"
 PAGED = "every \"...\" (#/N) on /kubecon's glance rows and segments 4 and 5 is on slide N"
 
 BLOCK_TAG = re.compile(r"<(?=/?(?:p|div|li|br|h[1-6]|tr|td|th|text|pre|section)\b)", re.I)
@@ -240,12 +241,12 @@ def main() -> int:
     need(ros, lit, ROS_PATH)
     fails("a step's Say quote reworded in the run-of-show", STEPPED,
           ros_=ros.replace(lit, lit.replace("So why", "Why"), 1))
-    lit = "(`#/116` to `#/128`)"
+    lit = "(`#/118` to `#/126`)"
     need(ros, lit, ROS_PATH)
-    fails("segment 6 opened a slide late", RANGED, ros_=ros.replace(lit, "(`#/117` to `#/128`)", 1))
-    lit = '"Try your attack again." (#/73)'
+    fails("segment 6 opened a slide late", RANGED, ros_=ros.replace(lit, "(`#/119` to `#/126`)", 1))
+    lit = '"Try your attack again." (#/75)'
     need(plain(page), lit, PAGE_PATH)
-    fails("a /kubecon quote cited on the wrong slide", PAGED, page_=page.replace("(#/73)", "(#/74)", 1))
+    fails("a /kubecon quote cited on the wrong slide", PAGED, page_=page.replace("(#/75)", "(#/76)", 1))
 
     if failures:
         print(f"\nFAILED: {len(failures)} check(s)")

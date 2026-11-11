@@ -13,10 +13,10 @@ by slide range. This test holds:
   2. Its words and its time are the Timing paragraph's: the same W, and the same "about M minutes S seconds".
   3. The time is W words at 150 words a minute, to the nearest 30 seconds, and the Timing paragraph's three parts
      (the challenge, the diagrams, the YAML) add up to W, with D the diagrams' part.
-  4. Its N is the slides of the segment's range as the Timing paragraph cites it, `#/67` to `#/115` since rounds
+  4. Its N is the slides of the segment's range as the Timing paragraph cites it, `#/69` to `#/117` since rounds
      `8f53ce2` renumbered the deck (rounds-agenticburn#170, #1327), and its diagram slide count is the slides of the
-     diagrams' range, `#/76` to `#/113`. The segments table's row cites that range, or opens one slide earlier on
-     Challenge 4's title card, `#/66`, which `8f53ce2` added and the figures predate.
+     diagrams' range, `#/78` to `#/115`. The segments table's row cites that range, or opens one slide earlier on
+     Challenge 4's title card, `#/68`, which `8f53ce2` added and the figures predate.
   5. Both paragraphs name the same rounds commit they were read from, and the paragraph says segment 5 runs past its
      5 minutes on speech alone exactly when its time is over the segments table's 5 minutes.
   6. The paragraph keeps none of the 154-slide deck's segment 5 length it replaced (744 words, about 5 minutes).
@@ -202,7 +202,7 @@ def main() -> None:
           fails("the time is the words at 150 a minute, to the nearest 30 seconds", moved, timing))
     check("a segments table row with another range fails the row check",
           fails("the segments table's segment 5 row cites the same range", over, timing,
-                row.replace("`#/115`", "`#/98`")))
+                row.replace("`#/117`", "`#/100`")))
     check("a segments table row opening on the card without naming it fails the row check",
           fails("the segments table's segment 5 row cites the same range", over, timing,
                 row.replace("the title card, ", "")))
