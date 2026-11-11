@@ -52567,3 +52567,46 @@ in this run's scratch directory.
 **Tests.** No code or test changed; the change is this entry alone, so the prose gate is the one check it needs.
 
 No dependency was added.
+
+## 2026-11-11 · #1335 · run 20290 · #1332's coc-mask ConfigMap runs on both clusters, and the live scrub check waits out Datadog's 429
+
+**Live check, 06:33Z to 06:50Z.** Both clusters' `otel-collector` Application was Synced and Healthy at staging
+`88f86a72`, which carries #1332. Argo CD had synced it about two minutes before the check began. On each cluster:
+
+    cluster                  coc-mask ConfigMap   relay ConfigMap            pod     started    restarts  checksum/coc-mask
+    watch-it-burn-community  338,033 bytes        26,210 bytes, no mask def  9zznp   06:32:08Z  0         829e6a36...
+    watch-it-burn-private    338,033 bytes        24,498 bytes, no mask def  8qxf4   06:31:32Z  0         829e6a36...
+
+The relay names `transform/coc_mask` once, in the traces pipeline's processor list, and defines it nowhere. Down from
+704,848 and 703,136 bytes. The live `coc-mask.yaml` and the pods' `checksum/coc-mask` annotation both hash to
+`829e6a368fc264835e01983a0de2bb3adb5f95004449d9d6ed42ff4ccbb00455`, which matches `values.yaml`. Each pod runs
+`--config=/conf/relay.yaml --config=/coc-mask/coc-mask.yaml --config=/datadog-gate/datadog.yaml`, mounts the
+`otel-collector-coc-mask` ConfigMap as volume `coc-mask`, logged `Everything is ready. Begin running and processing
+data.` (community 06:32:12Z, private 06:31:48Z) and still showed 0 restarts at 06:50Z.
+
+**The live scrub check failed first, on Datadog's rate limit.** `COMMUNITY_CONTEXT=watch-it-burn-community python3
+verify/test_collector_pii_scrub_live.py` sent its span and read it back. Then the 168-hour scan of stored spans failed
+on `POST /api/v2/spans/events/search -> 429: ["Too many requests"]`. That was the second time on 2026-11-11 (the
+first was run 20240 on #1326, at 03:17Z), so the test has a defect to fix. One search read Datadog's headers:
+`x-ratelimit-name spans_public_api`, limit 50, period 60. The scan pages 1,000 spans at a time with no pause, and
+burritobot-public now holds about 99,000 spans in the window, so it needs about 100 searches in under a minute.
+
+**The fix.** `verify/pii_scrub_live.py` wraps the Datadog client in `Patient`. A 429 (`fleet_monitors.Datadog.call`'s
+`-> 429:` error) is waited out for one 60 s period and asked again, up to 5 tries, and each wait is printed. Any
+other error, and a fifth 429 in a row, is raised as before. `verify/test_pii_scrub_live_logic.py` drives it through
+`fleet_monitors.Datadog` itself, with fake HTTP: two 429s on the scan end green after two 60 s waits and four
+searches, five in a row fail naming the 429, and a 403 fails at once with no wait. With the wrap taken out, the
+test fails on the same 429 the live run saw. The test now imports `fleet_monitors`, so the scope map gains
+`infra/datadog-fleet/fleet_monitors.py` and the three YAML files it reads on import.
+
+**The rerun passed**, 22 of 22, at 06:43Z to 06:50Z, with one 429 waited out. The span came back scrubbed from APM and
+Agent Observability, and the scans read 99,433 APM spans and 21,924 Agent Observability spans with no raw match. The
+two runs left two `wib-pii-scrub-check` spans in Whitney's org under burritobot-public, which the post-talk purge
+deletes. Nothing on either cluster changed.
+
+**Near the cap.** 99,433 is within 1% of the scan's 100,000-span `CAP`. As the room's traffic grows, the 168-hour
+scan will stop at the cap and fail as incomplete, so this is filed as a followup.
+
+**Tests run**, each once and passing: `test_pii_scrub_live_logic.py`, `test_scope_tests.py`, `test_test_map.py`, and
+`test_collector_pii_scrub_live.py` live on watch-it-burn-community. The other tests the change selects are left to
+validation.
