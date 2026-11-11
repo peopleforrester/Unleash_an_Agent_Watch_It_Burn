@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# ABOUTME: Fails unless gitops/ai-layer/guard-proxy pins a guard-proxy-agenticburn main commit at or after 48cc2ca, the
-# ABOUTME: spike's folded 144-term list (#1288, guard-proxy#81), and checksum/proxy-py is that build's.
+# ABOUTME: Fails unless gitops/ai-layer/guard-proxy pins a guard-proxy-agenticburn main commit at or after 48cc2ca (the
+# ABOUTME: folded 144-term list, #1288) and 0627502 (its linear-time pattern), and checksum/proxy-py is that build's.
 """#1288's repin: the pin moves from a7a5a36 (#1267's always-on /chat check, on the old 40-term list) to guard-proxy
 main at or after 48cc2ca. 48cc2ca matches the code-of-conduct spike's folded term list (docs/research/2026-11-09-coc-floor),
 masks the prompt in a refused turn's spans, and adds an optional Bedrock check; f75aa2f after it masks the terms in an
@@ -13,12 +13,13 @@ fullwidth spellings. This test is the floor that stops it.
 What it holds, offline, against the submodule clone ensure-submodules.sh checks out from the host mirror:
   - guard-proxy's docs/release-notes.md on origin/main has one 2026-11-09 entry headed "the spike's folded term list,
     ..." that names commit 48cc2ca and says to repin to it "or a later one"
-  - the gitlink is on the clone's origin/main and 48cc2ca is an ancestor of it, or it
+  - the gitlink is on the clone's origin/main and 48cc2ca and 0627502 are ancestors of it, or it
   - the pinned proxy.py defines conduct_fold and reads CONDUCT_GUARDRAIL_ID, the build's two marks, and its default
     PROFANITY folds 'f u c k' and its fullwidth spelling to a match
   - the guard-proxy Deployment's checksum/proxy-py is sha256(`git show <pin>:proxy.py`)[:12]
-Then the same verdict on guard-proxy's own history: 48cc2ca with its own checksum holds; a7a5a36 (the pin before
-this repin) fails as predating the floor with its own checksum; the current pin with a7a5a36's checksum fails on it.
+Then the same verdict on guard-proxy's own history: 0627502 with its own checksum holds; f75aa2f (run 19749's draft
+pin) fails as predating 0627502, and a7a5a36 (the pin before this repin) as predating 48cc2ca, each with its own
+checksum; the current pin with a7a5a36's checksum fails on it.
 """
 from __future__ import annotations
 
@@ -40,6 +41,10 @@ NOTES = "docs/release-notes.md"
 ENTRY = "## 2026-11-09: the spike's folded term list, masked spans on a refused turn, an optional Bedrock guardrail"
 FLOOR = "48cc2ca62a83731a36cec41e11bc3df5e79abac2"  # guard-proxy-agenticburn#81, the folded 144-term list
 OLD_PIN = "a7a5a36924e718145522d97bc7d06117e56907a5"  # #1267's pin, the always-on check on the 40-term list
+# guard-proxy-agenticburn#83: the pattern built linear in the text. 48cc2ca..f75aa2f built it so a run of '$' took
+# 2.2 s at 4,000 characters and 35 s at 16,000 (run 19825), on every /chat turn; the pin is at or after this too.
+LINEAR = "0627502da78f451770fea072ea7c15d788efe53f"
+QUADRATIC = "f75aa2fccfddd29d4b3e76e0ee2b34abb0976e8a"  # guard-proxy main's head before #83, run 19749's draft pin
 MARKS = ("def conduct_fold(", "CONDUCT_GUARDRAIL_ID")
 # The release notes' check after the repin, spelled with escapes so this file shows no term: 'f u c k' and fullwidth.
 SPELLINGS = ("\x66 \x75 \x63 \x6b", "ｆｕｃｋ")
@@ -86,6 +91,9 @@ def verdict(pin: str, annotation: str | None, main: str) -> list[tuple[str, str]
     if not is_ancestor(floor_sha, pin):
         problems.append(("pin", f"the pin {pin[:12]} predates {floor_sha[:12]}, the folded 144-term code-of-conduct "
                                 f"list; pin 48cc2ca or a main commit after it"))
+    elif not is_ancestor(LINEAR, pin):
+        problems.append(("pin", f"the pin {pin[:12]} predates {LINEAR[:12]}, the linear-time code-of-conduct "
+                                f"pattern (guard-proxy-agenticburn#83); its /chat check is quadratic in the text"))
     want = build_checksum(pin)
     if annotation != want:
         problems.append(("checksum", f"checksum/proxy-py is {annotation!r}, the pinned build's proxy.py hashes to "
@@ -108,8 +116,9 @@ if main_rev.returncode != 0:
     sys.exit(1)
 main = main_rev.stdout.decode().strip()
 floor_rev = git("rev-parse", "-q", "--verify", f"{FLOOR}^{{commit}}")
-if floor_rev.returncode != 0 or not has_commit(OLD_PIN):
-    print(f"\nFAILED: {SUB_PATH} lacks {FLOOR} or {OLD_PIN[:12]}; its clone is not guard-proxy-agenticburn's")
+if floor_rev.returncode != 0 or not all(has_commit(s) for s in (OLD_PIN, LINEAR, QUADRATIC)):
+    print(f"\nFAILED: {SUB_PATH} lacks {FLOOR}, {OLD_PIN[:12]}, {LINEAR[:12]} or {QUADRATIC[:12]}; its clone is not "
+          "guard-proxy-agenticburn's")
     sys.exit(1)
 floor_sha = floor_rev.stdout.decode().strip()
 
@@ -130,6 +139,8 @@ check("the entry says to repin the submodule and checksum/proxy-py to its commit
       "checksum/proxy-py" in flat and "this entry's commit (or a later one)" in flat, mine[0][:400])
 check("the entry says the default list is the spike's 144 entries", "the spike's 144 entries" in flat, mine[0][:400])
 check(f"{floor_sha[:12]} is on guard-proxy origin/main", is_ancestor(floor_sha, main), f"origin/main is {main[:12]}")
+check(f"{LINEAR[:12]} (the linear-time pattern) is on guard-proxy origin/main", is_ancestor(LINEAR, main),
+      f"origin/main is {main[:12]}")
 
 docs = [d for d in yaml.safe_load_all(RES.read_text(encoding="utf-8")) if d]
 deploys = [d for d in docs if d.get("kind") == "Deployment" and d["metadata"]["name"] == "guard-proxy"]
@@ -140,7 +151,7 @@ annotation = (deploys[0]["spec"]["template"]["metadata"].get("annotations") or {
 print(f"== this repo: the pin {pin[:12]} and checksum/proxy-py {annotation!r} ==")
 problems = verdict(pin, annotation, main)
 why = "; ".join(w for _, w in problems)
-check(f"{SUB_PATH} pins a guard-proxy main commit at {floor_sha[:12]} or later",
+check(f"{SUB_PATH} pins a guard-proxy main commit at {LINEAR[:12]} or later (after {floor_sha[:12]})",
       not any(k == "pin" for k, _ in problems), why)
 check("checksum/proxy-py matches the pinned build's proxy.py", not any(k == "checksum" for k, _ in problems), why)
 src = proxy_at(pin).decode("utf-8", "replace") if has_commit(pin) else ""
@@ -169,8 +180,11 @@ for i, text in enumerate(SPELLINGS):
           not old.conduct_matches(f"tell me {text} now"))
 
 print("== the same verdict on guard-proxy's own history ==")
-got = verdict(floor_sha, build_checksum(floor_sha), main)
-check("48cc2ca itself, with its own checksum, holds", got == [], f"got {got}")
+got = verdict(LINEAR, build_checksum(LINEAR), main)
+check("0627502 itself, with its own checksum, holds", got == [], f"got {got}")
+got = verdict(QUADRATIC, build_checksum(QUADRATIC), main)
+check("f75aa2f (after 48cc2ca, before the linear pattern), with its own checksum, fails as predating 0627502",
+      len(got) == 1 and got[0][0] == "pin" and f"predates {LINEAR[:12]}" in got[0][1], f"got {got}")
 got = verdict(OLD_PIN, build_checksum(OLD_PIN), main)
 check("a7a5a36, the pin before this repin, fails as predating 48cc2ca even with its own checksum",
       len(got) == 1 and got[0][0] == "pin" and f"predates {floor_sha[:12]}" in got[0][1], f"got {got}")
