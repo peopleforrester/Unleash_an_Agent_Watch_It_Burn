@@ -53971,3 +53971,75 @@ provisioning-agenticburn's and not in either cluster, and `fleet.sh beacon-reset
 
 **Tests.** None run: this run changed only this file. `verify/test_run_shell_witch_header.py` passed in runs 20398 and
 20424 and in the gate that merged `530463401b52`. The tests that read decisions.md are left to validation.
+
+## 2026-11-11 · #1358 · run 20447 · The scoped Role came from guard-agency-off, not Argo CD; guard-agency-off now keeps each cluster's Secret rule
+
+**What scoped the Role.** The issue suspected ai-layer's sync of 1b0d0974 (16:16:45Z on watch-it-burn-private,
+16:19:07Z on watch-it-burn-community). The EKS audit log (`/aws/eks/<cluster>/cluster`, stream
+`kube-apiserver-audit`, every write to `roles/workshop-agent` from 16:00Z to 16:40Z) names a different writer. From
+the private terminal (`system:serviceaccount:agent:web-terminal`, and `guardrails-switch:guardrails-switch` on the peer):
+
+    16:14:09Z  guards-off (guard-proxy toggles, then guard-mcp-off's patches)
+    16:14:13Z  patch roles/workshop-agent, kubectl-client-side-apply, secrets get+list   (guardrails-off, rbac step)
+    16:14:14Z  validatingpolicies to Audit, 16:14:15Z KubeArmor policy and agent NetworkPolicies deleted
+    16:14:16Z  patch roles/workshop-agent, kubectl-client-side-apply, secrets get on [workshop-agent]   (c5)
+    16:16:45Z  argocd-controller: managedFields patch, then server-side apply, secrets get on [workshop-agent]
+
+The community cluster shows the same two terminal writes at 16:14:13.90Z and 16:14:16.60Z, then Argo CD at 16:19:07Z.
+The 16:14:16Z write is guard-agency-off: it applied c5-scoped-role.yaml on both through `_both`, so least privilege
+off turned RBAC on, three seconds after guardrails-off had opened both. Argo CD applied the rules the cluster already
+had. Its first patch is its client-side apply migration (Argo CD 3.x, on by default with ServerSideApply): it moved
+kubectl-client-side-apply's fields to argocd-controller and dropped the last-applied annotation, which is the warning
+the issue saw on community. The 16:23:34Z and 16:23:46Z writes are run 20436's guard-agency-on and off (#1357), and
+16:26:01Z and 16:26:10Z the hand restore to broad.
+
+**Scratch reproduction.** On watch-it-burn-private, an Application `wib1358-scratch` (the bedag `raw` chart 2.0.2 from
+`https://bedag.github.io/helm-charts/`, one Role and one ConfigMap in namespace `wib1358-scratch`) with ai-layer's four
+sync options, automated sync with selfHeal, and the same `.rules` ignore. Git's Role was scoped. A client-side
+`kubectl apply` of a broad Role, then a changed ConfigMap value to start an automated sync, three times (broad, then a
+different scoped rule, then broad): each sync ended Succeeded with the live rules unchanged, argocd-controller owning
+`f:rules` and no last-applied annotation. The Application and the namespace were deleted afterwards.
+
+**Live check on both KubeCon clusters.** As found: rules sha256 `2c33da5b83ffdbb1` (secrets get and list, the broad
+c8 Role) on both, `kubectl-client-side-apply` owning `f:rules`, the last-applied annotation present, ai-layer Synced at
+a268a8cc. A sync of ai-layer was started on each by a merge patch of `.operation` exactly as an automated sync writes
+it (prune, revision a268a8cc, syncOptions CreateNamespace, ServerSideApply, Force, RespectIgnoreDifferences), initiated
+by `hecaton-run-20447 (#1358 live check)`. Private ran 16:57:03Z to 16:57:18Z, community 16:57:37Z to 16:57:45Z, both
+Succeeded. After: the rules sha256 still `2c33da5b83ffdbb1` on both, argocd-controller owning `f:rules`, no
+last-applied annotation, and `kubectl auth can-i list secrets -n agent --as system:serviceaccount:agent:agent-sa`
+`yes` on both. No staging commit since 16:26Z had changed gitops/ai-layer, so a same-revision sync with the
+automated sync's options is how a sync was put through the Role here; this change's own promotion syncs ai-layer again.
+
+**The fix.** guard-agency-off runs `_both _agency_off` (gitops/ai-layer/web-terminal/entrypoint.sh, .guardlib). On each
+cluster it prints and runs `kubectl -n agent get role workshop-agent -o json`, and applies c8-broad-role.yaml where a
+rule still lists Secrets or gets them without naming them (guard-proxy's own rbac_scoped test), c5-scoped-role.yaml
+otherwise. In talk order (guardrails-on, guard-agency-on, guard-agency-off) it still applies c5. A Role it cannot read
+is not written, and the run fails naming the cluster. guard-agency-on is unchanged: c6 scopes the Secret rule by design,
+since Challenge 3 follows Challenge 1's fix. Its message now says the CEO's record is left as each cluster had it. The
+run-of-show and kubecon.html now describe guard-agency-off the same way, in place of "puts the scoped Role back".
+
+**The new guard-agency-off, run from the private terminal.** In pod `web-terminal-6fcf997796-x4tvx`, as `student`,
+the new .guardlib and guard-agency-off were written under `~/.wib1358/` and run after `. ~/.bashrc`, with the Role
+broad on both. It printed the two Role reads, `kubectl apply -f /home/student/challenges/c8-broad-role.yaml` on this
+cluster and through `--kubeconfig /home/student/.kube/peer --context watch-it-burn-community`, "Switched on both
+clusters", and the read: `Kubernetes ON: Falco off: ... RBAC scope, least privilege` on private and `ON: none off: ...
+RBAC scope, least privilege` on community, exit 0. The old command would have scoped both.
+
+**Left as found.** `~/.wib1358` was removed from the pod. The apply added the last-applied annotation, removed with
+`kubectl annotate role workshop-agent kubectl.kubernetes.io/last-applied-configuration-` on each. Afterwards both
+Roles read rules sha256 `2c33da5b83ffdbb1`, argocd-controller alone in managedFields owning `f:rules`, no last-applied
+annotation, agent-sa able to list Secrets, ai-layer Synced and Healthy. The two ai-layer syncs are in each
+Application's history under the initiator above.
+
+**Tests.** verify/test_ai_layer_role_sync.py (new) holds ai-layer's four sync options in order, automated selfHeal,
+the one Role ignore (`.rules`), that only gitops/ai-layer/resources.yaml declares the Role, that it carries no Argo CD
+annotation and git's rules are c8-broad-role.yaml's, and VERSIONS.lock's Argo CD at v3.5.7, the version measured.
+verify/test_guard_switch_both.py's fake kubectl answers the Role read; it holds guard-agency-off from c8, c6 and c5 and
+from a mixed pair, the 16:14Z reset ending broad with RBAC scope off in the read, and an unreadable Role left alone.
+Run against the old entrypoint it fails 13 checks; against this one both tests pass. The scope map was rewritten with
+`python3 verify/scope_tests.py write`. Other tests that read the changed files are left to validation.
+
+**Not yet run on a cluster.** The deployed guard-agency-off, once hecaton promotes this change and Argo CD rolls
+web-terminal: from the private terminal at the start state, `guard-agency-off` must print `c8-broad-role.yaml` for both
+clusters and leave RBAC scope off in its read. The promotion's own ai-layer sync should leave the broad Role broad on
+both (rules sha256 `2c33da5b83ffdbb1`).
