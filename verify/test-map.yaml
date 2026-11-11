@@ -7216,6 +7216,14 @@ rules:
       - gitops/otel-collector/values.yaml
     tests:
       - verify/test_run_shell_failure.py
+  - name: test_run_shell_witch_header.py
+    paths:
+      - gitops/ai-layer/tool_audit.py
+      - gitops/ai-layer/web/burritbot.html
+      - gitops/ai-layer/web/event.js
+      - gitops/ai-layer/workshop-mcp-server.py
+    tests:
+      - verify/test_run_shell_witch_header.py
   - name: test_run_tests_files.py
     paths:
       - .gitmodules
