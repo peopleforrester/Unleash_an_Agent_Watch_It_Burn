@@ -53863,4 +53863,13 @@ container does, so both the hand-off and the run inside are driven. Each passed 
 `test_verify_suites_workflow.py`, `test_workflow_artifact_cache.py`, `test_fetch_inventory.py` (two counts updated),
 `test_no_system_temp_paths.py`, `scope_tests.py check` and the prose gate.
 
+**Run through the image on netcup.** After the commits, as this run's pool user, whose podman held no wib-e2e-tools
+image: `bash verify/run-e2e-tools.sh test_collector_one_root_e2e.py` printed `the tools tier runs inside the
+wib-e2e-tools image`, then `51ec299b51b3558f-65501e27 is not on this host; pulling it once (podman)`, pulled it from
+ghcr.io with no login, and ran the test inside it on `/opt/wib-e2e-tools/bin`: `1 checks ran (the 1 tier tests named,
+no offline suite) in 0m53s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0` (log /var/lib/hecaton/runs/20434/live-one-1.log).
+The same command again printed `already on this host (podman)`, had no pull line, and ended green with `exit=0`
+(live-one-2.log). Neither run made `verify/.tools`. The whole tier was not run, as the rules say for a run; CI's e2e
+job on this branch's push runs it on Tanjiro through the image, since the change selects FULL.
+
 **Live check.** None on a cluster: this change touches `verify/`, `.github/workflows/` and docs, which no cluster runs.
