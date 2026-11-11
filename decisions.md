@@ -54170,3 +54170,25 @@ and the challenge-fixes ConfigMap: from the private terminal at the start state,
 `c6-broad-secrets-role.yaml` for both clusters, then `guard-agency-off` `c8-broad-role.yaml` for both, and
 `python3 verify/agency_role_check.py watch-it-burn-community watch-it-burn-private` must read c8-broad-role.yaml on
 both afterwards.
+## 2026-11-11 · #1359 · run 20452 · verify-suites.yml's e2e job drops its Node and Chromium steps
+
+**What changed.** The e2e-tools job in `.github/workflows/verify-suites.yml` no longer has the `actions/setup-node`
+step (#1200) or the `python3 verify/ci_chromium_libs.py "$RUNNER_TEMP/chromium-libs"` step (#1047). Since #1188,
+`run-e2e-tools.sh` on a host hands any run that needs the tools to `verify/e2e-image.sh run` before its own tool
+checks, so the host's Node is never checked or used, and the tier's node scripts and Playwright renders run on the
+image's Node and Chromium. A push no tier test reads runs the offline suite on the host, and no offline test starts a
+real Node or Chromium: `test_e2e_toolchain.py` stubs node, and `test_ci_chromium_libs.py` and
+`test_package_cache.py` parse text. `verify/ci_chromium_libs.py` and its test stay, since
+`test_chat_wide_font_e2e.py` imports its `font_dirs`; nothing in CI runs the script now.
+
+**Tests.** `verify/test_verify_suites_workflow.py` now fails any job with an `actions/setup-node` step or a step
+whose `run` names `ci_chromium_libs.py`, in place of requiring both on the e2e job. Its four mutation cases put the
+setup-node step back on the e2e job, add one to the offline job, put the Chromium step back, and hide it in a
+multi-line `run`; the checker fails each. The fetch inventory's `setup-node` entry for verify-suites.yml went with the
+step (`test_fetch_inventory.py` failed on the stale entry until then). Passed alone: `test_verify_suites_workflow.py`,
+`test_fetch_inventory.py`, `test_workflow_artifact_cache.py`, `test_tf_plugin_cache.py`, `test_scope_tests.py`,
+`test_test_map.py`; `scope_tests.py write` changed nothing. The tools tier was not run here: validation runs the
+tier tests the change selects (`test_iam_policy_structural.py`, `test_image_version_tags.py`,
+`test_kyverno_counter_fix_cache.py`, `test_wib_digests_signed.py`, all reading the fetch inventory).
+
+**Live check.** None on a cluster: the change touches `.github/workflows/` and `verify/` files no cluster runs.
