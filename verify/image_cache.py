@@ -12,7 +12,7 @@ resolves the root and refuses one inside a worktree):
     layout is left where it is for a person to look at. A hit reads no registry.
   - A miss takes a lock on the digest, looks again, and then fetches the manifest and each blob through
     artifact_cache.get_retrying() by its own sha256, which checks each one before it is kept, retries what the network
-    broke, and writes each fetch to the fetch log. For an index (a manifest list), the image for `platform` is taken
+    broke after each wait in BLOB_BACKOFF, and writes each fetch to the fetch log. For an index (a manifest list), the image for `platform` is taken
     and the other platforms are not fetched. The layout is assembled in a temp directory beside its place, from hard
     links to those blobs, and renamed into place whole, so no reader sees a half-built layout.
 The registry is read anonymously, as a node with no pull secret reads a public package: a 401 that names a Bearer
@@ -134,6 +134,13 @@ def _token(challenge: str) -> str:
 RESUMES = 8
 RESUME_WAIT = 5.0
 _sleep = time.sleep
+# A manifest or blob whose fetch the network broke before its first byte is asked again after each wait in BLOB_BACKOFF
+# (#1322), longer than artifact_cache.BACKOFF's 2, 5 and 10 s. CI run 42929090097 filled the web-terminal layout cold
+# on Tanjiro's runner for 41 minutes, and a blob's TLS handshake to ghcr.io then timed out on all 4 tries, 60 s each,
+# about 4 minutes in all, while other checks in that job saw handshakes to other hosts time out too. Seven tries, these
+# six waits apart, last through about 11 minutes of a network that answers nothing. Each blob a layout keeps stays in
+# the cache, so only a cold fill pays this, and a warm run asks for no blob at all.
+BLOB_BACKOFF = (2, 5, 10, 30, 60, 120)
 REDIRECTS = (301, 302, 303, 307, 308)
 DROPPED = (urllib.error.URLError, http.client.HTTPException, ConnectionError, TimeoutError)
 
@@ -293,7 +300,8 @@ def layout(ref: str, platform: str = PLATFORM, *, root: pathlib.Path | None = No
         def read(h: str) -> bytes:
             # The pinned digest and an index's child are manifests; the rest are blobs. get() checks each one.
             kind = "manifests" if h in manifests else "blobs"
-            return artifact_cache.get_retrying(h, f"{base}/{kind}/sha256:{h}", root=root, fetch=fetch, env=env).read_bytes()
+            return artifact_cache.get_retrying(h, f"{base}/{kind}/sha256:{h}", backoff=BLOB_BACKOFF,
+                                               sleep=lambda s: _sleep(s), root=root, fetch=fetch, env=env).read_bytes()
 
         top = json.loads(read(hexdigest))
         if _media_type(top) in INDEX_TYPES:

@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import urllib.error
 
 VERIFY = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(VERIFY))
@@ -165,6 +166,56 @@ try:
     check("it fails naming the URL and both sums", sha(layer) in msg and sha(b"tampered") in msg and BASE in msg, msg)
     check("no layout was made", not ic.layout_path(sha(manifest), wrong_root).exists())
     check("the fetch log says mismatch", any("\tmismatch " in x for x in log_lines(wrong_root)), str(log_lines(wrong_root)))
+
+    print("== a blob whose TLS handshake times out is asked again after each wait in BLOB_BACKOFF (#1322) ==")
+    # CI run 42929090097: a web-terminal blob's handshake to ghcr.io timed out on all 4 tries artifact_cache.BACKOFF
+    # gives, and the layout failed after 41 minutes of a cold fill. layout() asks a blob the network broke again for
+    # longer. The layer here times out on its first DOWN tries, then is served.
+    class Handshake(Registry):
+        def __init__(self, urls: dict[str, bytes], down: int):
+            super().__init__(urls)
+            self.down = down
+
+        def __call__(self, url: str, out) -> None:
+            if url.endswith(sha(layer)) and self.down:
+                self.down -= 1
+                self.asked.append(url)
+                raise urllib.error.URLError(TimeoutError("_ssl.c:1012: The handshake operation timed out"))
+            super().__call__(url, out)
+
+    waits: list[float] = []
+    real_sleep, ic._sleep = ic._sleep, waits.append
+    try:
+        check(f"BLOB_BACKOFF gives more tries than artifact_cache.BACKOFF ({ic.BLOB_BACKOFF} after {ac.BACKOFF})",
+              len(ic.BLOB_BACKOFF) > len(ac.BACKOFF) and list(ic.BLOB_BACKOFF[:len(ac.BACKOFF)]) == list(ac.BACKOFF))
+        outage = sum(ic.BLOB_BACKOFF) + (len(ic.BLOB_BACKOFF) + 1) * ac.TIMEOUT
+        check(f"its tries, each up to TIMEOUT, last through at least 10 minutes of no answer ({outage} s)",
+              outage >= 600)
+        down = len(ac.BACKOFF) + 1
+        reg = Handshake(served(), down)
+        hs = ic.layout(REF, root=base / "cache-handshake", fetch=reg)
+        check(f"a layer whose handshake timed out {down} times, as in CI run 42929090097, is then kept in the layout",
+              [p.read_bytes() for p in ic.image(hs)["layers"]] == [layer])
+        check(f"it was asked {down + 1} times, after the first {down} waits of BLOB_BACKOFF ({waits})",
+              reg.asked.count(f"{BASE}/blobs/sha256:{sha(layer)}") == down + 1 and waits == list(ic.BLOB_BACKOFF[:down]))
+        check("the manifest and config, which never failed, were asked once each",
+              reg.asked.count(f"{BASE}/manifests/sha256:{sha(manifest)}") == 1
+              and reg.asked.count(f"{BASE}/blobs/sha256:{sha(config)}") == 1, str(reg.asked))
+
+        waits.clear()
+        reg = Handshake(served(), len(ic.BLOB_BACKOFF) + 1)
+        msg = raises(lambda: ic.layout(REF, root=base / "cache-handshake-down", fetch=reg), ac.ArtifactCacheError)
+        check("a handshake that times out on every try fails, naming the blob's URL and the timeout",
+              f"{BASE}/blobs/sha256:{sha(layer)}" in msg and "handshake operation timed out" in msg, msg)
+        check(f"after {len(ic.BLOB_BACKOFF) + 1} tries, each wait of BLOB_BACKOFF in turn ({waits})",
+              reg.asked.count(f"{BASE}/blobs/sha256:{sha(layer)}") == len(ic.BLOB_BACKOFF) + 1
+              and waits == list(ic.BLOB_BACKOFF))
+        check("no layout was made", not ic.layout_path(sha(manifest), base / "cache-handshake-down").exists())
+        check("the manifest and config it did fetch stay in the cache for the next run",
+              ac.path_for(sha(manifest), base / "cache-handshake-down").is_file()
+              and ac.path_for(sha(config), base / "cache-handshake-down").is_file())
+    finally:
+        ic._sleep = real_sleep
 
     print("== an index: the platform's image is taken, and no other platform is fetched ==")
     ix_root = base / "cache-index"
