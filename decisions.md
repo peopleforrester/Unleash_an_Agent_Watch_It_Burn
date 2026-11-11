@@ -51313,3 +51313,29 @@ and comparing against `REPO / "verify"` made it read all of `verify/`. As writte
 pinned digests (`sha256:0765b359552b...` and `sha256:793db2995eee...`), `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`.
 The whole tools tier on staging is left to the gate. The change touches only `verify/` files no cluster runs, so there
 is no live check.
+
+## 2026-11-11 · #1322 · run 20214 · A cold image layout rides out minutes of ghcr.io handshakes that time out
+
+**What failed.** CI run 42929090097 on staging 89125d24: the offline job passed, and the e2e tools job, which ran
+every test (16 paths changed against main 3f001681), failed one of 97 checks, `test_image_version_tags.py`, after
+2503 s. It was the first CI run since #1320 moved the test onto the runner's artifact cache, so the web-terminal
+layout was filled cold, at about 270 KB/s. One 297 MB layer was resumed once and kept. Then the TLS handshake for
+blob `sha256:2addd6fe46ea...` timed out on all 4 tries `artifact_cache.BACKOFF` gives (60 s each, 2, 5 and 10 s
+apart, about 4 minutes in all) and the layout failed. The same job saw handshakes time out to
+`support.burritobot.co` and `charts.external-secrets.io`, which passed on their own retries, so the runner's
+network as a whole was slow then. Every blob the run did fetch stays in `$RUNNER_TOOL_CACHE/wib-artifacts`.
+
+**The change.** `image_cache.layout()` passes a new `BLOB_BACKOFF = (2, 5, 10, 30, 60, 120)` to
+`artifact_cache.get_retrying()` for each manifest and blob, so a cold fill tries 7 times and outlasts about 11
+minutes of a network that answers nothing. `artifact_cache.BACKOFF` and its other callers are unchanged. Only a miss
+pays the wait; a warm layout asks for no blob. The wait goes through `image_cache._sleep`, which the tests stub.
+
+**Tests, each once.** `python3 verify/test_image_cache.py` passes, with 9 new checks: a layer whose handshake times
+out 4 times, as in the CI run, is then kept, after the first 4 waits of `BLOB_BACKOFF`; one that times out every try
+fails after 7, naming its URL and the timeout, with no layout made and the manifest and config kept in the cache.
+`test_fetch_inventory.py`, `test_ghcr_pull.py`, `test_kagent_mcp_traceparent.py` and `test_kyverno_counter_fix.py`,
+the offline tests that read `image_cache.py`, exit 0, and `fetch_inventory.py check` reads every call site classed.
+`scope_tests.py write` left the scope map as it was. The tools tier, `test_image_version_tags.py` included, is left
+to the gate and to CI on staging.
+
+**No live cluster check.** The change touches only `verify/` files that no cluster runs.
