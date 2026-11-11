@@ -91,8 +91,8 @@ rules:
       - transcripts/**
       - verify
       - verify/**
-      - weaver/registry
-      - weaver/registry/**
+      - weaver
+      - weaver/**
     tests:
       - verify/test_agent_tools_sync.py
       - verify/test_american_english_gate.py
@@ -3036,6 +3036,62 @@ rules:
       - verify/test_drift_selfheal_live.py
     tests:
       - verify/test_drift_selfheal_ops.py
+  - name: test_e2e_image.py
+    paths:
+      - .github/workflows/build-e2e-tools-image.yml
+      - agent
+      - agent/**
+      - agent/**/*
+      - agent/**/*/**
+      - challenges/**/*
+      - challenges/**/*/**
+      - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+      - challenges/c1-network-policy.yaml
+      - challenges/c1-network-policy.yaml/**
+      - challenges/c3-kubearmor-policy.yaml
+      - challenges/c3-kubearmor-policy.yaml/**
+      - challenges/c5-scoped-role.yaml
+      - challenges/c5-scoped-role.yaml/**
+      - challenges/c8-broad-role.yaml
+      - challenges/c8-broad-role.yaml/**
+      - cost
+      - cost/**
+      - docs/admin-console.md
+      - facilitation/kubecon-na-2026-audience-qr.svg
+      - gitops/ai-layer
+      - gitops/ai-layer/**
+      - gitops/workshop-agent/agent.yaml
+      - images.lock
+      - images/llm-guard
+      - images/llm-guard/**
+      - images/workshop-mcp/Dockerfile
+      - infra/datadog-fleet
+      - infra/datadog-fleet/**
+      - infra/org/boundary
+      - infra/org/boundary/**
+      - infra/terraform/aws/cluster/main.tf
+      - infra/terraform/aws/network
+      - infra/terraform/aws/network/**
+      - infra/terraform/fleet
+      - infra/terraform/fleet/**
+      - infra/terraform/fleet/providers/**/*.sh
+      - infra/terraform/fleet/providers/**/*.sh/**
+      - scripts/audience-qr.py
+      - scripts/ghcr_version_tag.py
+      - scripts/harvest_cluster_access.sh
+      - scripts/harvest_cluster_access.sh/**
+      - scripts/harvest_terminal_credential.sh
+      - scripts/harvest_terminal_credential.sh/**
+      - scripts/push_vtt_aws_creds.sh
+      - scripts/push_vtt_aws_creds.sh/**
+      - scripts/reload-routes.sh
+      - scripts/reload-routes.sh/**
+      - verify
+      - verify/**
+      - weaver
+      - weaver/**
+    tests:
+      - verify/test_e2e_image.py
   - name: test_egress.py
     paths:
       - infra/terraform/aws/cluster/main.tf
@@ -4168,6 +4224,13 @@ rules:
       - verify/test_prose_gate_e2e_wait_cause_comment.py
     tests:
       - verify/test_gh_comments.py
+  - name: test_gh_relay.py
+    paths:
+      - verify/e2e-image/Containerfile
+      - verify/e2e-image/gh
+      - verify/gh_relay.py
+    tests:
+      - verify/test_gh_relay.py
   - name: test_ghcr_pull.py
     paths:
       - .github/workflows/build-web-terminal.yml
@@ -9092,18 +9155,18 @@ rules:
       - verify/**/*Dockerfile/**
       - verify/**/*Dockerfile.*
       - verify/**/*Dockerfile.*/**
-      - weaver/registry/**/*.json
-      - weaver/registry/**/*.json/**
-      - weaver/registry/**/*.sh
-      - weaver/registry/**/*.sh/**
-      - weaver/registry/**/*.yaml
-      - weaver/registry/**/*.yaml/**
-      - weaver/registry/**/*.yml
-      - weaver/registry/**/*.yml/**
-      - weaver/registry/**/*Dockerfile
-      - weaver/registry/**/*Dockerfile/**
-      - weaver/registry/**/*Dockerfile.*
-      - weaver/registry/**/*Dockerfile.*/**
+      - weaver/**/*.json
+      - weaver/**/*.json/**
+      - weaver/**/*.sh
+      - weaver/**/*.sh/**
+      - weaver/**/*.yaml
+      - weaver/**/*.yaml/**
+      - weaver/**/*.yml
+      - weaver/**/*.yml/**
+      - weaver/**/*Dockerfile
+      - weaver/**/*Dockerfile/**
+      - weaver/**/*Dockerfile.*
+      - weaver/**/*Dockerfile.*/**
       - gitops/ai-layer/guard-proxy
       - images/llm-guard
     tests:
@@ -9166,8 +9229,8 @@ rules:
       - transcripts/**/*.md/**
       - verify/**/*.md
       - verify/**/*.md/**
-      - weaver/registry/**/*.md
-      - weaver/registry/**/*.md/**
+      - weaver/**/*.md
+      - weaver/**/*.md/**
       - gitops/ai-layer/guard-proxy
       - images/llm-guard
     tests:
