@@ -124,7 +124,9 @@ def _any_escaping(piece: str) -> str:
 # edge then its terms, since its classes keep only what a name holds and read like any other regex's. Read from
 # floor.py, so they follow it.
 NAME_OPENING = r"(?i)(^|[^a-z0-9])((?:"
-PIECES = (floor._SEP,) + tuple(floor._letter(ch) for ch in sorted(floor._LEET)) + (NAME_OPENING,)
+# (The i class is left out: portable_pattern() writes the dotless i inside it, so it reads differently there.)
+PIECES = ((floor._SEP,) + tuple(floor._letter(ch) for ch in sorted(floor._LEET) if ch not in floor._RE2_UNFOLDED)
+          + (NAME_OPENING,))
 FINGERPRINT = re.compile("|".join(_any_escaping(p) for p in PIECES))
 
 

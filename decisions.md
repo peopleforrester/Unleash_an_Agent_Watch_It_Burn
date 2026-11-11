@@ -51770,3 +51770,101 @@ rewrites the spike's measured floor, and it is asked as a question in the run's 
 reads the spike's own files, which nothing here changed.
 
 **Live check.** Skipped: this entry is the only file the run changes, and no cluster runs it.
+
+## 2026-11-11 · #1316 · question 1166 · Grow the shared code-of-conduct list everywhere
+
+**Question.** Should the workshop's shared code-of-conduct word list, which the chat page, the support desk, the
+workshop's tool server, the log collector and the cluster's name check all read, grow to guard-proxy's new 1,253-term
+list?
+
+**Answer.** Grow the shared list everywhere. Decided by hecaton's research under Michael's standing rules, not by
+Michael. The research cited Michael's ask on guard-proxy-agenticburn#84 (2026-11-10) that the blocked list carry the
+slang and its alphanumeric spellings, and that issue's own "Then" section: the desk and the chat page read the same
+list, so one longer list covers the wall, `/chat`, the saved rail and the desk.
+
+**What it changes.** `terms-proposed.rot13` becomes guard-proxy's 1,253 terms and every surface follows it, as the
+one-list rule of #1289 has it; the entry below is the work.
+
+## 2026-11-11 · #1316 · run 20220 · guard-proxy pinned at 0a3ca16 and the 1,253 terms on every surface, with RE2 forms that fit the cluster's limits
+
+**Pin.** guard-proxy-agenticburn's main reached `0a3ca16` (the compare API reads `main...0a3ca16` identical) and #1288's
+repin to `0627502` landed on staging, so the two waits run 20084 named are gone. `gitops/ai-layer/guard-proxy` is at
+`0a3ca16078a2` and `checksum/proxy-py` is `ef48fb92f4d9`, the first 12 hex digits of sha256(proxy.py) there. New
+`verify/test_guard_proxy_pin_1316.py` holds the pin on guard-proxy main at or after `0a3ca16`, the checksum, guard-proxy's
+release-notes entry, and the pinned default list equal to `terms-proposed.rot13` entry for entry. It fails `0627502`
+with its own checksum. `test_guard_proxy_pin_1288.py` held the list at exactly 144; it now holds the 144 as the list's
+first entries, in order.
+
+**The list.** `docs/research/2026-11-09-coc-floor/terms-proposed.rot13` is guard-proxy's `_DEFAULT_PROFANITY` at
+`0a3ca16`: the spike's 144 lines unchanged, then 1,109 more under guard-proxy's own section headings. The README keeps
+its 2026-11-09 figures as the measurement of the 144 and says what changed. On the abuse set the list catches 112 of
+155 (one more Portuguese text), and it flags none of the stage texts, the hard negatives past the rooster sentence, or
+the 2,201 string literals of the probes and servers.
+
+**What each surface needed.**
+- *Folded floor and its three ports* (`floor.proposed_pattern()`, the chat page's `COC_RE`, the desk's and the MCP
+  server's shared block). One alternation of 1,253 terms cost 0.17 s of CPU on a 4,000-character run of `$` in
+  Python. Each now groups its alternatives by first character as guard-proxy's `_profanity_pattern` does, and writes a
+  whole-class run as `[k][k]*`, so that run costs 0.017 s. Against `proxy.py` at `0a3ca16`, the floor's spans are
+  guard-proxy's on 3,208 texts (the abuse set, hard negatives, stage texts and slang fixture), and both ports' spans
+  are the floor's on 6,880. The page's RegExp takes the `u` flag, since the list holds the finger emoji, past U+FFFF.
+- *Collector* (`portable_pattern()`). The single alternation is 212,409 characters. The form is now factored on
+  shared leading pieces: the spelt-out alternatives come first, then the others, so "f u c k" is masked whole and not
+  as the phrase "f u". It is 94,535 characters. Its trailing edge reads the dotless i and its `ı` escape as a
+  letter. Without that, a shorter term ending before a dotless i won over the longer one ("shitt" before "ıest").
+  The emoji's JSON escape is its surrogate pair. On the abuse set, slang fixture, stage texts and hard negatives its
+  mask is the folded floor's text for text. On 68,669 generated texts, each term and pairs of terms, its yes or no
+  agrees with the floor on all. On 509 of them a mask ends one letter early or late, and on none does a term the
+  floor finds survive the collector's two passes.
+- *Collector Applications.* The rendered ConfigMap holds the pattern four times, about 464 KB against the 1 MiB cap.
+  A client-side apply would copy it into a last-applied annotation of about 559 KB against the 262,144-byte cap. The
+  three otel-collector Applications now carry `ServerSideApply=true`, as gateway-api already does for its 248 KB CRD.
+  Nothing patches the collector at runtime.
+- *Admission policy on names* (`name_pattern()`, new). CEL charges `matches()` 0.1 a text character times 0.25 a
+  pattern character against 1,000,000 a call. With the portable form the budget would be about 420 characters of
+  name and labels; the longest a stage identity writes in `agent` is 374 (a Job, read live on both clusters). A name
+  or label holds only letters, digits and `.-_/=:`, so this form cuts each class to those and drops the JSON escapes.
+  It is 52,863 characters, a budget of about 756. It refuses what the portable form refuses on 49,928 texts of that
+  alphabet. No stage identity can create a Role or RoleBinding in `agent`, the only kinds whose names hold more
+  (`kubectl auth can-i`, both clusters).
+  `verify/coc_pattern_copies.py` gives each Site its own floor function, and `test_coc_admission.py` holds the cost
+  of the longest stage text to two thirds of the limit.
+
+**Tests changed** for the list, each run once here and passing: test_chat_coc.py (Go's `\u` escapes; entries ROT13
+leaves as they are), test_chat_coc_e2e.py (112 of 155; the pre-#1300 mutant written `[k][k]*`; the slang fixture),
+test_desk_coc.py (the slang fixture through the real desk), test_coc_admission.py, test_coc_pattern_copies.py,
+test_coc_pattern_linear.py (its mutant), test_coc_floor_spike.py (the ports' own term literal left out),
+test_deploy_coc.py (the emoji's escape), test_guard_proxy_pin_1288.py and the new test_guard_proxy_pin_1316.py.
+Also run, unchanged and passing: test_collector_coc_mask.py, test_coc_floor_mapping.py, test_coc_floor_latency.py,
+test_proxy_checksum.py, test_guard_proxy_pin_1267.py, 1225, 1048 and test_guard_proxy_pin_on_main.sh. The tier test
+`bash verify/run-e2e-tools.sh test_collector_coc_mask_e2e.py` ran the factored pattern through the pinned
+otelcol-contrib on the instructor and burn configs: `ALL E2E TOOLS TIER CHECKS GREEN`, 2m17s. The rest of the
+scoped suites is left to validation.
+
+**Criterion 2.** On guard-proxy's `conformance/coc_floor/slang-set.rot13.tsv` at the pin (70 refused, 17 passes), the
+pinned `proxy.py` refuses the 70 and passes the 17. The page's `cocViolation`, run in node, gives its verdict on all
+87. The desk's `coc_hit` does too, and on the running desk `/submit` and `/presenter-ticket` refuse the 70 with 422 and
+file the 17 whole.
+
+**Live check, both clusters, 2026-11-11.** The name form was checked with a copy of the policy named
+`coc-names-1316-probe`, bound to a scratch namespace `coc-1316-probe`, and server dry runs as the run's role; terms
+masked:
+
+    validatingadmissionpolicy.admissionregistration.k8s.io/coc-names-1316-probe created
+    policy status: {"observedGeneration": 1, "typeChecking": {}}
+    PASS  ConfigMap named joker-<slang term 0..2, and the first term>: refused -> ... denied request: Keep it kind: ...
+    PASS  ConfigMap with <each of those> in a label value: refused
+    PASS  ConfigMap with a plain name: admitted (server dry run)
+    PASS  ConfigMap with 374 characters of name and labels: admitted (server dry run)
+    INFO  ConfigMap with 934 characters of name and labels: refused -> ... resulted in error: operation cancelled:
+          actual cost limit exceeded
+    left: 0 probe objects; namespaces "coc-1316-probe" not found
+
+The same on watch-it-burn-private and watch-it-burn-community. The policy, binding and namespace were deleted, and
+the live `code-of-conduct-names` policy was not touched.
+
+**Not yet run on a cluster.** After Argo CD syncs this from staging, on both clusters: guard-proxy's
+`checksum/proxy-py` reads `ef48fb92f4d9` and `/chat` refuses a slang text from the fixture with every guard off. The
+otel-collector Application syncs with `ServerSideApply=true` and its ConfigMap holds the new pattern, which
+`verify/pii_scrub_live.py` reads. The namespaces Application syncs the new `code-of-conduct-names`. Then
+`verify/kubecon_probe.py`'s community and admin runs are green.

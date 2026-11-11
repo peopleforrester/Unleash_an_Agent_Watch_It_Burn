@@ -224,7 +224,7 @@ def portable_pattern(terms: list[str] | None = None) -> str:
 
     RE2's (?i) folds fewer letters than Python's re.IGNORECASE: it leaves the dotless i apart from i, where fold()
     and guard-proxy's match read it as i. Each class holding a letter of _RE2_UNFOLDED therefore also matches that
-    letter and its escape (#1301)."""
+    letter and its escape (#1301): `(?:[i1ı]|\\u0131)`."""
     terms = corpus.terms("proposed") if terms is None else terms
     alts = _two_kinds([_alternatives(t) for t in _ordered(terms)])
     for ch in sorted({c for c in alts if not c.isascii()}):
@@ -233,7 +233,10 @@ def portable_pattern(terms: list[str] | None = None) -> str:
         alts = alts.replace(f"[{ch}]", f"(?:{ch}|{_json_escape(ch)})")
     for latin, other in _RE2_UNFOLDED.items():
         classes = re.compile(r"\[[^\]]*" + re.escape(latin) + r"[^\]]*\]")
-        alts = classes.sub(lambda m: f"(?:{m.group(0)}|{other}|\\\\u{ord(other):04x})", alts)
+        # The letter goes inside the class, not beside it as `(?:[i1]|ı|...)`: Python's re.IGNORECASE folds the dotless i
+        # to i, so beside the class a run of i could be read two ways at each character, and a failed match on a run
+        # of "i" backtracked through every way (#1316, the first term starting with i). Inside, any engine reads one.
+        alts = classes.sub(lambda m: f"(?:{m.group(0)[:-1]}{other}]|\\\\u{ord(other):04x})", alts)
     hexd = "[0-9a-f]" * 4  # not {4}: no brace reaches the collector's Helm-templated config
     return r"(?i)(^|[^a-z0-9]|\\[nrt]|\\u" + hexd + r")((?:" + _compact(alts) + r")s?)" + _trailing_edge()
 
