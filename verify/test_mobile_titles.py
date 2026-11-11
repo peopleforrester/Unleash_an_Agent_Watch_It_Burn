@@ -89,6 +89,9 @@ check("it measures the header buttons", "document.querySelectorAll('body>header 
 check("at any width the bar counts as overflowing when it is wider than its box (#1253)",
       "window.matchMedia('(max-width:760px)')" in fit and "return bar.scrollWidth>bar.clientWidth ||" in fit)
 check("a button counts as overflowing when its label is wider than its box", "a.scrollWidth>a.clientWidth" in fit)
+check("or when it ends past the bar's right padding edge, which the bar's scrollWidth does not count (#1361)",
+      "var edge=bar.getBoundingClientRect().right-parseFloat(getComputedStyle(bar).paddingRight)+0.5;" in fit
+      and "a.getBoundingClientRect().right>edge" in fit)
 steps = ["if(over()) bar.classList.add('hbnodom');", "if(phone.matches && over()) bar.classList.add('hbicons');",
          "if(over()) bar.classList.add('hbtight');",
          "while(px>8 && over()){ px-=0.5; hb.forEach(function(a){ a.style.fontSize=px+'px'; }); }",

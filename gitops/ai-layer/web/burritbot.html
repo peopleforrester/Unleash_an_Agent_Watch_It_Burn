@@ -351,8 +351,11 @@
     <a class="hb" id="fbbtn" href="https://feedback.burritobot.co/quick?context=Challenges&amp;source=burritobot" target="_blank" rel="noopener" aria-label="Feedback" title="Feedback"><span class="hbi" aria-hidden="true">&#128172;</span><span class="hbl"> Feedback</span></a>
   </header>
   <!-- HEADER BUTTONS THAT FIT ANY FONT (#1047), ON ONE ROW ON A PHONE (#1214), AND ON A WIDE FONT (#1253). The CSS
-       size stays the first choice. The bar counts as overflowing when it is wider than its box, at any width, or
-       when a label is wider than its own button. While it overflows, the fit takes one step at a time and stops
+       size stays the first choice. The bar counts as overflowing when it is wider than its box, at any width, when
+       a label is wider than its own button, or when a button ends past the bar's right padding edge, which the
+       bar's scrollWidth does not count (#1361: at 1280px on the wide-font copy the last button ended at 1280.2px,
+       18px into the padding and past the screen, with scrollWidth still 1280; the half pixel is the spacer's
+       rounding, since it pushes the last button to that edge). While it overflows, the fit takes one step at a time and stops
        at the first that fits: .hbnodom drops the brand's domain (#1253: the private bot's bar ran 29px past a
        768px screen in DejaVu Sans), then below 760px .hbicons shows each button's icon alone (#1214), then
        .hbtight closes the bar's padding and gaps (#1253: the icons ran past a 320px screen on the widest fonts),
@@ -377,8 +380,9 @@
       var hb=[].slice.call(document.querySelectorAll('body>header a.hb'));
       var phone=window.matchMedia('(max-width:760px)');
       function over(){
+        var edge=bar.getBoundingClientRect().right-parseFloat(getComputedStyle(bar).paddingRight)+0.5;
         return bar.scrollWidth>bar.clientWidth ||
-               hb.some(function(a){ return a.scrollWidth>a.clientWidth; });
+               hb.some(function(a){ return a.scrollWidth>a.clientWidth || a.getBoundingClientRect().right>edge; });
       }
       function fit(){
         bar.classList.remove('hbnodom','hbicons','hbtight','hbmin');

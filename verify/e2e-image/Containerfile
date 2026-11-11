@@ -20,10 +20,11 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PLAYWRIGHT_SKIP_BROWSER_GC=1
 
 # What run-e2e-tools.sh checks for (git, jq, openssl, flock) and what the tests call (ps and pkill, tar, xz), with
-# curl and unzip for this build's fetches.
+# curl and unzip for this build's fetches, and the DejaVu fonts test_chat_wide_font_e2e.py renders the chat page in,
+# the wide fonts netcup and Tanjiro's runner draw it in (#1253), which Playwright's own font set lacks (#1361).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends bash ca-certificates curl git jq openssl procps tar unzip \
-        util-linux xz-utils \
+    && apt-get install -y --no-install-recommends bash ca-certificates curl fonts-dejavu-core git jq openssl procps \
+        tar unzip util-linux xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
 COPY e2e-image/install.sh /usr/local/lib/wib-e2e/install.sh
