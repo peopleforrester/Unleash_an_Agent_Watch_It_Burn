@@ -53730,4 +53730,4 @@ none (the docstring, comments, the `which("curl")` lookup and check messages). A
 20424 repeated the read-only curl check in pod `workshop-mcp-67cc87b6bd-s9h8p` on watch-it-burn-community: with the
 `.curlrc` in `CURL_HOME` the request sent `> X-Witch-Name: Agatha the Banshee`, without it none, curl 8.14.1; the
 scratch directory was removed. The Challenge 2C send above is still owed, and it waits only on this change's
-promotion now that #48 is merged.
+promotion, since #48 is merged.
