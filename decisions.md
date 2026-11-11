@@ -53120,6 +53120,7 @@ watch-it-burn-private --kubeconfig <both clusters' contexts> --profile accen-dev
 GREEN` with the new names; then, from the private terminal, `guardrails-ai-on`, `guardrails-ai-off`,
 `guardrails-topic-on` and `guardrails-topic-off`, each ending on both clusters' `/controls` reading the new state.
 The deck's DO notes name the new switches once rounds-agenticburn#171 lands; no test here reads them.
+
 ## 2026-11-11 · #1344 · run 20383 · `stage_views.py remove`: the eight stage objects come out of Whitney's org after the talk
 
 **What #1344 asks.** Run 20202 (#648) put eight objects in Whitney's sandbox Datadog org for the 2026-11-12
@@ -53238,3 +53239,53 @@ validation.
 **Not yet run on a cluster.** The new login sentences in `gitops/ai-layer/web/kubecon.html` and `brief.html` reach the
 private cluster's `/kubecon` and `/brief` only after hecaton promotes this change and Argo CD syncs it; the next run on
 the issue reads both pages there and finds mrf-secrets named for the pair and no "set by hand" sentence.
+
+## 2026-11-11 · #1346 · run 20414 · Run 20403's `guardrails-<name>-on/off` draft, checked with git and the guard-proxy submodule, and read live on both KubeCon clusters
+
+**Why run 20403 did not land.** It ended `failed (lane-moved)`: it ran on the doc lane, and its edit changed code
+(`entrypoint.sh`, `verify/*.py`, the scope and test maps). Nothing in it was wrong for that reason. This run's branch
+starts from that edit, and staging has not moved since (its tip is this run's base, a53c340d), so there is no drift
+to port and the draft stands as written. The one edit to it: a blank line before the #1344 heading that follows its
+entry.
+
+**Offline, rerun in a checkout with git and the guard-proxy submodule.** The doc lane had neither, so four of the
+draft's changed tests (`test_guardrails_switch.py`, `test_kubecon_probe.py`, `test_stage_switch_check.py`,
+`test_trace_walkthrough_view.py`) could not read `gitops/ai-layer/guard-proxy/proxy.py` there. With the submodule
+checked out at its pin (0a3ca160), every changed offline test passes alone: `test_guardrails_names.py` and the
+sixteen the draft entry names. `test_coc_floor_probes_live.py` is `# SUITE: e2e`, its change is a comment, and it was
+not run: it needs every guardrail off on both clusters, and they are on (below). The unchanged offline tests that
+both name an old switch and read a changed file pass alone too: `test_agent_tools_sync`, `test_backups_floor`,
+`test_c7_gateway_toggle`, `test_challenge_fallbacks`, `test_coc_admission`, `test_evil_tools_by_name`,
+`test_guard_input_both`, `test_guard_lease`, `test_guard_mcp_both`, `test_guard_switch_both`, `test_guards_all_both`,
+`test_marketing_send_persona`, `test_no_docker_hub`, `test_progress_entries`, `test_recipe_block_coverage`,
+`test_replay_prompts`, `test_room_reader_rbac`, `test_terminal_quiet`, `test_topic_guard`, `test_topic_guard_proxy`
+and `test_fleet_converge_repairs.sh`. `test_scope_tests.py` and `test_test_map.py` pass, so the map entry the draft
+wrote without git holds. The prose gate passes on the three prose files. The scoped `run-tests.sh` is left to the
+gate.
+
+**Live, read only, on both clusters.** The two clusters were read through this run's session, and the private
+terminal pod (`kubectl exec deploy/web-terminal -c ttyd`) under its own identity:
+
+- Both clusters' `/controls` read kates on, agency off, input on, output on, mcp on, budget on, topic off. The
+  draft's `.controls.py`, cut from the new entrypoint and fed each live answer, printed
+  `watch-it-burn-private (burritobot-private.agenticburn.com): kates on · agency off · input on · output on · mcp on ·
+  budget on · topic off`, the same for `watch-it-burn-community (attackme.agenticburn.com)`, exited 0 when held to
+  that state and 1, with `/controls reads kates on, not off`, when held to kates off.
+- From the private terminal, the two reads `_state` makes both answer: this cluster's through `kubectl -n agent exec
+  deploy/guard-proxy`, and the peer's through `~/.kube/peer --context watch-it-burn-community get --raw
+  .../services/guard-proxy:8080/proxy/controls` (exit 0). The `guardrails-peer` Secret names
+  `watch-it-burn-community`.
+- On watch-it-burn-community, the `guardrails-switch` Role grants `get` on `services/proxy` for `guard-proxy:8080`,
+  the path `_toggle` and `_topic` take to the peer, and guard-proxy's `TOGGLE_KEYS` hold `output`, `budget` and
+  `topic`. So the three switches that used to change only the terminal's own cluster reach the peer through the grant
+  `guardrails-input-on` already uses.
+- The private terminal's home still holds only the old names (`guardrails-on`, `guards-on`, `guard-<one>-on`), as
+  expected: the new names arrive when Argo CD rolls `web-terminal` after promotion.
+
+**Not yet run on a cluster.** `python3 verify/stage_switch_run.py --context watch-it-burn-private --kubeconfig
+"$KUBECONFIG" --profile accen-dev` with the new names, which must end `STAGE SWITCH CHECK GREEN`, then
+`guardrails-ai-on`, `guardrails-ai-off`, `guardrails-topic-on` and `guardrails-topic-off` from the private terminal.
+They need the new entrypoint on the terminals, which comes only with promotion. They also need both clusters at the
+start state, every guardrail off, and today both read guardrails on: the run refuses from there (exit 4) by design.
+The presenters rehearse today, so this run switched nothing on either cluster. The next run on the issue, after
+promotion and with the clusters at the start state, runs both.
