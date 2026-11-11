@@ -101,12 +101,6 @@ sites:
     kind: tool
     pin: '.github/workflows/verify-suites.yml (--python 3.13: uv fetches a 3.13 build when the runner has none)'
     cached: false
-  - match: setup-node
-    lines: 1
-    class: pinned
-    kind: tool
-    pin: .github/workflows/verify-suites.yml (the action's commit and its node-version)
-    cached: false
   .github/workflows/weaver-registry-check.yml:
   - match: artifact-cache
     lines: 1

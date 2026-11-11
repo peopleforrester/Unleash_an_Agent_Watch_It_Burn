@@ -153,24 +153,10 @@ jobs:
           "$RUNNER_TEMP/venv/bin/python" verify/package_cache.py install pyyaml --python "$RUNNER_TEMP/venv/bin/python"
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
 
-      # The node harnesses run on the Node on PATH, 24 or later, which run-e2e-tools.sh checks before any test; the job
-      # installs the current major, 26 (#1200).
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
-        with:
-          node-version: '26'
-          package-manager-cache: false
-
       - name: HECATON_BASE_SHA, the merge base with origin/staging, or the newest green staging ancestor
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash verify/ci-base-sha.sh
-
-      # Playwright's Chromium needs shared libraries and fonts that Tanjiro's Debian lacks (libnspr4.so first, #1047),
-      # and the host takes nothing from apt. This unpacks the missing Debian packages under the job's temp directory,
-      # never installing them, and sets LD_LIBRARY_PATH and FONTCONFIG_FILE for the suite; with nothing missing it
-      # writes nothing.
-      - name: Chromium's libraries and fonts, unpacked for this job
-        run: python3 verify/ci_chromium_libs.py "$RUNNER_TEMP/chromium-libs"
 
       # The suite's scratch goes in the job's temp directory, which the runner empties for each job. Unset, TMPDIR
       # would be the checkout's tmp/, 119 bytes on Tanjiro, and a Terraform provider's socket there passes Linux's
@@ -182,7 +168,7 @@ jobs:
       # When the push touches what a tier test reads, run-e2e-tools.sh runs the offline suite and the tier inside the
       # wib-e2e-tools image (#1188), through verify/e2e-image.sh and the runner user's podman, and fetches no binary;
       # with no image on the host and none pullable, it fails naming the image. A push no tier test reads runs the
-      # offline suite here alone and pulls nothing. The Node and Chromium steps above serve no tier test now, since
-      # the image holds both.
+      # offline suite here alone and pulls nothing. The job installs no Node and unpacks no Chromium libraries
+      # (#1359): the image holds Node and Playwright's Chromium, and the offline suite needs neither.
       - name: bash verify/run-e2e-tools.sh
         run: bash verify/run-e2e-tools.sh
