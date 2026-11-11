@@ -52929,3 +52929,102 @@ line (community 06:32:12Z, private 06:31:48Z), as #1335 recorded. Nothing on eit
 
 **Tests run**, each once and passing: `test_collector_pods_ready_live_checks.py`, `test_collector_pods_ready_live.py`
 live on both clusters, and `scope_tests.py check`. The rest the change selects are left to validation.
+## 2026-11-11 · #648 · run 20202 · The Night Before seed ran green, the retention filter and seven stage views are in Whitney's org through the API
+
+`bash verify/prior-drafts.sh 648 origin/staging` printed `NONE`: every earlier draft is followed in staging by later
+#648 work. The issue had no checklist, so its body now has an `## Acceptance criteria` section of three items: the seed
+ends `SEEDED GREEN`, a view per challenge plus `burritobot-public` and `burritobot-private` is in Whitney's org, and the
+morning `check` ends `STAGE TRACES GREEN`.
+
+**What changed since run 17365.** Run 17365 (2026-11-05) found the repo's Datadog key read-only and left the retention
+filter and the views to clicks in Whitney's signed-in UI. Two things since make both API work. The secret
+`watch-it-burn/datadog` (accen-dev, us-west-2) has a `write-app-key` field, the unscoped key from Michael's user in the
+sandbox org (#489, 2026-11-05). And #792's run 18770 found that every Datadog explorer keeps its saved views in one store,
+`/api/v1/logs/views`, filtered by `?type=`, and read its create schema off Datadog's 400s. This run read the store's type
+and page lists the same way, with two POSTs that failed validation and created nothing: APM Trace Explorer is type
+`trace`, page `traces`; LLM Observability is `llmobs`, `llm_obs_explorer`, as #792 found.
+
+**The script.** `infra/datadog-room/stage_views.py` has two verbs, each a dry run by default, `--list` read-only and
+`--apply` writing. `retention` creates the APM retention filter `WIB stage seeds (#648)`, query
+`service:burritobot @session.id:wib-stage-*`, rate 1.0 and trace rate 1.0, unless one with that query and those rates
+is there; one of its name with another query is not edited. `views` reads the seed's `tmp/stage-traces.json` and keeps
+seven views, named `WIB stage 1` to `WIB stage 6` so Datadog's name order is presentation order: one per challenge
+holding its attack and fixed seeds, `ml_app:burritobot session_id:(<attack> OR <fixed>)` on Past 7 Days; the PII
+refusal in APM after Challenge 3 (`3b`); then `burritobot-public` and `burritobot-private`, live on Past 15 Minutes. A
+view of the right name with another query is updated in place by id (PUT), so a new seed keeps the same links. It
+writes only views whose name starts `WIB stage `, deletes nothing, refuses a name two views hold, and passes only when
+all seven read back as built. Both verbs fence the org as `fleet_monitors.py` does and take the application key from
+`WIB_FLEET_MONITORS_APP_KEY`, else the secret's `write-app-key`, never printed. `verify/test_stage_views.py` holds it
+offline against a fake org with the store's schema, and holds the four challenge titles to the run-of-show's segment
+headings. The run-of-show's seed step now runs `retention` before the seed in place of the UI click, and a new Night
+Before step after it runs `views` and lists the seven. The seed step still tells the presenter to save nothing, as
+`verify/test_ros_seed_step_links.py` holds (#1139, #1205): the deck's four links stay the way in on stage.
+
+**Live, 2026-11-11, staging `89125d24` plus this change, run's own session.**
+
+- 00:30Z `python3 verify/stage_traces.py pii burritobot-private.burritobot.co --context watch-it-burn-private ...`:
+  card, SSN, e-mail, phone and the stage prompt each `CAUGHT` by the Regex scanner at 1.0, the plain order `OK`,
+  `PII GREEN: THE INPUT GUARD REFUSES 5 OF 5`. No model call.
+- 00:35Z `stage_views.py retention --list` read four filters (Datadog's three defaults, disabled, and Error Default),
+  then `--apply` printed `CREATED: id W0CFEfLXRCmykjfq8cio8w: 'WIB stage seeds (#648)' query
+  'service:burritobot @session.id:wib-stage-*' rate 1 trace_rate 1 enabled True, read back after the create`.
+- 00:35Z `python3 verify/stage_traces.py seed burritobot-private.burritobot.co --context watch-it-burn-private
+  --kubeconfig "$KUBECONFIG" --profile accen-dev --lock-wait 900`, stamp `202611110035`, held the guard lock on both
+  clusters and ended `SEEDED GREEN`, exit 0. All 18 beats PASS, from the start state through `[end] guards-off and
+  guardrails-off: both clusters at the start state`. Every seed made its slide's call on the first ask, so `missed` is
+  empty and every session is `wib-stage-<key>-202611110035`. Its trace verdicts:
+
+      PASS  c1-attack   ... 6 spans, with get_vault_entry
+      PASS  c1-fixed    ... 6 spans, with get_vault_entry
+      PASS  c2-attack   ... 6 spans, with run_shell
+      PASS  c2-fixed    ... 6 spans, with run_shell
+      PASS  c3-attack   ... 10 spans, with read_support_ticket then deploy_app
+      PASS  c3-fixed    ... 6 spans, with read_support_ticket and no deploy_app
+      PASS  c3-pii      ... 2 spans, refused by input_classifier, no agent span, none of the PII
+      PASS  c4-attack   ... 8 spans, with get_weather with read_internal_config, asked for in one model turn
+      PASS  c4-fixed    ... 8 spans, with get_weather
+      seeded traces complete in Datadog: 9 of 9 (126s of 600s)
+      SEEDED GREEN
+
+- `stage_views.py views --apply` created the seven and read them back, `STAGE VIEWS GREEN: 7 views, 0 not saved as
+  built`: views 4819010 (Challenge 1), 4819011 (2), 4819012 (3), 4819013 (3b, the PII refusal, APM), 4819014 (4),
+  4819015 (`burritobot-public`) and 4819016 (`burritobot-private`). Their links are
+  `https://app.datadoghq.com/llm/traces?saved-view-id=<id>`, and `apm/traces` for 4819013.
+- Each view's query, read through the API with the read-only key: views 4819010, 4819011, 4819012 and 4819014 found
+  12, 12, 16 and 16 spans, each exactly its challenge's attack and fixed sessions; 4819013 found the one `POST` root
+  span of `wib-stage-c3-pii-202611110035`, sent 00:39:15Z.
+- A PUT of view 4819016's own body to `/api/v1/logs/views/4819016` answered 200 and it read back as built with the
+  same id: the store takes the in-place update a new seed's `views --apply` sends.
+- 00:45Z `python3 verify/stage_traces.py check --profile accen-dev`: all nine PASS, `STAGE TRACES GREEN`.
+- 00:56Z, 17 minutes after it was sent and so past Live Search's 15, the APM search for
+  `service:burritobot @session.id:wib-stage-c3-pii-202611110035` still found its `POST` span. The 2026-11-09 seed's PII
+  span, sent before this filter existed, is found too, so Datadog's own retention also kept that one; the filter
+  makes the keep certain rather than a matter of Datadog's sampling.
+
+**`check` from the stamp.** `tmp/` is not committed, so the morning check in any checkout but this run's had no views
+file, and run 18879 rebuilt run 18805's views from its stamp by hand. `check` now takes `--stamp <UTC minute>`, with
+`--session KEY=SESSION` for a seed asked again (#1210), and rebuilds the views with the script's own `views()`. It
+refuses a stamp that is not a UTC minute and a session of another seed. `verify/test_stage_traces.py` gains those cases.
+Live, with this run's views file moved aside, `python3 verify/stage_traces.py check --profile accen-dev --stamp
+202611110035` read all nine PASS and `STAGE TRACES GREEN`.
+
+**Left as found.** Both clusters read the start state at the seed's last beat, and `verify/guard_lease.py show` reads
+`wib-guard-lock is free` on both. No Joker runs on watch-it-burn-private; the one on watch-it-burn-community is
+`joker-ichabod-the-werewolf`, three days old, recorded before. `https://deployments.burritobot.co/deployments.json`
+reads `[]`: the seed removed `c3-attack`'s row itself. In Whitney's org the writes were the one retention filter, the
+seven `WIB stage` views and the same-body PUT on one of them; no other view or filter was edited or deleted. The
+terminal login Secret was not read or touched.
+
+**Spend.** Eight model calls on Nova Pro through the private bot, one ask each; `c3-pii` spent no tokens.
+
+**Tests.** Run alone, each exits 0: `verify/test_stage_views.py` (new), `verify/test_stage_traces.py`,
+`test_ros_seed_step_links.py`, `test_seed_step_matches_stage_traces.py`, `test_stage_seed_links.py`,
+`test_stage_trace_prompts.py`, `test_stage_trace_slides.py`, `test_stage_switch_night_before.py`,
+`test_trace_walkthrough_view.py`, `test_instructor_brief.py`, `test_kubecon_probe.py`, `test_replay_prompts.py`,
+`test_docs_current.py`, `test_tests_own_inputs.py`, `test_scope_tests.py` and `test_test_map.py`. The prose gate passes.
+The scoped suites are left to the gate.
+
+**Still owed.** The morning of 2026-11-12, `python3 verify/stage_traces.py check --profile accen-dev --stamp
+202611110035`, or a fresh `seed` and `views --apply` if the stage changes before then.
+That a view opens on its query in the browser is not checked: it needs a Datadog session in a browser, and Michael's
+Chrome on Tanjiro had none on 2026-11-05 and 2026-11-08.
