@@ -1,30 +1,30 @@
-# ABOUTME: Offline gate for _both in the terminal's .guardlib (#1147): guard-agency-on and guard-agency-off switch this
-# ABOUTME: cluster and the linked KubeCon peer, name a peer they could not reach, and guardrails-on/off stay as they were.
-"""#1147, the first piece of #1132. guard-agency-on and guard-agency-off used to change only the cluster whose terminal
+# ABOUTME: Offline gate for _both in the terminal's .guardlib (#1147): guardrails-agency-on and guardrails-agency-off switch this
+# ABOUTME: cluster and the linked KubeCon peer, name a peer they could not reach, and guardrails-k8s-on/off stay as they were.
+"""#1147, the first piece of #1132. guardrails-agency-on and guardrails-agency-off used to change only the cluster whose terminal
 ran them, while the room plays on the public bot. _both in ~/.guardlib (gitops/ai-layer/web-terminal/entrypoint.sh)
 runs one switch step here, then on the other KubeCon cluster through the kubeconfig in the
 guardrails-switch/guardrails-peer Secret, the way _guardrails reaches it.
 
 Checked here, with a kubectl on PATH that plays two clusters:
-  * guard-agency-on and guard-agency-off apply their Role on both clusters, say which clusters changed, and print every
+  * guardrails-agency-on and guardrails-agency-off apply their Role on both clusters, say which clusters changed, and print every
     kubectl they run; each printed line, run by bash, makes the same call;
   * a peer Secret whose cluster cannot be reached: this cluster switches, the run fails and names the peer;
   * a cluster with no peer Secret (the 2-hour workshop's): this cluster switches alone, one line says so, exit 0;
   * a peer Secret that is there but cannot be read: this cluster switches and the run fails, never passing as unlinked;
-  * guard-agency-off reads each cluster's Role first and keeps its Secret rule (#1358): c8-broad-role.yaml where RBAC is
-    off, c5-scoped-role.yaml where it is on, so guards-off, guardrails-off, guard-agency-off (the 2026-11-11 16:14Z
+  * guardrails-agency-off reads each cluster's Role first and keeps its Secret rule (#1358): c8-broad-role.yaml where RBAC is
+    off, c5-scoped-role.yaml where it is on, so guardrails-ai-off, guardrails-k8s-off, guardrails-agency-off (the 2026-11-11 16:14Z
     reset) ends broad on both, and a Role it cannot read is not written;
-  * guard-agency-on keeps each cluster's Secret rule too (#1362): c6-least-privilege-role.yaml where RBAC is on,
-    c6-broad-secrets-role.yaml where it is off, so guard-agency-on then guard-agency-off from the start state (after
-    guardrails-off) ends with the shipped broad Role and RBAC scope off on both clusters;
+  * guardrails-agency-on keeps each cluster's Secret rule too (#1362): c6-least-privilege-role.yaml where RBAC is on,
+    c6-broad-secrets-role.yaml where it is off, so guardrails-agency-on then guardrails-agency-off from the start state (after
+    guardrails-k8s-off) ends with the shipped broad Role and RBAC scope off on both clusters;
   * what the two commands ask of the peer is inside its guardrails-switch grant, and that grant is #774's plus
     #1148's one guard-proxy Service proxy rule;
-  * guardrails-on and guardrails-off make the same kubectl calls and print the same output as before #1147, held to
+  * guardrails-k8s-on and guardrails-k8s-off make the same kubectl calls and print the same output as before #1147, held to
     verify/fixtures/guardrails-switch-golden.json, recorded from staging e4354c50 and recorded again for #1349, whose
     closing /controls read (_controls) both now end on: the switch's calls and lines are #774's, then the read.
 
 `python3 verify/test_guard_switch_both.py --write-golden` rewrites that file from the current entrypoint. Run it only
-when guardrails-on or guardrails-off is meant to change, and say why in decisions.md.
+when guardrails-k8s-on or guardrails-k8s-off is meant to change, and say why in decisions.md.
 """
 from __future__ import annotations
 
@@ -190,8 +190,8 @@ def run(cmd: str, mode: str, args: tuple[str, ...] = (), start: str = "", start_
                 "state": json.loads(state.read_text())}
 
 
-GOLDEN_CASES = [("guardrails-on", "linked"), ("guardrails-off", "linked"), ("guardrails-on", "unlinked"),
-                ("guardrails-off", "unlinked"), ("guardrails-on", "peer-down"), ("guardrails-off", "peer-down")]
+GOLDEN_CASES = [("guardrails-k8s-on", "linked"), ("guardrails-k8s-off", "linked"), ("guardrails-k8s-on", "unlinked"),
+                ("guardrails-k8s-off", "unlinked"), ("guardrails-k8s-on", "peer-down"), ("guardrails-k8s-off", "peer-down")]
 
 
 def golden_now() -> dict:
@@ -204,19 +204,19 @@ if "--write-golden" in sys.argv[1:]:
     print(f"wrote {GOLDEN.relative_to(REPO)}")
     sys.exit(0)
 
-ROLE = {"guard-agency-on": "c6-least-privilege-role.yaml", "guard-agency-off": "c5-scoped-role.yaml"}
-# The Role each cluster holds before the command, in talk order: guard-agency-on after guardrails-on's c5, guard-agency-off
-# after guard-agency-on's c6. The checks below run each command from there.
-TALK_START = {"guard-agency-on": "c5-scoped-role.yaml", "guard-agency-off": "c6-least-privilege-role.yaml"}
+ROLE = {"guardrails-agency-on": "c6-least-privilege-role.yaml", "guardrails-agency-off": "c5-scoped-role.yaml"}
+# The Role each cluster holds before the command, in talk order: guardrails-agency-on after guardrails-k8s-on's c5, guardrails-agency-off
+# after guardrails-agency-on's c6. The checks below run each command from there.
+TALK_START = {"guardrails-agency-on": "c5-scoped-role.yaml", "guardrails-agency-off": "c6-least-privilege-role.yaml"}
 # The calls each makes on two linked clusters: two reads of the peer Secret, then per cluster the read of the Role
 # (#1358, #1362) and the apply, then the closing /controls read on each (#1349).
-LINKED_CALLS = {"guard-agency-on": 8, "guard-agency-off": 8}
-STEP = {"guard-agency-on": "_both _agency_on", "guard-agency-off": "_both _agency_off"}
+LINKED_CALLS = {"guardrails-agency-on": 8, "guardrails-agency-off": 8}
+STEP = {"guardrails-agency-on": "_both _agency_on", "guardrails-agency-off": "_both _agency_off"}
 
 print("== _both is in .guardlib, and the two commands use it ==")
 lib = helpers.get(".guardlib", "")
-check("the terminal ships .guardlib, guard-agency-on and guard-agency-off",
-      {".guardlib", "guard-agency-on", "guard-agency-off"} <= set(helpers))
+check("the terminal ships .guardlib, guardrails-agency-on and guardrails-agency-off",
+      {".guardlib", "guardrails-agency-on", "guardrails-agency-off"} <= set(helpers))
 check(".guardlib defines _both, beside _peer", re.search(r"^_both\(\) \{", lib, re.M) is not None and "_peer()" in lib)
 for cmd, f in ROLE.items():
     body = helpers.get(cmd, "")
@@ -232,7 +232,7 @@ check("the KubeCon terminals run gitops/ai-layer/web-terminal/entrypoint.sh: ai-
       in RESOURCES.read_text(encoding="utf-8"))
 check("images/web-terminal/entrypoint.sh is kept byte-identical to it", TWIN.read_bytes() == ENTRYPOINT.read_bytes())
 
-print("== guard-agency-on and guard-agency-off on two linked clusters ==")
+print("== guardrails-agency-on and guardrails-agency-off on two linked clusters ==")
 for cmd, f in ROLE.items():
     r = run(cmd, "linked", start=TALK_START[cmd])
     out = r["stdout"] + r["stderr"]
@@ -254,39 +254,39 @@ for cmd, f in ROLE.items():
     others = [c for c in r["calls"] if c["cluster"] not in ("this", PEER)]
     check(f"{cmd}: touches no cluster but these two", not others, str(others))
 
-print("== guard-agency-off keeps each cluster's Secret rule: least privilege off never turns RBAC on (#1358) ==")
+print("== guardrails-agency-off keeps each cluster's Secret rule: least privilege off never turns RBAC on (#1358) ==")
 c5, c6, c8 = "c5-scoped-role.yaml", "c6-least-privilege-role.yaml", "c8-broad-role.yaml"
 for this0, peer0, want_this, want_peer, why in (
         (c8, c8, c8, c8, "from the start state, the shipped broad Role on both"),
-        (c6, c6, c5, c5, "after guard-agency-on, in talk order: RBAC was on"),
-        (c5, c5, c5, c5, "after guardrails-on alone"),
+        (c6, c6, c5, c5, "after guardrails-agency-on, in talk order: RBAC was on"),
+        (c5, c5, c5, c5, "after guardrails-k8s-on alone"),
         (c8, c6, c8, c5, "this cluster broad, the peer least-privileged: each keeps its own")):
-    r = run("guard-agency-off", "linked", start=this0, start_peer=peer0)
+    r = run("guardrails-agency-off", "linked", start=this0, start_peer=peer0)
     applies = [(c["cluster"], c["args"][-1].rsplit("/", 1)[-1]) for c in r["calls"] if c["args"][:1] == ["apply"]]
-    check(f"guard-agency-off {why}: applies {want_this} here and {want_peer} on {PEER}, exit 0",
+    check(f"guardrails-agency-off {why}: applies {want_this} here and {want_peer} on {PEER}, exit 0",
           r["rc"] == 0 and applies == [("this", want_this), (PEER, want_peer)], f"{r['rc']} {applies}")
     reads = [c for c in r["calls"] if c["args"] == ["-n", "agent", "get", "role", "workshop-agent", "-o", "json"]]
-    check(f"guard-agency-off {why}: reads the Role on each cluster before it applies, and prints the read",
+    check(f"guardrails-agency-off {why}: reads the Role on each cluster before it applies, and prints the read",
           [c["cluster"] for c in reads] == ["this", PEER] and r["replayed"] == r["calls"], str(r["calls"]))
     for ctx, want in (("this", want_this), (PEER, want_peer)):
         rules = ROLE_RULES[want]
-        check(f"guard-agency-off {why}: {ctx} ends with create on Deployments and Pods (least privilege off)",
+        check(f"guardrails-agency-off {why}: {ctx} ends with create on Deployments and Pods (least privilege off)",
               any("apps" in x.get("apiGroups", []) and "deployments" in x.get("resources", [])
                   and "create" in x.get("verbs", []) for x in rules)
               and any("" in x.get("apiGroups", []) and "pods" in x.get("resources", [])
                       and "create" in x.get("verbs", []) for x in rules), str(rules))
-r = run("guard-agency-off", "linked", before=("guards-off", "guardrails-off"), start=c5, start_peer=c5)
+r = run("guardrails-agency-off", "linked", before=("guardrails-ai-off", "guardrails-k8s-off"), start=c5, start_peer=c5)
 applies = [(c["cluster"], c["args"][-1].rsplit("/", 1)[-1]) for c in r["calls"] if c["args"][:1] == ["apply"]]
-check("the 2026-11-11 16:14Z reset, guards-off then guardrails-off then guard-agency-off, ends broad on both clusters",
+check("the 2026-11-11 16:14Z reset, guardrails-ai-off then guardrails-k8s-off then guardrails-agency-off, ends broad on both clusters",
       r["rc"] == 0 and applies == [("this", c8), (PEER, c8)], f"{r['rc']} {applies}")
 check("and its closing read shows RBAC scope off on both, the start state",
       "RBAC scope" in r["stdout"] and all("RBAC scope" in (ln.split("off:", 1)[-1] if "off:" in ln else "")
                                           for ln in r["stdout"].splitlines() if ln.strip().startswith("Kubernetes")),
       r["stdout"])
 for who in ("this", PEER):
-    r = run("guard-agency-off", "linked", start=c6, start_peer=c6, unreadable=who)
+    r = run("guardrails-agency-off", "linked", start=c6, start_peer=c6, unreadable=who)
     applied = [c["cluster"] for c in r["calls"] if c["args"][:1] == ["apply"]]
-    check(f"guard-agency-off: a Role it cannot read on {who} is not written there, and the run fails",
+    check(f"guardrails-agency-off: a Role it cannot read on {who} is not written there, and the run fails",
           r["rc"] == 1 and who not in applied and len(applied) == 1, f"{r['rc']} {applied}\n{r['stdout']}")
 
 def creates_workloads(rules: list[dict]) -> bool:
@@ -311,7 +311,7 @@ def badges(stdout: str) -> dict[str, tuple[str, str]]:
     return out
 
 
-print("== guard-agency-on keeps each cluster's Secret rule: least privilege on never turns RBAC on (#1362) ==")
+print("== guardrails-agency-on keeps each cluster's Secret rule: least privilege on never turns RBAC on (#1362) ==")
 c6b = "c6-broad-secrets-role.yaml"
 check(f"challenge-fixes holds {c6b}", c6b in ROLE_RULES, str(sorted(ROLE_RULES)))
 check(f"{c6b} is c6-least-privilege-role.yaml's workload rules with c8-broad-role.yaml's Secret rule",
@@ -321,40 +321,40 @@ check(f"{c6b} is c6-least-privilege-role.yaml's workload rules with c8-broad-rol
       == [x for x in ROLE_RULES[c8] if "secrets" in x.get("resources", [])], str(ROLE_RULES.get(c6b)))
 for this0, peer0, want_this, want_peer, why in (
         (c8, c8, c6b, c6b, "from the start state, the shipped broad Role on both"),
-        (c5, c5, c6, c6, "after guardrails-on, in talk order: RBAC is on"),
+        (c5, c5, c6, c6, "after guardrails-k8s-on, in talk order: RBAC is on"),
         (c8, c5, c6b, c6, "this cluster broad, the peer scoped: each keeps its own")):
-    r = run("guard-agency-on", "linked", start=this0, start_peer=peer0)
+    r = run("guardrails-agency-on", "linked", start=this0, start_peer=peer0)
     applies = [(c["cluster"], c["args"][-1].rsplit("/", 1)[-1]) for c in r["calls"] if c["args"][:1] == ["apply"]]
-    check(f"guard-agency-on {why}: applies {want_this} here and {want_peer} on {PEER}, exit 0",
+    check(f"guardrails-agency-on {why}: applies {want_this} here and {want_peer} on {PEER}, exit 0",
           r["rc"] == 0 and applies == [("this", want_this), (PEER, want_peer)], f"{r['rc']} {applies}")
     reads = [c for c in r["calls"] if c["args"] == ["-n", "agent", "get", "role", "workshop-agent", "-o", "json"]]
-    check(f"guard-agency-on {why}: reads the Role on each cluster before it applies, and prints the read",
+    check(f"guardrails-agency-on {why}: reads the Role on each cluster before it applies, and prints the read",
           [c["cluster"] for c in reads] == ["this", PEER] and r["replayed"] == r["calls"], str(r["calls"]))
     for ctx, start0, want in (("this", this0, want_this), (PEER, peer0, want_peer)):
         rules = ROLE_RULES[want]
-        check(f"guard-agency-on {why}: {ctx} ends with no create or patch on Deployments or Pods, and its Secret rule "
+        check(f"guardrails-agency-on {why}: {ctx} ends with no create or patch on Deployments or Pods, and its Secret rule "
               f"as it was", not creates_workloads(rules) and secrets_broad(rules) == secrets_broad(ROLE_RULES[start0]),
               str(rules))
 for who in ("this", PEER):
-    r = run("guard-agency-on", "linked", start=c8, start_peer=c8, unreadable=who)
+    r = run("guardrails-agency-on", "linked", start=c8, start_peer=c8, unreadable=who)
     applied = [c["cluster"] for c in r["calls"] if c["args"][:1] == ["apply"]]
-    check(f"guard-agency-on: a Role it cannot read on {who} is not written there, and the run fails",
+    check(f"guardrails-agency-on: a Role it cannot read on {who} is not written there, and the run fails",
           r["rc"] == 1 and who not in applied and len(applied) == 1, f"{r['rc']} {applied}\n{r['stdout']}")
 
-# The rehearsal #1362 reported: from the start state (guardrails-off after a talk that had scoped both Roles),
-# guard-agency-on, then guard-agency-off.
-r = run("guard-agency-on", "linked", before=("guardrails-off",), start=c5, start_peer=c5)
+# The rehearsal #1362 reported: from the start state (guardrails-k8s-off after a talk that had scoped both Roles),
+# guardrails-agency-on, then guardrails-agency-off.
+r = run("guardrails-agency-on", "linked", before=("guardrails-k8s-off",), start=c5, start_peer=c5)
 applies = [(c["cluster"], c["args"][-1].rsplit("/", 1)[-1]) for c in r["calls"] if c["args"][:1] == ["apply"]]
 read = badges(r["stdout"])
-check("guard-agency-on after guardrails-off applies the broad-Secret least-privilege Role on both clusters",
+check("guardrails-agency-on after guardrails-k8s-off applies the broad-Secret least-privilege Role on both clusters",
       r["rc"] == 0 and applies == [("this", c6b), (PEER, c6b)], f"{r['rc']} {applies}")
 check("and its closing read shows least privilege on and RBAC scope off on both clusters",
       len(read) == 2 and all("least privilege" in on and "RBAC scope" in off for on, off in read.values()),
       r["stdout"])
-r = run("guard-agency-off", "linked", before=("guardrails-off", "guard-agency-on"), start=c5, start_peer=c5)
+r = run("guardrails-agency-off", "linked", before=("guardrails-k8s-off", "guardrails-agency-on"), start=c5, start_peer=c5)
 applies = [(c["cluster"], c["args"][-1].rsplit("/", 1)[-1]) for c in r["calls"] if c["args"][:1] == ["apply"]]
 read = badges(r["stdout"])
-check("guardrails-off, guard-agency-on, guard-agency-off ends with the shipped broad Role on both clusters",
+check("guardrails-k8s-off, guardrails-agency-on, guardrails-agency-off ends with the shipped broad Role on both clusters",
       r["rc"] == 0 and applies == [("this", c8), (PEER, c8)], f"{r['rc']} {applies}")
 check("and its closing read shows RBAC scope and least privilege off on both, the start state",
       len(read) == 2 and all("RBAC scope" in off and "least privilege" in off for _on, off in read.values()),
@@ -423,10 +423,10 @@ for f in (c5, c6, c6b, c8):
     ds = docs(FIXES[f])
     check(f"~/challenges/{f} is the workshop-agent Role in agent alone, the one Role the peer may write",
           [(d["kind"], d["metadata"]["namespace"], d["metadata"]["name"]) for d in ds] == [("Role", "agent", "workshop-agent")])
-for cmd, start0 in [(c, TALK_START[c]) for c in ROLE] + [("guard-agency-on", c8), ("guard-agency-off", c6b)]:
+for cmd, start0 in [(c, TALK_START[c]) for c in ROLE] + [("guardrails-agency-on", c8), ("guardrails-agency-off", c6b)]:
     r = run(cmd, "linked", start=start0)
     # kubectl apply on an existing Role reads it and patches it; writing rules the switch identity does not hold
-    # needs escalate on that Role. The Role exists from git, so no create. guard-agency-off's read is a get (#1358).
+    # needs escalate on that Role. The Role exists from git, so no create. guardrails-agency-off's read is a get (#1358).
     need = {("agent", "roles", "workshop-agent", v) for c in r["calls"] if c["cluster"] == PEER
             and c["args"][:1] == ["apply"] for v in ("get", "patch", "escalate")}
     need |= {("agent", "roles", "workshop-agent", "get") for c in r["calls"] if c["cluster"] == PEER
@@ -435,11 +435,11 @@ for cmd, start0 in [(c, TALK_START[c]) for c in ROLE] + [("guard-agency-on", c8)
     check(f"{cmd}: everything it asks of {PEER} is inside the guardrails-switch grant", bool(need) and not missing,
           str(missing))
 
-print("== guardrails-on and guardrails-off are as they were ==")
+print("== guardrails-k8s-on and guardrails-k8s-off are as they were ==")
 if not GOLDEN.exists():
-    sys.exit(f"FAILED: {GOLDEN.relative_to(REPO)} is missing; it holds guardrails-on and guardrails-off to #774's calls")
+    sys.exit(f"FAILED: {GOLDEN.relative_to(REPO)} is missing; it holds guardrails-k8s-on and guardrails-k8s-off to #774's calls")
 want = json.loads(GOLDEN.read_text(encoding="utf-8"))
-check("the record covers guardrails-on and guardrails-off linked, unlinked and with the peer down",
+check("the record covers guardrails-k8s-on and guardrails-k8s-off linked, unlinked and with the peer down",
       sorted(want) == sorted(f"{c} {m}" for c, m in GOLDEN_CASES), str(sorted(want)))
 got = golden_now()
 for key in sorted(want):

@@ -104,25 +104,28 @@ check("the persona does not restrict topics itself (the wide-open start needs it
       "only talk burritos" not in persona and "off-topic" not in persona.lower())
 
 print("== the terminal helpers ==")
-for helper in ("guard-topic-on", "guard-topic-off"):
+for helper in ("guardrails-topic-on", "guardrails-topic-off"):
     check(f"{helper} is written and made executable",
           f'cat > "$HOME/{helper}"' in terminal and f'"$HOME"/{helper}' in terminal)
 # Since #1349 both switch this cluster and the other KubeCon cluster through _both _topic, which reads back what each
 # guard-proxy reports; verify/test_guard_switch_controls.py runs them against two clusters.
-topic_on = terminal.split('cat > "$HOME/guard-topic-on" <<\'EOS\'\n', 1)[-1].split("\nEOS\n", 1)[0]
-topic_off = terminal.split('cat > "$HOME/guard-topic-off" <<\'EOS\'\n', 1)[-1].split("\nEOS\n", 1)[0]
-check("guard-topic-on and guard-topic-off switch through _both _topic",
+topic_on = terminal.split('cat > "$HOME/guardrails-topic-on" <<\'EOS\'\n', 1)[-1].split("\nEOS\n", 1)[0]
+topic_off = terminal.split('cat > "$HOME/guardrails-topic-off" <<\'EOS\'\n', 1)[-1].split("\nEOS\n", 1)[0]
+check("guardrails-topic-on and guardrails-topic-off switch through _both _topic",
       "_both _topic on" in topic_on and "_both _topic off" in topic_off)
 check("_topic flips topic=on|off and reads back what the proxy reports",
       '_pxkey "topic=$st" topic' in terminal and "_pxkey()" in terminal and "_topic()" in terminal)
-check("guard-topic-on fails loudly on a guard-proxy without the topic stage",
+check("guardrails-topic-on fails loudly on a guard-proxy without the topic stage",
       "its guard-proxy has no on-topic guard, so nothing changed there" in terminal)
-guards_on = terminal.split('cat > "$HOME/guards-on" <<\'EOS\'\n', 1)[1].split("\nEOS\n", 1)[0]
-guards_off = terminal.split('cat > "$HOME/guards-off" <<\'EOS\'\n', 1)[1].split("\nEOS\n", 1)[0]
-check("the guards-on and guards-off bodies are found", "_toggle" in guards_on and "_toggle" in guards_off)
-check("guards-on leaves the on-topic guard off (it would refuse every challenge prompt)", "topic" not in guards_on)
-check("guards-off turns the on-topic guard off too", re.search(r'_toggle "[^"]*\btopic=off\b', guards_off) is not None)
-check("guards-status lists the on-topic guard", '"topic":"On-topic guard' in terminal)
+guards_on = terminal.split('cat > "$HOME/guardrails-ai-on" <<\'EOS\'\n', 1)[1].split("\nEOS\n", 1)[0]
+guards_off = terminal.split('cat > "$HOME/guardrails-ai-off" <<\'EOS\'\n', 1)[1].split("\nEOS\n", 1)[0]
+check("the guardrails-ai-on and guardrails-ai-off bodies are found", "_toggle" in guards_on and "_toggle" in guards_off)
+check("guardrails-ai-on leaves the on-topic guard off (it would refuse every challenge prompt)", "topic" not in guards_on)
+# #1350: the on-topic guard is its own switch. guardrails-ai-off, guards-off's new name, leaves it as it is (guards-off
+# turned it off too), and says guardrails-topic-off is what turns it off.
+check("guardrails-ai-off leaves the on-topic guard as it is, and names guardrails-topic-off for it",
+      "topic=" not in guards_off and "_topic" not in guards_off and "guardrails-topic-off turns it off" in guards_off)
+check("guardrails-status lists the on-topic guard", '"topic":"On-topic guard' in terminal)
 
 print("== the classifier step: BanTopics in llm-guard-scanners ==")
 # A phrase list alone misses paraphrases (the issue's own words), so the classifier half is required, not armed

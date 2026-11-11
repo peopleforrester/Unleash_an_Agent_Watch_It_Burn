@@ -1,6 +1,6 @@
 # ABOUTME: The terminal's guard commands print each real command they run, before running it, so the room sees the
-# ABOUTME: kubectl behind guard-input-on and the rest; each printed line, run by bash, makes the same call.
-"""Michael, 2026-10-29: "for guard-input-on and the other guard commands, echo the full commands you are actually
+# ABOUTME: kubectl behind guardrails-input-on and the rest; each printed line, run by bash, makes the same call.
+"""Michael, 2026-10-29: "for guardrails-input-on and the other guard commands, echo the full commands you are actually
 running to the terminal in addition to the text."
 
 The guards act through four helpers in ~/.guardlib (gitops/ai-layer/web-terminal/entrypoint.sh): _px and _pxkey call
@@ -37,7 +37,7 @@ elif "get" in args and "validatingpolicy" in args:
 elif "get" in args and "application" in args:
     sys.stdout.write("admin")
 elif "logs" in args:
-    print('info  state_manager  loaded config from File("/etc/agentgateway-c7/config.yaml")')  # guard-mcp-on's wait
+    print('info  state_manager  loaded config from File("/etc/agentgateway-c7/config.yaml")')  # guardrails-mcp-on's wait
 elif "get" in args and "workshop-agent" in args:
     print(json.dumps({"metadata": {"name": "workshop-agent"}, "spec": {"declarative": {"tools": [
         {"type": "McpServer", "mcpServer": {"name": "workshop-mcp", "toolNames": ["run_shell"]}},
@@ -76,9 +76,9 @@ with tempfile.TemporaryDirectory() as tmp:
     (fakebin / "sleep").chmod(0o755)
     env = {**os.environ, "HOME": str(home), "PATH": f"{fakebin}:{os.environ['PATH']}"}
 
-    for cmd in ("guard-input-on", "guard-output-on", "guard-topic-on", "guard-mcp-on", "guard-input-off",
-                "guard-rbac-on", "guard-rbac-off", "guard-admission-on", "guard-admission-off",
-                "guard-agency-on", "guard-agency-off"):
+    for cmd in ("guardrails-input-on", "guardrails-output-on", "guardrails-topic-on", "guardrails-mcp-on", "guardrails-input-off",
+                "guardrails-rbac-on", "guardrails-rbac-off", "guardrails-admission-on", "guardrails-admission-off",
+                "guardrails-agency-on", "guardrails-agency-off"):
         print(f"== {cmd} ==")
         real = pathlib.Path(tmp, f"{cmd}.real")
         r = subprocess.run(["bash", str(home / cmd)], env={**env, "FAKE_CALLS": str(real)},
@@ -99,24 +99,24 @@ with tempfile.TemporaryDirectory() as tmp:
 
     print("== the commands the room reads ==")
     real = pathlib.Path(tmp, "show.real")
-    r = subprocess.run(["bash", str(home / "guard-input-on")], env={**env, "FAKE_CALLS": str(real)},
+    r = subprocess.run(["bash", str(home / "guardrails-input-on")], env={**env, "FAKE_CALLS": str(real)},
                        capture_output=True, text=True, timeout=60)
     out = r.stdout + r.stderr
-    check("guard-input-on shows the /toggle query it sends",
+    check("guardrails-input-on shows the /toggle query it sends",
           "$ kubectl -n agent exec deploy/guard-proxy -- python3 -c" in out
           and "toggle?input_blocklist=on&input_classifier=on" in out, out)
 
     print("== Challenge 1's and Challenge 3's cluster fixes are commands too ==")
-    for cmd, verb, target in (("guard-rbac-on", "apply", "c5-scoped-role.yaml"),
-                              ("guard-rbac-off", "apply", "c8-broad-role.yaml"),
-                              ("guard-admission-on", "patch", "restrict-image-registries"),
-                              ("guard-admission-off", "patch", "restrict-image-registries"),
-                              ("guard-agency-on", "apply", "c6-least-privilege-role.yaml"),
-                              ("guard-agency-off", "apply", "c5-scoped-role.yaml")):
+    for cmd, verb, target in (("guardrails-rbac-on", "apply", "c5-scoped-role.yaml"),
+                              ("guardrails-rbac-off", "apply", "c8-broad-role.yaml"),
+                              ("guardrails-admission-on", "patch", "restrict-image-registries"),
+                              ("guardrails-admission-off", "patch", "restrict-image-registries"),
+                              ("guardrails-agency-on", "apply", "c6-least-privilege-role.yaml"),
+                              ("guardrails-agency-off", "apply", "c5-scoped-role.yaml")):
         ran = calls_of(pathlib.Path(tmp, f"{cmd}.real"))
         check(f"{cmd} runs kubectl {verb} on {target}",
               any(verb in c and any(target in a for a in c) for c in ran), str(ran))
-    for cmd, action in (("guard-admission-on", "Deny"), ("guard-admission-off", "Audit")):
+    for cmd, action in (("guardrails-admission-on", "Deny"), ("guardrails-admission-off", "Audit")):
         ran = calls_of(pathlib.Path(tmp, f"{cmd}.real"))
         check(f"{cmd} sets validationActions to [{action}]",
               any("patch" in c and any(f'"value":["{action}"]' in a for a in c) for c in ran), str(ran))
@@ -125,14 +125,14 @@ print("== the guard messages name the attack, not a challenge number ==")
 # One terminal serves the KubeCon cut (Challenge 1 to 4) and the 2-hour lab (C1 to C8), which number the same
 # attack differently, so a message that names a number is wrong in one of them. Each names its attack instead.
 docs = heredocs()
-for cmd, attack in (("guard-rbac-on", "CEO's record"), ("guard-rbac-off", "CEO's record"),
-                    ("guard-admission-on", "support ticket"), ("guard-admission-off", "support ticket"),
-                    ("guard-agency-on", "support ticket"), ("guard-agency-off", "support ticket"),
-                    ("guard-input-on", "support ticket"), ("guard-input-off", "support ticket"),
-                    ("guard-mcp-on", "weather tool"), ("guard-mcp-off", "weather tool")):
+for cmd, attack in (("guardrails-rbac-on", "CEO's record"), ("guardrails-rbac-off", "CEO's record"),
+                    ("guardrails-admission-on", "support ticket"), ("guardrails-admission-off", "support ticket"),
+                    ("guardrails-agency-on", "support ticket"), ("guardrails-agency-off", "support ticket"),
+                    ("guardrails-input-on", "support ticket"), ("guardrails-input-off", "support ticket"),
+                    ("guardrails-mcp-on", "weather tool"), ("guardrails-mcp-off", "weather tool")):
     check(f"{cmd} names the {attack}", attack in docs.get(cmd, ""), docs.get(cmd, "<missing>")[:200])
 for cmd, body in docs.items():
-    if cmd.startswith("guard") or cmd in ("platform", "guards-on", "guards-off"):
+    if cmd.startswith("guard") or cmd in ("platform", "guardrails-ai-on", "guardrails-ai-off"):
         nums = re.findall(r"Challenge [0-9]\b|\(C[0-9]\)", body)
         check(f"{cmd} names no challenge number", not nums, str(nums))
         check(f"{cmd} prints no em-dash", "\u2014" not in body)
@@ -169,8 +169,8 @@ check("it keeps patch on deployments/scale, the reaper's grant, as every Role do
                                              for v in r.get("verbs", [])}
           for role in (least, scoped, broad, yaml.safe_load(fixes["c8-broad-role.yaml"]),
                        yaml.safe_load(fixes["c8-scoped-role.yaml"]))))
-check("guard-agency-on, read in the terminal's list, belongs to the support ticket at KubeCon",
-      "guard-agency-on (the support ticket's Joker at KubeCon" in ENTRYPOINT)
+check("agency, in guardrails-status's list of switches, belongs to the support ticket at KubeCon",
+      re.search(r'^echo "  agency +least privilege \(the support ticket\'s Joker at KubeCon', ENTRYPOINT, re.M) is not None)
 
 print("== both copies of the entrypoint ==")
 check("images/web-terminal/entrypoint.sh is byte-identical to gitops/ai-layer/web-terminal/entrypoint.sh",

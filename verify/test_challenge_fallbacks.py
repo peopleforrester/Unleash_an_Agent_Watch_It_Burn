@@ -98,7 +98,12 @@ def terminal_says(cmd):
     return "\n".join(re.findall(r'echo "(.*)"', branch.group(1))) if branch else ""
 
 
-TERMINAL_SAYS = {c: terminal_says(c) for c in ("guard-mcp-on", "guard-mcp-off")}
+# The C7 fallback types the old names, guard-mcp-on and guard-mcp-off, which since #1350 are aliases: each prints the
+# line naming its guardrails-mcp-* form, then runs it, so the terminal says that line and then what the new one says.
+TERMINAL_SAYS = {old: f"({old} is now {new}; running that.)\n" + terminal_says(new)
+                 for old, new in (("guard-mcp-on", "guardrails-mcp-on"), ("guard-mcp-off", "guardrails-mcp-off"))}
+if f"echo \"(%s is now %s; running that.%s)\"" not in ENTRY:
+    sys.exit("ANCHOR MISSING: the old-name alias's `(%s is now %s; running that.%s)` line in the terminal's entrypoint.sh")
 
 print("== the fallbacks aim at what is deployed ==")
 check("workshop-mcp is deployed with a container named shim, as its own workshop-mcp ServiceAccount (#553)",
@@ -131,7 +136,7 @@ check("agentgateway-c7-config serves 3003 to evil-mcp, with one '# c7-rule' line
       "port: 3003" in C7_CONFIG and "name: evil-mcp" in C7_CONFIG and _c7_marked == ["- 'true' # c7-rule"], _c7_marked)
 check("the terminal's rule rewrite narrows to the rule the C7 fallback expects",
       """RULES = {"on": "'mcp.tool.name == \\"get_weather\\"'", "off": "'true'"}""" in ENTRY)
-check("guard-mcp-on and guard-mcp-off say 'at the gateway' when they switched the rule (the C7 fallback reads it)",
+check("guardrails-mcp-on and guardrails-mcp-off (guard-mcp-on and guard-mcp-off's new names) say 'at the gateway' when they switched the rule (the C7 fallback reads it)",
       all("at the gateway" in t for t in TERMINAL_SAYS.values()), TERMINAL_SAYS)
 _drift = (REPO / "policies/kyverno/block-argocd-drift.yaml").read_text()
 check("block-argocd-drift lets the web terminal edit agentgateway-c7-config",

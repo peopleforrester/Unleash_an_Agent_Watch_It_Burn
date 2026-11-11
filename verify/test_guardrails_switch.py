@@ -1,9 +1,9 @@
 # ABOUTME: Offline gate for the KubeCon guardrails switch (#774): both KubeCon profiles start with the four Kubernetes
-# ABOUTME: guardrails off, guardrails-on and guardrails-off switch them on both clusters, and Kyverno denies external registries.
+# ABOUTME: guardrails off, guardrails-k8s-on and guardrails-k8s-off switch them on both clusters, and Kyverno denies external registries.
 """Michael's spec on #774 (2026-11-01):
 
 1. Both clusters start with the four Kubernetes guardrails OFF (community/attackme and private).
-2. One guardrails-on command arms BOTH clusters, run from either one's terminal, Kyverno to Enforce included, so
+2. One guardrails-k8s-on command arms BOTH clusters, run from either one's terminal, Kyverno to Enforce included, so
    external registries are denied. It is not per-cluster.
 3. The badges come up the way they do when a control arms (guard-proxy's /controls), as each guardrail turns on.
 
@@ -12,7 +12,7 @@ What is checked here, without a cluster:
     fleet.sh picking them from event.sh, so the 2-hour workshop keeps burn and admin;
   * the registry policies: deny-external-registries for what the agent creates, registry.burritobot.co trusted by both;
   * the Argo CD Applications that let the switch's flips hold;
-  * the terminal's guardrails-on and guardrails-off, run against a kubectl that plays two clusters: each prints every
+  * the terminal's guardrails-k8s-on and guardrails-k8s-off, run against a kubectl that plays two clusters: each prints every
     command it runs, switches all four on both, fails loudly when the other cluster is not linked or a flip does not
     hold, and touches the other cluster only within the guardrails-switch grant;
   * the objects it switches are the ones the chat page's badges read (guard-proxy's proxy.py);
@@ -105,7 +105,7 @@ check("the workshop's admin profile still arms egress and KubeArmor from git",
 print("== fleet.sh picks the profiles from the event; the workshop keeps burn and admin ==")
 
 
-# A guardrails-on run here makes 16 fake kubectl calls, each a fresh python3, and takes under 2 seconds alone. On the
+# A guardrails-k8s-on run here makes 16 fake kubectl calls, each a fresh python3, and takes under 2 seconds alone. On the
 # shared host under a load of about 40 one took over 60 seconds in a full tools-tier run (#984), so each command gets
 # STEP_SECONDS, and one that still runs past it fails naming the command, not as a traceback.
 STEP_SECONDS = 300
@@ -139,7 +139,7 @@ inst = re.search(r"^cmd_instructors\(\) \{\n.*?^\}\n", src, re.S | re.M).group(0
 check("instructors up links the pair once it has built both, on the KubeCon profiles only",
       'if [[ -z "${WIB_NO_BOOTSTRAP:-}" && "${WIB_ROSTER_PROFILES:-}" == "kubecon" ]]' in inst
       and "cmd_guardrails_link || _rc=1" in inst)
-check("bootstrap arms Kyverno on admin and full only, so neither KubeCon profile is armed before guardrails-on",
+check("bootstrap arms Kyverno on admin and full only, so neither KubeCon profile is armed before guardrails-k8s-on",
       '[[ "${profile}" == "full" || "${profile}" == "admin" ]] && arm_infra_guardrails' in src)
 check("fleet.sh dispatches guardrails-link", "guardrails-link) cmd_guardrails_link" in src)
 
@@ -175,7 +175,7 @@ check("policies/kyverno-breakout holds that policy, the room sweep and its grant
                                                              "remove-untrusted-room-workloads-rbac.yaml",
                                                              "remove-untrusted-room-workloads.yaml"])
 
-print("== the room sweep (#990): guardrails-on takes the room's untrusted workloads off the cluster ==")
+print("== the room sweep (#990): guardrails-k8s-on takes the room's untrusted workloads off the cluster ==")
 SWEEP = BREAKOUT.parent / "remove-untrusted-room-workloads.yaml"
 dpol = docs(SWEEP)[0]
 dspec = dpol["spec"]
@@ -304,9 +304,9 @@ check("the grant: the workshop-agent Role (get, patch, escalate), the two regist
                 ("", "validatingpolicies", "deny-external-registries"): {"get", "patch"}}, str(GRANT))
 # kubectl delete waits for each object to go (its --wait defaults to true), and while one still holds a finalizer it
 # lists and watches it; a delete the grant admits with no list and watch beside it is retried Forbidden until killed,
-# which hung guardrails-off on the peer in runs 18644 and 18785 (#1134).
+# which hung guardrails-k8s-off on the peer in runs 18644 and 18785 (#1134).
 _deletes = {k: v for k, v in GRANT.items() if "delete" in v}
-check("every kind the switch may delete it may also list and watch, so guardrails-off's kubectl delete can see the "
+check("every kind the switch may delete it may also list and watch, so guardrails-k8s-off's kubectl delete can see the "
       "object go (#1134)", bool(_deletes) and all({"list", "watch"} <= v for v in _deletes.values()), str(_deletes))
 bindings = [d for d in sw if d["kind"] in ("RoleBinding", "ClusterRoleBinding")]
 check("both bindings name the guardrails-switch ServiceAccount alone",
@@ -319,7 +319,7 @@ agent_grants = [d for d in everything if d.get("kind") in ("RoleBinding", "Role"
 check("no Role or RoleBinding lives in guardrails-switch, so no agent identity reads the peer's token",
       not agent_grants, str([d["metadata"]["name"] for d in agent_grants]))
 term = next(d for d in docs(RESOURCES) if d.get("kind") == "ClusterRole" and d["metadata"]["name"] == "console-terminal")
-check("the terminal's own ClusterRole reads Secrets everywhere, which is how guardrails-on reads guardrails-peer",
+check("the terminal's own ClusterRole reads Secrets everywhere, which is how guardrails-k8s-on reads guardrails-peer",
       any("*" in r["resources"] and "get" in r["verbs"] for r in term["rules"]))
 for f, kinds in (("c1-network-policy.yaml", {"NetworkPolicy"}), ("c3-kubearmor-policy.yaml", {"KubeArmorPolicy"}),
                  ("c5-scoped-role.yaml", {"Role"}), ("c8-broad-role.yaml", {"Role"})):
@@ -340,7 +340,7 @@ for what, path in (("the egress badge: agent-egress-allowlist, in the staged egr
     check(what, path in proxy)
 check("the staged files carry those names", "agent-egress-allowlist" in c1 and c3["metadata"]["name"] == "block-recipe-snoop")
 
-print("== guardrails-on and guardrails-off, run against a kubectl that plays two clusters ==")
+print("== guardrails-k8s-on and guardrails-k8s-off, run against a kubectl that plays two clusters ==")
 FAKE = r'''#!/usr/bin/env python3
 import base64, json, os, sys
 a = sys.argv[1:]
@@ -370,7 +370,7 @@ elif "get" in a and "validatingpolicy" in a:
 json.dump(state, open(os.environ["STATE"], "w"))
 '''
 helpers = dict(re.findall(r'cat > "\$HOME/([^"]+)" <<\'EOS\'\n(.*?)\nEOS\n', ENTRYPOINT.read_text(encoding="utf-8"), re.S))
-check("the terminal ships guardrails-on and guardrails-off", {"guardrails-on", "guardrails-off"} <= set(helpers))
+check("the terminal ships guardrails-k8s-on and guardrails-k8s-off", {"guardrails-k8s-on", "guardrails-k8s-off"} <= set(helpers))
 
 
 def run(cmd: str, mode: str = "linked", args: tuple[str, ...] = ()) -> tuple[subprocess.CompletedProcess, list[dict], list[str]]:
@@ -384,7 +384,7 @@ def run(cmd: str, mode: str = "linked", args: tuple[str, ...] = ()) -> tuple[sub
             (home / name).write_text(body + "\n")
         (fakebin / "kubectl").write_text(FAKE)
         (fakebin / "kubectl").chmod(0o755)
-        # A sleep that returns at once: the /controls read guardrails-on and guardrails-off end on (_controls, #1349)
+        # A sleep that returns at once: the /controls read guardrails-k8s-on and guardrails-k8s-off end on (_controls, #1349)
         # waits out guard-proxy's 5 s cache of the Kubernetes controls, which this fake has none of.
         (fakebin / "sleep").write_text("#!/usr/bin/env bash\nexit 0\n")
         (fakebin / "sleep").chmod(0o755)
@@ -421,37 +421,37 @@ def touched(ran: list[dict], cluster: str) -> dict[str, list[list[str]]]:
 
 
 for st in ("on", "off"):
-    r, ran, extra = run(f"guardrails-{st}")
+    r, ran, extra = run(f"guardrails-k8s-{st}")
     out = r.stdout + r.stderr
-    check(f"guardrails-{st}: exits 0 and says both clusters switched",
+    check(f"guardrails-k8s-{st}: exits 0 and says both clusters switched",
           r.returncode == 0 and f"watch-it-burn-community: all four Kubernetes guardrails are {st}." in r.stdout, out)
     here, there = touched(ran, "this"), touched(ran, "watch-it-burn-community")
-    check(f"guardrails-{st}: switches each of the four on this cluster and on the other one",
+    check(f"guardrails-k8s-{st}: switches each of the four on this cluster and on the other one",
           all(here[g] for g in FOUR) and all(there[g] for g in FOUR), json.dumps({"here": here, "there": there})[:400])
-    check(f"guardrails-{st}: does the same to both clusters", here == there)
+    check(f"guardrails-k8s-{st}: does the same to both clusters", here == there)
     order = [g for c in ran for g in FOUR if touched([c], c["cluster"])[g]]
     firsts = [g for i, g in enumerate(order) if g not in order[:i]]
-    check(f"guardrails-{st}: one guardrail at a time across both clusters, RBAC, Kyverno, KubeArmor, egress",
+    check(f"guardrails-k8s-{st}: one guardrail at a time across both clusters, RBAC, Kyverno, KubeArmor, egress",
           firsts == list(FOUR), str(firsts))
     shown_calls = extra[:-1]
-    check(f"guardrails-{st}: every line it prints, run by bash, makes the call it made, in order",
+    check(f"guardrails-k8s-{st}: every line it prints, run by bash, makes the call it made, in order",
           shown_calls == [json.dumps(c) for c in ran] and len(ran) > 8,
           f"\n    shown: {shown_calls[:3]}\n    ran:   {[json.dumps(c) for c in ran][:3]}")
-    check(f"guardrails-{st}: the other cluster's kubeconfig is written for the student alone", extra[-1] == "peer-mode 0o600",
+    check(f"guardrails-k8s-{st}: the other cluster's kubeconfig is written for the student alone", extra[-1] == "peer-mode 0o600",
           extra[-1])
     lines = [line for line in r.stdout.splitlines() if not line.startswith("$ ")]
     # The switch's own lines come first; the /controls read every stage switch ends on (#1349) follows them, held by
     # verify/test_guard_switch_controls.py and verify/test_guard_switch_both.py's record.
     read_at = next((i for i, line in enumerate(lines) if line.startswith(("Waiting out guard-proxy", "Read back from"))),
                    len(lines))
-    check(f"guardrails-{st}: says what each guardrail now does, one line each, no challenge number",
+    check(f"guardrails-k8s-{st}: says what each guardrail now does, one line each, no challenge number",
           read_at == 5 and not re.search(r"Challenge [0-9]|\(C[0-9]\)", r.stdout) and "—" not in r.stdout, str(lines))
-    check(f"guardrails-{st}: then reads /controls back on both clusters, naming the other one",
+    check(f"guardrails-k8s-{st}: then reads /controls back on both clusters, naming the other one",
           "Read back from guard-proxy's /controls" in r.stdout and "  watch-it-burn-community" in r.stdout
           or "watch-it-burn-community: /controls could not be read" in r.stdout, r.stdout[-600:])
     want = "Deny" if st == "on" else "Audit"
     pats = [c for c in ran if "patch" in c["args"]]
-    check(f"guardrails-{st}: sets restrict-image-registries and deny-external-registries to [{want}] on both",
+    check(f"guardrails-k8s-{st}: sets restrict-image-registries and deny-external-registries to [{want}] on both",
           sorted((c["cluster"], c["args"][c["args"].index("validatingpolicy") + 1]) for c in pats)
           == sorted((cl, p) for cl in ("this", "watch-it-burn-community")
                     for p in ("restrict-image-registries", "deny-external-registries"))
@@ -460,7 +460,7 @@ for st in ("on", "off"):
              "off": ("c8-broad-role.yaml", "c3-kubearmor-policy.yaml", "c1-network-policy.yaml")}[st]
     verbs = {"on": ("apply", "apply", "apply"), "off": ("apply", "delete", "delete")}[st]
     for f, v in zip(files, verbs):
-        check(f"guardrails-{st}: {v}s ~/challenges/{f} on both clusters",
+        check(f"guardrails-k8s-{st}: {v}s ~/challenges/{f} on both clusters",
               sum(1 for c in ran if c["args"][0] == v and c["args"][-1].endswith(f"/challenges/{f}")) == 2)
     # Each call on the other cluster, as the RBAC request it makes, inside the guardrails-switch grant.
     need = set()
@@ -494,33 +494,34 @@ for st in ("on", "off"):
         old = {k: v - {"list", "watch"} for k, v in GRANT.items()}
         old_missing = sorted(n for n in need if n[3] not in old.get(n[:3], set()))
         dels = [c["args"] for c in ran if c["cluster"] != "this" and c["args"][0] == "delete"]
-        check("guardrails-off: its deletes on the other cluster wait for the object to go (no --wait=false), so the "
+        check("guardrails-k8s-off: its deletes on the other cluster wait for the object to go (no --wait=false), so the "
               "check below holds list and watch on each kind it deletes, and fails on the grant that hung run 18721 "
               "(#1208)",
               len(dels) == 2 and not any("--wait=false" in d for d in dels)
               and {("agent", "networkpolicies", "*", "watch"), ("agent", "kubearmorpolicies", "*", "watch")}
               <= set(old_missing), str(old_missing))
-    check(f"guardrails-{st}: everything it asks of the other cluster is inside the guardrails-switch grant",
+    check(f"guardrails-k8s-{st}: everything it asks of the other cluster is inside the guardrails-switch grant",
           not missing and bool(need), str(missing))
 
-r, ran, _ = run("guardrails-on", mode="unlinked")
-check("unlinked: guardrails-on still arms this cluster, then fails, saying how to link it",
+r, ran, _ = run("guardrails-k8s-on", mode="unlinked")
+check("unlinked: guardrails-k8s-on still arms this cluster, then fails, saying how to link it",
       r.returncode == 1 and all(touched(ran, "this")[g] for g in FOUR)
       and "not linked to the other KubeCon cluster" in r.stdout and "fleet.sh guardrails-link" in r.stdout, r.stdout)
 check("unlinked: and touches no other cluster", {c["cluster"] for c in ran} == {"this"})
-r, ran, _ = run("guardrails-on", mode="peer-down")
-check("the other cluster unreachable: guardrails-on fails and names each guardrail it missed there",
+r, ran, _ = run("guardrails-k8s-on", mode="peer-down")
+check("the other cluster unreachable: guardrails-k8s-on fails and names each guardrail it missed there",
       r.returncode == 1 and all(f"{g} on watch-it-burn-community" in r.stdout for g in FOUR), r.stdout)
-r, ran, _ = run("guardrails-on", mode="peer-kyverno-stuck")
+r, ran, _ = run("guardrails-k8s-on", mode="peer-kyverno-stuck")
 check("a Kyverno flip that does not hold on the other cluster fails, naming it",
       r.returncode == 1 and "kyverno on watch-it-burn-community" in r.stdout
       and "rbac on watch-it-burn-community" not in r.stdout, r.stdout)
-r, ran, _ = run("guardrails-on", args=("soon",))
-check("guardrails-on refuses a pause that is not a number of seconds, and touches nothing",
-      r.returncode == 2 and "Usage: guardrails-on" in r.stdout and not ran, r.stdout)
-r, ran, _ = run("guardrails-on", args=("0",))
-check("guardrails-on 0 is the default, no pause", r.returncode == 0)
-check("guards-status names the switch", "guardrails-on / guardrails-off" in helpers.get("guards-status", ""))
+r, ran, _ = run("guardrails-k8s-on", args=("soon",))
+check("guardrails-k8s-on refuses a pause that is not a number of seconds, and touches nothing",
+      r.returncode == 2 and "Usage: guardrails-k8s-on" in r.stdout and not ran, r.stdout)
+r, ran, _ = run("guardrails-k8s-on", args=("0",))
+check("guardrails-k8s-on 0 is the default, no pause", r.returncode == 0)
+check("guardrails-status names the switch, k8s: the four Kubernetes guardrails (#1350)",
+      re.search(r'^echo "  k8s +the four Kubernetes guardrails', helpers.get("guardrails-status", ""), re.M) is not None)
 check("the C7 control still finds agentgateway's rule on the KubeCon private cluster",
       '[ "$r" = admin ] || [ "$r" = kubecon-private ]' in helpers[".guardlib"])
 

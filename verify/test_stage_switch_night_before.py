@@ -135,8 +135,13 @@ check(f"the step's not-at-start exit is stage_switch_run.NOT_AT_START_EXIT ({ssr
       f"exit {ssr.NOT_AT_START_EXIT} is a cluster not at the start state" in flat)
 check("the step says the summary names the lines that wait on #1132", "wait on #1132" in flat
       and "waiting on #1132" in RUNNER)
+# A command the terminal has: a heredoc it writes, or an old name its ALIASES table writes as an alias of one (#1350).
+_term = (REPO / "gitops/ai-layer/web-terminal/entrypoint.sh").read_text(encoding="utf-8")
+if "<<'ALIASES'\n" not in _term:
+    sys.exit("ANCHOR MISSING: the <<'ALIASES' table of old switch names in gitops/ai-layer/web-terminal/entrypoint.sh")
+_aliases = dict(ln.split() for ln in _term.split("<<'ALIASES'\n", 1)[1].split("\nALIASES\n", 1)[0].splitlines())
 check("each -off command the FAIL bullet names is one the terminal has",
-      all(f'"$HOME/{c}"' in (REPO / "gitops/ai-layer/web-terminal/entrypoint.sh").read_text(encoding="utf-8")
+      all(f'cat > "$HOME/{_aliases.get(c, c)}" <<' in _term
           for c in re.findall(r"`(guard-[a-z]+-off)`", flat)) and bool(re.findall(r"`(guard-[a-z]+-off)`", flat)))
 
 if failures:

@@ -1,10 +1,10 @@
-# ABOUTME: Offline gate for #1149: guard-mcp-on and guard-mcp-off switch Challenge 4's MCP rule on this cluster and the
-# ABOUTME: linked KubeCon peer, each through its own control, and guard-mcp-on times how long each took to serve it.
-"""#1149, part of #1132. The room plays on the public bot, so guard-mcp-on, run from the private terminal, has to reach
-the community cluster too. guard-mcp-on and guard-mcp-off now run _mcp through _both (gitops/ai-layer/web-terminal/
+# ABOUTME: Offline gate for #1149: guardrails-mcp-on and guardrails-mcp-off switch Challenge 4's MCP rule on this cluster and the
+# ABOUTME: linked KubeCon peer, each through its own control, and guardrails-mcp-on times how long each took to serve it.
+"""#1149, part of #1132. The room plays on the public bot, so guardrails-mcp-on, run from the private terminal, has to reach
+the community cluster too. guardrails-mcp-on and guardrails-mcp-off now run _mcp through _both (gitops/ai-layer/web-terminal/
 entrypoint.sh): here with kubectl, then on the other KubeCon cluster through the guardrails-peer kubeconfig. _mcp asks
 _c7gw which control that cluster uses, agentgateway's rule (kubecon-private, admin) or the Agent's evil-mcp toolNames
-(kubecon-community and everything else), and switches that one. guard-mcp-on then waits, bounded, until each cluster
+(kubecon-community and everything else), and switches that one. guardrails-mcp-on then waits, bounded, until each cluster
 serves the change and prints how long that took.
 
 Checked here, with a kubectl on PATH that plays two clusters, each with its own Argo CD profile label:
@@ -20,7 +20,7 @@ Checked here, with a kubectl on PATH that plays two clusters, each with its own 
     everywhere but pods and pods/log, whose names RBAC cannot know, and the pod patch is held by an admission policy
     to the one annotation; block-argocd-drift lets that identity UPDATE agentgateway-c7-config and nothing else.
 
-The clock is the test's own (#1180, run 18742). guard-mcp-on's wait reads `date +%s` against each write's t0, so on
+The clock is the test's own (#1180, run 18742). guardrails-mcp-on's wait reads `date +%s` against each write's t0, so on
 the real clock a 2 s bound ran out before the first read whenever the two writes and the peer's calls took 2 s, as on a
 loaded gate host, and "it read again, every 2 s" saw 1 read. A fake `date` answers `+%s` from a file and passes every
 other form to the real one, and a fake `sleep` moves that file on without waiting, so time passes only when the script
@@ -186,7 +186,7 @@ def cluster(profile: str, config: str = COMMITTED, evil: list[str] = ALL) -> dic
 
 
 def switched_on(profile: str) -> dict:
-    """A cluster as guard-mcp-on leaves it: the gateway rule narrowed where it is the control, else the short list."""
+    """A cluster as guardrails-mcp-on leaves it: the gateway rule narrowed where it is the control, else the short list."""
     if profile in ("admin", "kubecon-private"):
         return cluster(profile, NARROWED)
     return cluster(profile, evil=["get_weather"])
@@ -273,13 +273,13 @@ roll_line = lambda who: re.compile(  # noqa: E731
 
 print("== the two commands go through _both and _mcp, and C7's profiles pick the controls the issue names ==")
 lib = helpers.get(".guardlib", "")
-for cmd, st in (("guard-mcp-on", "on"), ("guard-mcp-off", "off")):
+for cmd, st in (("guardrails-mcp-on", "on"), ("guardrails-mcp-off", "off")):
     body = helpers.get(cmd, "")
     check(f"{cmd} runs _mcp {st} through _both, and no kubectl of its own",
           f"_both _mcp {st}" in body and "kubectl" not in body, body[:300])
-check("guard-mcp-on waits with _c7wait, bounded by its argument, 180 s unless given",
-      '_c7wait "$bound"' in helpers.get("guard-mcp-on", "") and 'bound="${1:-180}"' in helpers.get("guard-mcp-on", ""))
-check("guard-mcp-off waits for nothing", "_c7wait" not in helpers.get("guard-mcp-off", ""))
+check("guardrails-mcp-on waits with _c7wait, bounded by its argument, 180 s unless given",
+      '_c7wait "$bound"' in helpers.get("guardrails-mcp-on", "") and 'bound="${1:-180}"' in helpers.get("guardrails-mcp-on", ""))
+check("guardrails-mcp-off waits for nothing", "_c7wait" not in helpers.get("guardrails-mcp-off", ""))
 check("_c7gw picks the gateway on the admin and kubecon-private labels only",
       '[ "$r" = admin ] || [ "$r" = kubecon-private ]' in lib)
 vals = {p.stem: yaml.safe_load(p.read_text(encoding="utf-8")) or {} for p in BOOT.glob("values*.yaml")}
@@ -294,8 +294,8 @@ LINKED = (("private here, community the peer", "kubecon-private", COMMUNITY, "ku
 for label, here_p, peer_name, peer_p in LINKED:
     gw_who, tn_who = ("This cluster", peer_name) if here_p == "kubecon-private" else (peer_name, "This cluster")
     gw_key, tn_key = ("this", peer_name) if here_p == "kubecon-private" else (peer_name, "this")
-    print(f"== guard-mcp-on, {label} ==")
-    r = run("guard-mcp-on", "linked", cluster(here_p), peer_name, cluster(peer_p))
+    print(f"== guardrails-mcp-on, {label} ==")
+    r = run("guardrails-mcp-on", "linked", cluster(here_p), peer_name, cluster(peer_p))
     st, out = r["state"], r["stdout"]
     check(f"{label}: exits 0", r["rc"] == 0, r["out"])
     check(f"{label}: the private cluster's gateway rule is narrowed to get_weather, and only that line changed",
@@ -330,21 +330,21 @@ for label, here_p, peer_name, peer_p in LINKED:
               next(c for c in r["calls"] if c["cluster"] == tn_key and "deployment" in c["args"]))
           < r["calls"].index(next(c for c in r["calls"] if c["cluster"] == tn_key and "patch" in c["args"])))
 
-    print(f"== guard-mcp-off, {label} ==")
-    r = run("guard-mcp-off", "linked", switched_on(here_p), peer_name, switched_on(peer_p))
+    print(f"== guardrails-mcp-off, {label} ==")
+    r = run("guardrails-mcp-off", "linked", switched_on(here_p), peer_name, switched_on(peer_p))
     st, out = r["state"], r["stdout"]
-    check(f"{label}: guard-mcp-off exits 0", r["rc"] == 0, r["out"])
+    check(f"{label}: guardrails-mcp-off exits 0", r["rc"] == 0, r["out"])
     check(f"{label}: the private cluster's rule is 'true' again, the committed file byte for byte",
           st[gw_key]["config"] == COMMITTED)
     check(f"{label}: the community cluster's allow-list is the three tools again", evil_of(st[tn_key]) == ALL)
     check(f"{label}: one line per cluster names the control, and _both names {peer_name}",
           f"🔓 {gw_who}: OFF, at the gateway." in out and f"🔓 {tn_who}: OFF, in the agent's allow-list." in out
           and f"Switched on both clusters: this one and {peer_name}." in out, out)
-    check(f"{label}: guard-mcp-off times nothing and reads no log", "⏱" not in out and not on_cluster(r, gw_key, "logs"))
-    check(f"{label}: every line guard-mcp-off prints replays the call it made", r["replayed"] == r["calls"])
+    check(f"{label}: guardrails-mcp-off times nothing and reads no log", "⏱" not in out and not on_cluster(r, gw_key, "logs"))
+    check(f"{label}: every line guardrails-mcp-off prints replays the call it made", r["replayed"] == r["calls"])
 
 print("== the waits run out: each cluster named with the bound, and the run fails ==")
-r = run("guard-mcp-on", "stuck", cluster("kubecon-private"), COMMUNITY, cluster("kubecon-community"), ("2",))
+r = run("guardrails-mcp-on", "stuck", cluster("kubecon-private"), COMMUNITY, cluster("kubecon-community"), ("2",))
 out = r["stdout"]
 check("exits 1", r["rc"] == 1, r["out"])
 check("names this cluster and the bound: the gateway logged no reload",
@@ -358,12 +358,12 @@ check("both writes still went through", r["state"]["this"]["config"] == NARROWED
       and evil_of(r["state"][COMMUNITY]) == ["get_weather"])
 polls = len(on_cluster(r, "this", "logs"))
 check("it read again, every 2 s, before giving up: once at the write and once 2 s on", polls == 2, f"{polls} reads")
-r = run("guard-mcp-on", "linked", cluster("kubecon-private"), COMMUNITY, cluster("kubecon-community"), ("soon",))
+r = run("guardrails-mcp-on", "linked", cluster("kubecon-private"), COMMUNITY, cluster("kubecon-community"), ("soon",))
 check("a bound that is not a number of seconds is a usage error that changes nothing",
-      r["rc"] == 2 and "Usage: guard-mcp-on [seconds" in r["stdout"] and not r["calls"], r["out"])
+      r["rc"] == 2 and "Usage: guardrails-mcp-on [seconds" in r["stdout"] and not r["calls"], r["out"])
 
 print("== a write that changed nothing has nothing to reload ==")
-r = run("guard-mcp-on", "linked", cluster("kubecon-private", NARROWED), COMMUNITY,
+r = run("guardrails-mcp-on", "linked", cluster("kubecon-private", NARROWED), COMMUNITY,
         cluster("kubecon-community", evil=["get_weather"]))
 out = r["stdout"]
 check("exits 0, both clusters say it already read that way", r["rc"] == 0
@@ -374,21 +374,21 @@ check("and it reads no log and no rollout status", not on_cluster(r, "this", "lo
 
 print("== a cluster with no guardrails-peer Secret, the 2-hour workshop's ==")
 for profile, timing in (("admin", gw_line("This cluster")), ("attendee", roll_line("This cluster"))):
-    r = run("guard-mcp-on", "unlinked", cluster(profile), COMMUNITY, cluster("kubecon-community"))
+    r = run("guardrails-mcp-on", "unlinked", cluster(profile), COMMUNITY, cluster("kubecon-community"))
     lines = [line for line in r["stdout"].splitlines() if line.startswith("Switched on")]
     check(f"{profile}: switches this cluster alone, says so in one line, and exits 0", r["rc"] == 0 and lines == [
         "Switched on this cluster alone: it has no guardrails-switch/guardrails-peer Secret, so no other cluster is "
         "linked to it."], r["out"])
     check(f"{profile}: still times this cluster", timing.search(r["stdout"]) is not None, r["stdout"])
     check(f"{profile}: touches no other cluster", {c["cluster"] for c in r["calls"]} == {"this"})
-    r = run("guard-mcp-off", "unlinked", cluster(profile, NARROWED, ["get_weather"]), COMMUNITY,
+    r = run("guardrails-mcp-off", "unlinked", cluster(profile, NARROWED, ["get_weather"]), COMMUNITY,
             cluster("kubecon-community"))
-    check(f"{profile}: guard-mcp-off switches it alone and exits 0", r["rc"] == 0
+    check(f"{profile}: guardrails-mcp-off switches it alone and exits 0", r["rc"] == 0
           and "Switched on this cluster alone" in r["stdout"] and {c["cluster"] for c in r["calls"]} == {"this"},
           r["out"])
 
 print("== the peer Secret is there, its cluster cannot be reached ==")
-r = run("guard-mcp-on", "peer-down", cluster("kubecon-private"), COMMUNITY, cluster("kubecon-community"))
+r = run("guardrails-mcp-on", "peer-down", cluster("kubecon-private"), COMMUNITY, cluster("kubecon-community"))
 out = r["stdout"]
 check("this cluster is switched and timed", r["state"]["this"]["config"] == NARROWED
       and gw_line("This cluster").search(out) is not None, out)
@@ -397,14 +397,14 @@ check(f"fails, naming {COMMUNITY} as the cluster it could not reach",
       and f"⚠️  {COMMUNITY}: the MCP tool restriction did not switch on" in out, out)
 check("ends saying it did not switch on everywhere, without the explanation",
       "did not switch on everywhere" in out and "Re-ask the weather question" not in out, out)
-r = run("guard-mcp-off", "peer-down", cluster("kubecon-private", NARROWED), COMMUNITY, cluster("kubecon-community"))
-check(f"guard-mcp-off: switches this cluster, fails naming {COMMUNITY}", r["rc"] == 1
+r = run("guardrails-mcp-off", "peer-down", cluster("kubecon-private", NARROWED), COMMUNITY, cluster("kubecon-community"))
+check(f"guardrails-mcp-off: switches this cluster, fails naming {COMMUNITY}", r["rc"] == 1
       and r["state"]["this"]["config"] == COMMITTED and f"not on {COMMUNITY}" in r["stdout"], r["out"])
 
 print("== the peer's grant is what those calls ask of it, and no more ==")
 asked: set[tuple[str, str, str, str]] = set()
 for label, here_p, peer_name, peer_p in LINKED:
-    for cmd in ("guard-mcp-on", "guard-mcp-off"):
+    for cmd in ("guardrails-mcp-on", "guardrails-mcp-off"):
         start = switched_on if cmd.endswith("off") else cluster
         r = run(cmd, "linked", start(here_p), peer_name, start(peer_p))
         for c in r["calls"]:
@@ -428,7 +428,7 @@ check("mcp-switch.yaml grants argocd/lab-bootstrap (get), agentgateway-c7-config
       "patch), the workshop-agent Deployment (get), and pods (list, patch) and pods/log (get) in agent",
       GRANT == WANT, str(GRANT))
 granted = {(*k, v) for k, vs in GRANT.items() for v in vs}
-check("everything guard-mcp-on and guard-mcp-off ask of the peer, both ways round, is inside it",
+check("everything guardrails-mcp-on and guardrails-mcp-off ask of the peer, both ways round, is inside it",
       asked and asked <= granted, str(sorted(asked - granted)))
 check("and every verb it grants is one they ask for", granted <= asked, str(sorted(granted - asked)))
 groups = {(d["metadata"]["namespace"], res): rule["apiGroups"] for d in mcp if d["kind"] == "Role"

@@ -1,9 +1,9 @@
 # ABOUTME: Offline gate for #1349: guard-output, guard-budget and guard-topic switch both KubeCon clusters through _both,
 # ABOUTME: and every stage switch ends with _controls, guard-proxy's /controls read back on each cluster by name.
-"""#1349, the first piece of #1346. guard-output-on/off, guard-budget-on/off and guard-topic-on/off used to call _px,
+"""#1349, the first piece of #1346. guardrails-output-on/off, guardrails-budget-on/off and guardrails-topic-on/off used to call _px,
 which reaches this cluster only, while the room plays on the public bot. They now run `_both _toggle <query>` (output,
 budget) and `_both _topic on|off` (topic) from ~/.guardlib (gitops/ai-layer/web-terminal/entrypoint.sh), as
-guard-input-on does: here the kubectl exec into deploy/guard-proxy, on the other KubeCon cluster a GET through the API
+guardrails-input-on does: here the kubectl exec into deploy/guard-proxy, on the other KubeCon cluster a GET through the API
 server's Service proxy on guard-proxy:8080. And every stage switch now ends with _controls: guard-proxy's /controls on
 this cluster and on the peer, printed one cluster to a block by name.
 
@@ -15,7 +15,7 @@ Checked here, with a kubectl on PATH that plays two clusters, each with a guard-
   * no guardrails-peer Secret (the 2-hour lab's): the switch acts here alone and reads this cluster alone, exit 0;
   * the peer cannot be reached: this cluster switches, the run fails naming the peer, and the read says the peer's
     /controls could not be read rather than guessing it;
-  * a guard-proxy without the topic stage: guard-topic-on fails naming that cluster, guard-topic-off passes saying it
+  * a guard-proxy without the topic stage: guardrails-topic-on fails naming that cluster, guardrails-topic-off passes saying it
     already chats about anything;
   * a control guard-proxy could not measure (null) reads "not measured", never off;
   * after a Kubernetes write the read waits out guard-proxy's 5 s cache of those controls; after a guard-proxy toggle
@@ -100,7 +100,7 @@ if "apply" in a:
     state.setdefault("applied", []).append([ctx, os.path.basename(a[-1])])
     print("role.rbac.authorization.k8s.io/workshop-agent configured")
 elif a == ["-n", "agent", "get", "role", "workshop-agent", "-o", "json"]:
-    # guard-agency-on's and guard-agency-off's read of the live Role (_keep_secrets, #1358, #1362): the shipped Role's
+    # guardrails-agency-on's and guardrails-agency-off's read of the live Role (_keep_secrets, #1358, #1362): the shipped Role's
     # Secret rule, every Secret, which test_guard_switch_both.py holds the choice of file to.
     print(json.dumps({"kind": "Role", "rules": [{"apiGroups": [""], "resources": ["secrets"], "verbs": ["get", "list"]}]}))
 else:
@@ -214,12 +214,12 @@ def block(out: str, header: str) -> str:
 
 # The three switches, the query each sends, the guard key it sets, the value it leaves, and its explanation.
 SWITCHES = {
-    "guard-output-on": ("output=on", "output", True, "OUTPUT guard ON"),
-    "guard-output-off": ("output=off", "output", False, "OUTPUT guard OFF"),
-    "guard-budget-on": ("budget=on", "budget", True, "BUDGET guard ON"),
-    "guard-budget-off": ("budget=off", "budget", False, "Budget limits are now removed"),
-    "guard-topic-on": ("topic=on", "topic", True, "On-topic guard ON"),
-    "guard-topic-off": ("topic=off", "topic", False, "On-topic guard OFF"),
+    "guardrails-output-on": ("output=on", "output", True, "OUTPUT guard ON"),
+    "guardrails-output-off": ("output=off", "output", False, "OUTPUT guard OFF"),
+    "guardrails-budget-on": ("budget=on", "budget", True, "BUDGET guard ON"),
+    "guardrails-budget-off": ("budget=off", "budget", False, "Budget limits are now removed"),
+    "guardrails-topic-on": ("topic=on", "topic", True, "On-topic guard ON"),
+    "guardrails-topic-off": ("topic=off", "topic", False, "On-topic guard OFF"),
 }
 LABEL = {"output": "output", "budget": "budget cap", "topic": "on-topic"}
 
@@ -235,9 +235,9 @@ for cmd, (q, key, _, _) in SWITCHES.items():
 check("images/web-terminal/entrypoint.sh is kept byte-identical to it", TWIN.read_bytes() == ENTRYPOINT.read_bytes())
 
 print("== every stage switch ends with the /controls read, then exits with its own code ==")
-STAGES = ("guardrails-on", "guardrails-off", "guard-agency-on", "guard-agency-off", "guard-input-on", "guard-input-off",
-          "guard-mcp-on", "guard-mcp-off", "guard-output-on", "guard-output-off", "guard-budget-on", "guard-budget-off",
-          "guard-topic-on", "guard-topic-off", "guards-on", "guards-off")
+STAGES = ("guardrails-k8s-on", "guardrails-k8s-off", "guardrails-agency-on", "guardrails-agency-off", "guardrails-input-on", "guardrails-input-off",
+          "guardrails-mcp-on", "guardrails-mcp-off", "guardrails-output-on", "guardrails-output-off", "guardrails-budget-on", "guardrails-budget-off",
+          "guardrails-topic-on", "guardrails-topic-off", "guardrails-ai-on", "guardrails-ai-off")
 for cmd in STAGES:
     lines = [ln.strip() for ln in helpers.get(cmd, "").splitlines() if ln.strip()]
     check(f"{cmd} ends with _controls, then exit \"$rc\"",
@@ -282,10 +282,10 @@ for cmd, (q, key, val, explains) in SWITCHES.items():
     check(f"{cmd}: touches no cluster but these two", not others, str(others))
 
 print("== the read names each cluster ==")
-r = run("guard-output-on", "linked", cluster_name=None)
+r = run("guardrails-output-on", "linked", cluster_name=None)
 check("without WIB_CLUSTER_NAME this cluster reads as This cluster, beside its host",
       block(r["stdout"], "This cluster, burritobot-private.example") != "", r["stdout"])
-r = run("guard-output-on", "linked")
+r = run("guardrails-output-on", "linked")
 check(f"with it, {HERE} (this cluster) and {PEER}, each beside the host its guard-proxy reports",
       block(r["stdout"], f"{HERE} (this cluster), burritobot-private.example") != ""
       and block(r["stdout"], f"{PEER}, attackme.example") != "", r["stdout"])
@@ -326,20 +326,20 @@ for cmd, (q, key, val, explains) in SWITCHES.items():
           and f"⚠️  {PEER}: /controls could not be read, so its state is not shown." in r["stdout"], r["stdout"])
 
 print("== a guard-proxy without the topic stage ==")
-r = run("guard-topic-on", "no-topic")
-check("guard-topic-on fails, naming each cluster whose guard-proxy has no on-topic guard, never a confident ON",
+r = run("guardrails-topic-on", "no-topic")
+check("guardrails-topic-on fails, naming each cluster whose guard-proxy has no on-topic guard, never a confident ON",
       r["rc"] == 1 and "This cluster: its guard-proxy has no on-topic guard, so nothing changed there." in r["stdout"]
       and f"{PEER}: its guard-proxy has no on-topic guard, so nothing changed there." in r["stdout"]
       and "On-topic guard ON" not in r["stdout"], r["stdout"])
-r = run("guard-topic-off", "no-topic")
-check("guard-topic-off passes, saying each cluster already chats about anything",
+r = run("guardrails-topic-off", "no-topic")
+check("guardrails-topic-off passes, saying each cluster already chats about anything",
       r["rc"] == 0 and "This cluster: its guard-proxy has no on-topic guard, so BurritoBot there already chats" in r["stdout"]
       and f"{PEER}: its guard-proxy has no on-topic guard" in r["stdout"], r["stdout"])
 
 print("== after a Kubernetes write, the read waits out guard-proxy's 5 s cache ==")
-r = run("guard-agency-on", "linked")
+r = run("guardrails-agency-on", "linked")
 kinds = [(c["cluster"], kind(c)) for c in r["calls"] if kind(c) != "other"]
-check("guard-agency-on applies on both clusters, then reads /controls on both, and exits 0",
+check("guardrails-agency-on applies on both clusters, then reads /controls on both, and exits 0",
       r["rc"] == 0 and kinds == [("this", "controls"), (PEER, "controls")]
       and [x[0] for x in r["state"].get("applied", [])] == ["this", PEER], f"{kinds} {r['stdout']}")
 check("it waits 6 s from its write before the read, and says why", r["slept"] == ["6"]

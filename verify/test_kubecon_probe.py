@@ -721,7 +721,15 @@ print("== the probe says what the stage says ==")
 terminal = (REPO / "gitops/ai-layer/web-terminal/entrypoint.sh").read_text()
 
 
+# The probe types the switches' old names (guards-off, guard-mcp-on, guardrails-on, ...). Since #1350 each is an alias
+# the terminal writes from its ALIASES table, which runs its guardrails-<name> form, so helper() reads that one's body.
+if "<<'ALIASES'\n" not in terminal:
+    sys.exit("ANCHOR MISSING: the <<'ALIASES' table of old switch names in gitops/ai-layer/web-terminal/entrypoint.sh")
+ALIASES = dict(line.split() for line in terminal.split("<<'ALIASES'\n", 1)[1].split("\nALIASES\n", 1)[0].splitlines())
+
+
 def helper(name: str) -> str:
+    name = ALIASES.get(name, name)
     return terminal.split(f"cat > \"$HOME/{name}\" <<'EOS'\n", 1)[1].split("\nEOS\n", 1)[0]
 
 
@@ -740,9 +748,11 @@ def terminal_rewrite(text: str, mode: str) -> str | None:
 
 off_body = helper("guards-off")
 guardlib = helper(".guardlib")
-# Since #1132 guards-off sends every guard-proxy key in one `_both _toggle` call, so the probe's queries, joined, are it.
-check("guards-off sends exactly the terminal's /toggle queries, in order",
-      re.findall(r'_both _toggle "([^"]+)"', off_body) == ["&".join(kp.GUARDS_OFF)])
+# Since #1132 guards-off sends every guard-proxy key in one `_both _toggle` call. Since #1350 it is guardrails-ai-off,
+# which leaves the on-topic guard to guardrails-topic-off, so the probe's queries, joined, are the two together.
+check("guards-off and guardrails-topic-off send exactly the terminal's /toggle queries, in order",
+      re.findall(r'_both _toggle "([^"]+)"', off_body) == ["&".join(kp.GUARDS_OFF[:-1])]
+      and kp.GUARDS_OFF[-1] == "topic=off" and "_both _topic off" in helper("guardrails-topic-off"))
 check("guards-off and guard-mcp-off both go through the terminal's _mcp, which carries the full evil-mcp list",
       "_mcp off" in off_body and "_mcp off" in helper("guard-mcp-off")
       and f"all='{json.dumps(kp.EVIL_ALL).replace(' ', '')}'" in guardlib)
@@ -2340,8 +2350,7 @@ check("community: both fixes run in the private terminal's own commands, which s
       kp.TERMINAL_GUARDS == {n: [*kp.TERMINAL_EXEC, f"/home/student/{n}"]
                              for n in ("guard-agency-on", "guard-input-on", "guard-input-off", "guard-mcp-on",
                                        "guard-mcp-off")}
-      and all((pathlib.Path(REPO) / "gitops/ai-layer/web-terminal/entrypoint.sh").read_text().count(
-          f'cat > "$HOME/{n}" <<') == 1 for n in kp.TERMINAL_GUARDS))
+      and all(terminal.count(f'cat > "$HOME/{ALIASES.get(n, n)}" <<') == 1 for n in kp.TERMINAL_GUARDS))
 _aat = walk(kp.ADMIN)
 _akeys = [b.key for b in kp.ADMIN]
 check("admin: the room's Challenge 3 attempt (c6-lands) runs before guard-agency-on and guard-input-on",
