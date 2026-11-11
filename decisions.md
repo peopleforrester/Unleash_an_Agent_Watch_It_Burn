@@ -55286,3 +55286,37 @@ senders' logs, `otelcol_exporter_enqueue_failed_spans` and `otelcol_exporter_sen
 `otlp_grpc/relay` at 0, no restart, and `test_collector_relay_live.py` and `test_collector_pii_scrub_live.py` passing.
 
 No dependency was added.
+## 2026-11-11 · #1343 · run 20321 · The wrapper is dropped on a pin to c8599fe, which is on guard-proxy staging, not main, so the branch is held
+
+**Pin.** guard-proxy-agenticburn#85's commit `c8599fe` (proxy.py serves through `Server`, a ThreadingHTTPServer subclass
+with `request_queue_size = 1024` and `daemon_threads = True`) is on guard-proxy-agenticburn's `staging` only. The
+compare API read `main...c8599fe` as ahead 1, behind 0 at this run, and main's tip is still `0a3ca16`, this repo's pin.
+This repo pins guard-proxy main commits alone (`verify/guard-proxy-pin-on-main.sh`), as runs 19825 (#1288) and 20084
+(#1316) held.
+
+**What this run did, on its branch.** It repinned `gitops/ai-layer/guard-proxy` to `c8599fe`, set
+`checksum/proxy-py` to `fff00bf9171d` (sha256 of proxy.py at `c8599fe`), and put the guard-proxy command back to
+`["python", "/app/proxy.py"]`, the command before #1337's runpy wrapper. `verify/test_guard_proxy_backlog.py` no
+longer reads command text. It holds the command as `python /app/proxy.py` with no wrapper, holds that proxy.py's
+`__main__` builds `Server` and nothing else, and imports the pinned proxy.py in a child process and probes its
+`Server` on a loopback port that never accepts: it listens with 1024 and takes 64 connections, while the stdlib's
+ThreadingHTTPServer probed the same way listens with 5 and takes fewer. The CPU limit check is kept. At `c8599fe` all
+9 checks pass; with the submodule checked out at `0a3ca16` the probe fails on `Server` missing and the `__main__` check
+names `ThreadingHTTPServer`.
+
+**Why the branch cannot promote yet.** `verify/test_guard_proxy_pin_on_main.sh`, `verify/test_guard_proxy_pin_1316.py`
+and `verify/test_guard_proxy_pin_1288.py` fail on this branch, each because `c8599fe` is not on guard-proxy main. That
+is the hold: shipping the Deployment change on the `0a3ca16` pin would serve proxy.py with the stdlib's backlog of 5
+again. Once `c8599fe` reaches guard-proxy main, the next run on #1343 fetches the submodule, repins to main's head if it
+moved past `c8599fe` (and resets `checksum/proxy-py` to that proxy.py's sha256[:12]), and runs the three pin tests and
+`test_guard_proxy_backlog.py`.
+
+**Live read, both clusters, read-only.** On watch-it-burn-community and watch-it-burn-private the `agent/guard-proxy`
+Deployment carries `checksum/proxy-py: ef48fb92f4d9` and #1337's `python -c` runpy command, one ready replica each.
+Nothing was changed.
+
+**Not yet run on a cluster.** #644's 500-phone replay on watch-it-burn-community after this change syncs, with 0 turns
+answered 502 or 504 and no new ListenOverflows on the guard-proxy pod, as #1342 ran it for #1337.
+
+**Tests run**, each once: `test_guard_proxy_backlog.py` (9 of 9), `test_proxy_checksum.py` and
+`test_challenge_fallbacks.py` pass; the three pin tests above fail as described. `scope_tests.py write` changed nothing.
