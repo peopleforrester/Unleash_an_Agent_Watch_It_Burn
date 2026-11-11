@@ -843,7 +843,7 @@ which is `2026-11-12T20:50:00Z` (conference-knowledge `kubecon-na-2026`).
    leaves the live router alone: a local copy of it moves attackme from the community
    cluster to `watch-it-burn-community-b03`, with a headless phone browser left open on
    the page, and prints PASS or FAIL for the witch name, the same page, no refresh and
-   the wait (`bash verify/fetch-e2e-tools.sh` first, for its Caddy):
+   the wait (`bash verify/e2e-image.sh tools verify/.tools` first, for its Caddy):
 
    ```
    AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig /tmp/b03.kubeconfig --name watch-it-burn-community-b03 --region us-west-2 --alias watch-it-burn-community-b03

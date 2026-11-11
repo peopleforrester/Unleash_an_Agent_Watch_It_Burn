@@ -52,7 +52,7 @@ so kagent's invocation was the copy's root and the trace filed under burritobot-
 turn with no parent at all, and every root of every copied trace must go out as service burritobot, while kagent's
 other rows keep burritobot-agent and APM keeps burritobot-agent on all of kagent's spans.
 
-Fails when the binary is missing: run verify/fetch-e2e-tools.sh (verify/run-e2e-tools.sh does).
+Fails when the binary is missing: run it through verify/run-e2e-tools.sh, which runs it in the wib-e2e-tools image.
 """
 from __future__ import annotations
 
@@ -88,7 +88,7 @@ def check(name: str, cond: bool, detail: str = "") -> None:
 
 
 if not os.access(OTELCOL, os.X_OK):
-    print(f"FAIL: {OTELCOL} is missing; run bash verify/fetch-e2e-tools.sh (this is a failure, not a skip)")
+    print(f"FAIL: {OTELCOL} is missing; run it through bash verify/run-e2e-tools.sh, in the wib-e2e-tools image (this is a failure, not a skip)")
     sys.exit(1)
 pinned = next(line.split()[1] for line in LOCK.read_text().splitlines() if line.startswith("otelcol-contrib "))
 version = subprocess.run([str(OTELCOL), "--version"], capture_output=True, text=True, check=True).stdout.strip()

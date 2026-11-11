@@ -68,8 +68,8 @@ def cli_lines(text):
 install = cli_lines(cli_test)
 check(f"test_kyverno_cel_policies.py's install instructions name only {deployed}",
       "releases/tag" in install and not other_versions(install), install)
-# run-e2e.sh no longer asks for a kyverno CLI on PATH (#585): it runs the one fetch-e2e-tools.sh installs from
-# e2e-tools.lock, so that lock's kyverno line is the copy that has to name the deployed version.
+# run-e2e.sh no longer asks for a kyverno CLI on PATH (#585): it runs the one it copies out of the wib-e2e-tools image,
+# built from e2e-tools.lock (#1360), so that lock's kyverno line is the copy that has to name the deployed version.
 e2e = (REPO / "verify/run-e2e.sh").read_text()
 check("run-e2e.sh points KYVERNO_CLI at the fetched kyverno", 'KYVERNO_CLI="${TOOLS_BIN}/kyverno"' in e2e)
 check(f"run-e2e.sh names no kyverno version but {deployed}", not other_versions(cli_lines(e2e)), cli_lines(e2e))

@@ -51,7 +51,7 @@ def pinned(tool: str) -> str:
 KUBECTL, HELM = shutil.which("kubectl"), shutil.which("helm")
 if not KUBECTL or not HELM:
     print("FAILED: kubectl and helm must be on PATH; run this through bash verify/run-e2e-tools.sh, which puts the "
-          "pinned ones from verify/fetch-e2e-tools.sh there")
+          "pinned ones from the wib-e2e-tools image there")
     sys.exit(1)
 kv = subprocess.run([KUBECTL, "version", "--client", "-o", "yaml"], capture_output=True, text=True).stdout
 hv = subprocess.run([HELM, "version", "--short"], capture_output=True, text=True).stdout.strip()

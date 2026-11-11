@@ -113,8 +113,9 @@ run that selects no tier test runs the offline suite on the host and pulls nothi
 user, so on netcup each run user pulls the image once; the CI runners on Tanjiro share one podman user. Tier tests named
 after `run` (`bash verify/e2e-image.sh run test_ttyd_ws_auth.py`) run alone inside it, as with the runner. Inside, gh answers
 `gh issue view` through the host's own gh (`verify/gh_relay.py`), and the host's artifact cache is mounted for the
-Terraform providers, charts and wheels. `verify/fetch-e2e-tools.sh`, which downloads the lock's binaries into the
-gitignored `verify/.tools`, is left only for `run-e2e.sh`, the by-hand live suite, and `iam-policy.yml`.
+Terraform providers, charts and wheels. What runs the lock's binaries on the host, `run-e2e.sh` (the by-hand live
+suite) and `iam-policy.yml`, copies them out of the same image with `bash verify/e2e-image.sh tools verify/.tools` into
+the gitignored `verify/.tools/bin` (#1360). Nothing downloads them file by file: `verify/fetch-e2e-tools.sh` is gone.
 
 Both runners scope themselves to the change when `HECATON_BASE_SHA` is set, as hecaton's gate and the CI workflow set
 it (#1018): `verify/scope_tests.py` runs only the tests whose entry in `verify/scope-map.yaml` reads a path the change
