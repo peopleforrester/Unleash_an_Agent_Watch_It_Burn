@@ -54545,3 +54545,27 @@ scope map gains those two reads from `scope_tests.py write`. Run once alone, eac
 
 **No live check.** The change touches only `facilitation/`, `scripts/check-fallback-assets.py` (run on a presenter
 laptop) and `verify/`, none of which a cluster runs.
+## 2026-11-11 · #1365 · run 20478 · A test reads the deck's switch map on rounds-agenticburn#171 and its link on #1346
+
+**What changed.** New `verify/test_deck_do_note_switch_map_comment.py`, a tools-tier test (`# SUITE: e2e`,
+`# E2E TIER: tools`), holds #1352's criterion that rounds-agenticburn#171 lists each deck DO note's old switch with its
+guardrails-<name> replacement and a comment on #1346 links it. Run 20474's test review found nothing read either issue.
+The test reads both through `verify/gh_comments.py`, with gh's token (#863), as the cause-comment tests do.
+
+**What it holds.** The four DO notes are pinned in the test as run 20473 recorded them from rounds-agenticburn
+`4627d95`: `#/27` `guardrails-on`, `#/52` `guard-agency-on` then `guard-input-on`, `#/74` `guard-mcp-on`, `#/121`
+`guard-topic-on`. It checks each replacement against #1350's rename rule, not the terminal's ALIASES table, which #1363
+removes after the talk, and checks the #1352 entry here still records the same pairs, each anchor found first. Then
+one comment on #171, by Michael or hecaton, has a table row per slide hash whose old cell names the note's old
+switches and whose new cell names their replacements, in order, plus the deck commit. One comment on #1346 must link the
+mapping: either the mapping comment's URL, or #171 with the DO notes and every slide hash. A run report on #1346 names
+#171 in passing and the first draft of the test counted it, so the link check was narrowed until only the mapping
+comment (issuecomment-6806635614) matches.
+
+**Checked.** Run once alone, it passes: the mapping is issuecomment-6806634603 on #171, the link is
+issuecomment-6806635614 on #1346. Four mutated copies each failed: a fifth DO note the comment lacks, a wrong
+replacement for `guard-mcp-on`, the link read from #1352 instead of #1346, and the mapping read from #170.
+`scope_tests.py write` added its scope-map entry; `test_scope_tests.py`, `test_test_map.py` and
+`test_tests_own_inputs.py` pass. The scoped `run-tests.sh` and `run-e2e-tools.sh` are left to validation.
+
+**Live check.** Skipped: the change touches only `verify/` files no cluster runs, and decisions.md.
