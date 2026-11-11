@@ -53,11 +53,13 @@ ROW6, AFTER_SEGMENTS = "| 6 | 5 |", "## Abstract points to segments"
 # run-of-show to the deck rounds serves, read live, and quotes the close's hashes in its self-checks (#1270); and the
 # one that holds the over-the-slot paragraph to segment 5's Timing paragraph and its ranges, #/65 to #/113 and #/74 to
 # #/111, and quotes them in its docstring and self-checks (#1275); and the one that holds segment 3's hand-off to the
-# note on Challenge 3's title card, #/43, which rounds 8f53ce2 put before the "AI guardrails" heading, now #/44 (#1327).
+# note on Challenge 3's title card, #/43, which rounds 8f53ce2 put before the "AI guardrails" heading, now #/44 (#1327);
+# and the one that holds rounds-agenticburn#171's map of the deck's DO notes, read from rounds 4627d95, which quotes
+# the current deck's hashes #/52, #/74 and #/121 (#1365).
 SEG4_READERS = {"verify/test_instructor_brief.py", "verify/test_ros_seg4_flow.py", "verify/test_kubecon_seg4_flow.py", "verify/test_stage_trace_slides.py",
                 "verify/test_support_desk_named.py", "verify/test_ros_seed_step_links.py",
                 "verify/test_stage_seed_links.py", "verify/test_ros_deck_live.py",
-                "verify/test_ros_over_slot_seg5.py"}
+                "verify/test_ros_over_slot_seg5.py", "verify/test_deck_do_note_switch_map_comment.py"}
 LOW, HIGH = 44, 64  # the new Challenge 3, which the old deck's Challenge 3, Challenge 4 and close numbers land in
 HASH_FROM = 43      # #/43 is slide 44
 # The Night Before step that names each challenge's Datadog link by hash, #/48 and #/68 among them (#1139), from its
