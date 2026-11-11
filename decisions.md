@@ -54911,5 +54911,6 @@ promotion; #1350's "Not yet run on a cluster" list for these switches is closed 
 gate (`verify/prose_gate.py` against staging) passes. The scoped selection for this change picks 118 offline tests that
 read `decisions.md` and no tools-tier test; the ones that parse its entries or scan its text as a whole
 (`test_progress_entries.py`, `test_dispatched_runs.py`, `test_gitattributes_union.py`, `test_no_docker_hub.py`,
-`test_repo_identity.py`, `test_guard_toggle_record.py`, `test_platform_baseline.py`, `test_turn_guard.py`) ran once
-here, and the rest are left to validation.
+`test_repo_identity.py`, `test_guard_toggle_record.py`, `test_platform_baseline.py`, `test_turn_guard.py`) pass
+here, and the rest are left to validation. `test_guard_toggle_record.py` first failed, as it does on the base commit, because
+this worktree had no guard-proxy submodule checked out; it passed once `bash verify/ensure-submodules.sh` checked it out.
