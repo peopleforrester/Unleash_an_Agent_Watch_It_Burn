@@ -1,0 +1,178 @@
+# ABOUTME: One-shot Job (#1323): adds the no-standalone-sse route to a live agentgateway-c7-config that lacks it, keeping
+# ABOUTME: its `# c7-rule` line, so the 3003 bind answers GET /mcp with 405 on clusters built before #1303 too.
+#
+# Why. #1303 gave both MCP binds a route answering GET /mcp with 405, so the agent's MCP client opens no standalone
+# SSE stream for a timeout to cut. ai-layer ignores agentgateway-c7-config's content (the live C7 rule flips), so the
+# 3003 bind's route reached new clusters only. On watch-it-burn-private and watch-it-burn-community the evil-mcp
+# stream was cut at the 12h RemoteMCPServer timeout, the gateway answered the reconnect 404 "mcp: session not
+# found", and the session failed (private 2026-11-10 12:18:11Z, community 13:22:00Z). Kyverno's block-argocd-drift
+# denies a hand edit of the ConfigMap ("Change it in Git, not in the cluster"), so the edit comes from Git, here.
+#
+# What it writes. It reads the live config.yaml and, only when no route is named no-standalone-sse, appends that route
+# to the 3003 bind's routes list, which is the last thing in the file on every cluster built so far. Every other line,
+# the `# c7-rule` line among them, is kept as it is, and the write tests the resourceVersion it read, as _c7rule in
+# web-terminal/entrypoint.sh does, so a guard-mcp-on/off in between is never written over: it reads again and retries.
+# A config already carrying the route (every cluster built since #1303) is left alone. A config whose shape it does
+# not know is left alone too, and the log says why. The agentgateway-c7 container reloads the file when the kubelet
+# refreshes the volume, as for a rule flip. verify/test_c7_sse_route_job.py runs the script on both clusters' shapes.
+#
+# Who. The web-terminal ServiceAccount, the identity guard-mcp-on/off already rewrite this ConfigMap as: its
+# console-terminal ClusterRole holds get and patch on it, and block-argocd-drift's not-terminal-c7-rule exempts an
+# UPDATE of it by that identity. Nothing new is granted, and restrict-agent-spawned-workloads keeps the agent from
+# running a pod of its own as web-terminal.
+#
+# Shape, as the ordering gates (otel-ordering-gate.yaml): a plain Sync-phase Job, not a hook, so a self-heal does not
+# re-run it; its name carries a hash of its spec and script, since a Job's pod template is immutable; no TTL, since a
+# deleted Job reads as missing and self-heal would run it again. The script exits 0 on every path it names, so the Job
+# fails only when its pod cannot run; a Failed Job reads Degraded and fails later ai-layer syncs until it is deleted:
+# `kubectl --context "$CONTEXT" -n agent delete job -l app.kubernetes.io/name=c7-sse-route`.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: c7-sse-route-script
+data:
+  route.py: |
+    import json, os, ssl, sys, time, urllib.request, urllib.error
+    NAME = "agentgateway-c7-config"
+    PATH = f"/api/v1/namespaces/agent/configmaps/{NAME}"
+    MARK = "# c7-rule"
+    ROUTE = """\
+    # No standalone SSE stream (#1303), added on this cluster by the c7-sse-route Job (#1323).
+    - name: no-standalone-sse
+      matches:
+      - method: GET
+        path:
+          pathPrefix: /mcp
+      policies:
+        directResponse:
+          status: 405"""
+    SA = "/var/run/secrets/kubernetes.io/serviceaccount"
+
+
+    def say(msg):
+        print(f"[c7-sse-route] {msg}", flush=True)
+
+
+    def indent(line):
+        return len(line) - len(line.lstrip(" "))
+
+
+    def rule_line(text):
+        """The one line ending in the c7-rule marker. Anything else is an error, never a guess."""
+        hits = [ln for ln in text.split("\n") if ln.rstrip().endswith(MARK)]
+        if len(hits) != 1:
+            raise ValueError(f"{len(hits)} lines end in '{MARK}', not one")
+        return hits[0]
+
+
+    def add_route(text):
+        """config.yaml with the 405 route appended to its routes list, or None when a route already has the name."""
+        if "name: no-standalone-sse" in text:
+            return None
+        rule_line(text)
+        lines = text.rstrip("\n").split("\n")
+        heads = [i for i, ln in enumerate(lines) if ln.strip() == "routes:"]
+        if len(heads) != 1:
+            raise ValueError(f"{len(heads)} 'routes:' lines, not one")
+        body = [ln for ln in lines[heads[0] + 1:] if ln.strip()]
+        if not body or not body[0].lstrip().startswith("- "):
+            raise ValueError("'routes:' is not followed by a list item")
+        item = indent(body[0])
+        if item < indent(lines[heads[0]]):
+            raise ValueError("the routes list sits left of 'routes:'")
+        for ln in body:
+            if ln.lstrip().startswith("#"):
+                continue
+            if indent(ln) < item or (indent(ln) == item and not ln.lstrip().startswith("- ")):
+                raise ValueError(f"the routes list does not run to the end of the file: {ln.strip()!r} follows it")
+        return "\n".join(lines + [" " * item + ln for ln in ROUTE.split("\n")]) + "\n"
+
+
+    def api(method, body=None):
+        token = open(f"{SA}/token").read().strip()
+        ctx = ssl.create_default_context(cafile=f"{SA}/ca.crt")
+        base = f"https://{os.environ['KUBERNETES_SERVICE_HOST']}:{os.environ['KUBERNETES_SERVICE_PORT']}"
+        headers = {"Authorization": f"Bearer {token}"}
+        data = None
+        if body is not None:
+            headers["Content-Type"] = "application/json-patch+json"
+            data = json.dumps(body).encode()
+        req = urllib.request.Request(base + PATH, data=data, headers=headers, method=method)
+        with urllib.request.urlopen(req, context=ctx, timeout=10) as r:
+            return json.load(r)
+
+
+    def main(deadline_s=240, pause=5):
+        deadline = time.time() + deadline_s
+        last = ""
+        while time.time() < deadline:
+            try:
+                cm = api("GET")
+                old = cm["data"]["config.yaml"]
+                before = rule_line(old)
+                new = add_route(old)
+                if new is None:
+                    say(f"{NAME} already has the no-standalone-sse route; nothing to do. Rule: {before.strip()}")
+                    sys.exit(0)
+                api("PATCH", [{"op": "test", "path": "/metadata/resourceVersion", "value": cm["metadata"]["resourceVersion"]},
+                              {"op": "replace", "path": "/data/config.yaml", "value": new}])
+                after = api("GET")["data"]["config.yaml"]
+                if add_route(after) is None and rule_line(after) == before:
+                    say(f"added the no-standalone-sse route to {NAME}'s 3003 bind. Rule before and after: {before.strip()}")
+                    sys.exit(0)
+                last = f"read back without the route or with another rule line: {rule_line(after).strip()}"
+            except ValueError as e:
+                say(f"NOT ADDED: {NAME}'s config.yaml has a shape this Job does not know ({e}); it is left as it was.")
+                sys.exit(0)
+            except urllib.error.HTTPError as e:
+                # 422: the resourceVersion test failed, a rule flip landed between the read and the write. Read again.
+                last = f"HTTP {e.code}: {e.read()[:300].decode(errors='replace')}"
+            except (OSError, KeyError) as e:
+                last = f"{type(e).__name__}: {e}"
+            say(f"retrying: {last}")
+            time.sleep(pause)
+        say(f"NOT ADDED after {deadline_s}s: {last}. {NAME} is left as it was; the 3003 bind keeps its standalone stream.")
+        sys.exit(0)
+
+
+    if __name__ == "__main__":
+        main()
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: c7-sse-route-4ffef145
+  labels:
+    app.kubernetes.io/name: c7-sse-route
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      # The Datadog Agent tags this pod's logs from these labels (#662), as on every BurritoBot pod.
+      labels: { tags.datadoghq.com/service: burritobot-c7-sse-route, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      serviceAccountName: web-terminal
+      restartPolicy: Never
+      containers:
+        - name: route
+          image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e
+          command: ["python3", "/job/route.py"]
+          volumeMounts:
+            - name: script
+              mountPath: /job
+          resources:
+            requests: { cpu: "50m", memory: "64Mi" }
+            limits: { cpu: "200m", memory: "128Mi" }
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+            seccompProfile: { type: RuntimeDefault }
+      volumes:
+        - name: script
+          configMap: { name: c7-sse-route-script }

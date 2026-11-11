@@ -51650,3 +51650,66 @@ words, as test_kubecon_probe.py's 424 re-send check holds, so the check now read
 hand and missed this reader. This time every offline test whose code names a path the change touches, 152 of them, ran
 through `run-tests.sh` with `HECATON_TEST_FILES`, as the gate passes them: "ALL OFFLINE RENDER-GATE TESTS GREEN", exit 0.
 `test_test_map.py` passed alone. This fix touches only a test no cluster runs, so it needs no live check.
+
+## 2026-11-11 · #1323 · run 20222 · The 3003 bind's 405 route reaches the two KubeCon clusters through a one-shot Job in ai-layer
+
+**Prior work.** `prior-drafts.sh 1323 origin/staging` printed NONE and the issue has no comments, so nothing to port.
+
+**Why a Job and not a hand edit.** The issue asks for a one-time edit of the live `agentgateway-c7-config` that adds
+#1303's `no-standalone-sse` route and keeps the `# c7-rule` line. A run does not deploy, and the cluster refuses that
+edit anyway: a server-side dry-run of the patch as this run's identity on watch-it-burn-private was denied by Kyverno,
+`Policy block-argocd-drift failed: This resource is managed by ArgoCD. Change it in Git, not in the cluster.` So the
+edit comes from Git, through Argo CD, once hecaton promotes this.
+
+**The change.**
+
+- `gitops/ai-layer/c7-sse-route.yaml`: the ConfigMap `c7-sse-route-script` and the Job `c7-sse-route-4ffef145`. The
+  script reads the live config.yaml and, only when no route is named `no-standalone-sse`, appends that route to the
+  3003 bind's routes list, which is the last thing in the file on both clusters. Every input line is kept in order, the
+  rule line among them, and the patch tests the resourceVersion it read, as `_c7rule` does, so a guard-mcp-on/off
+  between the read and the write is read again and kept. A config that already has the route (every cluster built
+  since #1303) gets no write. A shape it does not know (no rule line, two of them, no routes list, a key after it) gets
+  no write and a log line naming why. It reads back and logs the rule line before and after.
+- It runs as the `web-terminal` ServiceAccount, the identity guard-mcp-on/off already write this ConfigMap as: its
+  console-terminal ClusterRole holds get and patch, block-argocd-drift's `not-terminal-c7-rule` exempts its UPDATE of
+  this one ConfigMap, and restrict-agent-spawned-workloads keeps the agent from running a pod as it. Nothing new is
+  granted. A ServiceAccount of its own in `agent` would have needed a new Kyverno exemption, and the agent could have
+  run a pod as it and switched off its own C7 guard.
+- The shape of the ordering gates (#898): a plain Sync-phase Job, not a hook, at wave 0, its name the hash of its spec
+  and script, no TTL, the otel gate's pinned python image. The script exits 0 on every path, so a failure to write
+  leaves the config as it was and says so in the Job log, never a Failed Job that parks ai-layer's syncs.
+- The comments in agentgateway.yaml (inside the C7 config.yaml, comment lines only), resources.yaml (evil-mcp's 12h
+  timeout) and the ai-layer Application's ignore now name the Job. evil-mcp's 12h timeout stays.
+
+**Live check, nothing changed.** On both clusters, 2026-11-11: the live config.yaml was read (private with #864's
+`frontendPolicies` tracing, community with the older `config.tracing`, both with `- 'true' # c7-rule` and no 405
+route). The script's own patch for each, run as `--as=system:serviceaccount:agent:web-terminal --dry-run=server`, was
+admitted on both (`configmap/agentgateway-c7-config patched`), Kyverno's exemption included on private. A server-side
+dry-run of the Job, its ConfigMap and the pod its template makes was admitted on both. Afterwards each ConfigMap read
+the same resourceVersion as before (private 11347482, community 2199252), with no 405 route. `agent/terminal-auth` was
+not read or touched.
+
+**Not yet run on a cluster.** The Job runs once hecaton promotes this and Argo CD syncs ai-layer. Then, on each
+cluster: `kubectl --context <ctx> -n agent logs job/c7-sse-route-4ffef145` says the route was added with the rule line
+the same before and after; the ConfigMap has the route; the agent's GET /mcp on :3003 is answered 405 by
+`no-standalone-sse` (`kubectl --context <ctx> -n agent logs deploy/agentgateway -c agentgateway-c7 | grep
+'http.method=GET'`, read for the agent pod's address); and `PRIVATE_CONTEXT=watch-it-burn-private
+COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_coc_floor_probes_live.py` runs green. The agent sends
+its next GET when it opens a new session, which the probe's guard-mcp-on/off roll of the community agent pod causes,
+or on the reconnect at the 12h cut. The next run on #1323 runs those checks. Why agentgateway forgot a session the
+shim never ended is still not established; a config reload is a candidate, and this Job's write is one reload.
+
+**Tests.** `verify/test_c7_sse_route_job.py` (offline, new): the Job's shape and hash, the RBAC and exemption it relies
+on, the script's route equal to the committed one, the script on both clusters' live config.yaml as read today and on
+each with the rule on (the parsed result is the input plus the committed route, every line kept, the rule line the
+same, a second run writes nothing), five shapes it refuses, and its main loop against a fake API server (one patch,
+a 422 from a rule flip read again with the flip kept, no patch when the route is there or the shape is unknown, a
+bounded give-up), every path exiting 0. Run once, passing, with the scope map and test map written for it. Also run
+alone, all passing: test_scope_tests.py, test_test_map.py, test_ai_layer_gates.py, test_c7_gateway_toggle.py,
+test_mcp_standalone_stream.py, test_agentgateway_config.py, test_agentgateway_config_checksum.py, test_image_pins.py,
+test_bootstrap_chart.py, and the scoped offline tests that read ai-layer's Jobs or workloads: test_agent_cloud_credential.py,
+test_audience_event.py, test_console_service_vhosts.py, test_drift_selfheal_ops.py, test_fleet_monitors.py,
+test_gated_page_names.py, test_guard_switch_both.py, test_guardrails_switch.py, test_lab_events.py,
+test_manifest_contract.py, test_mesh_enrollment.py, test_no_docker_hub.py, test_pii_scrub_live_logic.py and
+test_student_aws_creds_namespace.py. The rest of the scoped offline selection and the scoped tools tier are left to
+validation.

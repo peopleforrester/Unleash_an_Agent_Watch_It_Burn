@@ -16,6 +16,7 @@ resources:
   - argocd-managed-app.yaml # Beat-1 wall-3 drift target (ArgoCD-managed; admission denies agent drift, self-heal reverts)
   - kubearmor-ordering-gate.yaml # wave -1 Job (a PreSync hook until #898): wait for KubeArmor webhook Ready so workshop-mcp is admitted+annotated for enforcement
   - otel-ordering-gate.yaml # wave -1 Job (a PreSync hook until #898): wait for the OTel operator webhook + Instrumentation so BurritoBot is admitted instrumented
+  - c7-sse-route.yaml # #1323: one-shot Job that adds the 405 GET /mcp route to a live agentgateway-c7-config built before #1303, keeping its rule line
 
 configMapGenerator:
   - name: guard-proxy-src

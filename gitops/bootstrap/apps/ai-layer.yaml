@@ -135,7 +135,8 @@ spec:
     # The config is one string, so the ignore has to cover all of it. That is why the evil-mcp bind has a
     # ConfigMap and a container of its own: agentgateway-config (the A2A, workshop-mcp and LLM routes) stays
     # fully managed, and the agentgateway Deployment ignores only its BEDROCK_NOVA_MODEL and BEDROCK_REGION env (above).
-    # The cost: a committed change to agentgateway-c7-config reaches new clusters only.
+    # The cost: a committed change to agentgateway-c7-config reaches new clusters only. The one exception is #1303's
+    # 405 route for GET /mcp, which the c7-sse-route Job in gitops/ai-layer adds to a live config that lacks it (#1323).
     - group: ""
       kind: ConfigMap
       name: agentgateway-c7-config

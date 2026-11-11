@@ -347,8 +347,9 @@ data:
                 mcp:
                   host: http://evil-mcp-shim.agent.svc.cluster.local:8000/mcp
         # No standalone SSE stream (#1303), as on agentgateway-config's 3001 bind, which says why. ai-layer ignores
-        # this ConfigMap's content, so on a cluster built before this line the 3003 bind still serves the stream,
-        # and evil-mcp's RemoteMCPServer timeout (resources.yaml) is what keeps its session alive there.
+        # this ConfigMap's content, so on a cluster built before this line the c7-sse-route Job (c7-sse-route.yaml,
+        # #1323) appends this route to the live config, keeping its rule line. Keep the two routes the same:
+        # verify/test_c7_sse_route_job.py holds them so.
         - name: no-standalone-sse
           matches:
           - method: GET

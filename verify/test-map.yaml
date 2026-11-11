@@ -1322,6 +1322,19 @@ rules:
       - gitops/ai-layer/resources.yaml
     tests:
       - verify/test_c7_output_guard.py
+  - name: test_c7_sse_route_job.py
+    paths:
+      - agent/web-terminal
+      - agent/web-terminal/**
+      - gitops/ai-layer/agentgateway.yaml
+      - gitops/ai-layer/c7-sse-route.yaml
+      - gitops/ai-layer/kustomization.yaml
+      - gitops/ai-layer/otel-ordering-gate.yaml
+      - gitops/ai-layer/resources.yaml
+      - policies/kyverno/block-argocd-drift.yaml
+      - policies/kyverno/restrict-agent-spawned-workloads.yaml
+    tests:
+      - verify/test_c7_sse_route_job.py
   - name: test_c7_teaching.py
     paths:
       - agent

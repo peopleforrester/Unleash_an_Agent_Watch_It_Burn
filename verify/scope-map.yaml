@@ -1436,6 +1436,15 @@ reads:
     - verify/test_guard_mcp_both.py
   test_c7_output_guard.py:
     - gitops/ai-layer/resources.yaml
+  test_c7_sse_route_job.py:
+    - agent/web-terminal
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/c7-sse-route.yaml
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/otel-ordering-gate.yaml
+    - gitops/ai-layer/resources.yaml
+    - policies/kyverno/block-argocd-drift.yaml
+    - policies/kyverno/restrict-agent-spawned-workloads.yaml
   test_c7_teaching.py:
     - agent
     - challenges/03-bad-mcp-excessive-agency/fallback.curl.sh

@@ -903,8 +903,9 @@ spec:
   # counts each cut as a retry without progress and fails the session on the sixth, with any tool call in flight:
   # at 30s that was every 3 minutes, and it cost the admin probe Challenge 4 on watch-it-burn-private. At 12h the
   # session lasts about three days. The 3003 bind's 405 for that GET (agentgateway-c7-config) removes the stream
-  # outright, but ai-layer ignores that ConfigMap's content, so it reaches new clusters only and this line is what
-  # holds on one built before it. evil-mcp's tools answer in about a second, so the longer bound costs nothing.
+  # outright. ai-layer ignores that ConfigMap's content, so on a cluster built before it the route comes from the
+  # c7-sse-route Job (c7-sse-route.yaml, #1323), and until that Job has run this line is what holds there. evil-mcp's
+  # tools answer in about a second, so the longer bound costs nothing.
   timeout: 12h
   sseReadTimeout: 5m0s
   terminateOnClose: true
