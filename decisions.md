@@ -52224,3 +52224,89 @@ empty" line at the head of that gate's output is a message another test prints o
 commits were cherry-picked onto c53df166 with no conflict. `python3 verify/test_fetch_inventory.py` exit 0, "All
 fetch inventory checks passed". No live check: the change is to CI scripts, their test and the inventory under
 `verify/`, which no cluster runs.
+## 2026-11-11 · #1328 · run 20249 · The collector's code-of-conduct mask cut into 36 short patterns: about 6 s of CPU to build instead of 46 s
+
+**What changed.** `transform/coc_mask` no longer carries `floor.portable_pattern()` as one 108,437-character statement
+four times over. New `floor.portable_patterns()` cuts it into patterns of at most `PORTABLE_LIMIT` (4,000) characters,
+36 for the 1,253 terms, which the collector applies one after another. `verify/coc_pattern_copies.py write` writes them
+into `values.yaml` as one block, two statements a pattern, and the span-event context aliases the span context's list.
+`portable_pattern()` is unchanged and stays the reference the admission test and the spike test read.
+
+**Why the order matters.** Applied in turn, a pattern masks its terms before a later one sees the text, which the
+issue named: a longer term can lose to a shorter one in an earlier pass. Three rules keep the cut to what the single
+alternation masks:
+- Every alternative is placed by the length of the text it matches, longest first. A term holding a shorter one (a
+  spelt-out compound holding a spelt-out word, a leetspeak `$` opening a word edge inside a term) is masked whole
+  before the shorter is tried. A first cut by first letter, which shares the most leading pieces, failed here: its
+  ordering constraints formed one cycle across 29 of its 48 groups.
+- A spelt-out term of n letters counts as 2n - 1 characters, so it runs before a phrase as long as the term, as the
+  single alternation, which tries every spelt-out form first, has it. Without this, 61 generated texts showed a
+  letter the single form masks.
+- Two terms of one length that are each other turned around (`fuckass` and `assfuck`) share a pattern: a term spelt
+  out twice holds the other where the two copies meet. Without this, 16 generated texts showed letters.
+
+**The second pass is conditional.** Each pattern runs twice, since an edge is consumed. The second statement carries
+`where IsMatch(String(cache["coc"]), "\\[redacted\\]")`. A first pass that matched nothing leaves the text as it was,
+so the second would find nothing either and skipping it changes no output; a `[redacted]` from elsewhere only runs a
+pass that finds nothing. It halves the cost on the spans that hold no term. The E2E case of a term three times one
+space apart needs the second pass, and the real collector masks it.
+
+**Measured (otelcol-contrib 0.160.0, CPU time).** `validate` on each profile's rendered config:
+
+    instructor 4.87 s, with datadog-secret 6.00 s   attendee 4.71 s, 6.16 s   burn 4.85 s, 5.99 s
+    the same config with the mask left out (burn, Datadog overlay): 0.68 s; with #1316's single form: 44.6 s
+    a cut at 2,000 / 3,000 / 5,000 / 8,000 characters: 3.4 / 3.9 / 5.5 / 7.8 s (mask alone)
+
+Go's regexp, which `replace_all_patterns` runs, on a 2,480-character reply with no term (`go1.27.2`, the patterns
+read from floor.py): the single form 1.8 ms a pass, the cut 15.7 ms for its 36 first passes, and 31.5 ms if every
+second pass ran. Every pattern is one more scan of the text, so the mask costs four to five times what the single form
+did on conversation text. A 6,000-character cut was 11.8 ms but 6.2 s to build, closer to the 10 s limit as the list
+grows, so the limit stays at 4,000. The relay config as helm writes it is 885 KB, 84% of the 1 MiB a ConfigMap holds,
+against 570 KB before: the cut loses some of the shared leading pieces (141,984 characters against 94,535), and each
+pattern sits in it four times.
+
+**Equivalence.** New `verify/test_collector_coc_split.py`, on the cut against `portable_pattern()`, with Python's `re`
+under `re.ASCII` as RE2 reads the patterns:
+- The abuse set (155), guard-proxy's slang fixture (87), the stage texts (2,906) and the hard negatives (60): the
+  cut's mask is the folded floor's on every text that needs no folding, and `portable_pattern()`'s on every text, as
+  written and JSON-encoded both ways.
+- 82,415 generated texts (every term in twelve spellings, alone, in a sentence, twice, after a JSON `\n`, quoted,
+  and 8,000 seeded pairs): the cut masks exactly where the single form does, leaves no term the floor finds where the
+  single form leaves none, and shows no letter of a floor match that the single form masks.
+- 8,000 seeded pairs of terms spelt out back to back: yes or no and terms left agree. On 15 of 7,977 a letter shows
+  that the single form masks, and no term is left: where one spelt-out term runs into the next, the single
+  alternation takes the leftmost and the cut the longest. The test prints the count.
+- The same patterns applied shortest first show letters on 19,391 generated texts, so the checks catch a losing order.
+
+The tier test `test_collector_coc_mask_e2e.py` now also sends the four corpora, 3,235 texts, through the pinned
+collector on instructor's processors, and the collector's output is Python's mask of them, so RE2 agrees. New tier
+test `test_collector_coc_parse_cpu_e2e.py` measures the build of each profile's config, with and without
+datadog-secret, against 10 s, and a 108,437-character string added must exceed it (19.6 s).
+`test_collector_startup_budget.py` now holds the estimated build under 10 s and the relay under 1 MiB. Its model is
+fit to the measurements above (1.0 s, 3e-6 s a character, 1.2e-9 s a character squared): 6.8 s for the cut, 59 s for
+#1316's form, against 6.0 to 6.2 s and 45 s measured. Its #1326 mutant is built from lengths alone, so it no longer
+needs the term list.
+
+**Live check, watch-it-burn-community, 2026-11-11.** d20a0643 is live there: the collector DaemonSet carries the
+startupProbe and the 2-CPU limit, and its pod had run 53 minutes with no restart. In a scratch namespace
+`otel-1328-probe`, two one-off pods ran the collector's own image
+(`opentelemetry-collector-contrib:0.160.0-5b66b0dc6921`) with `validate` at the DaemonSet's limits (2 CPU, 512Mi,
+GOMEMLIMIT 409MiB): one on the live relay.yaml (570,116 bytes, #1316's statements), one on the same file with this
+change's `transform/coc_mask` in its place (887,692 bytes, 150 statements).
+
+    validate-new   Succeeded  exit 0  04:42:24Z to 04:42:27Z   3 s
+    validate-live  Succeeded  exit 0  04:42:44Z to 04:43:11Z  27 s
+    namespace/otel-1328-probe deleted; the collector pod still Running, 0 restarts
+
+**Tests run**, each once and passing: `test_collector_coc_split.py` (new), `test_collector_coc_mask.py`,
+`test_coc_pattern_copies.py`, `test_coc_pattern_linear.py` (each of the 36 patterns timed on its own, at most 2.6 ms
+on 4,000 characters, under its 50 ms; all 36 timed together came to 38 ms, too near the bound for one entry),
+`test_collector_startup_budget.py`, `test_scope_tests.py`,
+`test_test_map.py`, and the tier tests `test_collector_coc_mask_e2e.py` and `test_collector_coc_parse_cpu_e2e.py` with
+the pinned binary taken from the host's artifact cache. The other tests that read `values.yaml` and floor.py are left
+to validation.
+
+**Not yet run on a cluster.** After Argo CD syncs this from staging, on both clusters: the `otel-collector`
+Application syncs (server-side, as #1316 set it) and is Synced and Healthy, the ConfigMap's relay.yaml holds 150
+`transform/coc_mask` statements, the collector pod rolls and logs `Everything is ready` within seconds with no
+restart, and `COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_collector_pii_scrub_live.py` passes.

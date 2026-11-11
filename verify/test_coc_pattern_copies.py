@@ -5,7 +5,8 @@
 PyYAML. No cluster, no network.
 
 1. Each Site in verify/coc_pattern_copies.py finds exactly one copy, each decodes to its Site's floor function
-   (floor.portable_pattern() for the collector, floor.name_pattern() for the admission policy since #1316), and no
+   (the collector's block of statements to coc_mask_cases.collector_patterns(), floor.portable_pattern() cut short
+   since #1328, and the admission policy's to floor.name_pattern() since #1316), and no
    piece of the pattern (floor's separator class or a leetspeak class, in any escaping) sits anywhere else under
    gitops/ but inside a Port, a block that carries floor.py's own Python (#1269's, held by test_deploy_coc.py): a
    copy in a new file fails here until it gets a Site or a Port.
@@ -47,7 +48,7 @@ if not PATTERN.startswith(EDGE_NOW):
     print(f"  FAIL  floor.portable_pattern() no longer starts with {EDGE_NOW!r}, which case 2 builds the old copy from")
     sys.exit(1)
 
-print("== 1. every copy under gitops/ is floor.portable_pattern(), and there is no other ==")
+print("== 1. every copy under gitops/ is its Site's floor form, and there is no other ==")
 files = cpc.gitops_files()
 copies, problems = cpc.scan(files)
 for p in problems:
@@ -86,8 +87,9 @@ for site in cpc.SITES:
     mine = next(c for c in copies if c.site is site)
     text = files[site.path]
     stale_copies = [("the copy written before the list's last entry was added", site.source(shorter))]
-    if site.source is cpc.floor.portable_pattern:
-        stale_copies.append(("the copy from before #1277's JSON-escape edges", old))
+    if site.source is cpc.coc_mask_cases.collector_patterns:
+        before_1277 = "\n".join(EDGE_BEFORE_1277 + p[len(EDGE_NOW):] for p in FORMS[site.path].split("\n"))
+        stale_copies.append(("the copy from before #1277's JSON-escape edges", before_1277))
     for label, stale_copy in stale_copies:
         before = text[:mine.start] + site.encode(stale_copy) + text[mine.end:]
         staged = dict(files, **{site.path: before})

@@ -2,7 +2,8 @@
 # ABOUTME: The code-of-conduct pattern matches in time linear in the text (#1300): floor.py and every copy of it under
 # ABOUTME: gitops/ are timed on 1,000 and 4,000 characters of each repeated leetspeak pair, and fail growing faster.
 """Offline: floor.py, the two ports of it (workshop-mcp-server.py and ticket_site.py, run from their own block), the
-copies of floor.portable_pattern() that verify/coc_pattern_copies.py finds (the admission policy's and the collector's),
+copies of the floor's RE2 forms that verify/coc_pattern_copies.py finds (the admission policy's, and each of the
+collector's patterns, #1328),
 and the pinned guard-proxy submodule's proxy.py conduct_matches() (#1288), standard library and PyYAML only. No
 cluster, no network.
 
@@ -117,7 +118,9 @@ if problems or not found:
              f"it: {problems[:2]}")
 by_regex: dict[str, list[str]] = {}
 for c in found:
-    by_regex.setdefault(c.decoded, []).append(c.site.path)
+    for n, regex in enumerate(c.regexes, 1):
+        by_regex.setdefault(regex, []).append(c.site.path + (f" pattern {n} of {len(c.regexes)}" if len(c.regexes) > 1
+                                                            else ""))
 by_regex.setdefault(floor.portable_pattern(), []).insert(0, "floor.portable_pattern()")
 for regex, where in by_regex.items():
     COPIES[" and ".join(where) + f" ({len(regex):,} characters, in Python's re)"] = finditer(regex)

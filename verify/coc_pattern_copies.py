@@ -3,11 +3,11 @@
 # ABOUTME: one command that checks them all against floor.py's RE2 forms or regenerates them all from them.
 """One source for the copies of the code-of-conduct pattern.
 
-docs/research/2026-11-09-coc-floor/floor.py's portable_pattern() and name_pattern(), over terms-proposed.rot13, are the
-term floor in the RE2 forms the collector (portable_pattern) and the cluster's admission on names (name_pattern, the
-same matcher for text that can only hold what a name or a label holds, #1316) run. Neither can import Python, so the
-pattern is written out in full in each place that runs it. Each place is a Site below: its file, the text around the
-copy, which of the two it holds, and how the copy is escaped there.
+docs/research/2026-11-09-coc-floor/floor.py's portable_patterns() and name_pattern(), over terms-proposed.rot13, are
+the term floor in the RE2 forms the collector (portable_patterns, portable_pattern() cut into short patterns, #1328) and
+the cluster's admission on names (name_pattern, the same matcher for text that can only hold what a name or a label
+holds, #1316) run. Neither can import Python, so the pattern is written out in full in each place that runs it. Each
+place is a Site below: its file, the text around the copy, which form it holds, and how the copy is escaped there.
 
     python3 verify/coc_pattern_copies.py          check: name each copy and exit 1 on a stale or unknown one
     python3 verify/coc_pattern_copies.py write    regenerate every copy from its floor function, then check
@@ -54,7 +54,7 @@ class Site:
 
     @property
     def form(self) -> str:
-        return f"floor.{self.source.__name__}()"
+        return f"{self.source.__module__}.{self.source.__name__}()"
 
 
 def _cel_raw(regex: str) -> str:
@@ -64,8 +64,31 @@ def _cel_raw(regex: str) -> str:
     return regex
 
 
-_OTTL = (f'&coc_mask \'replace_all_patterns({coc_mask_cases.CACHE}, "value", "',
-         f'", "{coc_mask_cases.REPLACEMENT}")\'')
+_OTTL = (f'replace_all_patterns({coc_mask_cases.CACHE}, "value", "', f'", "{coc_mask_cases.REPLACEMENT}")')
+_OTTL_INDENT = " " * 12  # the statements' indentation in values.yaml
+_OTTL_FIRST = "'" + _OTTL[0]
+
+
+def _ottl_block(patterns: str) -> str:
+    """The collector's patterns (coc_mask_cases.collector_patterns(), one a line) as values.yaml writes them in
+    transform/coc_mask's span statements: each pattern's replace_all_patterns statement, then the same with
+    coc_mask_cases.SECOND_PASS, so the collector applies each twice before the next; the span-event context aliases
+    the whole list."""
+    lines = []
+    for regex in patterns.split("\n"):
+        statement = coc_mask_cases.replace_statement(regex)
+        lines += [f"'{statement}'", f"'{statement}{coc_mask_cases.SECOND_PASS}'"]
+    return f"\n{_OTTL_INDENT}- ".join(lines)
+
+
+_OTTL_STATEMENT = re.compile("^'" + re.escape(_OTTL[0]) + r'([^"\n]*)' + re.escape(_OTTL[1]) + "'$")
+
+
+def _ottl_patterns(written: str) -> str:
+    """What RE2 compiles from each first-pass statement of the block, one a line."""
+    lines = [line.strip().removeprefix("- ") for line in written.split("\n")]
+    return "\n".join(coc_mask_cases.decode(m.group(1)) for m in map(_OTTL_STATEMENT.match, lines) if m)
+
 
 SITES = (
     Site("gitops/namespaces/code-of-conduct-names.yaml",
@@ -74,10 +97,13 @@ SITES = (
          re.compile(r"^(?P<i> +)- name: floor\n(?P=i)  expression: \|-\n(?P=i)    r'(?P<w>[^'\n]+)'$", re.M),
          _cel_raw, lambda written: written, ("test_coc_admission",), floor.name_pattern),
     Site("gitops/otel-collector/values.yaml",
-         "transform/coc_mask's replace_all_patterns, an OTTL string in collector config ($$ for $, \\\\ for \\)",
-         _OTTL[0],
-         re.compile(re.escape(_OTTL[0]) + r'(?P<w>[^"\n]+)' + re.escape(_OTTL[1]) + "$", re.M),
-         coc_mask_cases.encode, coc_mask_cases.decode, ("test_collector_coc_mask",)),
+         "transform/coc_mask's replace_all_patterns statements, OTTL strings in collector config ($$ for $, \\\\ for "
+         "\\), two a pattern",
+         "- " + _OTTL_FIRST,
+         re.compile(r"^(?P<i> +)- (?P<w>" + re.escape(_OTTL_FIRST) + r"[^\n]*'(?:\n(?P=i)- " + re.escape(_OTTL_FIRST)
+                    + r"[^\n]*')*)$", re.M),
+         _ottl_block, _ottl_patterns, ("test_collector_coc_mask",),
+         coc_mask_cases.collector_patterns),
 )
 # What the floor is built from: a change to any of these changes the pattern, so it has to select every test that
 # holds a copy (verify/scope-map.yaml), and it then fails on its own branch rather than on staging.
@@ -110,7 +136,8 @@ HOLDERS = ("test_coc_pattern_copies",) + tuple(dict.fromkeys(t for s in SITES + 
 
 
 def pattern() -> str:
-    """The collector's form, floor.portable_pattern(); each Site's own is site.source()."""
+    """floor.portable_pattern(), the single RE2 form the collector's patterns are cut from; each Site's own is
+    site.source()."""
     return floor.portable_pattern()
 
 
@@ -140,6 +167,11 @@ class Copy:
     @property
     def decoded(self) -> str:
         return self.site.decode(self.written)
+
+    @property
+    def regexes(self) -> list[str]:
+        """Each pattern the copy holds: the collector's holds one a line (coc_mask_cases.collector_patterns())."""
+        return self.decoded.split("\n")
 
 
 def gitops_paths() -> dict[str, pathlib.Path]:

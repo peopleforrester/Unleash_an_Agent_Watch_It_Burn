@@ -1,5 +1,5 @@
 # ABOUTME: Runs spans through the real otelcol-contrib with each profile's traces processors (#1277) and reads what the
-# ABOUTME: exporter receives: a code-of-conduct term in the conversation comes out masked, HC-666's ticket unchanged.
+# ABOUTME: exporter receives: a code-of-conduct term comes out masked, HC-666's ticket unchanged, four corpora as in Python.
 # SUITE: e2e
 # E2E TIER: tools (no cluster, no AWS: the pinned otelcol-contrib from e2e-tools.lock, run on loopback)
 """The executed half of verify/test_collector_coc_mask.py.
@@ -9,23 +9,31 @@ in that profile's order, are run by verify/.tools/bin/otelcol-contrib, the versi
 receiver and the exporter differ: OTLP/HTTP on a loopback port in, a file out. instructor (admin and full) and
 attendee run the same list, so it runs once for both, and burn's, with transform/scrub_pii after the mask, once.
 
-Three spans go in, shaped as guard-proxy's chat span, kagent's model call and kagent's tool call:
+Four spans go in, shaped as guard-proxy's chat span, kagent's model calls and kagent's tool call:
 
   - the chat span's prompt (gen_ai.input.messages) and a gen_ai.input.messages span-event attribute carry
     coc_mask_cases.term_cases(), each spelling of a term the RE2 form reads, one per line, JSON-encoded as guard-proxy
     writes it (a newline or a non-ASCII escape right before a term); the model call's prompt carries them as kagent writes it
     (UTF-8). All come out masked, as Python's re masks them, and session.id, which is not conversation, holding a
-    term comes out whole;
+    term comes out whole. A term three times one space apart needs each pattern's second pass, which runs only where
+    the first masked something (coc_mask_cases.SECOND_PASS, #1328), so it shows that condition holds in the collector;
   - the model call's reply (gen_ai.output.messages) carries HC-666's ticket, its injection included, and comes out
     unchanged, as does the tool call's result: read_support_ticket's reply on gcp.vertex.agent.tool_response and its
     gen_ai.tool.call.result copy;
   - the tool call's arguments hold a term and come out masked on gcp.vertex.agent.tool_call_args and on the
-    gen_ai.tool.call.arguments copy transform/adk_tool_content makes, which exists only because the mask runs after it.
+    gen_ai.tool.call.arguments copy transform/adk_tool_content makes, which exists only because the mask runs after it;
+  - a fourth span's prompt carries every text of the four corpora #1316 held the collector's form to (the abuse set,
+    guard-proxy's slang fixture, the stage texts and the hard negatives), one a line, and comes out as
+    coc_mask_cases.mask() masks it in Python, on instructor, where the mask is the last processor (burn's
+    transform/scrub_pii rewrites the stage data's phone numbers and addresses after it).
+    The collector split test (#1328) holds that mask, which applies floor.portable_patterns() in turn as the collector
+    does (#1328), to the folded floor's on each of those texts, so the collector's RE2 masks them as the floor does.
 
 Fails when the binary is missing: run verify/fetch-e2e-tools.sh (verify/run-e2e-tools.sh does).
 """
 from __future__ import annotations
 
+import codecs
 import json
 import os
 import pathlib
@@ -39,7 +47,7 @@ import urllib.request
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from coc_mask_cases import MASK, hc666_ticket, mask, term_cases  # noqa: E402
+from coc_mask_cases import MASK, corpora, hc666_ticket, mask, term_cases  # noqa: E402
 from collector_render import REPO, collector_config, feature_gate_args  # noqa: E402
 
 OTELCOL = REPO / "verify/.tools/bin/otelcol-contrib"
@@ -88,6 +96,7 @@ TOOL_ARGS = json.dumps({"ticket_id": "HC-666", "note": f"customer says {WORD}"})
 TOOL_ARGS_MASKED = json.dumps({"ticket_id": "HC-666", "note": "customer says [redacted]"})
 TOOL_RESULT = json.dumps({"content": [{"type": "text", "text": TICKET}], "isError": False})
 TRACE = "6c9efff798038103d269b633813fc61d"
+CORPUS = "\n".join(t for texts in corpora().values() for t in texts)
 SPANS = {
     "burritobot": [{
         "traceId": TRACE, "spanId": "aee19b7ec3c1b171", "name": "chat", "kind": 1,
@@ -109,13 +118,19 @@ SPANS = {
          "attributes": [kv("gen_ai.operation.name", "execute_tool"),
                         kv("gcp.vertex.agent.tool_call_args", TOOL_ARGS),
                         kv("gcp.vertex.agent.tool_response", TOOL_RESULT)]},
+        {"traceId": TRACE, "spanId": "aee19b7ec3c1b174", "parentSpanId": "aee19b7ec3c1b171",
+         "name": "generate_content corpora", "kind": 3,
+         "startTimeUnixNano": "1730000000400000000", "endTimeUnixNano": "1730000000500000000",
+         "attributes": [kv("gen_ai.operation.name", "generate_content"),
+                        kv("gen_ai.input.messages", messages("user", CORPUS))]},
     ],
 }
-NAMES = ("chat", "generate_content us.amazon.nova-pro-v1:0", "execute_tool read_support_ticket")
+NAMES = ("chat", "generate_content us.amazon.nova-pro-v1:0", "execute_tool read_support_ticket",
+         "generate_content corpora")
 
 
 def run(profile: str) -> dict[str, dict]:
-    """The three spans as the file exporter wrote them, after the profile's traces processors."""
+    """The spans as the file exporter wrote them, after the profile's traces processors."""
     rendered = collector_config(profile, datadog_secret=False)
     procs = rendered["service"]["pipelines"]["traces"]["processors"]
     port = free_port()
@@ -174,7 +189,7 @@ def run(profile: str) -> dict[str, dict]:
             proc.terminate()
             proc.wait(timeout=15)
             log.close()
-        check(f"{profile}: all three spans reached the exporter ({sorted(got)})", len(got) == len(NAMES),
+        check(f"{profile}: all {len(NAMES)} spans reached the exporter ({sorted(got)})", len(got) == len(NAMES),
               log_path.read_text()[-2000:])
     return got
 
@@ -194,7 +209,7 @@ check("attendee runs instructor's traces processors, so one run covers both",
 for profile in ("instructor", "burn"):
     print(f"== {profile} ({'admin, full and attendee' if profile == 'instructor' else 'community'}) ==")
     got = run(profile)
-    chat, model, tool = (attrs(got.get(n, {})) for n in NAMES)
+    chat, model, tool, corpora_span = (attrs(got.get(n, {})) for n in NAMES)
     check(f"{profile}: the chat span's prompt comes out masked",
           chat.get("gen_ai.input.messages") == messages("user", PROMPT_MASKED), str(chat.get("gen_ai.input.messages")))
     check(f"{profile}: session.id is not conversation and is left whole", chat.get("session.id") == SESSION,
@@ -214,6 +229,14 @@ for profile in ("instructor", "burn"):
     for key in ("gcp.vertex.agent.tool_response", "gen_ai.tool.call.result"):
         check(f"{profile}: read_support_ticket's HC-666 on {key} is unchanged", tool.get(key) == TOOL_RESULT,
               str(tool.get(key)))
+    if profile == "burn":  # transform/scrub_pii runs after the mask there and rewrites the stage data's PII
+        continue
+    got_corpus, want_corpus = corpora_span.get("gen_ai.input.messages") or "", mask(messages("user", CORPUS))
+    differ = [(g, w) for g, w in zip(got_corpus.split("\\n"), want_corpus.split("\\n")) if g != w]
+    check(f"{profile}: the four corpora ({CORPUS.count(chr(10)) + 1:,} texts) come out of the collector as Python masks "
+          f"them, the abuse set's terms masked", got_corpus == want_corpus and want_corpus != messages("user", CORPUS),
+          f"{len(differ)} lines differ; the first, collector then Python (ROT13): "
+          + str([codecs.encode(x[:120], "rot13") for x in (differ[0] if differ else ("", ""))]))
 
 print()
 if failures:

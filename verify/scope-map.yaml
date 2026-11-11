@@ -2091,6 +2091,7 @@ reads:
     - gitops/ai-layer/resources.yaml
     - infra/terraform/aws/cluster/main.tf
   test_coc_pattern_copies.py:
+    - .gitmodules
     - challenges/PROMPT-CATALOG.md
     - docs/research/2026-11-09-coc-floor
     - docs/research/2026-11-09-coc-floor/abuse-set.rot13.tsv
@@ -2111,8 +2112,13 @@ reads:
     - gitops/namespaces/code-of-conduct-names.yaml
     - gitops/otel-collector/values.yaml
     - gitops/workshop-agent/agent.yaml
+    - images/llm-guard
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/coc_mask_cases.py
     - verify/coc_pattern_copies.py
+    - verify/ensure-submodules.sh
+    - verify/git_mirror.py
     - verify/scope-map.yaml
     - verify/topic_cases.py
   test_coc_pattern_linear.py:
@@ -2196,6 +2202,7 @@ reads:
     - verify/bootstrap_chart.py
     - verify/collector_render.py
   test_collector_coc_mask.py:
+    - .gitmodules
     - challenges/PROMPT-CATALOG.md
     - docs/research/2026-11-09-coc-floor
     - docs/research/2026-11-09-coc-floor/abuse-set.rot13.tsv
@@ -2205,6 +2212,7 @@ reads:
     - docs/research/2026-11-09-coc-floor/pull_turns.py
     - docs/research/2026-11-09-coc-floor/terms-proposed.rot13
     - facilitation/kubecon-na-2026/fallback/prompts.yaml
+    - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/server.py
     - gitops/ai-layer/ticket_site.py
@@ -2217,16 +2225,20 @@ reads:
     - gitops/otel-collector
     - gitops/otel-collector/values-burn.yaml
     - gitops/workshop-agent/agent.yaml
+    - images/llm-guard
     - verify/.tools/bin/otelcol-contrib
     - verify/artifact-cache.sh
     - verify/artifact_cache.py
     - verify/coc_mask_cases.py
     - verify/collector_render.py
     - verify/e2e-tools.lock
+    - verify/ensure-submodules.sh
     - verify/fetch-e2e-tools.sh
+    - verify/git_mirror.py
     - verify/test_collector_coc_mask_e2e.py
     - verify/topic_cases.py
   test_collector_coc_mask_e2e.py:
+    - .gitmodules
     - challenges/PROMPT-CATALOG.md
     - docs/research/2026-11-09-coc-floor
     - docs/research/2026-11-09-coc-floor/abuse-set.rot13.tsv
@@ -2236,6 +2248,7 @@ reads:
     - docs/research/2026-11-09-coc-floor/pull_turns.py
     - docs/research/2026-11-09-coc-floor/terms-proposed.rot13
     - facilitation/kubecon-na-2026/fallback/prompts.yaml
+    - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/server.py
     - gitops/ai-layer/ticket_site.py
@@ -2247,13 +2260,53 @@ reads:
     - gitops/bootstrap/apps/otel-collector.yaml
     - gitops/otel-collector
     - gitops/workshop-agent/agent.yaml
+    - images/llm-guard
     - verify/.tools/bin/otelcol-contrib
     - verify/artifact-cache.sh
     - verify/artifact_cache.py
     - verify/coc_mask_cases.py
     - verify/collector_render.py
     - verify/e2e-tools.lock
+    - verify/ensure-submodules.sh
     - verify/fetch-e2e-tools.sh
+    - verify/git_mirror.py
+    - verify/topic_cases.py
+  test_collector_coc_parse_cpu_e2e.py:
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/otel-collector
+    - verify/.tools/bin/otelcol-contrib
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/collector_render.py
+    - verify/e2e-tools.lock
+    - verify/fetch-e2e-tools.sh
+  test_collector_coc_split.py:
+    - .gitmodules
+    - challenges/PROMPT-CATALOG.md
+    - docs/research/2026-11-09-coc-floor
+    - docs/research/2026-11-09-coc-floor/abuse-set.rot13.tsv
+    - docs/research/2026-11-09-coc-floor/corpus.py
+    - docs/research/2026-11-09-coc-floor/floor.py
+    - docs/research/2026-11-09-coc-floor/hard-negatives.txt
+    - docs/research/2026-11-09-coc-floor/pull_turns.py
+    - docs/research/2026-11-09-coc-floor/terms-proposed.rot13
+    - facilitation/kubecon-na-2026/fallback/prompts.yaml
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/server.py
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/workshop-agent/agent.yaml
+    - images/llm-guard
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/coc_mask_cases.py
+    - verify/ensure-submodules.sh
+    - verify/git_mirror.py
     - verify/topic_cases.py
   test_collector_config.py:
     - gitops/ai-layer/web/active-skin.js

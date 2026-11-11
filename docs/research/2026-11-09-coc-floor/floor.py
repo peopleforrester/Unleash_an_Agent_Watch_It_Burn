@@ -33,6 +33,8 @@ The list (#1316). terms-proposed.rot13 was the spike's 144 terms when it measure
 surface stays the rule (#1289). So proposed_pattern() groups its alternatives by their first character, as guard-proxy
 does, and the two RE2 forms the cluster carries are factored on shared leading pieces (portable_pattern() for the
 collector, name_pattern() for the admission policy on names), which keeps each inside the limit of where it runs.
+The collector parses an OTTL string in time that grows with the square of its length, so it runs portable_pattern()
+cut into short patterns, portable_patterns(), one after another (#1328).
 """
 from __future__ import annotations
 
@@ -208,6 +210,23 @@ def _json_escape(ch: str) -> str:
     return "".join(f"\\\\u{int.from_bytes(units[i:i + 2], 'big'):04x}" for i in range(0, len(units), 2))
 
 
+def _portable(alts: str) -> str:
+    """An alternation of _two_kinds() or _factored() pieces as portable_pattern() writes it: each non-ASCII letter
+    also as its JSON escape, the dotless i inside each class that holds i, compacted, between the two word edges."""
+    for ch in sorted({c for c in alts if not c.isascii()}):
+        if alts.count(ch) != alts.count(f"[{ch}]"):
+            raise ValueError(f"U+{ord(ch):04X} sits in a class with other letters; its JSON escape needs that class split")
+        alts = alts.replace(f"[{ch}]", f"(?:{ch}|{_json_escape(ch)})")
+    for latin, other in _RE2_UNFOLDED.items():
+        classes = re.compile(r"\[[^\]]*" + re.escape(latin) + r"[^\]]*\]")
+        # The letter goes inside the class, not beside it as `(?:[i1]|ı|...)`: Python's re.IGNORECASE folds the dotless i
+        # to i, so beside the class a run of i could be read two ways at each character, and a failed match on a run
+        # of "i" backtracked through every way (#1316, the first term starting with i). Inside, any engine reads one.
+        alts = classes.sub(lambda m: f"(?:{m.group(0)[:-1]}{other}]|\\\\u{ord(other):04x})", alts)
+    hexd = "[0-9a-f]" * 4  # not {4}: no brace reaches the collector's Helm-templated config
+    return r"(?i)(^|[^a-z0-9]|\\[nrt]|\\u" + hexd + r")((?:" + _compact(alts) + r")s?)" + _trailing_edge()
+
+
 def portable_pattern(terms: list[str] | None = None) -> str:
     """The proposed pattern in the syntax RE2 shares with Python: no lookarounds, so the word edges are groups 1 and 3
     and a replacement keeps them ("$1[redacted]$3"; "$$1[redacted]$$3" in a collector config). An edge is consumed,
@@ -226,19 +245,67 @@ def portable_pattern(terms: list[str] | None = None) -> str:
     and guard-proxy's match read it as i. Each class holding a letter of _RE2_UNFOLDED therefore also matches that
     letter and its escape (#1301): `(?:[i1ı]|\\u0131)`."""
     terms = corpus.terms("proposed") if terms is None else terms
-    alts = _two_kinds([_alternatives(t) for t in _ordered(terms)])
-    for ch in sorted({c for c in alts if not c.isascii()}):
-        if alts.count(ch) != alts.count(f"[{ch}]"):
-            raise ValueError(f"U+{ord(ch):04X} sits in a class with other letters; its JSON escape needs that class split")
-        alts = alts.replace(f"[{ch}]", f"(?:{ch}|{_json_escape(ch)})")
-    for latin, other in _RE2_UNFOLDED.items():
-        classes = re.compile(r"\[[^\]]*" + re.escape(latin) + r"[^\]]*\]")
-        # The letter goes inside the class, not beside it as `(?:[i1]|ı|...)`: Python's re.IGNORECASE folds the dotless i
-        # to i, so beside the class a run of i could be read two ways at each character, and a failed match on a run
-        # of "i" backtracked through every way (#1316, the first term starting with i). Inside, any engine reads one.
-        alts = classes.sub(lambda m: f"(?:{m.group(0)[:-1]}{other}]|\\\\u{ord(other):04x})", alts)
-    hexd = "[0-9a-f]" * 4  # not {4}: no brace reaches the collector's Helm-templated config
-    return r"(?i)(^|[^a-z0-9]|\\[nrt]|\\u" + hexd + r")((?:" + _compact(alts) + r")s?)" + _trailing_edge()
+    return _portable(_two_kinds([_alternatives(t) for t in _ordered(terms)]))
+
+
+# The longest one of portable_patterns() may be, in characters of RE2 (#1328). The collector's otelcol-contrib 0.160.0
+# parses an OTTL string in CPU time that grows with the square of its length, so the single portable_pattern(),
+# 94,535 characters and 108,370 as written in the config, cost 44.6 s of CPU across its four statements. Shorter
+# patterns parse faster, but each is one more scan of every text the collector masks. At this limit the list takes 36
+# patterns, about 4.8 s to parse and 15.7 ms of Go's regexp a 2,480-character reply; at 6,000 it took 24, 6.2 s and
+# 11.8 ms, and a whole profile's config then came closer to 10 s on a loaded host (decisions.md, #1328).
+PORTABLE_LIMIT = 4000
+
+
+def portable_patterns(terms: list[str] | None = None, limit: int = PORTABLE_LIMIT) -> list[str]:
+    """portable_pattern() cut into patterns of at most `limit` characters, each over a run of the list taken longest
+    term first, for the collector to apply one after another, each twice (#1328).
+
+    Applied in turn, a pattern masks its terms before a later one sees the text, so a term must not lose to a shorter
+    one in an earlier pass. Longest first, a pattern runs before every pattern of shorter terms: a longer term that
+    holds a shorter one ("m o t h e r f u c k e r" holds a spelt-out "f u c k e r", "a$$hole" holds a word after the
+    "$") is masked whole before the shorter is tried. At a start where the single alternation can match two terms, it
+    takes the longer, since it lists the longest first, and so does the cut. Terms of one length are taken in
+    alphabetical order, so a pattern gathers terms that share their leading pieces, which _factored() writes once;
+    inside each pattern the terms keep the list's order, as portable_pattern() has them. The cut masks what
+    portable_pattern() masks on the abuse set, the slang fixture, the stage texts and the hard negatives, text for
+    text, and on generated spellings it leaves no term that portable_pattern() masks (the collector split test of
+    #1328 holds both)."""
+    terms = _ordered(corpus.terms("proposed") if terms is None else terms)
+    rank = {t: i for i, t in enumerate(terms)}
+    # Each alternative on its own (0: spelt out, 1: as written), by the length of the text it matches: a spelt-out
+    # term of n letters is 2n - 1 characters, so it runs before a phrase as long as the term ("f u" before "fuk"),
+    # where the single alternation, which tries every spelt-out term first, would also take it.
+    items = [(t, 1) for t in terms] + [(t, 0) for t in terms if len(_alternatives(t)) > 1]
+
+    def length(item: tuple[str, int]) -> int:
+        return len(item[0]) if item[1] else 2 * len(fold(item[0])[0].strip()) - 1
+
+    def pattern(run: list[tuple[str, int]]) -> str:
+        kinds = [[_alternatives(t)[0 if kind else 1] for t, kind in sorted(run, key=lambda i: rank[i[0]]) if kind == k]
+                 for k in (0, 1)]
+        parts = [_factored(seqs) for seqs in kinds if seqs]
+        return _portable(parts[0] if len(parts) == 1 else "(?:" + "|".join(parts) + ")")
+
+    # Two terms of one length where each is the other turned around ("fuckass" and "assfuck") go in one pattern: a term
+    # spelt out twice holds the other where the two meet, starting later, and only the single alternation's leftmost
+    # match takes the first one whole.
+    def turned(item: tuple[str, int]) -> tuple:
+        letters = fold(item[0])[0].replace(" ", "")
+        return item[1], length(item), min(letters[i:] + letters[:i] for i in range(len(letters)))
+
+    blocks: dict[tuple, list[tuple[str, int]]] = {}
+    for item in sorted(items, key=lambda i: (-length(i), i[1], fold(i[0])[0], rank[i[0]])):
+        blocks.setdefault(turned(item), []).append(item)
+    runs: list[list[tuple[str, int]]] = [[]]
+    for block in blocks.values():
+        if runs[-1] and len(pattern(runs[-1] + block)) > limit:
+            runs.append([])
+        runs[-1].extend(block)
+    out = [pattern(run) for run in runs if run]
+    if any(len(p) > limit for p in out):
+        raise ValueError(f"a single term's pattern is longer than {limit} characters; raise the limit")
+    return out
 
 
 def _trailing_edge() -> str:

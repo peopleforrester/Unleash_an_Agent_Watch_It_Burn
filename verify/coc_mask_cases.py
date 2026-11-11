@@ -3,22 +3,25 @@
 """One source for both halves of the mask's tests.
 
 transform/coc_mask in gitops/otel-collector/values.yaml runs replace_all_patterns with the spike's term floor in its
-RE2 form, docs/research/2026-11-09-coc-floor/floor.py's portable_pattern(). The pattern is written into the collector
-config three times over, so each layer's escaping is undone here in the reverse order a cluster applies it:
+RE2 form, cut into short patterns (docs/research/2026-11-09-coc-floor/floor.py's portable_patterns(), #1328): the
+collector parses an OTTL string in time that grows with the square of its length, and portable_pattern() whole cost
+about 46 s of CPU at every start. Each pattern is written into the collector config through three layers of escaping,
+undone here in the reverse order a cluster applies them:
 
   YAML       the statement is a single-quoted scalar; the pattern has no quote, so YAML changes nothing
   confmap    the collector reads `$$` as a literal `$` (a bare `$` can open a ${...} reference)
   OTTL       the pattern is a double-quoted string literal, where `\\\\` is one backslash
   RE2        what Go's regexp compiles
 
-Run as a script it prints the statement to paste into values.yaml after the term list changes:
-`python3 verify/coc_mask_cases.py`. test_collector_coc_mask.py fails until the two agree.
+The copies registry's `write` (coc_pattern_copies) writes the statements into values.yaml after the list changes, and
+test_collector_coc_mask.py fails until the config and statements() agree. Run as a script, this prints them.
 
-test_collector_coc_mask.py checks the statement and its placement offline and applies the decoded pattern with
+test_collector_coc_mask.py checks the statements and their placement offline and applies the decoded patterns with
 Python's re; test_collector_coc_mask_e2e.py sends the same texts through the pinned otelcol-contrib.
 """
 from __future__ import annotations
 
+import functools
 import importlib.util
 import pathlib
 import sys
@@ -37,9 +40,24 @@ sys.path.insert(0, str(SPIKE))
 import floor  # noqa: E402
 
 
-def pattern() -> str:
-    """The pattern the collector must run: the spike's portable_pattern() on its proposed list."""
-    return floor.portable_pattern()
+def patterns(terms: list[str] | None = None) -> list[str]:
+    """The patterns the collector must run, in order: the spike's portable_patterns() on its proposed list. Building
+    them takes about 1.5 s, so the proposed list's are built once."""
+    return list(_proposed()) if terms is None else floor.portable_patterns(terms)
+
+
+@functools.lru_cache(maxsize=1)
+def _proposed() -> tuple[str, ...]:
+    return tuple(floor.portable_patterns())
+
+
+def collector_patterns(terms: list[str] | None = None) -> str:
+    """patterns() as one text, a line each: the form the copies registry (coc_pattern_copies) holds the collector's
+    copy to."""
+    out = patterns(terms)
+    if any("\n" in p for p in out):
+        raise SystemExit("a term pattern holds a newline; collector_patterns() writes one a line")
+    return "\n".join(out)
 
 
 def encode(regex: str) -> str:
@@ -54,8 +72,16 @@ def decode(written: str) -> str:
     return written.replace("$$", "$").replace("\\\\", "\\")
 
 
-def replace_statement() -> str:
-    return f'replace_all_patterns({CACHE}, "value", "{encode(pattern())}", "{REPLACEMENT}")'
+def replace_statement(regex: str) -> str:
+    return f'replace_all_patterns({CACHE}, "value", "{encode(regex)}", "{REPLACEMENT}")'
+
+
+# The second pass of each pattern runs only where the conversation holds a "[redacted]" (#1328), which every match of a
+# first pass writes. A first pass that matched nothing leaves the text as it was, and the second would match nothing
+# either, so the condition changes no output (a "[redacted]" from elsewhere only runs a pass that finds nothing). The
+# conversation holds no term in nearly every span, and there the condition halves what the mask costs. `\\[` in the
+# OTTL string is the RE2 `\[`.
+SECOND_PASS = ' where IsMatch(String(cache["coc"]), "\\\\[redacted\\\\]")'
 
 
 def keep_statement() -> str:
@@ -63,18 +89,28 @@ def keep_statement() -> str:
 
 
 def statements() -> list[str]:
-    """Each context's statements: copy the attributes to the cache, keep the conversation, mask twice (an edge is
-    consumed, so two terms one separator apart take two passes), merge the masked copy back."""
-    return [f"set({CACHE}, attributes)", keep_statement(), replace_statement(), replace_statement(),
-            f'merge_maps(attributes, {CACHE}, "upsert")']
+    """Each context's statements: copy the attributes to the cache, keep the conversation, mask with each pattern in
+    turn, twice (an edge is consumed, so two terms one separator apart take two passes; the second only where something
+    is masked, SECOND_PASS), merge the masked copy back."""
+    return ([f"set({CACHE}, attributes)", keep_statement()]
+            + [s for regex in patterns() for s in (replace_statement(regex), replace_statement(regex) + SECOND_PASS)]
+            + [f'merge_maps(attributes, {CACHE}, "upsert")'])
 
 
 def mask(text: str) -> str:
-    """The mask as RE2 applies it, in Python: the spike's portable_mask with the collector's replacement. re.ASCII has
-    the pattern's (?i) fold ASCII letters alone. Python's own folding reads a dotless i as i and RE2's does not, so
-    without it a pattern that lacks the dotless i would pass here and miss it in the collector (#1301)."""
+    """The mask as the collector applies it, in Python: the spike's portable_mask (each pattern twice) with each
+    pattern in turn. re.ASCII has the patterns' (?i) fold ASCII letters alone. Python's own folding reads a dotless i
+    as i and RE2's does not, so without it a pattern that lacks the dotless i would pass here and miss it in the
+    collector (#1301)."""
+    for regex in _compiled():
+        text = floor.portable_mask(text, regex)
+    return text
+
+
+@functools.lru_cache(maxsize=1)
+def _compiled() -> tuple:
     import re
-    return floor.portable_mask(text, re.compile(pattern(), re.ASCII))
+    return tuple(re.compile(regex, re.ASCII) for regex in patterns())
 
 
 def hc666_ticket() -> str:
@@ -86,6 +122,21 @@ def hc666_ticket() -> str:
     if not ticket or "IGNORE ALL PREVIOUS INSTRUCTIONS" not in ticket.get("body", ""):
         raise SystemExit("gitops/ai-layer/ticket_site.py has no HC-666 ticket with its injection; the case reads it")
     return ticket["body"]
+
+
+SLANG = REPO / "gitops/ai-layer/guard-proxy/conformance/coc_floor/slang-set.rot13.tsv"  # guard-proxy-agenticburn#84's
+
+
+def corpora() -> dict[str, list[str]]:
+    """The four corpora #1316 held the collector's form to, text for text against the folded floor: the spike's abuse
+    set, the pinned guard-proxy's slang fixture, the stage texts and the hard negatives."""
+    import codecs
+    if not SLANG.is_file():
+        raise SystemExit(f"FAIL {SLANG.relative_to(REPO)} is missing; run bash verify/ensure-submodules.sh")
+    slang = [codecs.decode(line.split("\t", 1)[1], "rot13") for line in SLANG.read_text(encoding="utf-8").splitlines()
+             if line.strip() and not line.startswith("#") and "\t" in line]
+    return {"abuse set": [t for _, t in floor.corpus.abuse_set()], "slang fixture": slang,
+            "stage texts": [t for _, t in floor.corpus.stage_texts()], "hard negatives": floor.corpus.hard_negatives()}
 
 
 # Texts that must come out masked, one term each kind of spelling the RE2 form reads without folding. Terms from the
@@ -114,4 +165,4 @@ def term_cases() -> list[tuple[str, str]]:
 
 
 if __name__ == "__main__":
-    print(replace_statement())
+    print("\n".join(statements()))

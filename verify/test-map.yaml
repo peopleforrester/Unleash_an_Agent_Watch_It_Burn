@@ -1870,6 +1870,7 @@ rules:
       - verify/test_coc_guardrail_tf.py
   - name: test_coc_pattern_copies.py
     paths:
+      - .gitmodules
       - challenges/PROMPT-CATALOG.md
       - docs/research/2026-11-09-coc-floor
       - docs/research/2026-11-09-coc-floor/**
@@ -1878,8 +1879,14 @@ rules:
       - gitops/**
       - gitops/**/*
       - gitops/**/*/**
+      - images/llm-guard
+      - images/llm-guard/**
+      - verify/artifact-cache.sh
+      - verify/artifact_cache.py
       - verify/coc_mask_cases.py
       - verify/coc_pattern_copies.py
+      - verify/ensure-submodules.sh
+      - verify/git_mirror.py
       - verify/scope-map.yaml
       - verify/topic_cases.py
     tests:
@@ -1947,10 +1954,13 @@ rules:
       - verify/test_collector_backends.py
   - name: test_collector_coc_mask.py
     paths:
+      - .gitmodules
       - challenges/PROMPT-CATALOG.md
       - docs/research/2026-11-09-coc-floor
       - docs/research/2026-11-09-coc-floor/**
       - facilitation/kubecon-na-2026/fallback/prompts.yaml
+      - gitops/ai-layer/guard-proxy
+      - gitops/ai-layer/guard-proxy/**
       - gitops/ai-layer/resources.yaml
       - gitops/ai-layer/server.py
       - gitops/ai-layer/ticket_site.py
@@ -1963,6 +1973,8 @@ rules:
       - gitops/otel-collector
       - gitops/otel-collector/**
       - gitops/workshop-agent/agent.yaml
+      - images/llm-guard
+      - images/llm-guard/**
       - verify/.tools/bin/otelcol-contrib
       - verify/.tools/bin/otelcol-contrib/**
       - verify/artifact-cache.sh
@@ -1970,11 +1982,39 @@ rules:
       - verify/coc_mask_cases.py
       - verify/collector_render.py
       - verify/e2e-tools.lock
+      - verify/ensure-submodules.sh
       - verify/fetch-e2e-tools.sh
+      - verify/git_mirror.py
       - verify/test_collector_coc_mask_e2e.py
       - verify/topic_cases.py
     tests:
       - verify/test_collector_coc_mask.py
+  - name: test_collector_coc_split.py
+    paths:
+      - .gitmodules
+      - challenges/PROMPT-CATALOG.md
+      - docs/research/2026-11-09-coc-floor
+      - docs/research/2026-11-09-coc-floor/**
+      - facilitation/kubecon-na-2026/fallback/prompts.yaml
+      - gitops/ai-layer/guard-proxy
+      - gitops/ai-layer/guard-proxy/**
+      - gitops/ai-layer/resources.yaml
+      - gitops/ai-layer/server.py
+      - gitops/ai-layer/ticket_site.py
+      - gitops/ai-layer/tool_audit.py
+      - gitops/ai-layer/web/kubecon.html
+      - gitops/ai-layer/workshop-mcp-server.py
+      - gitops/workshop-agent/agent.yaml
+      - images/llm-guard
+      - images/llm-guard/**
+      - verify/artifact-cache.sh
+      - verify/artifact_cache.py
+      - verify/coc_mask_cases.py
+      - verify/ensure-submodules.sh
+      - verify/git_mirror.py
+      - verify/topic_cases.py
+    tests:
+      - verify/test_collector_coc_split.py
   - name: test_collector_config.py
     paths:
       - gitops/ai-layer/web/active-skin.js
