@@ -51812,7 +51812,11 @@ the 2,201 string literals of the probes and servers.
   shared leading pieces: the spelt-out alternatives come first, then the others, so "f u c k" is masked whole and not
   as the phrase "f u". It is 94,535 characters. Its trailing edge reads the dotless i and its `ı` escape as a
   letter. Without that, a shorter term ending before a dotless i won over the longer one ("shitt" before "ıest").
-  The emoji's JSON escape is its surrogate pair. On the abuse set, slang fixture, stage texts and hard negatives its
+  The dotless i goes inside its letter's class, `(?:[i1ı]|\u0131)`, not beside it. `test_coc_pattern_linear.py`
+  times each copy in Python's `re`, whose case folding reads `ı` as `i`. Beside the class, a run of `i` could be read
+  two ways at each character. With the list's first term starting with i, a 22-character run then took 537 ms and a
+  1,000-character one did not end; now 4,000 take 0.3 ms. RE2 never folded `ı` to `i`, so the collector was not
+  exposed. The emoji's JSON escape is its surrogate pair. On the abuse set, slang fixture, stage texts and hard negatives its
   mask is the folded floor's text for text. On 68,669 generated texts, each term and pairs of terms, its yes or no
   agrees with the floor on all. On 509 of them a mask ends one letter early or late, and on none does a term the
   floor finds survive the collector's two passes.
