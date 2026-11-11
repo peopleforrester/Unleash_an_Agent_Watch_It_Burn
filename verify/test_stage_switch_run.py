@@ -31,7 +31,7 @@ import stage_switch_run as ssr  # noqa: E402
 
 PRIVATE, COMMUNITY = "watch-it-burn-private", "watch-it-burn-community"
 CONTEXT_OF = {"private": PRIVATE, "community": COMMUNITY}
-TALK_ORDER = ["guardrails-on", "guard-agency-on", "guard-input-on", "guard-mcp-on"]
+TALK_ORDER = ["guardrails-kates-on", "guardrails-agency-on", "guardrails-input-on", "guardrails-mcp-on"]
 
 failures: list[str] = []
 
@@ -74,13 +74,13 @@ class FakeWorld:
     def _apply(self, name: str) -> None:
         on = name.endswith("-on")
         fields = {
-            "guardrails-on": ssc.SWITCHES["guardrails-on"],
-            "guard-agency-on": ssc.SWITCHES["guard-agency-on"],
-            "guard-input-on": ssc.SWITCHES["guard-input-on"],
-            "guard-mcp-on": ssc.SWITCHES["guard-mcp-on"],
-            # guards-off: the AI guards and C7; guardrails-off: the four guardrails and, with the broad Role, agency.
-            "guards-off": (*ssc.SWITCHES["guard-input-on"], *ssc.SWITCHES["guard-mcp-on"], *ssr.CLOSE_ALSO),
-            "guardrails-off": (*ssc.SWITCHES["guardrails-on"], *ssc.SWITCHES["guard-agency-on"]),
+            "guardrails-kates-on": ssc.SWITCHES["guardrails-kates-on"],
+            "guardrails-agency-on": ssc.SWITCHES["guardrails-agency-on"],
+            "guardrails-input-on": ssc.SWITCHES["guardrails-input-on"],
+            "guardrails-mcp-on": ssc.SWITCHES["guardrails-mcp-on"],
+            # guardrails-all-off: every switch's fields, output and budget, never topic (#1346); guardrails-topic-off: topic.
+            "guardrails-all-off": (*(f for fs in ssc.SWITCHES.values() for f in fs), ("ai", "output"), ("ai", "budget")),
+            "guardrails-topic-off": (("ai", "topic"),),
         }[name]
         for cluster in self.reach[name]:
             for section, key in fields:
@@ -165,15 +165,18 @@ def held_by_us(world: FakeWorld) -> bool:
 # --- the commands, held to the probe's and the terminal's ------------------------------------------------------
 
 check(list(ssr.SWITCHES) == TALK_ORDER, "the switches run in talk order, the judge's own list")
-check(ssr.CLOSE == ("guards-off", "guardrails-off"), "the run closes with guards-off, then guardrails-off")
-check(ssr.terminal_command("guardrails-on") == kp.GUARDRAILS_ON
-      and ssr.terminal_command("guardrails-off") == kp.GUARDRAILS_OFF,
-      "guardrails-on and guardrails-off are the probe's own terminal commands")
+check(ssr.CLOSE == ("guardrails-all-off", "guardrails-topic-off"), "the run closes with guardrails-all-off, then guardrails-topic-off")
+check(ssr.terminal_command("guardrails-kates-on") == kp.GUARDRAILS_ON
+      and ssr.terminal_command("guardrails-kates-off") == kp.GUARDRAILS_OFF,
+      "guardrails-kates-on and guardrails-kates-off are the probe's own terminal commands")
 check(all(ssr.terminal_command(n)[:len(kp.TERMINAL_EXEC)] == kp.TERMINAL_EXEC for n in [*TALK_ORDER, *ssr.CLOSE]),
       "every command runs through the probe's TERMINAL_EXEC")
 for entry in ("gitops/ai-layer/web-terminal/entrypoint.sh", "images/web-terminal/entrypoint.sh"):
     text = (REPO / entry).read_text(encoding="utf-8")
-    missing = [n for n in [*TALK_ORDER, *ssr.CLOSE] if f'cat > "$HOME/{n}" <<' not in text]
+    # guardrails-<name>-on and -off are written by one loop over the names (#1346); test_guardrails_names.py runs it.
+    loop = re.search(r"^for g in ([a-z ]+); do\n  for st in on off; do\n", text, re.M)
+    names = {f"guardrails-{g}-{st}" for g in (loop.group(1).split() if loop else []) for st in ("on", "off")}
+    missing = [n for n in [*TALK_ORDER, *ssr.CLOSE] if n not in names]
     check(not missing, f"{entry} writes every command the run types into /home/student (missing: {missing})")
 src = (REPO / "verify/stage_switch_run.py").read_text(encoding="utf-8")
 check("terminal-auth" not in src.replace("agent/terminal-auth Secret: it runs", "")
@@ -181,7 +184,7 @@ check("terminal-auth" not in src.replace("agent/terminal-auth Secret: it runs", 
       "the command never names the presenter terminal login's Secret beyond saying it does not touch it")
 check(ssr.CLOSED_FIELDS[-3:] == (("ai", "output"), ("ai", "budget"), ("ai", "topic"))
       and all(f in ssr.CLOSED_FIELDS for fs in ssc.SWITCHES.values() for f in fs),
-      "the as-found fields are every switch's fields plus the AI guards guards-off turns off")
+      "the as-found fields are every switch's fields plus the AI guards guardrails-all-off and guardrails-topic-off turn off")
 
 # --- no context: nothing is run ---------------------------------------------------------------------------------
 
@@ -202,7 +205,7 @@ code, text = go(w)
 r = rows(text)
 check(code == 0 and "STAGE SWITCH CHECK GREEN" in text, f"all four switches on both clusters: exit 0, GREEN ({code})")
 check(w.terminals() == [*TALK_ORDER, *ssr.CLOSE],
-      f"the terminal ran the switches in talk order, then guards-off and guardrails-off ({w.terminals()})")
+      f"the terminal ran the switches in talk order, then guardrails-all-off and guardrails-topic-off ({w.terminals()})")
 check(all(r.get((s, c)) == "PASS" for s in TALK_ORDER for c in ssc.CLUSTERS),
       "PASS is printed per switch per cluster")
 check(all(r.get((s, c)) == "PASS" for s in ("start-state", "as-found") for c in ssc.CLUSTERS),
@@ -224,7 +227,7 @@ check(sorted(e[1] for e in w.events if e[0] == "lease-create") == [COMMUNITY, PR
 # After each terminal command, the cache is waited out before both clusters are read.
 ok = True
 for i, e in enumerate(w.events):
-    if e[0] == "terminal" and e[1] != "guards-off":
+    if e[0] == "terminal" and e[1] != "guardrails-all-off":
         nxt = [x for x in w.events[i + 1:] if x[0] in ("sleep", "fetch", "terminal")]
         if not nxt or nxt[0][0] != "sleep" or nxt[0][1] < 5.0:
             ok = False
@@ -240,14 +243,14 @@ r = rows(text)
 check(code == 1 and "STAGE SWITCH CHECK RED" in text, "without agency_scoped the run is RED, exit 1")
 check(r.get(("start", "private")) == "PASS" and r.get(("start", "community")) == "PASS",
       "a field the pinned guard-proxy does not send yet does not stop the run from starting")
-check(all(r.get(("guard-agency-on", c)) == "FAIL" for c in ssc.CLUSTERS)
-      and all(r.get((s, c)) == "PASS" for s in ("guardrails-on", "guard-input-on", "guard-mcp-on")
+check(all(r.get(("guardrails-agency-on", c)) == "FAIL" for c in ssc.CLUSTERS)
+      and all(r.get((s, c)) == "PASS" for s in ("guardrails-kates-on", "guardrails-input-on", "guardrails-mcp-on")
               for c in ssc.CLUSTERS),
-      "guard-agency-on is FAIL on both clusters, the other three PASS")
+      "guardrails-agency-on is FAIL on both clusters, the other three PASS")
 check(all(r.get(("start-state", c)) == "FAIL" and r.get(("as-found", c)) == "PASS" for c in ssc.CLUSTERS),
       "the start state is FAIL (agency_scoped cannot be read as off) while as-found is PASS")
 m = re.search(r"^waiting on #1132 .*$", text, re.M)
-check(bool(m) and "guard-agency-on on private, community" in m.group(0)
+check(bool(m) and "guardrails-agency-on on private, community" in m.group(0)
       and "start-state on private, community" in m.group(0),
       f"the summary names what waits on #1132, per cluster ({m.group(0) if m else 'no line'})")
 check(w.terminals() == [*TALK_ORDER, *ssr.CLOSE] and held_by_us(w), "the closing pair still ran, under the lock")
@@ -255,49 +258,49 @@ check(w.terminals() == [*TALK_ORDER, *ssr.CLOSE] and held_by_us(w), "the closing
 # --- a switch that does not reach the room's cluster ------------------------------------------------------------
 
 w = FakeWorld()
-w.reach["guard-input-on"] = ("private",)
-w.rc["guard-input-on"] = 1
+w.reach["guardrails-input-on"] = ("private",)
+w.rc["guardrails-input-on"] = 1
 code, text = go(w)
 r = rows(text)
-check(code == 1 and r.get(("guard-input-on", "private")) == "PASS" and r.get(("guard-input-on", "community")) == "FAIL",
-      "guard-input-on reaching the private cluster alone is PASS there and FAIL on community")
-check(r.get(("guard-input-on", "terminal")) == "FAIL" and "exited 1" in text,
+check(code == 1 and r.get(("guardrails-input-on", "private")) == "PASS" and r.get(("guardrails-input-on", "community")) == "FAIL",
+      "guardrails-input-on reaching the private cluster alone is PASS there and FAIL on community")
+check(r.get(("guardrails-input-on", "terminal")) == "FAIL" and "exited 1" in text,
       "the terminal's non-zero exit is a FAIL line of its own")
-check(w.terminals() == [*TALK_ORDER, *ssr.CLOSE], "the run goes on to guard-mcp-on, then closes")
+check(w.terminals() == [*TALK_ORDER, *ssr.CLOSE], "the run goes on to guardrails-mcp-on, then closes")
 check(all(r.get(("start-state", c)) == "PASS" for c in ssc.CLUSTERS), "and both clusters end at the start state")
 
 # --- a switch that raises -----------------------------------------------------------------------------------------
 
 w = FakeWorld()
-w.raise_on["guard-agency-on"] = subprocess.TimeoutExpired(["kubectl"], ssr.TERMINAL_TIMEOUT_S)
+w.raise_on["guardrails-agency-on"] = subprocess.TimeoutExpired(["kubectl"], ssr.TERMINAL_TIMEOUT_S)
 code, text = go(w)
 r = rows(text)
-check(code == 1 and r.get(("guard-agency-on", "terminal")) == "FAIL" and "raised TimeoutExpired" in text,
+check(code == 1 and r.get(("guardrails-agency-on", "terminal")) == "FAIL" and "raised TimeoutExpired" in text,
       "a switch whose kubectl times out is a FAIL naming the raise")
-check(all(r.get(("guard-agency-on", c)) == "FAIL" for c in ssc.CLUSTERS),
+check(all(r.get(("guardrails-agency-on", c)) == "FAIL" for c in ssc.CLUSTERS),
       "and the switch, never run, is FAIL on both clusters")
 check(w.terminals() == [*TALK_ORDER, *ssr.CLOSE] and held_by_us(w),
       "the next switches and the closing pair still run, under the lock")
 
-# --- a failing guards-off: guardrails-off still runs ------------------------------------------------------------
+# --- a failing guardrails-all-off: guardrails-topic-off still runs ----------------------------------------------------
 
 w = FakeWorld()
-w.raise_on["guards-off"] = RuntimeError("exec failed")
+w.raise_on["guardrails-all-off"] = RuntimeError("exec failed")
 code, text = go(w)
 r = rows(text)
-check(w.terminals()[-2:] == list(ssr.CLOSE) and r.get(("guards-off", "terminal")) == "FAIL",
-      "a guards-off that raises is a FAIL, and guardrails-off still runs")
+check(w.terminals()[-2:] == list(ssr.CLOSE) and r.get(("guardrails-all-off", "terminal")) == "FAIL",
+      "a guardrails-all-off that raises is a FAIL, and guardrails-topic-off still runs")
 check(r.get(("start-state", "community")) == "FAIL" and r.get(("as-found", "community")) == "FAIL" and code == 1,
-      "the AI guards left on fail the start state and as-found")
+      "the guards left on fail the start state and as-found")
 
 # --- interrupted mid-run: ^C ----------------------------------------------------------------------------------------
 
 w = FakeWorld()
-w.raise_on["guard-input-on"] = KeyboardInterrupt()
+w.raise_on["guardrails-input-on"] = KeyboardInterrupt()
 code, text = go(w)
 check(code == ssr.INTERRUPTED_EXIT and "STAGE SWITCH CHECK INTERRUPTED" in text, f"a ^C exits 130 ({code})")
-check(w.terminals() == ["guardrails-on", "guard-agency-on", "guard-input-on", *ssr.CLOSE],
-      f"after a ^C during guard-input-on no other switch runs, and the closing pair does ({w.terminals()})")
+check(w.terminals() == ["guardrails-kates-on", "guardrails-agency-on", "guardrails-input-on", *ssr.CLOSE],
+      f"after a ^C during guardrails-input-on no other switch runs, and the closing pair does ({w.terminals()})")
 check(held_by_us(w) and not w.leases, "the closing pair ran under the lock, and the lock was released after")
 r = rows(text)
 check(all(r.get(("start-state", c)) == "PASS" for c in ssc.CLUSTERS), "both clusters end at the start state")
@@ -305,7 +308,7 @@ check(all(r.get(("start-state", c)) == "PASS" for c in ssc.CLUSTERS), "both clus
 # --- a SIGTERM during the switches, and a ^C during the closing pair ---------------------------------------------
 
 w = FakeWorld()
-w.during["guard-mcp-on"] = lambda: os.kill(os.getpid(), signal.SIGTERM)
+w.during["guardrails-mcp-on"] = lambda: os.kill(os.getpid(), signal.SIGTERM)
 code, text = go(w)
 check(code == 128 + signal.SIGTERM and w.terminals() == [*TALK_ORDER, *ssr.CLOSE] and not w.leases,
       f"a SIGTERM unwinds like a ^C: the closing pair runs, the lock is released, exit 143 ({code})")
@@ -313,7 +316,7 @@ check(signal.getsignal(signal.SIGTERM) == signal.SIG_DFL,
       "main puts the SIGTERM handler back after the run")
 
 w = FakeWorld()
-w.during["guards-off"] = lambda: os.kill(os.getpid(), signal.SIGINT)
+w.during["guardrails-all-off"] = lambda: os.kill(os.getpid(), signal.SIGINT)
 # The test owns the handler it expects back. A non-interactive shell starts a background job (`cmd &`, how a run
 # keeps the suite's output in a log) with SIGINT ignored, Python then keeps SIG_IGN instead of installing its own
 # handler, and _close puts back what it found; so the check below is pinned to the default handler here rather than
@@ -322,7 +325,7 @@ w.during["guards-off"] = lambda: os.kill(os.getpid(), signal.SIGINT)
 signal.signal(signal.SIGINT, signal.default_int_handler)
 code, text = go(w)
 check(w.terminals() == [*TALK_ORDER, *ssr.CLOSE] and code == ssr.INTERRUPTED_EXIT and "held" in text,
-      "a ^C during guards-off is held until guardrails-off has run too, then ends the run")
+      "a ^C during guardrails-all-off is held until guardrails-topic-off has run too, then ends the run")
 check(signal.getsignal(signal.SIGINT) is signal.default_int_handler, "the ^C handler is put back after the close")
 
 # --- the lock ------------------------------------------------------------------------------------------------------
@@ -346,7 +349,7 @@ check(not any(e[0] == "lease-create" and e[1] == COMMUNITY for e in w.events),
       "an unlinked private cluster holds its own lock only (guard_lease's rule)")
 
 w = FakeWorld()
-w.during["guardrails-off"] = lambda: setattr(w.apis[COMMUNITY], "lease", None)
+w.during["guardrails-topic-off"] = lambda: setattr(w.apis[COMMUNITY], "lease", None)
 code, text = go(w)
 r = rows(text)
 check(code == 1 and r.get(("guard-lock", "-")) == "FAIL", "a lock lost during the run is a FAIL line")
@@ -365,7 +368,7 @@ for section, key in ssr.CLOSE_ALSO:
     w.controls["private"][section][key] = True
     code, _ = go(w)
     check(code == ssr.NOT_AT_START_EXIT and not w.terminals(),
-          f"{section}.{key} on at the start stops the run too: guards-off would turn it off")
+          f"{section}.{key} on at the start stops the run too: guardrails-all-off would turn it off")
 
 w = FakeWorld()
 w.controls["private"]["infra"]["falco"] = False

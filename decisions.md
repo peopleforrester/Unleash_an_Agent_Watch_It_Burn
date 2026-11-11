@@ -53047,3 +53047,76 @@ verify/run-tests.sh`: 187 of 455 offline tests, `ALL OFFLINE RENDER-GATE TESTS G
 **Live, read-only, 13:03Z.** `python3 verify/stage_traces.py check --profile accen-dev --stamp 202611110035` read
 `STAGE TRACES GREEN`, and `stage_views.py views --list` read all seven `WIB stage` views `OK` with nothing to write.
 The change itself is prose in `facilitation/` and `decisions.md`, which no cluster runs, so there is no other live check.
+
+## 2026-11-11 · #1346 · run 20403 · Every stage switch is `guardrails-<name>-on` or `-off`, and every one reaches both KubeCon clusters
+
+Michael, 2026-11-11: the private terminal's switches followed four patterns (`guardrails-on`, `guard-agency-on`,
+`guards-on`, `guard-<one>-on`). There is now one: `guardrails-<name>-on` and `guardrails-<name>-off`, written by one
+loop in `gitops/ai-layer/web-terminal/entrypoint.sh` (and its `images/` twin), each a call to `_gr` in `~/.guardlib`.
+
+| Switch | Does | Through |
+|---|---|---|
+| `kates` | RBAC, Kyverno admission, KubeArmor, egress NetworkPolicy | `_guardrails`, as `guardrails-on` did; takes the seconds between guardrails |
+| `agency` | least privilege: `c6-least-privilege-role.yaml` on, `c5-scoped-role.yaml` off | `_both _apply` |
+| `input` | the block-list and the injection classifier | `_both _toggle` |
+| `output` | the output guard | `_both _toggle` |
+| `mcp` | Challenge 4's rule, each cluster by its own control | `_both _mcp`, then `_c7wait` on; takes the bound |
+| `budget` | the spend budget | `_both _toggle` |
+| `topic` | the on-topic guard, read back for the `topic` key | `_both _topic` (new) |
+| `ai` | input, output, mcp, budget | each in turn |
+| `all` | kates, agency and ai | each in turn; off takes agency off before kates |
+
+**Each ends on `/controls`.** After the switch, `_state` waits 6 seconds (guard-proxy caches `/controls` for 5,
+`_CONTROLS_TTL`), reads `/controls` from this cluster's guard-proxy and from the peer's through the Service proxy the
+`guardrails-switch` grant already holds, and prints one line per cluster: its host and each of kates, agency, input,
+output, mcp, budget and topic as on, off, partly on (naming what is off) or n/a. A group the switch changed that does
+not read the new state there, or a cluster that could not be read, prints a ⚠️ line and makes the switch exit 1, so
+the stage-switch check's `terminal` line and the presenter both see it.
+
+**What behaves differently from the old names.** `output`, `budget` and `topic` used to switch the cluster whose
+terminal ran them; they now switch both, as `input`, `mcp` and `agency` already did (#1132). `ai` and `all` leave the
+on-topic guard alone in both directions, as the issue's table says, where `guards-off` also turned it off; so the
+reset to the start state is `guardrails-all-off`, then `guardrails-topic-off`, and the run-of-show, /kubecon and
+`stage_switch_run.py`'s closing pair say that.
+
+**The old names stay, unchanged, through the delivery on 2026-11-12.** The presenters rehearse today and deliver
+tomorrow, the deck's DO notes change on rounds-agenticburn (rounds-agenticburn#171, filed by Michael and linked on the
+issue), and the 2-hour lab's pages and challenge texts (`lab.html`, `brief.html`, `links.html`, `challenges/`) name
+`guard-output-on` and the rest for students. A hand that types an old name on stage gets the switch it always gave.
+`guards-status` names only the new pattern, and the run-of-show says the old names still work and that records before
+2026-11-11 use them. Removing them, and moving the 2-hour lab's pages to the new names, is a follow-up for after the
+event. `guard-rbac-on`, `guard-admission-on` (the 2-hour lab's own fixes), `finale-cap-on`, `finale-cap-off` and
+`cost-watch` are not guardrail switches and keep their names.
+
+**Renamed with them.** `verify/kubecon_probe.py` runs `guardrails-kates-on`, `-agency-on`, `-input-on`, `-mcp-on` and
+their `-off` in the private terminal, and its beat keys carry the new names (`guardrails-all-off` is the admin run's
+end); `verify/stage_traces.py`, which builds its seeds from the probe's beats, follows. `verify/stage_switch_check.py`
+judges `guardrails-kates-on`, `guardrails-agency-on`, `guardrails-input-on` and `guardrails-mcp-on`, and
+`verify/stage_switch_run.py` closes with `guardrails-all-off` and `guardrails-topic-off`. The run-of-show is renamed
+from its first instruction on, with a table of the switches; its Probe record and the 2026-11-09 stage-switch record
+keep the names typed then. Comments elsewhere that name an old command (`gitops/`, `policies/`, fleet scripts,
+`desk_ticket_live.py`, `guard_lease.py`) still name a command that exists, and were left.
+
+**Tests.** New, `verify/test_guardrails_names.py`: the entrypoint's own `.guardlib`, `.controls.py`, `.c7rule.py`,
+`.evilpatch.py` and loop, with a kubectl that plays both clusters and answers `/toggle` and `/controls`. All eighteen
+switches, each from the opposite state: exit 0, the switched groups read the new state on both clusters and no other
+group moves, both clusters named, a `$ ` line for every kubectl in the order run, and the last two lines both clusters'
+`/controls`. Then a peer that is down, a peer whose `/controls` is stale, an unlinked cluster, bad arguments, the old
+names still written, the twin byte-identical, and a self-check that a reader not held to the new state is caught. Its
+109 checks pass. Changed and passing alone: `test_kubecon_probe.py`, `test_stage_switch_check.py`,
+`test_stage_switch_run.py`, `test_stage_switch_night_before.py`, `test_stage_traces.py`, `test_instructor_brief.py`,
+`test_kubecon_c3_recipe_block.py`, `test_kubecon_seg4_flow.py`, `test_public_images.py`,
+`test_ros_deployments_removed_row.py`, `test_ros_seg3_switch_step.py`, `test_ros_seg4_flow.py`,
+`test_trace_walkthrough_view.py`, `test_coc_floor_probes_live_checks.py`, `test_guardrails_switch.py` and
+`test_guard_commands_echo.py`. The other readers of the changed files that name a switch pass alone too, apart from
+those that call `git ls-files`, which this run's checkout (hecaton's doc lane, no git) cannot answer. The scope-map
+entry for the new test is `scope_tests.py`'s own `extract`, run over the file tree because the doc lane has no git,
+and `verify/test-map.yaml` was written from the map by its own `test_map`. The scoped suites are left to the gate.
+
+**Not yet run on a cluster.** This change touches what the clusters run (`gitops/ai-layer/web-terminal/`), and the new
+commands are on the terminals only once hecaton promotes it and Argo CD rolls `web-terminal`. This doc-lane run had no
+cluster session. Owed, on the two KubeCon clusters, before the delivery: `python3 verify/stage_switch_run.py --context
+watch-it-burn-private --kubeconfig <both clusters' contexts> --profile accen-dev`, which must end `STAGE SWITCH CHECK
+GREEN` with the new names; then, from the private terminal, `guardrails-ai-on`, `guardrails-ai-off`,
+`guardrails-topic-on` and `guardrails-topic-off`, each ending on both clusters' `/controls` reading the new state.
+The deck's DO notes name the new switches once rounds-agenticburn#171 lands; no test here reads them.

@@ -165,8 +165,8 @@ check("it keeps patch on deployments/scale, the reaper's grant, as every Role do
                                              for v in r.get("verbs", [])}
           for role in (least, scoped, broad, yaml.safe_load(fixes["c8-broad-role.yaml"]),
                        yaml.safe_load(fixes["c8-scoped-role.yaml"]))))
-check("guard-agency-on, read in the terminal's list, belongs to the support ticket at KubeCon",
-      "guard-agency-on (the support ticket's Joker at KubeCon" in ENTRYPOINT)
+check("guardrails-agency-on, read in the terminal's list, is least privilege (#1346)",
+      "agency (least privilege)" in ENTRYPOINT and "least privilege: c6-least-privilege-role.yaml on" in ENTRYPOINT)
 
 print("== both copies of the entrypoint ==")
 check("images/web-terminal/entrypoint.sh is byte-identical to gitops/ai-layer/web-terminal/entrypoint.sh",

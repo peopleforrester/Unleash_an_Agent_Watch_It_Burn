@@ -1,5 +1,5 @@
 # ABOUTME: The Night Before stage-switch check as one command (#1183, part of #1146): each stage switch run in the private
-# ABOUTME: terminal, both clusters' /controls judged PASS or FAIL after it, then guards-off and guardrails-off, under the lock.
+# ABOUTME: terminal, both clusters' /controls judged PASS or FAIL after it, then guardrails-all-off and guardrails-topic-off, under the lock.
 """Runs every stage switch the way the presenter types it, and judges it on both KubeCon clusters.
 
     python3 verify/stage_switch_run.py --context watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile accen-dev
@@ -17,19 +17,19 @@ through hold_switch, as the probe does) from the first read to the last:
    switching nothing (exit 4): the run ends by turning everything off, so starting from another state would not
    leave the clusters as found. A field the pinned guard-proxy does not send yet (stage_switch_check.WAITS_ON,
    agency_scoped today) does not stop it.
-2. Runs guardrails-on, guard-agency-on, guard-input-on and guard-mcp-on, in talk order, each in the private
+2. Runs guardrails-kates-on, guardrails-agency-on, guardrails-input-on and guardrails-mcp-on, in talk order, each in the private
    terminal pod through kubecon_probe.TERMINAL_EXEC (`kubectl exec deploy/web-terminal -c ttyd -- bash
    /home/student/<switch>`), printing what the terminal printed. After each it waits out guard-proxy's 5-second
    /controls cache (kubecon_probe.CONTROLS_CACHE_S), reads both clusters again, and prints
    stage_switch_check.judge_switch's PASS or FAIL per cluster, the read before it being the read after the one
    before. A switch the terminal answers with a non-zero exit is a FAIL of its own (the `terminal` line); one that
    raises (a kubectl timeout) is a FAIL and the next switch still runs.
-3. Runs guards-off, then guardrails-off, from the same terminal, whatever happened above: a failing switch, one
+3. Runs guardrails-all-off, then guardrails-topic-off, from the same terminal, whatever happened above: a failing switch, one
    that raised, a ^C or a SIGTERM. While they run, a ^C or SIGTERM is held until both have run. Then it waits out
    the cache, reads both clusters, and prints two verdicts per cluster: `start-state`, the judge's
    judge_start_state, and `as-found`, every field the closing commands turn off reading what it read in step 1.
 
-Until this repo's guard-proxy pin carries agency_scoped (guard-proxy-agenticburn#76), guard-agency-on and the
+Until this repo's guard-proxy pin carries agency_scoped (guard-proxy-agenticburn#76), guardrails-agency-on and the
 start state are FAIL on both clusters, and the summary names them as waiting on #1132. #1132 itself, the three
 Challenge 3 and 4 fixes switching both clusters from the private terminal, is on staging and in the terminals.
 
@@ -61,12 +61,13 @@ from stage_switch_check import FAIL, PASS  # noqa: E402
 
 TERMINAL_HOME = "/home/student"
 SWITCHES = tuple(ssc.SWITCHES)
-CLOSE = ("guards-off", "guardrails-off")
-# guard-mcp-on waits up to 180 s per cluster for the gateway or kagent to serve its change (_c7wait in entrypoint.sh).
+CLOSE = ("guardrails-all-off", "guardrails-topic-off")
+# guardrails-mcp-on waits up to 180 s per cluster for the gateway or kagent to serve its change (_c7wait in entrypoint.sh).
 TERMINAL_TIMEOUT_S = 420
 NOT_AT_START_EXIT = 4
 INTERRUPTED_EXIT = 130
-# What guards-off turns off besides the switches' own fields: the AI guards that are not stage switches.
+# What guardrails-all-off and guardrails-topic-off turn off besides the switches' own fields: the AI guards that are not
+# stage switches (output and budget by guardrails-all-off, topic by guardrails-topic-off, #1346).
 CLOSE_ALSO = (("ai", "output"), ("ai", "budget"), ("ai", "topic"))
 CLOSED_FIELDS = tuple(f for fields in ssc.SWITCHES.values() for f in fields) + CLOSE_ALSO
 _MISSING = object()
@@ -254,7 +255,7 @@ class StageSwitchRun:
             for cluster, bad in blockers.items():
                 self._row("start", cluster, FAIL, "; ".join(bad))
             self.out("\nSTAGE SWITCH CHECK NOT RUN: the clusters are not at the start state, and the closing "
-                     "guards-off and guardrails-off would change that (nothing was switched). Turn them off from "
+                     "guardrails-all-off and guardrails-topic-off would change that (nothing was switched). Turn them off from "
                      "the private terminal first, or find out who turned them on.")
             return NOT_AT_START_EXIT
         for cluster in ssc.CLUSTERS:
@@ -280,10 +281,10 @@ class StageSwitchRun:
         return 0
 
     def _close(self, opening: dict[str, Any]) -> None:
-        """guards-off then guardrails-off, with a ^C or SIGTERM held until both have run, then the start state."""
+        """guardrails-all-off then guardrails-topic-off, with a ^C or SIGTERM held until both have run, then the start state."""
         def hold_signal(signum, _frame):
             self.deferred = signum
-            self.out(f"(signal {signum} held: guards-off and guardrails-off run first)")
+            self.out(f"(signal {signum} held: guardrails-all-off and guardrails-topic-off run first)")
         saved = {}
         for sig in (signal.SIGINT, signal.SIGTERM):
             try:
@@ -336,7 +337,7 @@ def main(argv: list[str] | None = None, **kw) -> int:
         return run.run()
     except (KeyboardInterrupt, SystemExit) as e:
         run._summary()
-        print("STAGE SWITCH CHECK INTERRUPTED: guards-off and guardrails-off ran (see above)", flush=True)
+        print("STAGE SWITCH CHECK INTERRUPTED: guardrails-all-off and guardrails-topic-off ran (see above)", flush=True)
         return e.code if isinstance(e, SystemExit) and isinstance(e.code, int) else INTERRUPTED_EXIT
     finally:
         signal.signal(signal.SIGTERM, previous)

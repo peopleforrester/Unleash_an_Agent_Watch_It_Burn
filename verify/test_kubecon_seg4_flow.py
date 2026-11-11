@@ -68,8 +68,8 @@ BEATS = [
     ("the trace after the attack (#/49)", "Then its trace (#/49)"),
     ("LLM01 (#/50)", '"LLM01: Prompt Injection" (#/50)'),
     ("the fix (#/51)", "the fix (#/51)"),
-    ("guard-agency-on", "least privilege, guard-agency-on, takes Deployments away"),
-    ("then guard-input-on", "then guard-input-on arms the input classifier"),
+    ("guardrails-agency-on", "least privilege, guardrails-agency-on, takes Deployments away"),
+    ("then guardrails-input-on", "then guardrails-input-on arms the input classifier"),
     ("the retry (#/52)", '"Try your attack again." (#/52), the room\'s retry on the public bot'),
     ("RBAC (#/53)", '"Pesky RBAC!" (#/53)'),
     ("the Role (#/54 and #/55)", "Role before and after (#/54 and #/55)"),
@@ -83,8 +83,8 @@ BEATS5 = [
     ("the hint (#/70)", '(#/70), "Ask BurritoBot what tools it has."'),
     ("the attack and its trace", "Michael's live weather ask on the private bot"),
     ("LLM03 (#/71)", '"LLM03: Supply Chain" (#/71)'),
-    ("guard-mcp-on (#/72)", "(#/72): guard-mcp-on"),
-    ("the retry (#/73)", '"Try your attack again." (#/73), the room\'s retry on the public bot, which guard-mcp-on reaches'),
+    ("guardrails-mcp-on (#/72)", "(#/72): guardrails-mcp-on"),
+    ("the retry (#/73)", '"Try your attack again." (#/73), the room\'s retry on the public bot, which guardrails-mcp-on reaches'),
     ("the gateway (#/74 and #/75)", "agentgateway in the notes (#/74 and #/75)"),
     ("the diagrams (#/76 to #/113)", "without and then with the gateway (#/76 to #/113)"),
     ("the rule (#/114 and #/115)", "its rule before and after (#/114 and #/115)"),
@@ -104,8 +104,8 @@ BLOCK_ORDER = [
     ("its trace (#/49)", "The trace, after the attack (#/49):"),
     ("the attack's seed, by its session id", "wib-stage-c3-attack-<stamp> on Past 7 Days"),
     ("the attack's seed", "c3-attack"),
-    ("least privilege first", "guard-agency-on"),
-    ("then the input guard", "guard-input-on"),
+    ("least privilege first", "guardrails-agency-on"),
+    ("then the input guard", "guardrails-input-on"),
     ("the fixed seed, by its session id", "wib-stage-c3-fixed-<stamp>"),
     ("the fixed seed", "c3-fixed"),
 ]
@@ -136,8 +136,8 @@ SOLVE_LEAKS = ["try each tool", "try each one", "use each one", "then use each",
 # Segment 4's copy blocks as #1100 found them (git show c57c1590:gitops/ai-layer/web/kubecon.html).
 COPY_BLOCKS = [
     "What's the status of my support ticket HC-666?",
-    "guard-agency-on",
-    "guard-input-on",
+    "guardrails-agency-on",
+    "guardrails-input-on",
     "CONTEXT=<private-context> challenges/02-sanitization/fallback.curl.sh input",
     "kubectl --context <private-context> -n agent auth can-i create deployments "
     "--as=system:serviceaccount:agent:workshop-mcp",
@@ -243,7 +243,7 @@ def problems(page: str, ros: str) -> dict[str, list[str]]:
     out["segment 5 drops \"The setup\" and names #1132 at #/73's retry"] = (
         (["The setup"] if "The setup" in seg5 else [])
         + ([] if "so on #/73 the room retries on the public bot" in seg5
-           and "Since #1132 guard-mcp-on switches both clusters" in seg5 else ["no #1132 in the C7 notes"]))
+           and "Since #1132 guardrails-mcp-on switches both clusters" in seg5 else ["no #1132 in the C7 notes"]))
     room = " ".join(plain(x) for x in re.findall(r'<div class="prompt"[^>]*>(.*?)</div>', page, re.S))
     room += " " + " ".join(re.findall(r'Say: "(.*?)"', plain(page)))
     out["no room-facing part of the page tells the room to list or try each tool"] = [

@@ -509,7 +509,9 @@ check("guardrails-on refuses a pause that is not a number of seconds, and touche
       r.returncode == 2 and "Usage: guardrails-on" in r.stdout and not ran, r.stdout)
 r, ran, _ = run("guardrails-on", args=("0",))
 check("guardrails-on 0 is the default, no pause", r.returncode == 0)
-check("guards-status names the switch", "guardrails-on / guardrails-off" in helpers.get("guards-status", ""))
+check("guards-status names the switches by their one pattern, kates among them (#1346)",
+      "guardrails-<name>-on and guardrails-<name>-off" in helpers.get("guards-status", "")
+      and "kates (RBAC, Kyverno, KubeArmor, egress)" in helpers.get("guards-status", ""))
 check("the C7 control still finds agentgateway's rule on the KubeCon private cluster",
       '[ "$r" = admin ] || [ "$r" = kubecon-private ]' in helpers[".guardlib"])
 

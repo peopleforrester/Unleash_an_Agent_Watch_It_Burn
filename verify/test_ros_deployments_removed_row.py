@@ -5,7 +5,7 @@
 `facilitation/kubecon-na-2026-run-of-show.md`, in "The Kubernetes guardrails switch (#774)", has a paragraph on the
 sweep (`remove-untrusted-room-workloads`, #990). Since #1049 and #1050 it ends by saying the deployments page keeps
 every app that landed, that one the sweep removed stays listed, greyed, and reads "..., removed at <time>" within about
-a minute and a half of `guardrails-on`, and that a `registry.burritobot.co` app's line is left as it was. No test read
+a minute and a half of `guardrails-kates-on`, and that a `registry.burritobot.co` app's line is left as it was. No test read
 that wording (test review run 18571). This one holds:
 
   1. The paragraph is in that section and says each of those things, and the wording it replaced ("still lists what
@@ -52,8 +52,8 @@ CLAIMS = [
     ("the page keeps every landed row", "The deployments page keeps every app that landed."),
     ("a swept row stays listed and greyed", "One the sweep removed stays listed, greyed,"),
     ("a swept row reads \"..., removed at <time>\"", "reads \"..., removed at <time>\""),
-    ("the mark comes within about a minute and a half of guardrails-on",
-     "within about a minute and a half of `guardrails-on` (#1049, #1050)"),
+    ("the mark comes within about a minute and a half of guardrails-kates-on",
+     "within about a minute and a half of `guardrails-kates-on` (#1049, #1050)"),
     ("an internal-registry row is left as it was", "a `registry.burritobot.co` app's line is left as it was."),
 ]
 # What the paragraph said before #1051; neither may come back.

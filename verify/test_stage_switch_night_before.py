@@ -6,7 +6,7 @@ The step tells the presenter which command to run and what its PASS, FAIL and cl
 read from the script here, not typed twice: the flags from its argparse, the switches and their fields from
 stage_switch_check.SWITCHES, the closing commands from stage_switch_run.CLOSE, the verdict words from what the script
 prints, and the two NOT RUN exit codes from guard_lease.BUSY_EXIT and stage_switch_run.NOT_AT_START_EXIT. The step
-sits after the guardrails-switch step (#774), whose guardrails-on and guardrails-off it builds on, and before the
+sits after the guardrails-switch step (#774), whose guardrails-kates-on and guardrails-kates-off it builds on, and before the
 admin probe, which also switches both clusters and holds the same lock.
 """
 from __future__ import annotations
@@ -110,7 +110,7 @@ names = [f"`{s}`" for s in ssc.SWITCHES]
 talk_order = f"runs {', '.join(names[:-1])} and {names[-1]} in talk order"
 check(f"the step says it {talk_order!r}", talk_order in flat)
 for switch, fields in ssc.SWITCHES.items():
-    if switch == "guardrails-on":
+    if switch == "guardrails-kates-on":
         continue  # the step names its four fields as "the four Kubernetes guardrails"
     for _, key in fields:
         check(f"the PASS bullet names {switch}'s field {key}", f"`{key}`" in flat)
@@ -135,9 +135,12 @@ check(f"the step's not-at-start exit is stage_switch_run.NOT_AT_START_EXIT ({ssr
       f"exit {ssr.NOT_AT_START_EXIT} is a cluster not at the start state" in flat)
 check("the step says the summary names the lines that wait on #1132", "wait on #1132" in flat
       and "waiting on #1132" in RUNNER)
+# The terminal writes guardrails-<name>-on and -off in one loop over the names (#1346).
+_loop = re.search(r"^for g in ([a-z ]+); do\n  for st in on off; do\n",
+                  (REPO / "gitops/ai-layer/web-terminal/entrypoint.sh").read_text(encoding="utf-8"), re.M)
+_offs = re.findall(r"`guardrails-([a-z]+)-off`", flat)
 check("each -off command the FAIL bullet names is one the terminal has",
-      all(f'"$HOME/{c}"' in (REPO / "gitops/ai-layer/web-terminal/entrypoint.sh").read_text(encoding="utf-8")
-          for c in re.findall(r"`(guard-[a-z]+-off)`", flat)) and bool(re.findall(r"`(guard-[a-z]+-off)`", flat)))
+      bool(_loop) and bool(_offs) and all(g in _loop.group(1).split() for g in _offs))
 
 if failures:
     print(f"\n{len(failures)} FAILED", file=sys.stderr)

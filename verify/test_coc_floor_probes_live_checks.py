@@ -206,10 +206,10 @@ def swap(private: FakeCluster, community: FakeCluster) -> None:
 fails("the two contexts swapped", swap, probes_run=False, mentions="is the private admin cluster")
 
 # --- the parts read off the probe and the floor ------------------------------------------------------------------------
-check("the admin run's beats are kubecon_probe.ADMIN with guards-off",
-      [b.key for b in live.expected_beats("admin")] == [b.key for b in kp.ADMIN] + ["guards-off"])
-check("the community run's beats are kubecon_probe.COMMUNITY with guardrails-off",
-      [b.key for b in live.expected_beats("community")] == [b.key for b in kp.COMMUNITY] + ["guardrails-off"])
+check("the admin run's beats are kubecon_probe.ADMIN with guardrails-all-off",
+      [b.key for b in live.expected_beats("admin")] == [b.key for b in kp.ADMIN] + ["guardrails-all-off"])
+check("the community run's beats are kubecon_probe.COMMUNITY with guardrails-kates-off",
+      [b.key for b in live.expected_beats("community")] == [b.key for b in kp.COMMUNITY] + ["guardrails-kates-off"])
 cfg = "service:\n  pipelines:\n    traces:\n      processors: [batch, transform/coc_mask]\n"
 check("a collector config with transform/coc_mask in a pipeline reads as masking",
       live.collector_masks([{"data": {"relay": cfg}}]))

@@ -280,10 +280,13 @@ _kg() { local st="$1" g="$2" c a p; shift 2
 # _guardrails on|off [seconds] : the switch itself. One guardrail at a time, here and then on the other cluster, so
 # each badge lights (or goes dark) on both chat pages together; [seconds] waits between guardrails, so the room can
 # watch each one arrive (the page polls every 12 seconds). Says what changed, names anything that did not, and fails
-# when either cluster missed a guardrail or the other cluster could not be reached at all.
-_guardrails() { local st="$1" pause="${2:-0}" peer g bad=() line
-  case "$pause" in ''|*[!0-9]*) echo "Usage: guardrails-$st [seconds between guardrails, default 0]"; return 2 ;; esac
+# when either cluster missed a guardrail or the other cluster could not be reached at all. [name] is the command the
+# usage and retry lines name: guardrails-on or guardrails-off unless given, guardrails-kates-on or -off from _gr (#1346).
+# Sets _BOTHPEER to the other cluster's name, empty when it was not reached, for _state.
+_guardrails() { local st="$1" pause="${2:-0}" me="${3:-guardrails-$1}" peer g bad=() line
+  case "$pause" in ''|*[!0-9]*) echo "Usage: $me [seconds between guardrails, default 0]"; return 2 ;; esac
   peer="$(_peer)" || peer=""
+  _BOTHPEER="$peer"
   for g in rbac kyverno kubearmor egress; do
     _kg "$st" "$g" kubectl || bad+=("$g on this cluster")
     if [ -n "$peer" ]; then
@@ -308,7 +311,7 @@ _guardrails() { local st="$1" pause="${2:-0}" peer g bad=() line
     return 1
   fi
   if [ "${#bad[@]}" -gt 0 ]; then
-    echo "⚠️  These did not switch $st: ${bad[*]}. Run 'guardrails-$st' again; it is safe to repeat."
+    echo "⚠️  These did not switch $st: ${bad[*]}. Run '$me' again; it is safe to repeat."
     return 1
   fi
   echo "Both clusters, this one and $peer: all four Kubernetes guardrails are $st."; }
@@ -333,7 +336,9 @@ _toggle() { local q="$1" c; shift
 # runs as its guardrails-switch ServiceAccount, so a step there can do only what gitops/guardrails-switch/ grants.
 # Says in one line which clusters changed, naming a peer that could not be reached. A cluster with no guardrails-peer
 # Secret, the 2-hour workshop's, is switched alone, and that is success; a Secret that is there but cannot be read is
-# a failure, so a flaky read never passes for an unlinked cluster.
+# a failure, so a flaky read never passes for an unlinked cluster. Sets _BOTHPEER to the other cluster's name, empty
+# when there is none or it could not be read, for _state (#1346).
+_BOTHPEER=""
 _both() { local peer="" link=none here=0 there=0 c r
   if peer="$(_peer)"; then link=peer
   else
@@ -341,6 +346,7 @@ _both() { local peer="" link=none here=0 there=0 c r
     _show "${c[@]}"
     if r="$("${c[@]}" 2>/dev/null)" && [ -z "$r" ]; then link=none; else link=unread; fi
   fi
+  _BOTHPEER=""; [ "$link" = peer ] && _BOTHPEER="$peer"
   "$@" kubectl || here=1
   if [ "$link" = peer ]; then "$@" kubectl --kubeconfig "$HOME/.kube/peer" --context "$peer" || there=1; fi
   case "$link:$here:$there" in
@@ -398,6 +404,189 @@ _gp() { _gpc "$@"; _show "${_GPC[@]}"; "${_GPC[@]}" 2>/dev/null; }
 _room_after() {
   if [ "$_ROOMNAME" = "this cluster" ]; then echo "    Changed: this cluster only."
   else echo "    Changed: $_ROOMNAME only. This cluster, the private one, is unchanged."; fi; }
+# The stage switches, one pattern (#1346, Michael 2026-11-11): guardrails-<name>-on and guardrails-<name>-off, each
+# switching this cluster and the other KubeCon cluster (_both, or _guardrails for kates), printing every kubectl it
+# runs and the clusters it changed, then ending on both clusters' /controls (_state). The names:
+#   kates   the four Kubernetes guardrails: RBAC, Kyverno admission, KubeArmor, egress NetworkPolicy (_guardrails)
+#   agency  least privilege: c6-least-privilege-role.yaml on, c5-scoped-role.yaml off
+#   input   the input block-list and the injection classifier     output  the output guard
+#   mcp     the MCP tool restriction, Challenge 4 (_mcp)            budget  the spend budget
+#   topic   the on-topic guard
+#   ai      input, output, mcp and budget: every AI guard but on-topic, which refuses every challenge prompt
+#   all     kates, agency and ai: everything but on-topic
+# The older names (guardrails-on, guard-agency-on, guards-on, guard-<one>-on and their -off) still run as they did.
+# _topic on|off <kubectl...> : a switch step for _both. guard-proxy's /toggle?topic=<on|off> on one cluster, through
+# _gp, and what it reports for topic read back: on passes on True alone (a guard-proxy without the topic stage answers
+# missing, and that is no on-topic guard); off passes on False or missing.
+_topic() { local st="$1" v; shift
+  v="$(_gp "/toggle?topic=$st" "$@" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("topic","missing"))' 2>/dev/null)"
+  case "$st:$v" in on:True|off:False|off:missing) return 0 ;; esac
+  return 1; }
+# _gr_<name> on|off [argument] : one group of _gr's. Each prints what changed, or a ⚠️ line naming the command to run
+# again, and returns 1 when a cluster did not switch, 2 on a bad argument.
+_gr_kates() { _guardrails "$1" "${2:-0}" "guardrails-kates-$1"; }
+_gr_agency() { local st="$1" f=c6-least-privilege-role.yaml
+  [ "$st" = off ] && f=c5-scoped-role.yaml
+  if ! _both _apply "$f"; then
+    echo "⚠️  The Role did not change everywhere. Wait a moment and run 'guardrails-agency-$st' again; it is safe to repeat."
+    return 1
+  fi
+  if [ "$st" = on ]; then
+    echo "🛡️  Least privilege ON. agent-sa's Role no longer creates or changes Deployments or Pods, so BurritoBot cannot"
+    echo "    deploy anything, from any registry: deploy_app comes back Forbidden. The CEO's record stays out of reach."
+  else
+    echo "🔓 Least privilege OFF. agent-sa can create Deployments and Pods again, so the ticket's Joker lands."
+    echo "    The CEO's record stays out of reach (the scoped Role, c5-scoped-role.yaml)."
+  fi; }
+_gr_input() { local st="$1"
+  if ! _both _toggle "input_blocklist=$st&input_classifier=$st"; then
+    echo "⚠️  The input guards did not change everywhere. Wait a moment and run 'guardrails-input-$st' again; it is safe to repeat."
+    return 1
+  fi
+  if [ "$st" = on ]; then
+    echo "🛡️  INPUT guards ON: the block-list rejects destructive commands and the secret-recipe phrases, and the"
+    echo "    injection classifier catches poisoned instructions, in a prompt and in a support ticket as the tool reads it."
+  else
+    echo "🔓 INPUT guards OFF. Prompts and support tickets go straight to the model."
+  fi; }
+_gr_output() { local st="$1"
+  if ! _both _toggle "output=$st"; then
+    echo "⚠️  The output guard did not change everywhere. Wait a moment and run 'guardrails-output-$st' again; it is safe to repeat."
+    return 1
+  fi
+  if [ "$st" = on ]; then
+    echo "🛡️  OUTPUT guard ON: replies are scanned on the way out, and the recipe amounts, the ogre-toenails"
+    echo "    ingredient and the signature are redacted before they reach the chat."
+  else
+    echo "🔓 OUTPUT guard OFF. Replies are no longer scrubbed; the full recipe leaks straight through."
+  fi; }
+_gr_budget() { local st="$1"
+  if ! _both _toggle "budget=$st"; then
+    echo "⚠️  The spend budget did not change everywhere. Wait a moment and run 'guardrails-budget-$st' again; it is safe to repeat."
+    return 1
+  fi
+  if [ "$st" = on ]; then
+    echo "🛡️  BUDGET guard ON: once a cluster's spend crosses its cap, BurritoBot refuses requests before calling"
+    echo "    the model, so a blocked request costs \$0."
+  else
+    echo "🔓 BUDGET guard OFF. The meter keeps counting; only the limit is gone."
+  fi; }
+_gr_topic() { local st="$1"
+  if ! _both _topic "$st"; then
+    echo "⚠️  The on-topic guard did not change everywhere: a cluster could not be reached, or its guard-proxy has no"
+    echo "    topic stage. Wait a moment and run 'guardrails-topic-$st' again; it is safe to repeat."
+    return 1
+  fi
+  if [ "$st" = on ]; then
+    echo "🛡️  On-topic guard ON. BurritoBot now sells burritos only: the menu, hours and locations get answered, and"
+    echo "    anything else is turned back to the menu, politely, before the model is called."
+  else
+    echo "🔓 On-topic guard OFF. BurritoBot will chat about anything again."
+  fi; }
+# _gr_mcp on [seconds] | off : _mcp on both clusters; on then waits up to [seconds], 180 unless given, until each
+# serves it (_c7wait), as guard-mcp-on does.
+_gr_mcp() { local st="$1" bound="${2:-180}" ok=1
+  case "$bound" in ''|*[!0-9]*) echo "Usage: guardrails-mcp-on [seconds to wait for each cluster to serve it, default 180]"; return 2 ;; esac
+  _C7W=(); _C7HERE=""
+  _both _mcp "$st" || ok=0
+  if [ "$ok" = 1 ] && [ "$st" = on ] && ! _c7wait "$bound"; then
+    echo "⚠️  The restriction is written, but not every cluster serves it yet: the ones named above had not, within $bound s."
+    echo "    Give them a moment, then run 'guardrails-mcp-on' again; it is safe to repeat."
+    return 1
+  fi
+  if [ "$ok" = 0 ]; then
+    echo "⚠️  The MCP tool restriction did not switch $st everywhere. Wait a moment and run 'guardrails-mcp-$st' again; it is safe to repeat."
+    return 1
+  fi
+  if [ "$st" = on ]; then
+    echo "🛡️  MCP tool authorization ON: only get_weather stays usable on evil-mcp, so read_internal_config and"
+    echo "    apply_optimization are out of the agent's reach. The real BurritoBot tools are untouched."
+  else
+    echo "🔓 MCP tool authorization OFF: every evil-mcp tool is back within the agent's reach."
+  fi; }
+# _state on|off <group...> : what every guardrails-<name> switch ends on. guard-proxy caches /controls for 5 s (proxy.py
+# _CONTROLS_TTL), so it waits 6 s, then reads /controls from this cluster's guard-proxy and from the other KubeCon
+# cluster's (_BOTHPEER), and prints one line per cluster with every switch's state (.controls.py). Fails when a cluster
+# could not be read or a group the switch changed does not read <on|off> there.
+_state() { local st="$1" bad=0; shift
+  echo "/controls, both clusters, after guard-proxy's 5-second cache:"
+  sleep 6
+  _gp /controls kubectl | python3 "$HOME/.controls.py" "This cluster" "$st" "$@" || bad=1
+  if [ -n "$_BOTHPEER" ]; then
+    _gp /controls kubectl --kubeconfig "$HOME/.kube/peer" --context "$_BOTHPEER" \
+      | python3 "$HOME/.controls.py" "$_BOTHPEER" "$st" "$@" || bad=1
+  else
+    echo "  The other KubeCon cluster was not read: none is linked to this one, or it could not be reached."
+  fi
+  return "$bad"; }
+# _gr <name> on|off [argument] : guardrails-<name>-on and guardrails-<name>-off. ai and all run each group in turn,
+# every one even when one before it fails, then name the ones that did not switch. Ends on _state for the groups it
+# switched. Exits 0 when every cluster switched and reads the new state, 1 when not, 2 on a bad argument.
+_gr() { local g="$1" st="$2" rc=0 one bad="" groups
+  shift 2
+  case "$g" in
+    kates|mcp) ;;
+    *) [ $# -eq 0 ] || { echo "Usage: guardrails-$g-$st (it takes no argument)"; return 2; } ;;
+  esac
+  [ "$g:$st" != mcp:off ] || [ $# -eq 0 ] || { echo "Usage: guardrails-mcp-off (it takes no argument)"; return 2; }
+  case "$g" in
+    ai)  groups="input output mcp budget" ;;
+    all) groups="kates agency input output mcp budget"; [ "$st" = off ] && groups="budget mcp output input agency kates" ;;
+    kates|agency|input|output|mcp|budget|topic) groups="$g" ;;
+    *) echo "Usage: guardrails-<kates|agency|input|output|mcp|budget|topic|ai|all>-<on|off>"; return 2 ;;
+  esac
+  for one in $groups; do
+    "_gr_$one" "$st" "$@"; rc=$?
+    [ "$rc" = 2 ] && return 2
+    [ "$rc" = 0 ] || bad="${bad:+$bad, }$one"
+  done
+  if [ -n "$bad" ] && [ "$g" = ai -o "$g" = all ]; then
+    echo "⚠️  guardrails-$g-$st ran every step; these did not switch $st: $bad."
+  fi
+  rc=0; [ -z "$bad" ] || rc=1
+  _state "$st" $groups || rc=1
+  return "$rc"; }
+EOS
+
+# .controls.py <cluster> on|off <group...> : _state's reader. Takes guard-proxy's /controls JSON on stdin ({"ai": {...},
+# "infra": {...}, "host": ...}) and prints one line: the cluster, its host, and each switch's state, on or off, partly
+# on naming what is off, or n/a when guard-proxy could not measure it. Exits 1, saying why, when the read is not
+# /controls or a group named on the command line does not read on|off.
+cat > "$HOME/.controls.py" <<'EOS'
+import json, sys
+GROUPS = {
+    "kates": (("infra", "rbac_scoped"), ("infra", "kyverno"), ("infra", "kubearmor"), ("infra", "networkpolicy")),
+    "agency": (("infra", "agency_scoped"),),
+    "input": (("ai", "input_blocklist"), ("ai", "input_classifier")),
+    "output": (("ai", "output"),),
+    "mcp": (("infra", "tool_allowlist"),),
+    "budget": (("ai", "budget"),),
+    "topic": (("ai", "topic"),),
+}
+who, want, groups = sys.argv[1], sys.argv[2], sys.argv[3:]
+try:
+    c = json.load(sys.stdin)
+    if not isinstance(c.get("ai"), dict) or not isinstance(c.get("infra"), dict):
+        raise ValueError
+except (ValueError, AttributeError):
+    print("  ⚠️  %s: /controls could not be read." % who)
+    sys.exit(1)
+def state(g):
+    v = [c[s].get(k) for s, k in GROUPS[g]]
+    if any(x is None for x in v):
+        return "n/a"
+    if all(v):
+        return "on"
+    if not any(v):
+        return "off"
+    return "partly on (%s off)" % ", ".join(k for (s, k), x in zip(GROUPS[g], v) if not x)
+seen = {g: state(g) for g in GROUPS}
+host = " (%s)" % c["host"] if c.get("host") else ""
+print("  %s%s: %s" % (who, host, " · ".join("%s %s" % (g, seen[g]) for g in GROUPS)))
+wrong = [g for g in groups if seen.get(g) != want]
+if wrong:
+    print("  ⚠️  %s: /controls reads %s, not %s." % (who, ", ".join("%s %s" % (g, seen.get(g)) for g in wrong), want))
+    sys.exit(1)
 EOS
 
 # The rule rewrite behind _c7rule. Reads the ConfigMap as JSON on stdin and prints the JSON patch. Exactly
@@ -509,10 +698,10 @@ for k in ("output","input_blocklist","input_classifier","budget","topic"):
     print(("  n/a  " if on is None else "  ON   " if on else "  off  ")+label.get(k,k))
 '
 echo
-echo "Flip them with: guard-output-on  guard-input-on  guard-mcp-on  guard-budget-on  guard-topic-on  (or guards-on / guards-off)"
-echo "Cluster fixes: guard-rbac-on (the CEO's record)  guard-admission-on (the support ticket's image)"
-echo "               guard-agency-on (the support ticket's Joker at KubeCon: the bot deploys nothing)"
-echo "KubeCon: guardrails-on / guardrails-off (the four Kubernetes guardrails, on both clusters at once)"
+echo "Switch them with guardrails-<name>-on and guardrails-<name>-off, on both KubeCon clusters at once:"
+echo "  kates (RBAC, Kyverno, KubeArmor, egress)  agency (least privilege)  input  output  mcp  budget  topic"
+echo "  ai (input, output, mcp and budget)  all (kates, agency and ai: everything but topic)"
+echo "The 2-hour lab's cluster fixes: guard-rbac-on (the CEO's record)  guard-admission-on (the support ticket's image)"
 EOS
 
 # Combined: flip EVERY AI guard at once (the "reset and explore" convenience). guards-on leaves the on-topic
@@ -899,6 +1088,14 @@ chmod +x "$HOME/platform" "$HOME/guards-status" "$HOME/guards-on" "$HOME/guards-
   "$HOME"/guard-topic-on "$HOME"/guard-topic-off "$HOME"/guard-rbac-on "$HOME"/guard-rbac-off \
   "$HOME"/guard-admission-on "$HOME"/guard-admission-off "$HOME"/guard-agency-on "$HOME"/guard-agency-off \
   "$HOME"/finale-cap-on "$HOME"/finale-cap-off "$HOME"/cost-watch
+# The stage switches, guardrails-<name>-on and guardrails-<name>-off (#1346; _gr in .guardlib, which says what each
+# does). kates takes the seconds to wait between guardrails, and mcp-on the seconds to wait for each cluster to serve it.
+for g in kates agency input output mcp budget topic ai all; do
+  for st in on off; do
+    printf '#!/bin/bash\nsource "$HOME/.guardlib"\n_gr %s %s "$@"\n' "$g" "$st" > "$HOME/guardrails-$g-$st"
+    chmod +x "$HOME/guardrails-$g-$st"
+  done
+done
 
 # No banner. The shell opens on a prompt and nothing else (#342).
 #

@@ -11,17 +11,17 @@ https://attackme.burritobot.co/controls before and after each switch and hands t
 The switches, in talk order, and the fields each owns (guard-proxy proxy.py: the `/controls` handler sends
 {"ai": GUARDS, "infra": read_controls(), "host": WIB_PUBLIC_HOST}):
 
-    guardrails-on    segment 3    infra.rbac_scoped, infra.kyverno, infra.kubearmor, infra.networkpolicy
-    guard-agency-on  Challenge 3  infra.agency_scoped, the least-privilege Role (guard-proxy-agenticburn#76)
-    guard-input-on   Challenge 3  ai.input_blocklist, ai.input_classifier
-    guard-mcp-on     Challenge 4  infra.tool_allowlist
+    guardrails-kates-on    segment 3    infra.rbac_scoped, infra.kyverno, infra.kubearmor, infra.networkpolicy
+    guardrails-agency-on  Challenge 3  infra.agency_scoped, the least-privilege Role (guard-proxy-agenticburn#76)
+    guardrails-input-on   Challenge 3  ai.input_blocklist, ai.input_classifier
+    guardrails-mcp-on     Challenge 4  infra.tool_allowlist
 
 `agency_scoped` is on guard-proxy's staging but not in the submodule this repo pins, so until the pin moves /controls
-does not carry it and guard-agency-on is judged FAIL, naming #1132, on each cluster where it is missing. A missing
+does not carry it and guardrails-agency-on is judged FAIL, naming #1132, on each cluster where it is missing. A missing
 field is never a skip or a PASS. guard-proxy reads a field it could not measure as null; null is neither off nor on,
 so a switch whose field reads null before or after it fails too.
 
-The start state, before the first switch and again after guards-off and guardrails-off, is every one of those fields
+The start state, before the first switch and again after guardrails-all-off and guardrails-topic-off, is every one of those fields
 off on both clusters. Falco is outside it: it is not a switch, and the private cluster runs it (read on at 2026-11-07
 19:40 CST) while the community cluster does not. The other AI guards (output, budget, topic) are not stage switches
 and are not judged here.
@@ -47,11 +47,11 @@ CLUSTERS = {
 
 # Talk order. Each field is (section, key) in guard-proxy's /controls JSON.
 SWITCHES: dict[str, tuple[tuple[str, str], ...]] = {
-    "guardrails-on": (("infra", "rbac_scoped"), ("infra", "kyverno"), ("infra", "kubearmor"),
+    "guardrails-kates-on": (("infra", "rbac_scoped"), ("infra", "kyverno"), ("infra", "kubearmor"),
                       ("infra", "networkpolicy")),
-    "guard-agency-on": (("infra", "agency_scoped"),),
-    "guard-input-on": (("ai", "input_blocklist"), ("ai", "input_classifier")),
-    "guard-mcp-on": (("infra", "tool_allowlist"),),
+    "guardrails-agency-on": (("infra", "agency_scoped"),),
+    "guardrails-input-on": (("ai", "input_blocklist"), ("ai", "input_classifier")),
+    "guardrails-mcp-on": (("infra", "tool_allowlist"),),
 }
 
 # A field the pinned guard-proxy does not send yet, and what it waits on.
@@ -170,6 +170,6 @@ def _start_on_cluster(cluster: str, raw: Any) -> Verdict:
 
 
 def judge_start_state(controls: dict[str, Any]) -> dict[str, Verdict]:
-    """Both clusters back at the start state, after guards-off and guardrails-off: every field every switch owns
+    """Both clusters back at the start state, after guardrails-all-off and guardrails-topic-off: every field every switch owns
     reads false. FAIL names each field that does not, on its cluster."""
     return {c: _start_on_cluster(c, controls.get(c)) for c in CLUSTERS}
