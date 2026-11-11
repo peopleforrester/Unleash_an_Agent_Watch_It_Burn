@@ -54731,3 +54731,185 @@ test). The full offline suite is left to validation, which runs all of it again 
 field off, with Falco on only on the private cluster as before. The private bot's counter reads 0 requests. The
 community bot's reads 170 requests, up from 85 at 19:34 UTC, so someone is still using it. This run sent it nothing and
 did not reset it, for the reason the entry above gives.
+
+## 2026-11-11 · #1366 · run 20486 · guardrails-output, -budget, -topic, -ai and -all, and guards-on/off, run live from the private terminal on both clusters
+
+**What ran.** The switches run 20471's stage-switch check does not drive, which #1350's entry left under "Not yet run
+on a cluster". At 21:35 UTC both guard locks were free, both `/controls` read the start state (every AI guard and every
+stage field off, Falco on only on the private cluster, as in the #1351 entries above), and guard-proxy's log on either
+cluster held no `guard_toggle` line in the two hours before, so nobody was switching guards. The community bot's
+`/cost` read 247 requests at 21:33 and at 21:35, so its chat use had stopped. This run sent no model call. The twelve
+switches ran in one go under `python3 verify/guard_lease.py hold --context watch-it-burn-private --kubeconfig
+"$KUBECONFIG" --profile accen-dev --with-peer --what "run 20486 #1366 switches" --wait 300 -- bash drive.sh`, which held
+`wib-guard-lock` on both clusters from 21:36:24 to 21:38:49 UTC and released both. `drive.sh` (in the run's scratch
+directory, not committed) ran each switch as `kubectl --context watch-it-burn-private -n agent exec deploy/web-terminal -c
+ttyd -- bash /home/student/<switch>`, recorded its exit code, then read `https://burritobot-private.burritobot.co/controls`
+and `https://attackme.burritobot.co/controls` with curl. The order: output on/off, budget on/off, `guardrails-topic-on`,
+ai on/off, all on/off, `guards-on`/`guards-off`, then `guardrails-topic-off` last. With topic held on from its `-on`
+to the end, the run also shows that `guardrails-ai-off`, `guardrails-all-off` and `guards-off` leave it as it is.
+
+**The judge.** A script in the scratch directory parsed each switch's last printed `/controls` block (both clusters,
+field by `_ctlfmt`'s label), compared it field by field with the direct read made right after, and held the direct read
+to the state the switches so far should leave: output owns `output`; budget owns `budget`; topic owns `topic`; ai
+and its alias `guards` own `output`, `input_blocklist`, `input_classifier`, `budget` and `tool_allowlist`; all owns
+those plus `networkpolicy`, `kyverno`, `kubearmor`, `rbac_scoped` and `agency_scoped`. Falco is not a switch's and is
+compared only printed against direct. It printed:
+
+```
+PASS  start                 private    direct read: every stage field and AI guard off
+PASS  start                 community  direct read: every stage field and AI guard off
+PASS  guardrails-output-on  private    exit 0=True printed==direct=True expected=True  on: output
+PASS  guardrails-output-on  community  exit 0=True printed==direct=True expected=True  on: output
+PASS  guardrails-output-off private    exit 0=True printed==direct=True expected=True  on: none
+PASS  guardrails-output-off community  exit 0=True printed==direct=True expected=True  on: none
+PASS  guardrails-budget-on  private    exit 0=True printed==direct=True expected=True  on: budget
+PASS  guardrails-budget-on  community  exit 0=True printed==direct=True expected=True  on: budget
+PASS  guardrails-budget-off private    exit 0=True printed==direct=True expected=True  on: none
+PASS  guardrails-budget-off community  exit 0=True printed==direct=True expected=True  on: none
+PASS  guardrails-topic-on   private    exit 0=True printed==direct=True expected=True  on: topic
+PASS  guardrails-topic-on   community  exit 0=True printed==direct=True expected=True  on: topic
+PASS  guardrails-ai-on      private    exit 0=True printed==direct=True expected=True  on: output, input_blocklist, input_classifier, budget, topic, tool_allowlist
+PASS  guardrails-ai-on      community  exit 0=True printed==direct=True expected=True  on: output, input_blocklist, input_classifier, budget, topic, tool_allowlist
+PASS  guardrails-ai-off     private    exit 0=True printed==direct=True expected=True  on: topic
+PASS  guardrails-ai-off     community  exit 0=True printed==direct=True expected=True  on: topic
+PASS  guardrails-all-on     private    exit 0=True printed==direct=True expected=True  on: output, input_blocklist, input_classifier, budget, topic, networkpolicy, kyverno, kubearmor, tool_allowlist, rbac_scoped, agency_scoped
+PASS  guardrails-all-on     community  exit 0=True printed==direct=True expected=True  on: output, input_blocklist, input_classifier, budget, topic, networkpolicy, kyverno, kubearmor, tool_allowlist, rbac_scoped, agency_scoped
+PASS  guardrails-all-off    private    exit 0=True printed==direct=True expected=True  on: topic
+PASS  guardrails-all-off    community  exit 0=True printed==direct=True expected=True  on: topic
+PASS  guards-on             private    exit 0=True printed==direct=True expected=True  on: output, input_blocklist, input_classifier, budget, topic, tool_allowlist
+PASS  guards-on             community  exit 0=True printed==direct=True expected=True  on: output, input_blocklist, input_classifier, budget, topic, tool_allowlist
+PASS  guards-off            private    exit 0=True printed==direct=True expected=True  on: topic
+PASS  guards-off            community  exit 0=True printed==direct=True expected=True  on: topic
+PASS  guardrails-topic-off  private    exit 0=True printed==direct=True expected=True  on: none
+PASS  guardrails-topic-off  community  exit 0=True printed==direct=True expected=True  on: none
+GREEN: 0 FAIL
+```
+
+**What the terminal printed.** Each switch's headline and its closing `/controls` block, as the terminal printed
+them (the `$ kubectl ...` echo lines are left out; each switch's exit code is the `---` line):
+
+```
+$ guardrails-output-on
+🛡️  OUTPUT guard ON. The agent's replies are now scanned on the way out: the recipe
+  watch-it-burn-private (this cluster), burritobot-private.agenticburn.com
+    AI guards   ON: output   off: input block-list, injection classifier, budget cap, on-topic
+    Kubernetes  ON: Falco   off: NetworkPolicy, Kyverno, KubeArmor, tool allow-list, RBAC scope, least privilege
+  watch-it-burn-community, attackme.agenticburn.com
+    AI guards   ON: output   off: input block-list, injection classifier, budget cap, on-topic
+    Kubernetes  ON: none   off: NetworkPolicy, Kyverno, KubeArmor, Falco, tool allow-list, RBAC scope, least privilege
+--- guardrails-output-on exit=0
+$ guardrails-output-off
+🔓 OUTPUT guard OFF. Replies are no longer scrubbed. Re-send the recipe prompt and the
+  watch-it-burn-private (this cluster), burritobot-private.agenticburn.com
+    AI guards   ON: none   off: output, input block-list, injection classifier, budget cap, on-topic
+    Kubernetes  ON: Falco   off: NetworkPolicy, Kyverno, KubeArmor, tool allow-list, RBAC scope, least privilege
+  watch-it-burn-community, attackme.agenticburn.com
+    AI guards   ON: none   off: output, input block-list, injection classifier, budget cap, on-topic
+    Kubernetes  ON: none   off: NetworkPolicy, Kyverno, KubeArmor, Falco, tool allow-list, RBAC scope, least privilege
+--- guardrails-output-off exit=0
+$ guardrails-budget-on
+🛡️  BUDGET guard ON. Each cluster named above now has a spend cap at the gateway. Keep chatting;
+  watch-it-burn-private (this cluster), burritobot-private.agenticburn.com
+    AI guards   ON: budget cap   off: output, input block-list, injection classifier, on-topic
+    Kubernetes  ON: Falco   off: NetworkPolicy, Kyverno, KubeArmor, tool allow-list, RBAC scope, least privilege
+  watch-it-burn-community, attackme.agenticburn.com
+    AI guards   ON: budget cap   off: output, input block-list, injection classifier, on-topic
+    Kubernetes  ON: none   off: NetworkPolicy, Kyverno, KubeArmor, Falco, tool allow-list, RBAC scope, least privilege
+--- guardrails-budget-on exit=0
+$ guardrails-budget-off
+(The meter keeps counting; only the limit is gone.)
+  watch-it-burn-private (this cluster), burritobot-private.agenticburn.com
+    AI guards   ON: none   off: output, input block-list, injection classifier, budget cap, on-topic
+    Kubernetes  ON: Falco   off: NetworkPolicy, Kyverno, KubeArmor, tool allow-list, RBAC scope, least privilege
+  watch-it-burn-community, attackme.agenticburn.com
+    AI guards   ON: none   off: output, input block-list, injection classifier, budget cap, on-topic
+    Kubernetes  ON: none   off: NetworkPolicy, Kyverno, KubeArmor, Falco, tool allow-list, RBAC scope, least privilege
+--- guardrails-budget-off exit=0
+$ guardrails-topic-on
+🛡️  On-topic guard ON. BurritoBot now sells burritos only: the menu, hours and locations get answered,
+  watch-it-burn-private (this cluster), burritobot-private.agenticburn.com
+    AI guards   ON: on-topic   off: output, input block-list, injection classifier, budget cap
+    Kubernetes  ON: Falco   off: NetworkPolicy, Kyverno, KubeArmor, tool allow-list, RBAC scope, least privilege
+  watch-it-burn-community, attackme.agenticburn.com
+    AI guards   ON: on-topic   off: output, input block-list, injection classifier, budget cap
+    Kubernetes  ON: none   off: NetworkPolicy, Kyverno, KubeArmor, Falco, tool allow-list, RBAC scope, least privilege
+--- guardrails-topic-on exit=0
+$ guardrails-ai-on
+🛡️  ALL AI guards ON: output scrubbing, input block-list + injection classifier, MCP tool
+  watch-it-burn-private (this cluster), burritobot-private.agenticburn.com
+    AI guards   ON: output, input block-list, injection classifier, budget cap, on-topic   off: none
+    Kubernetes  ON: Falco, tool allow-list   off: NetworkPolicy, Kyverno, KubeArmor, RBAC scope, least privilege
+  watch-it-burn-community, attackme.agenticburn.com
+    AI guards   ON: output, input block-list, injection classifier, budget cap, on-topic   off: none
+    Kubernetes  ON: tool allow-list   off: NetworkPolicy, Kyverno, KubeArmor, Falco, RBAC scope, least privilege
+--- guardrails-ai-on exit=0
+$ guardrails-ai-off
+🔓 ALL AI guards OFF: output scrubbing, input block-list + injection classifier, MCP tool restriction and the
+  watch-it-burn-private (this cluster), burritobot-private.agenticburn.com
+    AI guards   ON: on-topic   off: output, input block-list, injection classifier, budget cap
+    Kubernetes  ON: Falco   off: NetworkPolicy, Kyverno, KubeArmor, tool allow-list, RBAC scope, least privilege
+  watch-it-burn-community, attackme.agenticburn.com
+    AI guards   ON: on-topic   off: output, input block-list, injection classifier, budget cap
+    Kubernetes  ON: none   off: NetworkPolicy, Kyverno, KubeArmor, Falco, tool allow-list, RBAC scope, least privilege
+--- guardrails-ai-off exit=0
+$ guardrails-all-on
+🛡️  EVERY guardrail ON but the on-topic guard: RBAC, Kyverno, KubeArmor, egress, least privilege, output
+  watch-it-burn-private (this cluster), burritobot-private.agenticburn.com
+    AI guards   ON: output, input block-list, injection classifier, budget cap, on-topic   off: none
+    Kubernetes  ON: NetworkPolicy, Kyverno, KubeArmor, Falco, tool allow-list, RBAC scope, least privilege   off: none
+  watch-it-burn-community, attackme.agenticburn.com
+    AI guards   ON: output, input block-list, injection classifier, budget cap, on-topic   off: none
+    Kubernetes  ON: NetworkPolicy, Kyverno, KubeArmor, tool allow-list, RBAC scope, least privilege   off: Falco
+--- guardrails-all-on exit=0
+$ guardrails-all-off
+🔓 EVERY guardrail OFF but the on-topic guard, which is as it was: guardrails-topic-off turns it off.
+  watch-it-burn-private (this cluster), burritobot-private.agenticburn.com
+    AI guards   ON: on-topic   off: output, input block-list, injection classifier, budget cap
+    Kubernetes  ON: Falco   off: NetworkPolicy, Kyverno, KubeArmor, tool allow-list, RBAC scope, least privilege
+  watch-it-burn-community, attackme.agenticburn.com
+    AI guards   ON: on-topic   off: output, input block-list, injection classifier, budget cap
+    Kubernetes  ON: none   off: NetworkPolicy, Kyverno, KubeArmor, Falco, tool allow-list, RBAC scope, least privilege
+--- guardrails-all-off exit=0
+$ guards-on
+(guards-on is now guardrails-ai-on; running that.)
+🛡️  ALL AI guards ON: output scrubbing, input block-list + injection classifier, MCP tool
+  watch-it-burn-private (this cluster), burritobot-private.agenticburn.com
+    AI guards   ON: output, input block-list, injection classifier, budget cap, on-topic   off: none
+    Kubernetes  ON: Falco, tool allow-list   off: NetworkPolicy, Kyverno, KubeArmor, RBAC scope, least privilege
+  watch-it-burn-community, attackme.agenticburn.com
+    AI guards   ON: output, input block-list, injection classifier, budget cap, on-topic   off: none
+    Kubernetes  ON: tool allow-list   off: NetworkPolicy, Kyverno, KubeArmor, Falco, RBAC scope, least privilege
+--- guards-on exit=0
+$ guards-off
+(guards-off is now guardrails-ai-off; running that. It leaves the on-topic guard as it is: guardrails-topic-off turns that off.)
+🔓 ALL AI guards OFF: output scrubbing, input block-list + injection classifier, MCP tool restriction and the
+  watch-it-burn-private (this cluster), burritobot-private.agenticburn.com
+    AI guards   ON: on-topic   off: output, input block-list, injection classifier, budget cap
+    Kubernetes  ON: Falco   off: NetworkPolicy, Kyverno, KubeArmor, tool allow-list, RBAC scope, least privilege
+  watch-it-burn-community, attackme.agenticburn.com
+    AI guards   ON: on-topic   off: output, input block-list, injection classifier, budget cap
+    Kubernetes  ON: none   off: NetworkPolicy, Kyverno, KubeArmor, Falco, tool allow-list, RBAC scope, least privilege
+--- guards-off exit=0
+$ guardrails-topic-off
+🔓 On-topic guard OFF. BurritoBot will chat about anything again. Ask it for salsa dance moves.
+  watch-it-burn-private (this cluster), burritobot-private.agenticburn.com
+    AI guards   ON: none   off: output, input block-list, injection classifier, budget cap, on-topic
+    Kubernetes  ON: Falco   off: NetworkPolicy, Kyverno, KubeArmor, tool allow-list, RBAC scope, least privilege
+  watch-it-burn-community, attackme.agenticburn.com
+    AI guards   ON: none   off: output, input block-list, injection classifier, budget cap, on-topic
+    Kubernetes  ON: none   off: NetworkPolicy, Kyverno, KubeArmor, Falco, tool allow-list, RBAC scope, least privilege
+--- guardrails-topic-off exit=0
+```
+
+**Left as found.** A read at 21:39 UTC: both `/controls` at the start state (every AI guard and stage field false,
+Falco true on the private cluster alone), both guard locks free, both clusters' `restrict-image-registries` and
+`deny-external-registries` ValidatingPolicies back on `[Audit]`. The private bot's `/cost` reads 0 requests and the
+community bot's still 247, so no chat ran during the switches. No file the clusters run changed, so nothing waits on a
+promotion; #1350's "Not yet run on a cluster" list for these switches is closed by this run.
+
+**Tests.** Only `decisions.md` changed, so no test was written or changed and the live check is the work. The prose
+gate (`verify/prose_gate.py` against staging) passes. The scoped selection for this change picks 118 offline tests that
+read `decisions.md` and no tools-tier test; the ones that parse its entries or scan its text as a whole
+(`test_progress_entries.py`, `test_dispatched_runs.py`, `test_gitattributes_union.py`, `test_no_docker_hub.py`,
+`test_repo_identity.py`, `test_guard_toggle_record.py`, `test_platform_baseline.py`, `test_turn_guard.py`) ran once
+here, and the rest are left to validation.
