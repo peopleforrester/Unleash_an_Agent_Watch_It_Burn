@@ -53084,6 +53084,10 @@ a dry run reads nothing and needs no seed file; another org is refused before an
 `--apply` sends eight DELETEs by id and ends GREEN, leaving another view, a logs view of a stage name, a `WIB stage 7`
 view and the default filters untouched; a second run deletes nothing; a doubled name, the filter's name on another
 query and a refused delete each end RED.
+The 77 offline tests the scope selects for reading the run-of-show or `stage_views.py` each exit 0 when run alone,
+after `verify/ensure-submodules.sh` checked out the guard-proxy submodule eight of them read. So do
+`test_scope_tests.py` and `test_test_map.py`, and the prose gate passes. The rest of the scoped offline suite (tests
+selected only for reading decisions.md) and the 9 tier tests `scope_tests.py select tools` names are left to the gate.
 
 **Not yet run.** On or after 2026-11-13: `remove --apply`, which must end `STAGE REMOVAL GREEN`, with its `DELETED`
 and `after:` lines recorded here. The expected `after:` line reads one view, `Every prompt`, and four retention
