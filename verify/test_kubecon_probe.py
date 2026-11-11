@@ -757,8 +757,11 @@ check("narrowed to open: the probe writes the same C7 config as the terminal's .
       terminal_rewrite(narrowed, "off") == kp.c7_config_with_rule(narrowed, kp.C7_OPEN) == C7_COMMITTED)
 check("guard-input-on is the terminal's query, which it sends on both KubeCon clusters (#1148)",
       f'_both _toggle "{kp.GUARD_INPUT_ON}"' in helper("guard-input-on"))
-check("guard-output-on is the terminal's query", f'_px "{kp.GUARD_OUTPUT_ON}"' in helper("guard-output-on"))
-check("guard-topic-on is the terminal's query", f'_pxkey "{kp.GUARD_TOPIC_ON}" topic' in helper("guard-topic-on"))
+check("guard-output-on is the terminal's query, which it sends on both KubeCon clusters (#1349)",
+      f'_both _toggle "{kp.GUARD_OUTPUT_ON}"' in helper("guard-output-on"))
+check("guard-topic-on is the terminal's query, which it sends on both KubeCon clusters (#1349)",
+      f'_both _topic {kp.GUARD_TOPIC_ON.split("=")[1]}' in helper("guard-topic-on")
+      and re.search(r'_pxkey "topic=\$st" topic', guardlib) is not None and kp.GUARD_TOPIC_ON.startswith("topic="))
 
 
 def terminal_evil_patch(agent: dict, names: list[str]) -> list | None:

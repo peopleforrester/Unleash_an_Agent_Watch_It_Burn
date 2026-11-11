@@ -384,6 +384,10 @@ def run(cmd: str, mode: str = "linked", args: tuple[str, ...] = ()) -> tuple[sub
             (home / name).write_text(body + "\n")
         (fakebin / "kubectl").write_text(FAKE)
         (fakebin / "kubectl").chmod(0o755)
+        # A sleep that returns at once: the /controls read guardrails-on and guardrails-off end on (_controls, #1349)
+        # waits out guard-proxy's 5 s cache of the Kubernetes controls, which this fake has none of.
+        (fakebin / "sleep").write_text("#!/usr/bin/env bash\nexit 0\n")
+        (fakebin / "sleep").chmod(0o755)
         calls, state = pathlib.Path(tmp, "calls"), pathlib.Path(tmp, "state")
         state.write_text("{}")
         env = {**os.environ, "HOME": str(home), "PATH": f"{fakebin}:{os.environ['PATH']}", "CALLS": str(calls),
@@ -436,8 +440,15 @@ for st in ("on", "off"):
     check(f"guardrails-{st}: the other cluster's kubeconfig is written for the student alone", extra[-1] == "peer-mode 0o600",
           extra[-1])
     lines = [line for line in r.stdout.splitlines() if not line.startswith("$ ")]
+    # The switch's own lines come first; the /controls read every stage switch ends on (#1349) follows them, held by
+    # verify/test_guard_switch_controls.py and verify/test_guard_switch_both.py's record.
+    read_at = next((i for i, line in enumerate(lines) if line.startswith(("Waiting out guard-proxy", "Read back from"))),
+                   len(lines))
     check(f"guardrails-{st}: says what each guardrail now does, one line each, no challenge number",
-          len(lines) == 5 and not re.search(r"Challenge [0-9]|\(C[0-9]\)", r.stdout) and "—" not in r.stdout, str(lines))
+          read_at == 5 and not re.search(r"Challenge [0-9]|\(C[0-9]\)", r.stdout) and "—" not in r.stdout, str(lines))
+    check(f"guardrails-{st}: then reads /controls back on both clusters, naming the other one",
+          "Read back from guard-proxy's /controls" in r.stdout and "  watch-it-burn-community" in r.stdout
+          or "watch-it-burn-community: /controls could not be read" in r.stdout, r.stdout[-600:])
     want = "Deny" if st == "on" else "Audit"
     pats = [c for c in ran if "patch" in c["args"]]
     check(f"guardrails-{st}: sets restrict-image-registries and deny-external-registries to [{want}] on both",
