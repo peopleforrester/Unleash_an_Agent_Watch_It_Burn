@@ -211,6 +211,7 @@ check("sister_tree.py runs git only to clone another repo and to read that clone
 # bounded file's own count of those is pinned: a new one fails here until its bound is reread against it.
 BOUNDED_READS = {"verify/app_render.py": 2, "verify/bootstrap_chart.py": 1, "verify/collector_render.py": 2,
                  "verify/git_mirror.py": 1, "verify/sister_tree.py": 1, "verify/test_bootstrap_chart_render.py": 1,
+                 "verify/test_collector_relay_live_checks.py": 2,
                  "verify/test_datadog_log_services_render.py": 4, "verify/test_enforce_floor.py": 3,
                  "verify/test_image_registry_render.py": 3, "verify/test_kubearmor_config_render.py": 1,
                  "verify/test_platform_baseline.py": 1}

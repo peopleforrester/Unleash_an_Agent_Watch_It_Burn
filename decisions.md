@@ -3600,7 +3600,7 @@ talk.
   `X-Forwarded-*`, and no Ingress, gateway or console route reaches `llm-guard:8000`. The comment saying this went
   into the run's escalation list, because a run cannot write to an issue.
 - **What else changes.** Kyverno's `verify-image-signatures` matches `ghcr.io/peopleforrester/watch-it-burn*`
-  and Harbor, so llm-guard is no longer signature-checked at admission. lab-platform signs the image with its own
+  and Harbor, so llm-guard is no longer signature-checked at admission. lab-platform signs the image with a few
   identity, not the key in `policies/cosign/`. Adding lab-platform's attestor is a follow-up. The package was
   still private when this was written: an anonymous `GET` of its manifest got 403 on 2026-10-29. Until Michael
   turns on the package's public visibility, a cluster cannot pull it and the pod sits in ImagePullBackOff.
@@ -24017,7 +24017,7 @@ no KubeArmorPolicy on the cluster, and the card read open from workshop-mcp's `s
 
 **How it was run.** A headless Chromium (Playwright 1.64.1, through `uv run --with`, in the run's directory only)
 opened `https://attackme.burritobot.co/`, the page the room uses, typed each prompt into the composer and pressed
-Send, and pressed the page's own Reset button (`resetChat()`). Each trial was a fresh browser context with its own
+Send, and pressed the page's own Reset button (`resetChat()`). Each trial was a fresh browser context with a few
 witch name. The tool calls of each turn were read off workshop-mcp's audit trail (`tool_invocation` `pre` lines in
 the `shim` container's log). Every prompt carried guard-proxy's probe marker `[[wib-probe]]` on its own line, so none
 of it reached the room's feed; the room's prompts do not carry it, and whether the marker moves Nova is not measured.
@@ -50872,7 +50872,7 @@ Argo CD sync, named above, is still not yet run on a cluster.
 ## 2026-11-10 · #1317 · run 20099 · A test runs sk-tmp-check itself and holds it to no literal findings
 
 **What.** #1315's done line reads: `sk-tmp-check`, run from the repo root, reports no "a system tempdir path"
-(literal) findings. No test ran sk-tmp-check. `test_no_system_temp_paths.py` holds the same paths with its own
+(literal) findings. No test ran sk-tmp-check. `test_no_system_temp_paths.py` holds the same paths with a few
 pattern and its own `EXCEPTIONS` list, which never reads a `tmp-ok` waiver, so a deleted waiver passed every test.
 
 **Change.** `verify/test_sk_tmp_check_e2e.py` runs scripts-knowledge's `bin/sk-tmp-check --warn` from the repo root
@@ -52829,3 +52829,49 @@ report, its log and the Datadog reads stayed in this run's scratch directory.
 live check above is the issue's work.
 
 No dependency was added.
+
+## 2026-11-11 · #1340 · run 20302 · a live test holds #1335's relay criterion on both clusters
+
+Test review run 20298 found that no test read the relay ConfigMap on either cluster for #1335's criterion "the relay
+ConfigMap no longer defines `transform/coc_mask` and reads about 25 KB". `test_collector_coc_mask.py` and
+`test_collector_startup_budget.py` hold the source offline, and `pii_scrub_live.collector_checks` reads the live relay
+on the community cluster for `transform/scrub_pii` alone. #1335's live sizes were only in this file.
+
+**The test.** `verify/test_collector_relay_live.py` (`# SUITE: e2e`, so `run-e2e.sh` runs it with the COMMUNITY_CONTEXT
+and PRIVATE_CONTEXT it already requires) runs seven read-only checks on each of watch-it-burn-community and
+watch-it-burn-private. The context is that cluster. The ConfigMap monitoring/otel-collector-opentelemetry-collector-agent
+exists, and its tracking id names the `otel-collector` Application. Its `relay` key parses as a YAML map. The relay
+defines no `transform/coc_mask` among its processors. Its traces pipeline still names `transform/coc_mask`, so a relay
+that dropped the mask altogether does not pass "not defined here" for the wrong reason. The relay is about 25 KB.
+
+**What "about 25 KB" means here.** 25,000 bytes within 40% either way: 15,000 to 35,000, read as the UTF-8 length of
+the `relay` key. #1335 read 26,210 and 24,498 bytes; this checkout renders 21,505 to 23,161 per profile before the
+chart adds its own processors. The mask written back in, as #1328 had it, is about 700 KB, twenty times the upper
+bound. A change that grows the relay past 35,000 bytes on purpose moves `HIGH_BYTES` with its own entry here.
+
+**Its offline half.** `verify/test_collector_relay_live_checks.py` runs the test's `run` against fake clusters whose
+relay is this checkout's render as helm writes it, burn's on the community cluster and instructor's on the private
+one, which are the profiles each cluster's live relay matches (scrub_pii on community, the Tempo exporter on private).
+Each profile's render must sit inside the band, so a change that grows a relay past it fails here before Argo CD
+syncs it. The healthy pair passes all 14 checks. Eleven breaks on the community cluster fail on the check that names
+them, and the other relay checks stay green where they should: the ConfigMap gone, put there by another Application or
+with no tracking id, no relay key, a relay that is not YAML or is a list, the full mask written back (fails both the
+definition and the size), a stub mask (the definition alone), the mask taken out of the traces pipeline, a relay one
+byte over the bound, a relay cut short. The bounds are held at their edges: 15,000 and 35,000 bytes pass, 14,999 and
+35,001 fail. A context naming the wrong cluster and a cluster that cannot be read fail too. The scope map and test map
+gain the checks file's entry.
+
+**It reads the value files itself.** The checks file merges each collector Application's `valueFiles` with a few
+lines of its own rather than importing `verify/collector_render.py`. Thirty tests import that helper already, and
+`test_scope_tests.py` makes a 31st turn it into a shared helper listed in `full`, so every later change to it would run
+the whole offline suite. Since the checks file builds those paths from the Applications, the scope map bounds it to
+`gitops/otel-collector` under `bounds`, as it bounds `collector_render.py`, rather than listing it in `always`. `test_scope_tests.py` pins the bound's two run-time
+paths in `BOUNDED_READS`, so a third added later fails there until the bound is reread.
+
+**Live check, 07:19Z, staging `215c162d`.** `COMMUNITY_CONTEXT=watch-it-burn-community
+PRIVATE_CONTEXT=watch-it-burn-private python3 verify/test_collector_relay_live.py` passed 14 of 14 and exited 0. The
+relay read 26,210 bytes on watch-it-burn-community and 24,498 on watch-it-burn-private, as #1335 recorded, with no mask
+definition and `transform/coc_mask` in each traces pipeline. Nothing on either cluster changed.
+
+**Tests run**, each once and passing: `test_collector_relay_live_checks.py`, `test_collector_relay_live.py` live on
+both clusters, `test_scope_tests.py` and `test_test_map.py`. The rest the change selects are left to validation.

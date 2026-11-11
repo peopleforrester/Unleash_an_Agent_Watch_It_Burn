@@ -62,6 +62,10 @@ bounds:
     why: REPO / f"gitops/manifests/{n}" is built with kustomize for each demo-app-* the burn profile lists (#1078)
     paths:
       - gitops/manifests
+  verify/test_collector_relay_live_checks.py:
+    why: relay_values() reads each $values/ file the collector Applications name, as collector_render.py does, which it does not import so as not to make that helper shared (#1340)
+    paths:
+      - gitops/otel-collector
   verify/test_datadog_log_services_render.py:
     why: render_app() reads each gitops/bootstrap/apps Application source's path, REPO / src["path"], and each $values/ file it names (#1078)
     paths:
@@ -2461,6 +2465,13 @@ reads:
     - verify/e2e-tools.lock
     - verify/fetch-e2e-tools.sh
     - verify/pii_scrub_cases.py
+  test_collector_relay_live_checks.py:
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/otel-collector
+    - gitops/otel-collector/coc-mask/configmap.yaml
+    - verify/test_collector_relay_live.py
   test_collector_startup_budget.py:
     - gitops/bootstrap/apps/otel-collector-attendee.yaml
     - gitops/bootstrap/apps/otel-collector-burn.yaml
