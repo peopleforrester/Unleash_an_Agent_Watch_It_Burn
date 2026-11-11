@@ -1,5 +1,5 @@
 # ABOUTME: Holds the run-of-show's Night Before step "Seed the stage's Datadog traces" to the deck's four Datadog links,
-# ABOUTME: #/11, #/26, #/48 and #/68, each with its attack seed, session and spans, and to no saved views (#1205, #1139).
+# ABOUTME: #/12, #/27, #/49 and #/70, each with its attack seed, session and spans, and to no saved views (#1205, #1139).
 """#1139 rewrote the Night Before step "Seed the stage's Datadog traces" in
 `facilitation/kubecon-na-2026-run-of-show.md`. Before it, the step told Whitney to open each of the nine seeds' links
 and save it as a view ("saves it as a view, in that order", "presses Save on a seed view"). The deck opens Datadog once
@@ -8,9 +8,11 @@ the test that fails when that stops holding. This one reads the step, from its f
 fails when any of these stops holding:
 
   1. The step has its "The four Datadog links" paragraph and says the deck opens Datadog once per challenge.
-  2. Its table has one row per link, and the rows are `#/11`, `#/26`, `#/48` and `#/68`, in that order. The issue
-     named slides 11, 26, 48 and 65; Challenge 4's link is `#/68`, the "tools" hint, since the deck grew
-     (rounds-agenticburn#118; #1138 and #1139 in decisions.md, 2026-11-08), and `#/65` is segment 5's tee-up.
+  2. Its table has one row per link, and the rows are `#/12`, `#/27`, `#/49` and `#/70`, in that order. The issue
+     named slides 11, 26, 48 and 65; Challenge 4's link is `#/70`, the "tools" hint, since the deck grew
+     (rounds-agenticburn#118; #1138 and #1139 in decisions.md, 2026-11-08). Rounds `8f53ce2` moved the desk's first
+     slide to `#/8` and added title cards on `#/43` and `#/66` (rounds-agenticburn#170, #1327), so the four links
+     moved from `#/11`, `#/26`, `#/48` and `#/68` to these, and `#/67` is segment 5's tee-up.
   3. Each row gives its segment, the words that open Datadog, the attack seed `cN-attack`, its session
      `wib-stage-cN-attack-<stamp>`, and the spans in the order `verify/stage_traces.py`'s SEEDS holds them.
   4. The step cites no slide hash but those four.
@@ -41,10 +43,10 @@ NOT_SAVED = "not from saved views"
 
 # Each link: the slide's URL hash, its segment, the words in the row that open Datadog, and the attack seed it shows.
 LINKS = (
-    ("#/11", 2, '"Ophelia Thorn"', "c1-attack"),
-    ("#/26", 3, "opens Datadog", "c2-attack"),
-    ("#/48", 4, '"Let\'s look at the trace."', "c3-attack"),
-    ("#/68", 5, '"tools"', "c4-attack"),
+    ("#/12", 2, '"Ophelia Thorn"', "c1-attack"),
+    ("#/27", 3, "opens Datadog", "c2-attack"),
+    ("#/49", 4, '"Let\'s look at the trace."', "c3-attack"),
+    ("#/70", 5, '"tools"', "c4-attack"),
 )
 MUST = {key: must for key, _c, _what, must, _not in st.SEEDS}
 HASH = re.compile(r"#/\d+")
@@ -104,7 +106,7 @@ def judge(step: str) -> dict[str, list[str]]:
     body = rows(step)
     hashes = [HASH.findall(r[0])[:1][0] if r and HASH.findall(r[0]) else "?" for r in body]
     want = [h for h, *_ in LINKS]
-    out["the link table's rows are #/11, #/26, #/48 and #/68, in that order"] = (
+    out["the link table's rows are #/12, #/27, #/49 and #/70, in that order"] = (
         [] if hashes == want else [f"rows read {hashes}, not {want}"])
 
     bad = []
@@ -146,33 +148,33 @@ step = seed_step(ros)
 print(f"{ROS_REL}, the Night Before step {SEED_STEP[6:]!r}:")
 report(judge(step))
 
-ROW_C4 = "| `#/68`, segment 5 |"
-ROW_C2 = next((line for line in step.splitlines() if line.lstrip().startswith("| `#/26`")), None)
+ROW_C4 = "| `#/70`, segment 5 |"
+ROW_C2 = next((line for line in step.splitlines() if line.lstrip().startswith("| `#/27`")), None)
 for lit in (HEADING, ROW_C4, "`wib-stage-c2-attack-<stamp>`", "`get_weather`, then `read_internal_config`",
             "the PII one\n  spends no tokens"):
     need(step, lit, f"{ROS_REL}'s seed step")
 if ROW_C2 is None:
-    print(f"ANCHOR MISSING: no row starting '| `#/26`' in {ROS_REL}'s seed step")
+    print(f"ANCHOR MISSING: no row starting '| `#/27`' in {ROS_REL}'s seed step")
     sys.exit(1)
 lines = step.splitlines()
-r3, r4 = (next(n for n, line in enumerate(lines) if line.lstrip().startswith(p)) for p in ("| `#/48`", "| `#/68`"))
+r3, r4 = (next(n for n, line in enumerate(lines) if line.lstrip().startswith(p)) for p in ("| `#/49`", "| `#/70`"))
 swapped = lines[:]
 swapped[r3], swapped[r4] = swapped[r4], swapped[r3]
 
-FOUR = "the link table's rows are #/11, #/26, #/48 and #/68, in that order"
+FOUR = "the link table's rows are #/12, #/27, #/49 and #/70, in that order"
 ROW = "each row names its segment, link, attack seed, session and SEEDS' spans in order"
 SAVE_NAME = "the step tells the presenter to save no view"
 cases = (
     ("the four-links paragraph cut", step.replace(HEADING, ""),
      "the step has its four-links paragraph and opens Datadog once per challenge"),
-    ("Challenge 4's link put back on #/65", step.replace(ROW_C4, "| `#/65`, segment 5 |"), FOUR),
-    ("the #/26 row dropped", step.replace(ROW_C2 + "\n", ""), FOUR),
-    ("the #/48 and #/68 rows swapped", "\n".join(swapped), FOUR),
+    ("Challenge 4's link put back on #/67", step.replace(ROW_C4, "| `#/67`, segment 5 |"), FOUR),
+    ("the #/27 row dropped", step.replace(ROW_C2 + "\n", ""), FOUR),
+    ("the #/49 and #/70 rows swapped", "\n".join(swapped), FOUR),
     ("Challenge 2's row showing the fix's session",
      step.replace("`wib-stage-c2-attack-<stamp>`", "`wib-stage-c2-fixed-<stamp>`"), ROW),
     ("Challenge 4's spans in the other order",
      step.replace("`get_weather`, then `read_internal_config`", "`read_internal_config`, then `get_weather`"), ROW),
-    ("#/65 cited as well", step.replace(HEADING, HEADING + " Segment 5's tee-up is `#/65`."),
+    ("#/67 cited as well", step.replace(HEADING, HEADING + " Segment 5's tee-up is `#/67`."),
      "the step cites no slide hash but the four links"),
     ("the pre-#1139 save instruction put back",
      step + "  Whitney opens each link in her org and saves it as a\n  view, in that order.\n", SAVE_NAME),
@@ -188,4 +190,4 @@ for label, text, name in cases:
 if failures:
     print(f"\nFAIL: {len(failures)} check(s): " + "; ".join(failures))
     sys.exit(1)
-print("\nThe seed step names the four Datadog links, #/11, #/26, #/48 and #/68, and tells the presenter to save no view.")
+print("\nThe seed step names the four Datadog links, #/12, #/27, #/49 and #/70, and tells the presenter to save no view.")

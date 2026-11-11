@@ -2,7 +2,7 @@
 # ABOUTME: Holds the run-of-show's Night Before seed step to verify/stage_traces.py: for each of the deck's four Datadog
 # ABOUTME: links, the seed and session shown, its spans in order, and how to reach it from the filtered and home links.
 """#1206, the test #1139 shipped without. The run-of-show's Night Before step "Seed the stage's Datadog traces" has a
-table with one row per Datadog link in the deck (`#/11`, `#/26`, `#/48`, `#/68`) naming the attack seed the presenter
+table with one row per Datadog link in the deck (`#/12`, `#/27`, `#/49`, `#/70`) naming the attack seed the presenter
 shows, its session `wib-stage-<key>-<stamp>` and the spans shown, and two bullets on reaching that trace: from the
 filtered Agent Observability link, and from the Datadog home page link. This test reads that step and holds it to
 verify/stage_traces.py, which seeds the traces and reads them back:
@@ -45,10 +45,10 @@ ONE_TRACE = "click the one trace"
 # deck), and the challenge whose attack seed it opens. verify/test_stage_trace_slides.py holds each seed's spans to
 # the slide's own note; this list is the four links #1139's step is written around.
 LINKS = (
-    ("#/11", "segment 2", '"Ophelia Thorn"', "Challenge 1"),
-    ("#/26", "segment 3", "Whitney opens Datadog", "Challenge 2"),
-    ("#/48", "segment 4", "\"Let's look at the trace.\"", "Challenge 3"),
-    ("#/68", "segment 5", '"tools"', "Challenge 4"),
+    ("#/12", "segment 2", '"Ophelia Thorn"', "Challenge 1"),
+    ("#/27", "segment 3", "Whitney opens Datadog", "Challenge 2"),
+    ("#/49", "segment 4", "\"Let's look at the trace.\"", "Challenge 3"),
+    ("#/70", "segment 5", '"tools"', "Challenge 4"),
 )
 TOOL = re.compile(r"\b[a-z]+(?:_[a-z]+)+\b")
 CODE = re.compile(r"`([^`]+)`")
@@ -199,16 +199,16 @@ check("the filtered link is stage_traces' presenters tab, and both bullets reach
       f"{RANGE}, ending on the one trace", not links_drift(step), "; ".join(links_drift(step)))
 
 print("== the drift checks fail on a changed step ==")
-c3_row = next(line for line in step.splitlines() if line.strip().startswith("| `#/48`"))
-c4_row = next(line for line in step.splitlines() if line.strip().startswith("| `#/68`"))
+c3_row = next(line for line in step.splitlines() if line.strip().startswith("| `#/49`"))
+c4_row = next(line for line in step.splitlines() if line.strip().startswith("| `#/70`"))
 c3_spans = "`read_support_ticket` returning HC-666, then `deploy_app`"
-need(c3_row, c3_spans, f"{ROS_REL}'s #/48 row")
+need(c3_row, c3_spans, f"{ROS_REL}'s #/49 row")
 c4_spans = "`get_weather`, then `read_internal_config`"
-need(c4_row, c4_spans, f"{ROS_REL}'s #/68 row")
+need(c4_row, c4_spans, f"{ROS_REL}'s #/70 row")
 c2_session = "`wib-stage-c2-attack-<stamp>`"
-need(step, c2_session, f"{ROS_REL}'s #/26 row")
+need(step, c2_session, f"{ROS_REL}'s #/27 row")
 table_cases = {
-    "the #/68 row dropped": step.replace(c4_row + "\n", ""),
+    "the #/70 row dropped": step.replace(c4_row + "\n", ""),
     "Challenge 3's spans swapped": step.replace(c3_spans, "`deploy_app`, then `read_support_ticket` returning HC-666"),
     "Challenge 4's second span dropped": step.replace(c4_spans, "`get_weather`"),
     "Challenge 2's session keyed to c2-fixed": step.replace(c2_session, "`wib-stage-c2-fixed-<stamp>`"),

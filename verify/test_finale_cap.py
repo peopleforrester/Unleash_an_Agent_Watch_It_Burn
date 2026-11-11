@@ -168,7 +168,9 @@ with tempfile.TemporaryDirectory() as tmp:
 
 print("== the close tells the presenters the finale ==")
 ros = (REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text(encoding="utf-8")
-close = ros[ros.index("- **Break it (the last minutes, #690):**"):ros.index("- **The close (Michael):**")]
+# Since rounds-agenticburn#170 the close and the take-home come before the break-it line, so the finale runs to
+# the speakers' close-out (#1327).
+close = ros[ros.index("- **Break it (the last minutes, #690):**"):ros.index("- **Close out (both):**")]
 check("the run-of-show's close runs finale-cap-on, shows cost-watch and ends with finale-cap-off",
       all(f"`{c}" in close for c in ("finale-cap-on", "cost-watch", "finale-cap-off")))
 check("it says what the room sees when the cap trips, guard-proxy's own reply, and that Reset does not help "

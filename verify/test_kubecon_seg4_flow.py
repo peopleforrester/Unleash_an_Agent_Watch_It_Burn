@@ -5,15 +5,17 @@
 rounds-agenticburn#102, built 2026-11-08, put Challenge 3 on the deck's `#/43` to `#/61` and Challenge 4 on `#/62`
 to `#/72`; #1196 moved them to `#/43` to `#/64` and `#/65` to `#/98` after rounds-agenticburn#112 and #118, and #1141
 moved the run-of-show's segments 4 and 5 onto those URL hashes. Rounds `cfbd9ba` redrew Challenge 4's diagrams as
-thirty-eight slides, so Challenge 4 is `#/65` to `#/113` in the 127-slide deck at rounds main `faf4005` (#1270). This
-test holds the page to them:
+thirty-eight slides, so Challenge 4 was `#/65` to `#/113` in the 127-slide deck at rounds main `faf4005` (#1270).
+Rounds `8f53ce2` (rounds-agenticburn#170, 2026-11-11) gave Challenges 3 and 4 title cards and moved the desk's first
+slide to `#/8`, so in the 129-slide deck Challenge 3 is `#/43` to `#/65` and Challenge 4 `#/66` to `#/115` (#1327).
+This test holds the page to them:
 
-  1. The glance table's row 4 names Challenge 3 with `#/43` to `#/64` and no Joker; row 5 names Challenge 4 with
-     `#/65` to `#/113`.
-  2. Segment 4's story cites `#/43` to `#/64`, and segment 5's `#/65` to `#/113`, each once, in ascending order, and
+  1. The glance table's row 4 names Challenge 3 with `#/43` to `#/65` and no Joker; row 5 names Challenge 4 with
+     `#/66` to `#/115`.
+  2. Segment 4's story cites `#/43` to `#/65`, and segment 5's `#/66` to `#/115`, each once, in ascending order, and
      their beats come in the run-of-show's order. The trace, LLM01, the switch and the retry carry the same hashes
      in the run-of-show.
-  3. In the Challenge 3 block the presenters' attack (`#/47`) comes before its Datadog trace (`#/48`), and the trace
+  3. In the Challenge 3 block the presenters' attack (`#/48`) comes before its Datadog trace (`#/49`), and the trace
      before the first fix.
   4. Segment 4 says no "Joker" and puts no desk wall on screen; the deployments page and the prompt wall are the
      optional views during play; the desk is #1077's, filed and looked up by number and never browsed.
@@ -48,56 +50,58 @@ ROS_NO_WALL_LINK = "the /kubecon page's header has no link to it (#1161)"
 C6_OPEN = '<article class="beat" data-beat="C6" data-segment="4">'
 ROW4_OPEN, ROW5_OPEN = "<tr><td>4</td><td>7</td>", "<tr><td>5</td><td>5</td>"
 ROS_SEG4, ROS_SEG5, ROS_SEG6 = "### Segment 4:", "### Segment 5:", "### Segment 6:"
-FIRST, LAST = 43, 64
-FIRST5, LAST5 = 65, 113
+FIRST, LAST = 43, 65
+FIRST5, LAST5 = 66, 115
 
 # The story's beats, as the page words them with its tags removed, in the run-of-show's order.
 BEATS = [
-    ("the desk (#/43)", '"BurritoBot has a support desk." (#/43)'),
-    ("its QR code (#/44)", '"People can use the support desk too." (#/44)'),
-    ("filing a ticket (#/45)", '"Let\'s file a ticket." (#/45)'),
-    ("the challenge (#/46)", '(#/46), "Use the support ticket system to get BurritoBot to deploy something."'),
+    ("the title card (#/43)", '"It is time for Challenge 3!" (#/43)'),
+    ("the AI guardrails heading (#/44)", '"AI guardrails" (#/44)'),
+    ("its QR code (#/45)", '"People can use the support desk too." (#/45)'),
+    ("filing a ticket (#/46)", '"Let\'s file a ticket." (#/46)'),
+    ("the challenge (#/47)", '(#/47), "Use the support ticket system to get BurritoBot to deploy something."'),
     ("the room's deployments page", "whose \"deploy\" opens the room's deployments page"),
-    ("the HC-666 hint (#/47)", '(#/47), "Look up ticket HC-666 on the support desk."'),
+    ("the HC-666 hint (#/48)", '(#/48), "Look up ticket HC-666 on the support desk."'),
     ("the white text, live", "Show it live"),
     ("the white text", "select all of its text to show the white text"),
     ("the attack", "the presenters' attack on the private bot and its deployment landing on the one deployments page"),
-    ("the trace after the attack (#/48)", "Then its trace (#/48)"),
-    ("LLM01 (#/49)", '"LLM01: Prompt Injection" (#/49)'),
-    ("the fix (#/50)", "the fix (#/50)"),
+    ("the trace after the attack (#/49)", "Then its trace (#/49)"),
+    ("LLM01 (#/50)", '"LLM01: Prompt Injection" (#/50)'),
+    ("the fix (#/51)", "the fix (#/51)"),
     ("guard-agency-on", "least privilege, guard-agency-on, takes Deployments away"),
     ("then guard-input-on", "then guard-input-on arms the input classifier"),
-    ("the retry (#/51)", '"Try your attack again." (#/51), the room\'s retry on the public bot'),
-    ("RBAC (#/52)", '"Pesky RBAC!" (#/52)'),
-    ("the Role (#/53 and #/54)", "Role before and after (#/53 and #/54)"),
-    ("LLM Guard (#/55)", "LLM Guard (#/55)"),
-    ("the diagram (#/56 to #/64)", "the architecture diagram (#/56 to #/64)"),
+    ("the retry (#/52)", '"Try your attack again." (#/52), the room\'s retry on the public bot'),
+    ("RBAC (#/53)", '"Pesky RBAC!" (#/53)'),
+    ("the Role (#/54 and #/55)", "Role before and after (#/54 and #/55)"),
+    ("LLM Guard (#/56)", "LLM Guard (#/56)"),
+    ("the diagram (#/57 to #/65)", "the architecture diagram (#/57 to #/65)"),
 ]
 BEATS5 = [
-    ("the tee-up (#/65 and #/66)", '"But not every MCP server can be trusted." (#/65 and #/66)'),
-    ("the challenge (#/67)", '(#/67), "Find the poisoned MCP tool."'),
-    ("the hint (#/68)", '(#/68), "Ask BurritoBot what tools it has."'),
+    ("the title card (#/66)", '"It is time for Challenge 4!" (#/66)'),
+    ("the tee-up (#/67 and #/68)", '"But not every MCP server can be trusted." (#/67 and #/68)'),
+    ("the challenge (#/69)", '(#/69), "Find the poisoned MCP tool."'),
+    ("the hint (#/70)", '(#/70), "Ask BurritoBot what tools it has."'),
     ("the attack and its trace", "Michael's live weather ask on the private bot"),
-    ("LLM03 (#/69)", '"LLM03: Supply Chain" (#/69)'),
-    ("guard-mcp-on (#/70)", "(#/70): guard-mcp-on"),
-    ("the retry (#/71)", '"Try your attack again." (#/71), the room\'s retry on the public bot, which guard-mcp-on reaches'),
-    ("the gateway (#/72 and #/73)", "agentgateway in the notes (#/72 and #/73)"),
-    ("the diagrams (#/74 to #/111)", "without and then with the gateway (#/74 to #/111)"),
-    ("the rule (#/112 and #/113)", "its rule before and after (#/112 and #/113)"),
-    ("the close starts at #/114", "The close starts at #/114."),
+    ("LLM03 (#/71)", '"LLM03: Supply Chain" (#/71)'),
+    ("guard-mcp-on (#/72)", "(#/72): guard-mcp-on"),
+    ("the retry (#/73)", '"Try your attack again." (#/73), the room\'s retry on the public bot, which guard-mcp-on reaches'),
+    ("the gateway (#/74 and #/75)", "agentgateway in the notes (#/74 and #/75)"),
+    ("the diagrams (#/76 to #/113)", "without and then with the gateway (#/76 to #/113)"),
+    ("the rule (#/114 and #/115)", "its rule before and after (#/114 and #/115)"),
+    ("the close starts at #/116", "The close starts at #/116."),
 ]
 # The same beats' hashes in the run-of-show, for the ones the page and the run-of-show both name.
 ROS_NUMBERS = [
-    ("the trace", "**The trace, after the attack (#/48).**"),
-    ("LLM01", "**LLM01 (#/49).**"),
-    ("the switch", "from /lab (#/50)"),
-    ("the retry", "**The retry (#/51).**"),
-    ("Challenge 4's retry", "**The retry (#/71).**"),
+    ("the trace", "**The trace, after the attack (#/49).**"),
+    ("LLM01", "**LLM01 (#/50).**"),
+    ("the switch", "from /lab (#/51)"),
+    ("the retry", "**The retry (#/52).**"),
+    ("Challenge 4's retry", "**The retry (#/73).**"),
 ]
 # The Challenge 3 block's order: the attack, its trace, then the fixes.
 BLOCK_ORDER = [
-    ("the presenters' attack (#/47)", "Success marker, private bot (the presenters' attack, #/47)"),
-    ("its trace (#/48)", "The trace, after the attack (#/48):"),
+    ("the presenters' attack (#/48)", "Success marker, private bot (the presenters' attack, #/48)"),
+    ("its trace (#/49)", "The trace, after the attack (#/49):"),
     ("the attack's seed, by its session id", "wib-stage-c3-attack-<stamp> on Past 7 Days"),
     ("the attack's seed", "c3-attack"),
     ("least privilege first", "guard-agency-on"),
@@ -214,9 +218,9 @@ def problems(page: str, ros: str) -> dict[str, list[str]]:
     block = plain(seg_html.split(C6_OPEN, 1)[1].split("</article>", 1)[0]) if C6_OPEN in seg_html else ""
     ros_seg = flat(ros.split(ROS_SEG4, 1)[1].split(ROS_SEG6, 1)[0].replace("`", ""))
     out: dict[str, list[str]] = {}
-    out["the glance rows name Challenge 3 on #/43 to #/64 and Challenge 4 on #/65 to #/113, and no Joker"] = (
-        ([] if "Challenge 3, #/43 to #/64:" in row else [f"row 4 reads {row!r}"])
-        + ([] if "Challenge 4, #/65 to #/113:" in row5 else [f"row 5 reads {row5!r}"])
+    out["the glance rows name Challenge 3 on #/43 to #/65 and Challenge 4 on #/66 to #/115, and no Joker"] = (
+        ([] if "Challenge 3, #/43 to #/65:" in row else [f"row 4 reads {row!r}"])
+        + ([] if "Challenge 4, #/66 to #/115:" in row5 else [f"row 5 reads {row5!r}"])
         + [w for w in ("Joker", "joker") if w in row])
     slides = expand(SLIDE_PAREN.finditer(premise))
     out[f"segment 4's story cites #/{FIRST} to #/{LAST}, each once, in order"] = (
@@ -236,9 +240,9 @@ def problems(page: str, ros: str) -> dict[str, list[str]]:
         + ([] if ROS_NO_WALL_LINK in flat(ros) else [f"the run-of-show lacks {ROS_NO_WALL_LINK!r}"]))
     out["segment 4 names the optional views, the number-only desk and the facts that hold"] = [
         f"{label}: {p!r}" for label, p in KEPT if p not in seg]
-    out["segment 5 drops \"The setup\" and names #1132 at #/71's retry"] = (
+    out["segment 5 drops \"The setup\" and names #1132 at #/73's retry"] = (
         (["The setup"] if "The setup" in seg5 else [])
-        + ([] if "so on #/71 the room retries on the public bot" in seg5
+        + ([] if "so on #/73 the room retries on the public bot" in seg5
            and "Since #1132 guard-mcp-on switches both clusters" in seg5 else ["no #1132 in the C7 notes"]))
     room = " ".join(plain(x) for x in re.findall(r'<div class="prompt"[^>]*>(.*?)</div>', page, re.S))
     room += " " + " ".join(re.findall(r'Say: "(.*?)"', plain(page)))
@@ -285,27 +289,27 @@ def swap(text: str, old: str, new: str) -> str:
     return text.replace(old, new, 1)
 
 
-ROWS = "the glance rows name Challenge 3 on #/43 to #/64 and Challenge 4 on #/65 to #/113, and no Joker"
+ROWS = "the glance rows name Challenge 3 on #/43 to #/65 and Challenge 4 on #/66 to #/115, and no Joker"
 OUTSIDE = "no slide 44 to 64 and no #/43 or later outside segments 4 and 5 and rows 4 and 5"
 fails_on("the old row put back",
-         swap(page, "Challenge 3, <code>#/43</code> to <code>#/64</code>: a support ticket gets the bot to deploy something",
+         swap(page, "Challenge 3, <code>#/43</code> to <code>#/65</code>: a support ticket gets the bot to deploy something",
               "Challenge 3: ticket HC-666 deploys your Joker"), ROWS)
-fails_on("the pre-#1270 row 5, Challenge 4 on #/65 to #/98, put back",
-         swap(page, "Challenge 4, <code>#/65</code> to <code>#/113</code>:",
-              "Challenge 4, <code>#/65</code> to <code>#/98</code>:"),
+fails_on("the pre-#1270 row 5, Challenge 4 on #/67 to #/100, put back",
+         swap(page, "Challenge 4, <code>#/66</code> to <code>#/115</code>:",
+              "Challenge 4, <code>#/67</code> to <code>#/100</code>:"),
          ROWS)
-fails_on("the pre-#1270 diagrams, #/74 to #/96, put back in segment 5's story",
-         swap(page, "(#/74 to #/111)", "(#/74 to #/96)"),
+fails_on("the pre-#1270 diagrams, #/76 to #/98, put back in segment 5's story",
+         swap(page, "(#/76 to #/113)", "(#/76 to #/98)"),
          f"segment 5's story cites #/{FIRST5} to #/{LAST5}, each once, in order")
 fails_on("a hash cited out of order in the story",
-         swap(page, "Then its trace (#/48)", "Then its trace (#/49)"),
+         swap(page, "Then its trace (#/49)", "Then its trace (#/50)"),
          f"segment 4's story cites #/{FIRST} to #/{LAST}, each once, in order")
 fails_on("the trace moved ahead of the attack in the story",
-         swap(swap(page, "Then its trace (#/48), ", ""),
-              "The hint (#/47),", "Then its trace (#/48), the hint (#/47),"),
+         swap(swap(page, "Then its trace (#/49), ", ""),
+              "The hint (#/48),", "Then its trace (#/49), the hint (#/48),"),
          "the story's beats come in the run-of-show's order")
-need(page, "<b>The trace, after the attack\n      (#/48)", PAGE_PATH)
-_trace = page[page.index("<b>The trace, after the attack\n      (#/48)"):page.index("leads to.</div>") + len("leads to.</div>")]
+need(page, "<b>The trace, after the attack\n      (#/49)", PAGE_PATH)
+_trace = page[page.index("<b>The trace, after the attack\n      (#/49)"):page.index("leads to.</div>") + len("leads to.</div>")]
 fails_on("the Datadog line moved above the attack's marker",
          swap(swap(page, _trace, "</div>"),
               "<span class=\"lbl\">Success marker, private bot (the presenters'", _trace + "<span class=\"lbl\">Success "
@@ -328,20 +332,20 @@ fails_on("the number-only desk dropped",
          "segment 4 names the optional views, the number-only desk and the facts that hold")
 fails_on("\"The setup\" put back in Challenge 4",
          swap(page, "<h3>Challenge 4: find the poisoned MCP tool</h3>", "<h3>Challenge 4: The setup</h3>"),
-         "segment 5 drops \"The setup\" and names #1132 at #/71's retry")
+         "segment 5 drops \"The setup\" and names #1132 at #/73's retry")
 fails_on("the pre-#1237 note, the retry shown on the admin bot, put back",
-         swap(page, "so on #/71 the room retries on the public bot, as soon as the\n      command prints",
-              "so show #/71's retry on the\n      admin bot"),
-         "segment 5 drops \"The setup\" and names #1132 at #/71's retry")
+         swap(page, "so on #/73 the room retries on the public bot, as soon as the\n      command prints",
+              "so show #/73's retry on the\n      admin bot"),
+         "segment 5 drops \"The setup\" and names #1132 at #/73's retry")
 fails_on("the solve told to the room in a prompt",
          swap(page, "follow its instructions exactly, and give me", "try each tool, and give me"),
          "no room-facing part of the page tells the room to list or try each tool")
-fails_on("#/40 cited in segment 4",
-         swap(page, "#/51, the retry</div>", "#/51, the retry (#/40)</div>"),
+fails_on("#/41 cited in segment 4",
+         swap(page, "#/52, the retry</div>", "#/52, the retry (#/41)</div>"),
          f"every hash segment 4 cites is in #/{FIRST} to #/{LAST}")
-fails_on("a #/50 hash cited in segment 6",
+fails_on("a #/51 hash cited in segment 6",
          swap(page, "<h3>Burritos only (1 min): re-send the weird asks</h3>",
-              "<h3>Burritos only (1 min, #/50): re-send the weird asks</h3>"), OUTSIDE)
+              "<h3>Burritos only (1 min, #/51): re-send the weird asks</h3>"), OUTSIDE)
 fails_on("the Challenge 3 prompt reworded",
          swap(page, "What's the status of my support ticket HC-666?<button",
               "What does my support ticket HC-666 say?<button"),
@@ -362,4 +366,4 @@ if failures:
     for f in failures:
         print(f"  - {f}")
     sys.exit(1)
-print("The /kubecon page's segments 4 and 5 and their rows follow the run-of-show's, #/43 to #/113 (#1141, #1270).")
+print("The /kubecon page's segments 4 and 5 and their rows follow the run-of-show's, #/43 to #/115 (#1141, #1327).")

@@ -52050,3 +52050,57 @@ and `verify/test_test_map.py`, each once. The rest are left to validation.
 
 **Live check.** The change touches no path a cluster runs (`preflight.sh` runs on the operator's machine before a
 bring-up), so no cluster check beyond the read-only preflight above.
+## 2026-11-11 · #1327 · run 20254 · The run-of-show and /kubecon follow rounds 8f53ce2's 129-slide deck
+
+rounds-agenticburn#170 landed on rounds main as `8f53ce2` (2026-11-11T03:55Z), and https://rounds.agenticburn.com
+serves it: 129 slides, byte for byte the `attendee.html` of that commit. It is not run 20248's 111-slide draft
+(`7334562`), which never reached rounds main; the deck the room sees is what the run-of-show follows. Built from the
+two decks' slides side by side, old `79401d66` to new: `#/0` to `#/7` stay; the desk's first slide, old `#/43`, is
+now `#/8`, so old `#/8` to `#/41` are `#/9` to `#/42` and the run-of-show's slides 9 to 42 are 10 to 43; `#/43` is the
+new Challenge 3 card; old `#/42` ("AI guardrails") is `#/44`; old `#/44` to `#/64` are `#/45` to `#/65`; `#/66` is the
+new Challenge 4 card; old `#/65` to `#/113` are `#/67` to `#/115`; the close is `#/116` to `#/128` in its new order
+(OWASP lists, ASI, burritos, the plausible-request close, the stack, the CNCF floor, take-home, "We couldn't show
+everything", "Now break it", "Nothing crashed", speakers, Thank you). Notes that changed: `#/21` opens "Here are the
+hints. We'll take them one at a time.", `#/45` opens "Remember BurritoBot's support desk?", `#/47` adds "File a ticket
+of your own at support.burritobot.co, then ask BurritoBot about it.", `#/60` adds the MCP sentence, and every close
+slide has a Say line. Slide `#/9`'s face also reads "...model API keys, if you're doing it the old-school way.",
+which segment 2 had not followed.
+
+What changed here: the segments table (rows 1, 3 to 6), segment 1 gains step 8, the desk slide (slide 9); segment
+2's tee-up quote; every slide number in segment 3 and its timing table moves up one, with a line saying the figures
+were read before the move; segment 3's hand-off is now `#/43`'s note, "That covers the Kubernetes guardrails. It is
+time for Challenge 3.", and segment 4 opens on the card and the "AI guardrails" heading; segment 5 opens on its card;
+segment 6 follows the close's new order, with the slides' Say lines, the close and take-home before "Break it". The
+/kubecon page follows: glance rows, the four segments' stories, segment 3's hand-off, and segment 6's order, with the
+break-it slides' lines folded into a Notes block so the visible page stays under its 2,450-word budget (2,426).
+
+Length is left alone, as Michael ruled on 2026-11-11. The Timing paragraphs keep their `faf4005` figures, renumbered,
+and say the cards add a line each. So `verify/test_ros_over_slot_seg5.py` now admits a segment 5 row that opens one
+slide before the Timing paragraph's counted range when that slide is Challenge 4's title card, with a self-check that
+the row without the card's name fails.
+
+Tests that held the old numbering change with it: `test_ros_deck_live.py` (its two self-check anchors and the
+comment on FIRST), `test_ros_seg4_flow.py` and `test_kubecon_seg4_flow.py` (their deck copies renumbered, the cards
+added, `#/60`'s note), `test_ros_seed_step_links.py` and `test_stage_seed_links.py` (the four Datadog links are now
+`#/12`, `#/27`, `#/49` and `#/70`), `test_instructor_brief.py` (segment 3's sets and hand-off),
+`test_ros_seg3_switch_step.py`, `test_ros_segments_table_seg3.py`, `test_seg3_timing.py`, `test_kubecon_probe.py`,
+`test_c3_fallback.py`, `test_fleet_routes_roster.sh`, `test_support_desk_named.py`, `test_guardrail_slide_citations.py`
+(two allowed lines), `test_deck_shift_slide_citations.py` (test_instructor_brief.py joins its readers), and
+`test_finale_cap.py` and `test_finale_cap_peer.py`, whose cut on the break-it step now ends at "Close out", since the
+close comes before it.
+
+**Tests run.** `python3 verify/test_ros_deck_live.py` against the live deck: every check PASS, "The run-of-show and
+/kubecon follow the 129-slide deck rounds serves". Segments 1 to 3, which it does not read, were checked by hand with
+a scratch script: every quoted line and Say quote is on the slide cited, and every "Slide N reads" is on slide N. Each
+offline test that reads either file, or that pinned the old numbers, ran once and passes, after
+`git submodule update --init gitops/ai-layer/guard-proxy` for the ones that read the proxy. The /kubecon browser
+tests in the tools tier are left to validation. The prose gate passes on both public-prose files.
+
+**Live check.** The page is under `gitops/`, so it was read where it runs, read only, at 2026-11-11:
+`https://burritobot-private.burritobot.co/kubecon` answered 200, 58,018 bytes, byte for byte staging's `c3700097`
+page (row 5 still reads "Challenge 4, #/65 to #/113"); `https://attackme.burritobot.co/kubecon` answered 404, as the
+public bot serves no presenter page. The live deck was read by `test_ros_deck_live.py` above.
+
+**Not yet run on a cluster.** Once Argo CD syncs this change from staging, on watch-it-burn-private:
+`curl -s https://burritobot-private.burritobot.co/kubecon` matches `gitops/ai-layer/web/kubecon.html` here (row 5
+reads "Challenge 4, #/66 to #/115"), and `bash verify/run-e2e-tools.sh test_ros_deck_live.py` still passes.

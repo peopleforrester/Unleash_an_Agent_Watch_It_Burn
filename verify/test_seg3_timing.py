@@ -1,5 +1,5 @@
 # ABOUTME: Holds segment 3's beat budget in the KubeCon run-of-show (#1040): each time column's beats add up to
-# ABOUTME: its Segment 3 row, the budget names the deck's close on slides 28 to 42, and the rehearsal's beat times
+# ABOUTME: its Segment 3 row, the budget names the deck's close on slides 29 to 43, and the rehearsal's beat times
 # ABOUTME: are all there or all waiting, tied to the Run-through record (#1297).
 """Segment 3's 'Timing' budget adds up (#1040).
 
@@ -13,9 +13,9 @@ Its last row, "Segment 3", is each column's total. This test holds:
      left as written, since the rehearsal has not run.
   3. The paragraph's own totals agree with the table: "about 8 minutes 40 seconds" for the deck as it is, and the
      cut's "about 6 minutes", to the nearest minute of the cut's total.
-  4. The budget is for the 2026-11-07 deck: it names slide 29's retry and the guardrail sets on slides 30 to 42,
+  4. The budget is for the 2026-11-07 deck: it names slide 30's retry and the guardrail sets on slides 31 to 43,
      and no longer the four single guardrail slides. It also names its re-read of 2026-11-09 against deck commit
-     4dd5bbb0, the deck the rehearsal times, with the 326 words slides 30 to 42 then read.
+     4dd5bbb0, the deck the rehearsal times, with the 326 words slides 31 to 43 then read.
   5. Michael and Whitney time segment 3 in a rehearsal, beat by beat, against that budget (#1297). The Rehearsal
      column is either empty on every row or an m:ss time on every row, never part-timed. It is tied to the
      "Run-through record": once a run-through's Date row reads anything but "not yet run", or its Segment 3 row
@@ -112,11 +112,11 @@ def verdicts(block: str) -> dict[str, bool]:
     m = re.search(r"That comes to about (\d+) minutes", flat)
     out["the paragraph's cut total rounds the cut column's"] = bool(m) and cut is not None and (
         int(m.group(1)) == round(cut / 60))
-    out["the budget names slide 29's retry and the sets on slides 30 to 42"] = (
-        "slide 29's retry" in flat and "one set per guardrail on slides 30 to 42" in flat)
+    out["the budget names slide 30's retry and the sets on slides 31 to 43"] = (
+        "slide 30's retry" in flat and "one set per guardrail on slides 31 to 43" in flat)
     out["the budget names the 2026-11-07 deck commit it was read from"] = "deck commit `903f26cb`" in flat
-    out["the budget names the 2026-11-09 re-read, deck commit 4dd5bbb0, and its 326 words on slides 30 to 42"] = (
-        "deck commit `4dd5bbb0`" in flat and "slides 30 to 42 read 326 words" in flat)
+    out["the budget names the 2026-11-09 re-read, deck commit 4dd5bbb0, and its 326 words on slides 31 to 43"] = (
+        "deck commit `4dd5bbb0`" in flat and "slides 31 to 43 read 326 words" in flat)
     return out
 
 
@@ -269,13 +269,13 @@ def main() -> None:
           not verdicts(re.sub(r"about\s+8\s+minutes\s+40\s+seconds", "about 6 minutes 40 seconds", block))[
               "the paragraph's 'about 8 minutes 40 seconds' is the deck column's total"])
     check("the old four-slide close fails the deck check",
-          not verdicts(re.sub(r"one\s+set\s+per\s+guardrail\s+on\s+slides\s+30\s+to\s+42", "four guardrail slides",
+          not verdicts(re.sub(r"one\s+set\s+per\s+guardrail\s+on\s+slides\s+31\s+to\s+43", "four guardrail slides",
                               block))[
-              "the budget names slide 29's retry and the sets on slides 30 to 42"])
+              "the budget names slide 30's retry and the sets on slides 31 to 43"])
 
     check("a budget without the 2026-11-09 re-read fails the re-read check",
           not verdicts(block.replace("`4dd5bbb0`", "`903f26cb`"))[
-              "the budget names the 2026-11-09 re-read, deck commit 4dd5bbb0, and its 326 words on slides 30 to 42"])
+              "the budget names the 2026-11-09 re-read, deck commit 4dd5bbb0, and its 326 words on slides 31 to 43"])
 
     rehearsal_cases(block, record)
 

@@ -412,25 +412,25 @@ check("the switch beat runs guardrails-on, ends on its own last line, and the ro
       'class="toggle"' in _sw and "guardrails-on" in _sw and 'class="marker"' in _sw and 'class="fallback"' in _sw
       and "all four Kubernetes guardrails are on." in _sw and "the room retries Challenges 1 and 2" in _sw
       and "all four Kubernetes guardrails are $st." in TERMINAL)
-# Slide 28's 2026-11-07 text, then slide 29's retry (rounds-agenticburn#77, #1095).
-check("the run-of-show's segment 3 runs the same switch from slide 28's link, names it guardrails-on, and retries on 29",
+# Slide 29's 2026-11-07 text, then slide 30's retry (rounds-agenticburn#77, #1095).
+check("the run-of-show's segment 3 runs the same switch from slide 29's link, names it guardrails-on, and retries on 30",
       "> Let's turn on Kubernetes guardrails." in ROS.split("### Segment 3:", 1)[1].split("### Segment 4:", 1)[0]
       and "That command is `guardrails-on`" in _ros_s3
       and "`https://burritobot-private.burritobot.co/lab`" in _ros_s3
       and "> Try your attacks again." in ROS.split("### Segment 3:", 1)[1].split("### Segment 4:", 1)[0]
       and "reset your bot and use your saved prompts" in _ros_s3)
-# Step 6 is one set per guardrail on slides 30 to 42, each naming the concept the slide names (#1095), and each set
+# Step 6 is one set per guardrail on slides 31 to 43, each naming the concept the slide names (#1095), and each set
 # keeps its fallback: the c1-fixed view, the Kyverno deny, the c2-fixed view with the Falco caution, the beacon POST.
-_step6 = _ros_s3.split("6. **One set per guardrail (slides 30 to 42).**", 1)[-1].split("**Delivers:**", 1)[0]
-_sets = [("**RBAC, slides 30 to 33.**", "This attack was prevented with RBAC.", "`c1-fixed`"),
-         ('**Kyverno, "an admission policy", slides 34 to 36.**', "This attack was prevented with an admission policy.",
+_step6 = _ros_s3.split("6. **One set per guardrail (slides 31 to 43).**", 1)[-1].split("**Delivers:**", 1)[0]
+_sets = [("**RBAC, slides 31 to 34.**", "This attack was prevented with RBAC.", "`c1-fixed`"),
+         ('**Kyverno, "an admission policy", slides 35 to 37.**', "This attack was prevented with an admission policy.",
           "challenges/c2-villain-image/fallback.kubectl.sh"),
-         ('**KubeArmor, "runtime security", slides 37 to 39.**', "This attack was prevented with runtime security.",
+         ('**KubeArmor, "runtime security", slides 38 to 40.**', "This attack was prevented with runtime security.",
           "Do not promise a Falco alert here"),
-         ("**NetworkPolicy, slides 40 to 42.**", "This attack was prevented with NetworkPolicy.",
+         ("**NetworkPolicy, slides 41 to 43.**", "This attack was prevented with NetworkPolicy.",
           "challenges/c1-exfil-s3/fallback.kubectl.sh")]
-check("the run-of-show's step 6 is one set per guardrail on slides 30 to 42, in the deck's order",
-      "6. **One set per guardrail (slides 30 to 42).**" in _ros_s3
+check("the run-of-show's step 6 is one set per guardrail on slides 31 to 43, in the deck's order",
+      "6. **One set per guardrail (slides 31 to 43).**" in _ros_s3
       and all(h in _step6 for h, _, _ in _sets)
       and [_step6.index(h) for h, _, _ in _sets] == sorted(_step6.index(h) for h, _, _ in _sets))
 for _h, _line, _fb in _sets:
@@ -439,11 +439,11 @@ for _h, _line, _fb in _sets:
           _h in _step6 and _line in _blk and _fb in _blk)
 # Each set recalls its attack on its first slide, names the fix on the next, then shows the YAML, and the YAML it
 # describes is the YAML guardrails-on applies (#1111). Every literal read here is checked first, by name.
-_STEP6_ANCHOR = "6. **One set per guardrail (slides 30 to 42).**"
+_STEP6_ANCHOR = "6. **One set per guardrail (slides 31 to 43).**"
 if _STEP6_ANCHOR not in _ros_s3 or "**Delivers:**" not in _ros_s3.split(_STEP6_ANCHOR, 1)[1]:
     sys.exit(f"anchor {_STEP6_ANCHOR!r} or the **Delivers:** after it is not in segment 3 of "
              "facilitation/kubecon-na-2026-run-of-show.md: reword the test with it")
-_S20_ANCHOR = "slide 20 reads:"
+_S20_ANCHOR = "slide 21 reads:"
 _ros_raw_s3 = ROS.split("### Segment 3:", 1)[1].split("### Segment 4:", 1)[0]
 if _S20_ANCHOR not in _ros_raw_s3:
     sys.exit(f"anchor {_S20_ANCHOR!r} is not in segment 3 of facilitation/kubecon-na-2026-run-of-show.md: "
@@ -460,7 +460,7 @@ if _C1_ASK not in ROS:
 _recalls = ("Convince BurritoBot to give you the CEO's home address.", "Run an image off the public internet.",
             "Read the famously secret 'Bat Spit Amazing Awesome Sauce' recipe off the filesystem.",
             "Send customer demographics off the cluster to agenticburn.com/beacon.")
-check("the three Challenge 2 attacks the sets recall are slide 20's three lines, in its order",
+check("the three Challenge 2 attacks the sets recall are slide 21's three lines, in its order",
       _s20 == list(_recalls[1:]))
 check("the RBAC set's recall is Challenge 1's own ask", _C1_ASK.strip("> *") == _recalls[0])
 check("step 6 says each set recalls its attack, names what prevented it, then shows the YAML",
@@ -472,16 +472,16 @@ check('step 6 says the slides name Kyverno "an admission policy" and KubeArmor "
       "are Kubernetes' own names and stay as they are" in _step6)
 # Per set: the recall slide, the "prevented with" slide, the YAML slide(s), and what that YAML shows.
 _yaml_slides = [
-    ('Slide 32 shows', 'slide 33 sets that rule beside the scoped one', '`verbs: ["get", "list"]` on `secrets` with no '
+    ('Slide 33 shows', 'slide 34 sets that rule beside the scoped one', '`verbs: ["get", "list"]` on `secrets` with no '
      '`resourceNames`', '`resourceNames: ["workshop-agent"]` with `verbs: ["get"]`'),
-    ("Slide 36 shows the `deny-external-registries` rule", "`registry.burritobot.co/`", "read its deny message aloud"),
-    ("Slide 39 shows the `block-recipe-snoop` policy", "`/tmp/burrito-data/config/legacy/` and everything under it",
+    ("Slide 37 shows the `deny-external-registries` rule", "`registry.burritobot.co/`", "read its deny message aloud"),
+    ("Slide 40 shows the `block-recipe-snoop` policy", "`/tmp/burrito-data/config/legacy/` and everything under it",
      "`action: Block`"),
-    ("Slide 42 shows the `agent-egress-allowlist` NetworkPolicy", "egress from every pod in BurritoBot's namespace",
+    ("Slide 43 shows the `agent-egress-allowlist` NetworkPolicy", "egress from every pod in BurritoBot's namespace",
      "goes only to `10.0.0.0/16`"),
 ]
-for (_h, _line, _fb), (_first, _quote), _yaml in zip(_sets, ((30, _recalls[0]), (34, _recalls[1]), (37, _recalls[2]),
-                                                             (40, _recalls[3])), _yaml_slides):
+for (_h, _line, _fb), (_first, _quote), _yaml in zip(_sets, ((31, _recalls[0]), (35, _recalls[1]), (38, _recalls[2]),
+                                                             (41, _recalls[3])), _yaml_slides):
     _blk = _step6.split(_h, 1)[-1].split("- **", 1)[0]
     _rec = f'Slide {_first} recalls'
     _prev = f'Slide {_first + 1} adds "{_line}"'
@@ -509,70 +509,70 @@ def _secrets_rule(role: str) -> str:
 
 
 _broad, _scoped = _secrets_rule(_fix_doc("c8-broad-role.yaml")), _secrets_rule(_fix_doc("c5-scoped-role.yaml"))
-check("slide 32's rule is guardrails-off's Role: get and list on every Secret, no resourceNames",
+check("slide 33's rule is guardrails-off's Role: get and list on every Secret, no resourceNames",
       'verbs: ["get", "list"]' in _broad and "resourceNames" not in _broad)
-check("slide 33's rule is guardrails-on's Role: get on the workshop-agent Secret alone",
+check("slide 34's rule is guardrails-on's Role: get on the workshop-agent Secret alone",
       'resourceNames: ["workshop-agent"]' in _scoped and 'verbs: ["get"]' in _scoped
       and '"list"' not in _scoped and "c5-scoped-role.yaml" in TERMINAL and "c8-broad-role.yaml" in TERMINAL)
 _DER = (REPO / "policies/kyverno-breakout/deny-external-registries.yaml").read_text(encoding="utf-8")
-check("slide 36's rule is deny-external-registries, which admits registry.burritobot.co/ alone and denies with a "
+check("slide 37's rule is deny-external-registries, which admits registry.burritobot.co/ alone and denies with a "
       "message to read aloud",
       "name: deny-external-registries" in _DER and "expression: \"'registry.burritobot.co/'\"" in _DER
       and "message: >-" in _DER and "deny-external-registries" in TERMINAL)
 _ka = _fix_doc("c3-kubearmor-policy.yaml")
-check("slide 39's policy is the block-recipe-snoop guardrails-on applies: the legacy dir, recursive, Block",
+check("slide 40's policy is the block-recipe-snoop guardrails-on applies: the legacy dir, recursive, Block",
       "name: block-recipe-snoop" in _ka and "- dir: /tmp/burrito-data/config/legacy/" in _ka
       and "recursive: true" in _ka and "action: Block" in _ka and "c3-kubearmor-policy.yaml" in TERMINAL)
 _np = _fix_doc("c1-network-policy.yaml")
-check("slide 42's policy is the agent-egress-allowlist guardrails-on applies: every pod in agent, to 10.0.0.0/16",
+check("slide 43's policy is the agent-egress-allowlist guardrails-on applies: every pod in agent, to 10.0.0.0/16",
       "name: agent-egress-allowlist" in _np and "namespace: agent" in _np and "podSelector: {}" in _np
       and "cidr: 10.0.0.0/16" in _np and "0.0.0.0/0" not in _np and "c1-network-policy.yaml" in TERMINAL)
 check("the run-of-show no longer has one slide per guardrail or the four slides",
       "one slide per guardrail" not in " ".join(ROS.split()).lower() and "its four slides" not in " ".join(ROS.split()))
-# The page's segment 3 follows the run-of-show's steps 5 and 6 (#1096): slide 28's text, clicked to open the admin
-# terminal, then guardrails-on; slide 29's retry from saved prompts; then one set per guardrail on slides 30 to 42,
+# The page's segment 3 follows the run-of-show's steps 5 and 6 (#1096): slide 29's text, clicked to open the admin
+# terminal, then guardrails-on; slide 30's retry from saved prompts; then one set per guardrail on slides 31 to 43,
 # with Kyverno shown as an admission policy and KubeArmor as runtime security, as the slides name them.
 _S28, _S29 = "Let's turn on Kubernetes guardrails.", "Try your attacks again."
-_SET_RANGES = (("RBAC", "30 to 33"), ("Kyverno", "34 to 36"), ("KubeArmor", "37 to 39"), ("NetworkPolicy", "40 to 42"))
+_SET_RANGES = (("RBAC", "31 to 34"), ("Kyverno", "35 to 37"), ("KubeArmor", "38 to 40"), ("NetworkPolicy", "41 to 43"))
 _premise_m = re.search(r'<p class="premise">(.*?)</p>', _seg3, re.S)
 if _premise_m is None:
     sys.exit('anchor <p class="premise"> is not in segment 3 of gitops/ai-layer/web/kubecon.html: reword the test with it')
 _premise = _premise_m.group(1)
 check("the run-of-show's step 6 sets cover the slide ranges the page names",
       all(f"{n}, " in _step6 and f"slides {r}.**" in _step6 for n, r in _SET_RANGES))
-check("the page's segment 3 summary names slide 28's text, clicked to the admin terminal, then guardrails-on",
-      f'slide 28, "{_S28}"' in _premise and "<code>https://burritobot-private.burritobot.co/lab</code>" in _premise
+check("the page's segment 3 summary names slide 29's text, clicked to the admin terminal, then guardrails-on",
+      f'slide 29, "{_S28}"' in _premise and "<code>https://burritobot-private.burritobot.co/lab</code>" in _premise
       and _before(_premise, f'"{_S28}"', "clicks it and types <code>guardrails-on</code>"))
-check("then slide 29's retry from the room's saved prompts, then one set per guardrail on slides 30 to 42",
-      _before(_premise, "<code>guardrails-on</code>", f'slide 29, "{_S29}"')
+check("then slide 30's retry from the room's saved prompts, then one set per guardrail on slides 31 to 43",
+      _before(_premise, "<code>guardrails-on</code>", f'slide 30, "{_S29}"')
       and "resets its bot and retries its saved prompts" in _premise
-      and _before(_premise, f'"{_S29}"', "one set per guardrail on slides 30 to 42"))
+      and _before(_premise, f'"{_S29}"', "one set per guardrail on slides 31 to 43"))
 check("the summary names each set's slides, in the deck's order, Kyverno as an admission policy and KubeArmor as "
       "runtime security",
       all(r in _premise for _, r in _SET_RANGES)
       and [_premise.index(r) for _, r in _SET_RANGES] == sorted(_premise.index(r) for _, r in _SET_RANGES)
-      and "an admission policy, Kyverno (34 to 36)" in _premise and "runtime security, KubeArmor (37 to 39)" in _premise)
+      and "an admission policy, Kyverno (35 to 37)" in _premise and "runtime security, KubeArmor (38 to 40)" in _premise)
 _sw_h3 = re.search(r"<h3>(.*?)</h3>", _sw)
-check("the switch beat is retitled for slide 28's text and the sets after it",
+check("the switch beat is retitled for slide 29's text and the sets after it",
       _sw_h3 is not None and _sw_h3.group(1).startswith("Let's turn on Kubernetes guardrails:")
       and "one set per guardrail" in _sw_h3.group(1)
       and "one switch, then the room tries again" not in KUBECON)
-check("the switch beat has slide 28's line opening the terminal, then slide 29's retry from saved prompts",
-      _before(_sw, "Slide 28: click its line for the private terminal", f'slide 29, "{_S29}"')
+check("the switch beat has slide 29's line opening the terminal, then slide 30's retry from saved prompts",
+      _before(_sw, "Slide 29: click its line for the private terminal", f'slide 30, "{_S29}"')
       and "the room retries Challenges 1 and 2 from saved prompts" in _sw
-      and f'Slide 28, "{_S28}", is a link to the admin terminal' in _sw)
-check("its marker ends on one set per guardrail, slides 30 to 42, named as the slides name them",
-      "Then one set per guardrail, slides 30 to 42: RBAC, an admission policy (Kyverno), runtime security "
+      and f'Slide 29, "{_S28}", is a link to the admin terminal' in _sw)
+check("its marker ends on one set per guardrail, slides 31 to 43, named as the slides name them",
+      "Then one set per guardrail, slides 31 to 43: RBAC, an admission policy (Kyverno), runtime security "
       "(KubeArmor), NetworkPolicy." in _sw)
 check("its notes give each set's slides, in the deck's order, with what each recalls and shows",
       [_sw.index(f"slides {r}:") for _, r in _SET_RANGES if f"slides {r}:" in _sw]
       == sorted(_sw.index(f"slides {r}:") for _, r in _SET_RANGES if f"slides {r}:" in _sw)
       and all(f"slides {r}:" in _sw for _, r in _SET_RANGES)
-      and "<b>An admission policy</b> (Kyverno), slides 34 to 36" in _sw
-      and "<b>Runtime security</b> (KubeArmor), slides 37 to 39" in _sw
+      and "<b>An admission policy</b> (Kyverno), slides 35 to 37" in _sw
+      and "<b>Runtime security</b> (KubeArmor), slides 38 to 40" in _sw
       and all(f"<code>{n}</code>" in _sw for n in ("deny-external-registries", "block-recipe-snoop",
                                                      "agent-egress-allowlist")))
-check("the page has no one slide per guardrail, and no old slide 28 title",
+check("the page has no one slide per guardrail, and no old slide 29 title",
       "one slide per guardrail" not in " ".join(KUBECON.split()).lower()
       and '"Kubernetes guardrails on" (slide 28)' not in " ".join(KUBECON.split()))
 check("the switch's RBAC fallback reads the Role, which names the one Secret",
@@ -591,11 +591,12 @@ for n, line in ((2, "Regarding excessive agency, there are a lot of Kubernetes g
                    .split())
     ros_sec = " ".join(ROS.split(f"### Segment {n}:", 1)[1].split(f"### Segment {n + 1}:", 1)[0].split())
     check(f"segment {n}'s hand-off is the run-of-show's", line in sec and line in ros_sec)
-# Segment 3's hand-off is slide #/42's note in the 2026-11-07 deck, word for word (rounds-agenticburn#82, #1098). The
-# run-of-show carries it as its whole Hand-off line; the /kubecon page's copy is #1100's, which adds its check here.
-_S3_HANDOFF = ('"Now let\'s transition to talking about new guardrails that you need to know about that are specific '
-               'to AI attacks."')
-check("segment 3's hand-off in the run-of-show is slide #/42's note, word for word (#1098)",
+# Segment 3's hand-off is the note on Challenge 3's title card, #/43, word for word (rounds 8f53ce2,
+# rounds-agenticburn#170, #1327); until that card, it was #/42's note, the "AI guardrails" heading's, which is now #/44
+# inside segment 4 (rounds-agenticburn#82, #1098). The run-of-show carries it as its whole Hand-off line; the /kubecon
+# page's copy is #1100's, which adds its check here.
+_S3_HANDOFF = '"That covers the Kubernetes guardrails. It is time for Challenge 3."'
+check("segment 3's hand-off in the run-of-show is slide #/43's note, word for word (#1327)",
       _ros_handoff(3) == _S3_HANDOFF)
 check("and the 2026-11-06 hand-off is gone from the run-of-show",
       "Next, the bot doing what a stranger asked." not in " ".join(ROS.split()))
@@ -603,7 +604,7 @@ check("and the 2026-11-06 hand-off is gone from the run-of-show",
 _page_seg3_handoffs = re.findall(
     r'<p class="note"><b>Hand-off:</b> (.*?)</p>',
     KUBECON.split('<span class="n">SEGMENT 3', 1)[1].split('<span class="n">SEGMENT 4', 1)[0], re.S)
-check("segment 3's hand-off on the page is slide #/42's note, word for word, as in the run-of-show (#1100)",
+check("segment 3's hand-off on the page is slide #/43's note, word for word, as in the run-of-show (#1100, #1327)",
       [" ".join(h.split()) for h in _page_seg3_handoffs] == [_S3_HANDOFF])
 check("and the 2026-11-06 hand-off is gone from the page",
       "the bot doing what a stranger asked" not in " ".join(KUBECON.split()))
@@ -632,7 +633,7 @@ check("the close invites the room to break it (#690)", "You have our permission.
 _ros6 = ROS.split("### Segment 6:", 1)[1].split("\n## ", 1)[0]
 check("the run-of-show's close says the same", "LLM01 Prompt Injection" in _ros6 and "K05" in _ros6
       and "You have our permission." in _ros6)
-# Segment 2 names LLM06 as exploited in Challenge 1 (#820, deck slide 13), so the close maps LLM06 from Challenge 1
+# Segment 2 names LLM06 as exploited in Challenge 1 (#820, deck slide 14), so the close maps LLM06 from Challenge 1
 # on, on both pages (#842).
 _ros2 = ROS.split("### Segment 2:", 1)[1].split("### Segment 3:", 1)[0]
 check("segment 2 names LLM06, Excessive Agency, as what Challenge 1 exploited (#820)",
@@ -768,7 +769,7 @@ check("every prompt and toggle stays visible",
 # fallbacks added with them are folded. 2,400 since #952: C3's recipe read is now the conversational recon-then-attack
 # pair (#925), so it carries a second copy-ready prompt and a second success marker where it had one of each; the two
 # markers are cut terse to hold the growth to the recon prompt itself. 2,450 since #1096: the 2026-11-07 deck closes
-# Challenge 2 on slide 28's switch, slide 29's retry and one set per guardrail on slides 30 to 42, so the switch
+# Challenge 2 on slide 29's switch, slide 30's retry and one set per guardrail on slides 31 to 43, so the switch
 # beat's title, who line and marker name the retry and the four sets as the slides name them (about 30 words); each
 # set's slides, attack and YAML are folded into its notes.
 _words = len(re.sub(r"<[^>]+>", " ", _visible.split("<body>")[1]).split())

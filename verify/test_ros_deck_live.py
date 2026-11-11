@@ -43,7 +43,7 @@ SEGMENTS, ABSTRACT = "## The segments, in order", "## Abstract points to segment
 SEG4, SEG5, SEG6 = "### Segment 4:", "### Segment 5:", "### Segment 6:"
 ROWS = ("| 4 | 7 |", "| 5 | 5 |", "| 6 | 5 |")
 PAGE_SEG4, PAGE_SEG6 = "<!-- SEGMENT 4:", "<!-- SEGMENT 6:"
-FIRST = 43  # segment 4's first slide, the support desk
+FIRST = 43  # segment 4's first slide, Challenge 3's title card since rounds 8f53ce2 (rounds-agenticburn#170)
 # The checks, by name, so a self-check names the one it expects to fail.
 COUNTED = "every \"the deck has N slides\" gives the deck's count"
 NOTED = "each diagram note the run-of-show quotes is the slide's Say note, word for word"
@@ -240,12 +240,12 @@ def main() -> int:
     need(ros, lit, ROS_PATH)
     fails("a step's Say quote reworded in the run-of-show", STEPPED,
           ros_=ros.replace(lit, lit.replace("So why", "Why"), 1))
-    lit = "(`#/114` to `#/126`)"
+    lit = "(`#/116` to `#/128`)"
     need(ros, lit, ROS_PATH)
-    fails("segment 6 opened a slide late", RANGED, ros_=ros.replace(lit, "(`#/115` to `#/126`)", 1))
-    lit = '"Try your attack again." (#/71)'
+    fails("segment 6 opened a slide late", RANGED, ros_=ros.replace(lit, "(`#/117` to `#/128`)", 1))
+    lit = '"Try your attack again." (#/73)'
     need(plain(page), lit, PAGE_PATH)
-    fails("a /kubecon quote cited on the wrong slide", PAGED, page_=page.replace("(#/71)", "(#/72)", 1))
+    fails("a /kubecon quote cited on the wrong slide", PAGED, page_=page.replace("(#/73)", "(#/74)", 1))
 
     if failures:
         print(f"\nFAILED: {len(failures)} check(s)")

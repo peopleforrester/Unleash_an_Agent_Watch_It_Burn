@@ -52,8 +52,9 @@ ROW6, AFTER_SEGMENTS = "| 6 | 5 |", "## Abstract points to segments"
 # of the four links, #/48 and #/68 among them, to verify/stage_traces.py (#1206); and the one that holds the
 # run-of-show to the deck rounds serves, read live, and quotes the close's hashes in its self-checks (#1270); and the
 # one that holds the over-the-slot paragraph to segment 5's Timing paragraph and its ranges, #/65 to #/113 and #/74 to
-# #/111, and quotes them in its docstring and self-checks (#1275).
-SEG4_READERS = {"verify/test_ros_seg4_flow.py", "verify/test_kubecon_seg4_flow.py", "verify/test_stage_trace_slides.py",
+# #/111, and quotes them in its docstring and self-checks (#1275); and the one that holds segment 3's hand-off to the
+# note on Challenge 3's title card, #/43, which rounds 8f53ce2 put before the "AI guardrails" heading, now #/44 (#1327).
+SEG4_READERS = {"verify/test_instructor_brief.py", "verify/test_ros_seg4_flow.py", "verify/test_kubecon_seg4_flow.py", "verify/test_stage_trace_slides.py",
                 "verify/test_support_desk_named.py", "verify/test_ros_seed_step_links.py",
                 "verify/test_stage_seed_links.py", "verify/test_ros_deck_live.py",
                 "verify/test_ros_over_slot_seg5.py"}

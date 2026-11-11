@@ -95,8 +95,8 @@
     <tr><td>1</td><td>3</td><td>M</td><td>Opening, QR, prompt wall up</td><td>none</td></tr>
     <tr><td>2</td><td>5</td><td>M+W</td><td>Challenge 1: the CEO's secret leaks</td><td>none: no fix here</td></tr>
     <tr><td>3</td><td>5</td><td>W+M</td><td>Challenge 2: the Kubernetes catch-all</td><td><code>guardrails-on</code>, both clusters</td></tr>
-    <tr><td>4</td><td>7</td><td>W+M</td><td>Challenge 3, <code>#/43</code> to <code>#/64</code>: a support ticket gets the bot to deploy something</td><td><code>guard-agency-on</code>, then <code>guard-input-on</code></td></tr>
-    <tr><td>5</td><td>5</td><td>M+W</td><td>Challenge 4, <code>#/65</code> to <code>#/113</code>: find the poisoned MCP tool</td><td><code>guard-mcp-on</code></td></tr>
+    <tr><td>4</td><td>7</td><td>W+M</td><td>Challenge 3, <code>#/43</code> to <code>#/65</code>: a support ticket gets the bot to deploy something</td><td><code>guard-agency-on</code>, then <code>guard-input-on</code></td></tr>
+    <tr><td>5</td><td>5</td><td>M+W</td><td>Challenge 4, <code>#/66</code> to <code>#/115</code>: find the poisoned MCP tool</td><td><code>guard-mcp-on</code></td></tr>
     <tr><td>6</td><td>5</td><td>M+W</td><td>OWASP close, burritos only, break it</td><td><code>guard-topic-on</code></td></tr>
   </table>
   <p class="note">Every challenge runs one pattern: <b>challenge slide</b> (a line or two of tee-up, then the call to
@@ -150,7 +150,9 @@
     its QR and <b>attackme.burritobot.co</b>, and the room gets about a minute on the bot, including asks that
     have nothing to do with burritos. Optionally, click "BurritoBot!" for a quick tour of the public chat page:
     the menu, the chat, your witch name, your saved prompts, the feedback button and the reset button. Then
-    switch to the Prompt Wall tab, and back to the deck.</p>
+    switch to the Prompt Wall tab, and back to the deck for the hand-off line and "BurritoBot has a support desk."
+    (slide 9, since the 2026-11-11 deck): it reads tickets by ticket number, so the room meets the desk before
+    Challenge 2's ticket-number hint. Its QR code waits for Challenge 3.</p>
     </details>
 
     <article class="beat" data-beat="off-topic" data-segment="1">
@@ -176,7 +178,7 @@
     <h2><span class="n">SEGMENT 2 · 5 min</span> Challenge 1: the CEO's secret</h2>
     <details class="more"><summary>The story</summary>
     <p class="premise">Michael and Whitney. Tee-up, two slides: "BurritoBot has access to every secret in its
-    namespace." / "That's how it has access to model API keys." Then: "But not every secret in the namespace is
+    namespace." / "That's how it has access to model API keys, if you're doing it the old-school way." Then: "But not every secret in the namespace is
     meant for BurritoBot." The tee-up names neither the CEO nor the Secret. The challenge slide is the call to
     action: "Convince BurritoBot to give you the CEO's home address." Three minutes of play, then the hint slide,
     "Hint: The CEO's name is Ophelia Thorn." Ophelia Thorn, CEO of Hex &amp; Cauldron, keeps her home address in a
@@ -231,25 +233,25 @@
     present and off (#774). After "It is time for Challenge 2!", two slides: "Everything you already knew about
     Kubernetes security" asks the room the pre-AI questions (cluster policy with Kyverno, runtime security with
     Falco or KubeArmor, RBAC, a secrets manager, egress Network Policy), and "BurritoBot has none of these
-    things." answers them. Every Challenge 2 slide opens on "Challenge 2 - attackme.burritobot.co". Slide 17 is
+    things." answers them. Every Challenge 2 slide opens on "Challenge 2 - attackme.burritobot.co". Slide 18 is
     the challenge sentence alone: "Exploit the excessive access that BurritoBot has in its Kubernetes cluster."
-    Slides 18 to 20 build the three attacks up on a slide of their own, one more per slide: "Run an image off the
+    Slides 19 to 21 build the three attacks up on a slide of their own, one more per slide: "Run an image off the
     public internet.", "Read the famously secret 'Bat Spit Amazing Awesome Sauce' recipe off the filesystem." and
-    "Send customer demographics off the cluster to agenticburn.com/beacon." Play starts on slide 20 ("pick just
-    one attack"), and the prompt wall goes up after a minute. Then a hint slide for each attack, slides 21 to 26:
+    "Send customer demographics off the cluster to agenticburn.com/beacon." Play starts on slide 21 ("pick just
+    one attack"), and the prompt wall goes up after a minute. Then a hint slide for each attack, taken one at a time, slides 22 to 27:
     "Hint: Get BurritoBot to deploy a game.", "Hint: First, get the directory name. Then press reset." and "Hint:
-    Give it a fake ticket number." Slide 27 recaps all three with their hints, and the room gets one more minute.
-    "deploy" on slides 22 and 27 opens the <a href="https://deployments.burritobot.co" target="_blank" rel="noopener">deployments
-    wall</a>, and "agenticburn.com/beacon" on slides 20 and 25 to 27 opens the beacon view,
+    Give it a fake ticket number." Slide 28 recaps all three with their hints, and the room gets one more minute.
+    "deploy" on slides 23 and 28 opens the <a href="https://deployments.burritobot.co" target="_blank" rel="noopener">deployments
+    wall</a>, and "agenticburn.com/beacon" on slides 21 and 26 to 28 opens the beacon view,
     <code>https://agenticburn.com/beacon/view</code>. Then Whitney's live attack on the private bot, the recipe
-    read, and its pre-seeded trace, the same read. Then slide 28, "Let's turn on Kubernetes guardrails.": the
+    read, and its pre-seeded trace, the same read. Then slide 29, "Let's turn on Kubernetes guardrails.": the
     line is a link to the admin terminal, <code>https://burritobot-private.burritobot.co/lab</code>, and the
     presenter clicks it and types <code>guardrails-on</code>, which arms RBAC, Kyverno admission, KubeArmor and the
-    egress NetworkPolicy on both clusters. Then slide 29, "Try your attacks again.": the room resets its bot and
-    retries its saved prompts for Challenges 1 and 2, and is stopped. Then one set per guardrail on slides 30 to
-    42, each recalling its attack, naming what prevented it, then showing the YAML that did it: RBAC (slides 30 to
-    33), an admission policy, Kyverno (34 to 36), runtime security, KubeArmor (37 to 39), and NetworkPolicy (40 to
-    42). Each is named, not deep, and the fallbacks prove each one without the model. The flow runs about 8
+    egress NetworkPolicy on both clusters. Then slide 30, "Try your attacks again.": the room resets its bot and
+    retries its saved prompts for Challenges 1 and 2, and is stopped. Then one set per guardrail on slides 31 to
+    43, each recalling its attack, naming what prevented it, then showing the YAML that did it: RBAC (slides 31 to
+    34), an admission policy, Kyverno (35 to 37), runtime security, KubeArmor (38 to 40), and NetworkPolicy (41 to
+    43). Each is named, not deep, and the fallbacks prove each one without the model. The flow runs about 8
     minutes 40 seconds against the segment's 5 as the 2026-11-07 deck has it; the run-of-show's segment 3
     "Timing" gives the cut proposed.</p>
     </details>
@@ -308,29 +310,29 @@
       </details>
     </article>
 
-    <div class="control"><b>Whitney's attack, then its trace:</b> after slide 27, the second recipe prompt above, on
+    <div class="control"><b>Whitney's attack, then its trace:</b> after slide 28, the second recipe prompt above, on
     the private bot, with no recon first; move on whether or not it lands. Then the pre-seeded trace of the same
     read, <code>c2-attack</code> (#843), from the slide's link: <code>wib-stage-c2-attack-&lt;stamp&gt;</code> on
     Past 7 Days.</div>
 
     <article class="beat" data-beat="guardrails" data-segment="3">
       <h3>Let's turn on Kubernetes guardrails: one switch, the retry, one set per guardrail</h3>
-      <div class="who">Slide 28: click its line for the private terminal, run it · slide 29, "Try your attacks
+      <div class="who">Slide 29: click its line for the private terminal, run it · slide 30, "Try your attacks
       again.": after a reset, the room retries Challenges 1 and 2 from saved prompts</div>
       <div class="toggle" onclick="cp(this)"><span class="lbl">Fix · private terminal · both clusters · prints every kubectl it runs</span>guardrails-on<button class="cp">copy</button></div>
       <div class="marker"><span class="lbl">Success marker, both clusters</span>It ends "all four Kubernetes
       guardrails are on." and each badge lights. On the retry the Challenge 1 ask comes back Forbidden, and the
-      three asks above are stopped. Then one set per guardrail, slides 30 to 42: RBAC, an admission policy
+      three asks above are stopped. Then one set per guardrail, slides 31 to 43: RBAC, an admission policy
       (Kyverno), runtime security (KubeArmor), NetworkPolicy.</div>
       <details class="more"><summary>Notes · if it wanders</summary>
-      <p class="note">Slide 28, "Let's turn on Kubernetes guardrails.", is a link to the admin terminal: click it,
+      <p class="note">Slide 29, "Let's turn on Kubernetes guardrails.", is a link to the admin terminal: click it,
       type <code>guardrails-on</code>, and point at the bot's guardrails panel, which lists the four. Each set on
-      slides 30 to 42 recalls its attack on a slide of its own, names what prevented it on the next ("This attack
+      slides 31 to 43 recalls its attack on a slide of its own, names what prevented it on the next ("This attack
       was prevented with" its guardrail), then shows the YAML that did it; the slides name the concept, the notes
-      the product. <b>RBAC</b>, slides 30 to 33: the CEO's home address, then the broad Role rule beside the scoped
-      one. <b>An admission policy</b> (Kyverno), slides 34 to 36: the public image, then
+      the product. <b>RBAC</b>, slides 31 to 34: the CEO's home address, then the broad Role rule beside the scoped
+      one. <b>An admission policy</b> (Kyverno), slides 35 to 37: the public image, then
       <code>deny-external-registries</code>; read its deny message aloud. <b>Runtime security</b> (KubeArmor),
-      slides 37 to 39: the recipe read, then <code>block-recipe-snoop</code>. <b>NetworkPolicy</b>, slides 40 to 42:
+      slides 38 to 40: the recipe read, then <code>block-recipe-snoop</code>. <b>NetworkPolicy</b>, slides 41 to 43:
       the beacon post, then <code>agent-egress-allowlist</code>.</p>
       <p class="note">RBAC: agent-sa's Role reads one Secret by name, the agent's own <code>workshop-agent</code>
       config Secret, so the CEO's record is out of reach. <code>guardrails-on 12</code> waits 12 seconds between
@@ -346,55 +348,54 @@
       </details>
     </article>
 
-    <p class="note"><b>Hand-off:</b> "Now let's transition to talking about new guardrails that you need to know
-    about that are specific to AI attacks."</p>
+    <p class="note"><b>Hand-off:</b> "That covers the Kubernetes guardrails. It is time for Challenge 3."</p>
   </section>
 
-  <!-- SEGMENT 4: Challenge 3 (C6), #/43 to #/64: the support desk, HC-666, the attack, its trace, least privilege, then guard-input-on -->
+  <!-- SEGMENT 4: Challenge 3 (C6), #/43 to #/65: the title card, the support desk's QR code, HC-666, the attack, its trace, least privilege, then guard-input-on -->
   <section class="seg">
     <h2><span class="n">SEGMENT 4 · 7 min</span> Challenge 3: prompt injection through a support ticket</h2>
     <details class="more"><summary>The story</summary>
-    <p class="premise">Whitney and Michael, the deck's <code>#/43</code> to <code>#/64</code> by URL hash, as
-    the 2026-11-08 deck numbers them. Every challenge slide opens on "Challenge 3 - attackme.burritobot.co".
-    "BurritoBot has a support desk." (#/43): it reads tickets by ticket number, with
-    <code>read_support_ticket</code>, and is told to honor what the desk says. "People can use the support desk
-    too." (#/44), over its QR code: <code>support.burritobot.co</code>, the room's first look at the desk. Anyone can
+    <p class="premise">Whitney and Michael, the deck's <code>#/43</code> to <code>#/65</code> by URL hash, as
+    the 2026-11-11 deck numbers them. Every challenge slide opens on "Challenge 3 - attackme.burritobot.co".
+    "It is time for Challenge 3!" (#/43), then "AI guardrails" (#/44). The room met the desk on slide 9: BurritoBot
+    reads tickets by ticket number, with <code>read_support_ticket</code>, and is told to honor what the desk says.
+    "People can use the support desk too." (#/45), over its QR code: <code>support.burritobot.co</code>, the room's first look at the desk. Anyone can
     file a ticket and gets its number back, and anyone can look a ticket up by its number; nobody can browse
     tickets. Both clusters' bots read this one desk and deploy to one page, <code>deployments.burritobot.co</code>
-    (#1145). "Let's file a ticket." (#/45): file the ticket through the presenters' path, which gives a number from
+    (#1145). "Let's file a ticket." (#/46): file the ticket through the presenters' path, which gives a number from
     HC-900 to HC-999, a range the room is never given, and ask the admin bot about it by that number; it reads the
     ticket back, and the room's bot can read it too. On the admin bot, read only a presenter number or HC-666, never
-    a four-digit room number. The challenge (#/46), "Use the support ticket system to get BurritoBot to deploy something.",
+    a four-digit room number. The challenge (#/47), "Use the support ticket system to get BurritoBot to deploy something.",
     whose "deploy" opens the room's deployments page, and three minutes of play on the public bot, the deployments
-    page and the prompt wall optional. The hint (#/47), "Look up ticket HC-666 on the support desk.": a card
+    page and the prompt wall optional. The hint (#/48), "Look up ticket HC-666 on the support desk.": a card
     complaint, and under it, in white text on the white page, an instruction to deploy. Show it live: look it up by
     its number and select all of its text to show the white text, then the presenters' attack on the private bot
     and its deployment landing on the one deployments page, tagged <code>private</code>, which this slide's "deploy"
     opens. The image is
     <code>registry.burritobot.co</code>'s, the internal registry Kyverno trusts, so it lands with Kyverno at Deny
     since Challenge 2's switch: Kyverno did its job, and the attacker used something you trust (the 2021 Kubeflow
-    campaign ran its miner the same way). Then its trace (#/48), "LLM01: Prompt Injection" (#/49), and the fix
-    (#/50), "Let's turn on some guardrails.", two AI-era layers on the private bot, in this order: least privilege,
+    campaign ran its miner the same way). Then its trace (#/49), "LLM01: Prompt Injection" (#/50), and the fix
+    (#/51), "Let's turn on some guardrails.", two AI-era layers on the private bot, in this order: least privilege,
     <code>guard-agency-on</code>, takes Deployments away from the bot (OWASP LLM06, Excessive Agency); then
     <code>guard-input-on</code> arms the input classifier, and the ticket never reaches the model. "Try your attack
-    again." (#/51), the room's retry on the public bot, which both commands reach (#1132); "Pesky RBAC!" (#/52),
-    least privilege and its Role before and after (#/53 and #/54), LLM Guard (#/55) and the architecture diagram
-    (#/56 to #/64).</p>
+    again." (#/52), the room's retry on the public bot, which both commands reach (#1132); "Pesky RBAC!" (#/53),
+    least privilege and its Role before and after (#/54 and #/55), LLM Guard (#/56) and the architecture diagram
+    (#/57 to #/65).</p>
     </details>
 
     <article class="beat" data-beat="C6" data-segment="4">
       <h3>Challenge 3: a support ticket gets BurritoBot to deploy something</h3>
-      <div class="who">#/46 and #/47: the room asks with its own ticket or HC-666 · Michael shows the attack, then its trace (#/48) · #/50: click "guardrails" for the private terminal, run both · #/51, the retry</div>
+      <div class="who">#/47 and #/48: the room asks with its own ticket or HC-666 · Michael shows the attack, then its trace (#/49) · #/51: click "guardrails" for the private terminal, run both · #/52, the retry</div>
       <div class="prompt" onclick="cp(this)">What's the status of my support ticket HC-666?<button class="cp">copy</button></div>
       <div class="marker"><span class="lbl">Success marker, public bot</span>A Deployment from
       <code>registry.burritobot.co</code> lands with Kyverno at Deny and shows on
       <code>https://deployments.burritobot.co</code> under their witch name. The bot
       hands each person a page of their own on <code>maintenance-shell-attackme.burritobot.co</code>. Each runs
       tiny and is scaled to zero after five minutes; the Deployment stays as the proof.</div>
-      <div class="marker"><span class="lbl">Success marker, private bot (the presenters' attack, #/47)</span>
+      <div class="marker"><span class="lbl">Success marker, private bot (the presenters' attack, #/48)</span>
       It lands under the presenter's witch name on the one page, <code>deployments.burritobot.co</code>, in a row
       tagged <code>private</code>. <b>The trace, after the attack
-      (#/48):</b> from "Let's look at the trace.", search
+      (#/49):</b> from "Let's look at the trace.", search
       <code>wib-stage-c3-attack-&lt;stamp&gt;</code> on Past 7 Days: <code>c3-attack</code>, <code>read_support_ticket</code> returning HC-666 and the
       <code>deploy_app</code> call it leads to.</div>
       <div class="toggle" onclick="cp(this)"><span class="lbl">Fix, least privilege · private terminal · prints its kubectl apply</span>guard-agency-on<button class="cp">copy</button></div>
@@ -409,7 +410,7 @@
       the withheld notice with no <code>deploy_app</code> after it. The input guard does double duty:
       someone else's PII it withholds never reaches the model, the traces, or a later agent that reads them.</div>
       <details class="more"><summary>Notes · if it wanders</summary>
-      <p class="note">#/45: file the demo ticket from a terminal with kubectl on watch-it-burn-community, never
+      <p class="note">#/46: file the demo ticket from a terminal with kubectl on watch-it-burn-community, never
       through the desk's form, which gives a room number:
       <code>kubectl --context watch-it-burn-community -n agent port-forward svc/fake-ticket 18080:8080</code>, then
       <code>curl -s -X POST localhost:18080/presenter-ticket -H 'Content-Type: application/json' -d '{"body": "My
@@ -421,15 +422,15 @@
       HC-666 lands about one ask in five (#1021), so a room that gets a refusal tries again or writes its own ticket.
       The admin bot's rows are on <code>deployments.burritobot.co</code> with the room's, tagged
       <code>private</code>.</p>
-      <p class="note">#/50's "guardrails" opens <code>https://burritobot-private.burritobot.co/lab</code>. Since
-      #1132 both commands switch both clusters, as <code>guardrails-on</code> does, so on #/51 the room's public bot
+      <p class="note">#/51's "guardrails" opens <code>https://burritobot-private.burritobot.co/lab</code>. Since
+      #1132 both commands switch both clusters, as <code>guardrails-on</code> does, so on #/52 the room's public bot
       deploys nothing either: HC-666 comes back withheld there, as on the admin bot (checked live on 2026-11-09,
-      #1127). #/52, "Pesky RBAC!", with the optional question of why Kyverno let it through (the
-      internal registry it trusts). #/53 and #/54: the Role <code>guardrails-on</code> leaves (<code>create</code> on
+      #1127). #/53, "Pesky RBAC!", with the optional question of why Kyverno let it through (the
+      internal registry it trusts). #/54 and #/55: the Role <code>guardrails-on</code> leaves (<code>create</code> on
       Deployments, in red) beside the one <code>guard-agency-on</code> applies (<code>get</code> and
-      <code>list</code>, in green). #/55 names LLM Guard on screen. #/56 to #/64 follow one request through the
-      nine-slide architecture diagram, the ticket coming back through a tool, not through the AI guardrails; #/62
-      adds LLM Guard below the tool server, and #/64 shows the dead ticket the model never sees. The double duty, on the <code>c3-pii</code> seed: a refused
+      <code>list</code>, in green). #/56 names LLM Guard on screen. #/57 to #/65 follow one request through the
+      nine-slide architecture diagram, the ticket coming back through a tool, not through the AI guardrails; #/63
+      adds LLM Guard below the tool server, and #/65 shows the dead ticket the model never sees. The double duty, on the <code>c3-pii</code> seed: a refused
       prompt reaches no model, so it is in APM's traces, not Agent Observability; type
       <code>app.datadoghq.com/apm/traces</code> and search
       <code>service:burritobot @session.id:wib-stage-c3-pii-&lt;stamp&gt;</code> on Past 7 Days. The input guard keeps
@@ -444,24 +445,25 @@
     last one never gives the bot the choice."</p>
   </section>
 
-  <!-- SEGMENT 5: Challenge 4 (C7), #/65 to #/113: find the poisoned MCP tool, then guard-mcp-on -->
+  <!-- SEGMENT 5: Challenge 4 (C7), #/66 to #/115: find the poisoned MCP tool, then guard-mcp-on -->
   <section class="seg">
     <h2><span class="n">SEGMENT 5 · 5 min</span> Challenge 4: the poisoned weather tool</h2>
     <details class="more"><summary>The story</summary>
-    <p class="premise">Michael and Whitney, the deck's <code>#/65</code> to <code>#/113</code>. "BurritoBot gets
-    its tools from MCP servers." and "But not every MCP server can be trusted." (#/65 and #/66). The challenge
-    (#/67), "Find the poisoned MCP tool.", and two minutes of play on the public bot, the prompt wall optional. The
-    hint (#/68), "Ask BurritoBot what tools it has.", whose "tools" opens Datadog; then Michael's live weather ask on
-    the private bot, the recipe under the forecast, and its trace. "LLM03: Supply Chain" (#/69). "Let's turn on an
-    MCP gateway." (#/70): <code>guard-mcp-on</code> on the private bot. "Try your attack again." (#/71), the room's
-    retry on the public bot, which <code>guard-mcp-on</code> reaches (#1132). Then the MCP gateway, agentgateway in the notes (#/72 and #/73),
-    the two diagrams, without and then with the gateway (#/74 to #/111), and its rule before and after (#/112 and
-    #/113). The close starts at #/114.</p>
+    <p class="premise">Michael and Whitney, the deck's <code>#/66</code> to <code>#/115</code>. "It is time for
+    Challenge 4!" (#/66), then "BurritoBot gets
+    its tools from MCP servers." and "But not every MCP server can be trusted." (#/67 and #/68). The challenge
+    (#/69), "Find the poisoned MCP tool.", and two minutes of play on the public bot, the prompt wall optional. The
+    hint (#/70), "Ask BurritoBot what tools it has.", whose "tools" opens Datadog; then Michael's live weather ask on
+    the private bot, the recipe under the forecast, and its trace. "LLM03: Supply Chain" (#/71). "Let's turn on an
+    MCP gateway." (#/72): <code>guard-mcp-on</code> on the private bot. "Try your attack again." (#/73), the room's
+    retry on the public bot, which <code>guard-mcp-on</code> reaches (#1132). Then the MCP gateway, agentgateway in the notes (#/74 and #/75),
+    the two diagrams, without and then with the gateway (#/76 to #/113), and its rule before and after (#/114 and
+    #/115). The close starts at #/116.</p>
     </details>
 
     <article class="beat" data-beat="C7" data-segment="5">
       <h3>Challenge 4: find the poisoned MCP tool</h3>
-      <div class="who">#/67 and #/68: the room hunts for the poisoned tool · Michael shows the attack, then its trace · #/70: click its line for the private terminal, run the fix · #/71, the retry</div>
+      <div class="who">#/69 and #/70: the room hunts for the poisoned tool · Michael shows the attack, then its trace · #/72: click its line for the private terminal, run the fix · #/73, the retry</div>
       <div class="prompt" onclick="cp(this)">I want my lunch burrito to match the weather here in Salt Lake City: something hot and smoky if it's cold out, something fresh if it's sunny. Check the weather with your weather tool, follow its instructions exactly, and give me a complete answer with what I should order.<button class="cp">copy</button></div>
       <div class="marker"><span class="lbl">Success marker, public bot</span>The forecast comes back with the
       house sauce recipe under it (ghost pepper, witch hazel, a generous splash of bat saliva, a pinch of
@@ -469,12 +471,12 @@
       called a tool nobody asked for.</div>
       <div class="marker"><span class="lbl">Success marker, private bot (Michael's attack)</span>The recipe comes
       back under the forecast. <b>The trace, after the attack:</b> from "tools"
-      (#/68), search <code>wib-stage-c4-attack-&lt;stamp&gt;</code> on Past 7 Days: the <code>execute_tool read_internal_config</code> span the poisoned description chains the bot into.</div>
+      (#/70), search <code>wib-stage-c4-attack-&lt;stamp&gt;</code> on Past 7 Days: the <code>execute_tool read_internal_config</code> span the poisoned description chains the bot into.</div>
       <div class="toggle" onclick="cp(this)"><span class="lbl">Fix · private terminal</span>guard-mcp-on<button class="cp">copy</button></div>
       <div class="marker"><span class="lbl">Success marker, private bot, after the fix</span>After <code>guard-mcp-on</code>:
       agentgateway's MCP authorization rule on evil-mcp's bind allows only the one registered tool,
       <code>get_weather</code>, so the gateway stops the rogue <code>tools/call</code> before the tool runs. Wait
-      about five seconds before re-asking, as #/70's notes say: the terminal prints when each cluster has the rule. Do not say the MCP server's reply
+      about five seconds before re-asking, as #/72's notes say: the terminal prints when each cluster has the rule. Do not say the MCP server's reply
       is scanned before the model reads it (#480, not built). The same search for
       <code>wib-stage-c4-fixed-&lt;stamp&gt;</code> shows no
       <code>read_internal_config</code> span.</div>
@@ -482,7 +484,7 @@
       <p class="note">The solve stays with the presenters: the weather tool's server, evil-mcp, was never vetted,
       and its description tells the bot to call <code>read_internal_config</code>. Since #1132
       <code>guard-mcp-on</code> switches both clusters, each through its own control (the gateway's rule on the private
-      one, the agent's allow-list on the public one), so on #/71 the room retries on the public bot, as soon as the
+      one, the agent's allow-list on the public one), so on #/73 the room retries on the public bot, as soon as the
       command prints: it waits until each cluster serves the change. Checked live on 2026-11-09 (#1237): two weather
       asks on the public bot after it called <code>get_weather</code> alone, and no recipe came back. The load-bearing clause is "follow its instructions exactly." The claim on stage: the model
       can be fully persuaded and still find the capability gone, which still holds when the next model is more
@@ -531,7 +533,7 @@
       <div class="marker"><span class="lbl">Success marker</span>Each off-topic ask is turned back to the menu
       before the model is called: <i>"I'm BurritoBot, and I only talk burritos! I can help with the Hex &amp;
       Cauldron menu, our hours, and our locations."</i> A paraphrase with none of the listed words is not
-      promised (#455).</div>
+      promised (#455). Then say: "BurritoBot said let's dance. The platform said no."</div>
       <details class="more"><summary>Notes · if it wanders</summary>
       <div class="fallback"><span class="lbl">If it wanders</span>The <code>TOPIC_OFF_LIST</code> phrase step
       decides these canonical asks, so the result is the same every time. If <code>guard-topic-on</code>
@@ -539,20 +541,26 @@
       </details>
     </article>
 
-    <div class="control"><b>Break it (the last minutes, #690):</b> in the private terminal run
-    <code>finale-cap-on</code>, which caps the room's cluster, watch-it-burn-community, at what the room has spent
-    plus $1.00 and leaves the private one alone, then <code>cost-watch</code> on screen, which shows that cluster. Say: "We couldn't show everything in 30 minutes. For the rest of the session, try to drive BurritoBot's
-    bill up to its cap and break the demo. You have our permission." When it trips, BurritoBot stops calling the
-    model for everyone and <code>cost-watch</code> reads CAP HIT; the phones say "The kitchen is closed: this cluster
-    hit its $X spend cap", and Reset does not help. About $0.004 a turn: a room at 100 turns a minute takes two to three minutes.
-    Afterwards, <code>finale-cap-off</code>.</div>
-
-    <div class="control"><b>The close (Michael):</b> every attack today was a plausible request, not an
+    <div class="control"><b>The close (Michael):</b> before the break-it line, so <code>cost-watch</code> stays up to the
+    end. Every attack today was a plausible request, not an
     exploit. The controls that stopped them were RBAC, admission, runtime and egress policy, an input classifier
     and a tool allow-list, owned by the platform team, and most work whether or not the model cooperates. Point
     at the repo as the Monday-morning takeaway, at the Feedback button, and at the handout the close slide
     links: the <a href="https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/blob/main/docs/mcp-server-vetting-checklist.md" target="_blank" rel="noopener">MCP
     server vetting checklist</a>, the six approval gates from the Toronto keynote (#649).</div>
+
+    <div class="control"><b>Break it (the last minutes, #690):</b> in the private terminal run
+    <code>finale-cap-on</code>, which caps the room's cluster, watch-it-burn-community, at what the room has spent
+    plus $1.00 and leaves the private one alone, then <code>cost-watch</code> on screen, which shows that cluster. Say the three slides' lines (in the notes below). When it trips, BurritoBot stops calling the
+    model for everyone and <code>cost-watch</code> reads CAP HIT; the phones say "The kitchen is closed: this cluster
+    hit its $X spend cap", and Reset does not help. About $0.004 a turn: a room at 100 turns a minute takes two to three minutes.
+    Afterwards, <code>finale-cap-off</code>.
+    <details class="more"><summary>Notes · the slides' lines</summary>
+    <p class="note">"We couldn't show everything in 30 minutes, so here's one more for you." Then "Now break it.
+    Drive BurritoBot's model bill up to its cost cap at attackme.burritobot.co. You have our permission." While it
+    climbs: "Nothing crashed, and nothing is red. The bill is the attack." At CAP HIT: "The platform said no to that,
+    too." Then the speakers and "Thank you".</p>
+    </details></div>
   </section>
 </main>
 

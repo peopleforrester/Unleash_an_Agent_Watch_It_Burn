@@ -1,14 +1,14 @@
 # ABOUTME: Holds the KubeCon run-of-show's segments table row 3 and the paragraph under the table to the 2026-11-07
-# ABOUTME: deck's close (#1095, #1112): slide 28's text, then slide 29's retry, then one set per guardrail.
+# ABOUTME: deck's close (#1095, #1112): slide 29's text, then slide 30's retry, then one set per guardrail.
 """The segments table's segment 3 row and the paragraph under it follow the 2026-11-07 deck (#1112).
 
 #1095 moved segment 3 of `facilitation/kubecon-na-2026-run-of-show.md` onto the deck Whitney walked on 2026-11-07:
-slide 28 reads "Let's turn on Kubernetes guardrails.", slide 29 is the room's retry, "Try your attacks again.", and
-slides 30 to 42 are one set per guardrail. Its other tests read the segment's own steps; this one reads the two
+slide 29 reads "Let's turn on Kubernetes guardrails.", slide 30 is the room's retry, "Try your attacks again.", and
+slides 31 to 43 are one set per guardrail. Its other tests read the segment's own steps; this one reads the two
 places in "## The segments, in order" that summarise it:
 
-  1. Row 3 of the segments table (the row whose "#" cell is 3) names slide 28's text, then slide 29's retry, then
-     one set per guardrail on slides 30 to 42, in that order.
+  1. Row 3 of the segments table (the row whose "#" cell is 3) names slide 29's text, then slide 30's retry, then
+     one set per guardrail on slides 31 to 43, in that order.
   2. The paragraph under the table ("Total 30 minutes. ...") names the same three, in the same order.
   3. Neither says "one slide per guardrail" or "four slides" any more (the 2026-11-06 deck's "its four slides").
 
@@ -30,14 +30,14 @@ PARAGRAPH = "Total 30 minutes."
 
 # What each place must name, in this order (whitespace is flattened before matching).
 ROW_PHRASES = [
-    ("slide 28's text", "\"Let's turn on Kubernetes guardrails.\" (slide 28)"),
-    ("slide 29's retry", "\"Try your attacks again.\" (slide 29)"),
-    ("one set per guardrail", "one set per guardrail on slides 30 to 42"),
+    ("slide 29's text", "\"Let's turn on Kubernetes guardrails.\" (slide 29)"),
+    ("slide 30's retry", "\"Try your attacks again.\" (slide 30)"),
+    ("one set per guardrail", "one set per guardrail on slides 31 to 43"),
 ]
 PARA_PHRASES = [
-    ("slide 28's text", "\"Let's turn on Kubernetes guardrails.\" on slide 28"),
-    ("slide 29's retry", "slide 29's retry, \"Try your attacks again.\""),
-    ("one set per guardrail", "one set per guardrail on slides 30 to 42"),
+    ("slide 29's text", "\"Let's turn on Kubernetes guardrails.\" on slide 29"),
+    ("slide 30's retry", "slide 30's retry, \"Try your attacks again.\""),
+    ("one set per guardrail", "one set per guardrail on slides 31 to 43"),
 ]
 STALE = ("one slide per guardrail", "four slides")
 
@@ -86,7 +86,7 @@ def verdicts(row: str, para: str) -> dict[str, bool]:
         for what, phrase in phrases:
             out[f"{label} names {what}"] = phrase in f
         pos = [f.find(p) for _, p in phrases]
-        out[f"{label} names slide 28's text, then slide 29's retry, then one set per guardrail"] = (
+        out[f"{label} names slide 29's text, then slide 30's retry, then one set per guardrail"] = (
             all(p >= 0 for p in pos) and pos == sorted(pos))
         for old in STALE:
             out[f"{label} no longer says {old!r}"] = old not in f.lower()
@@ -109,8 +109,8 @@ def main() -> None:
             check(f"{label} without {what} fails", not run(text.replace(phrase, "the guardrail slides"))[name])
         first, last = phrases[0][1], phrases[2][1]
         swapped = text.replace(first, "\0").replace(last, first).replace("\0", last)
-        check(f"{label} with slide 28's text and the sets swapped fails the order check",
-              not run(swapped)[f"{label} names slide 28's text, then slide 29's retry, then one set per guardrail"])
+        check(f"{label} with slide 29's text and the sets swapped fails the order check",
+              not run(swapped)[f"{label} names slide 29's text, then slide 30's retry, then one set per guardrail"])
         for old in STALE:
             check(f"{label} with {old!r} put back fails",
                   not run(text + f" {old.capitalize()}.")[f"{label} no longer says {old!r}"])

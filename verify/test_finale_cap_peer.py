@@ -356,7 +356,7 @@ with tempfile.TemporaryDirectory() as tmp:
 
 print("== the close sends the presenters to the private terminal ==")
 ros = ROS.read_text(encoding="utf-8")
-anchor_a, anchor_b = "- **Break it (the last minutes, #690):**", "- **The close (Michael):**"
+anchor_a, anchor_b = "- **Break it (the last minutes, #690):**", "- **Close out (both):**"  # the close precedes it (#1327)
 for a in (anchor_a, anchor_b):
     if a not in ros:
         sys.exit(f"FAILED: the anchor {a!r} is not in {ROS.relative_to(REPO)}")

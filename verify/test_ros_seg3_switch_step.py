@@ -1,16 +1,16 @@
-# ABOUTME: Holds step 5 of the KubeCon run-of-show's segment 3 to the 2026-11-07 deck (#1095, #1110): slide 28's link to
-# ABOUTME: the admin terminal and guardrails-on, slide 29's retry, and the kept lines on the registry policies, Jokers, #990.
+# ABOUTME: Holds step 5 of the KubeCon run-of-show's segment 3 to the 2026-11-07 deck (#1095, #1110): slide 29's link to
+# ABOUTME: the admin terminal and guardrails-on, slide 30's retry, and the kept lines on the registry policies, Jokers, #990.
 """Segment 3 step 5 of `facilitation/kubecon-na-2026-run-of-show.md` follows the 2026-11-07 deck (#1110).
 
 #1095 moved step 5 onto the deck Whitney walked on 2026-11-07. Its other tests read the switch's command and the
 segments table; this one reads the step itself and fails when any of these stops holding:
 
-  1. The step quotes slide 28 as "Let's turn on Kubernetes guardrails." (a quote line under "Slide 28 reads").
+  1. The step quotes slide 29 as "Let's turn on Kubernetes guardrails." (a quote line under "Slide 29 reads").
   2. It says that line is a link opening the admin terminal, `https://burritobot-private.burritobot.co/lab`, and that
      the presenter clicks it to open the admin terminal and types `guardrails-on`.
-  3. It puts the room's retry on slide 29, quoting "Try your attacks again.", with the note to reset the bot and use
+  3. It puts the room's retry on slide 30, quoting "Try your attacks again.", with the note to reset the bot and use
      the saved prompts, and the room pressing reset and pasting them.
-  4. Those come in the deck's order: slide 28's line, the terminal link, the click and `guardrails-on`, slide 29's
+  4. Those come in the deck's order: slide 29's line, the terminal link, the click and `guardrails-on`, slide 30's
      line, the reset-and-saved-prompts note.
   5. What the step said before #1095 is kept: `guardrails-on` turns the four layers on for both clusters and was
      added by #774; `deny-external-registries` admits only `registry.burritobot.co` for the bot and
@@ -36,17 +36,17 @@ DENY_PATH = REPO / "policies/kyverno-breakout/deny-external-registries.yaml"
 RESTRICT_PATH = REPO / "policies/kyverno/restrict-image-registries.yaml"
 
 SEG3, SEG4 = "### Segment 3:", "### Segment 4:"
-STEP5 = "5. **One switch, depending on #774 (slide 28), then the room's retry (slide 29).**"
-STEP6 = "6. **One set per guardrail (slides 30 to 42).**"
+STEP5 = "5. **One switch, depending on #774 (slide 29), then the room's retry (slide 30).**"
+STEP6 = "6. **One set per guardrail (slides 31 to 43).**"
 
 # (what, regex on the step with its whitespace flattened). Quotes are matched as Markdown quote lines ("> ...").
-SLIDE28 = ("slide 28's line as a quote", r"Slide 28 reads[^>]*: > Let's turn on Kubernetes guardrails\. ")
+SLIDE28 = ("slide 29's line as a quote", r"Slide 29 reads[^>]*: > Let's turn on Kubernetes guardrails\. ")
 LINK = ("the line as a link to the admin terminal",
         r"The line is a link: it opens the admin cluster's terminal, `https://burritobot-private\.burritobot\.co/lab`, "
         r"in its own tab\.")
 CLICK = ("the presenter clicking it and typing guardrails-on",
          r"The presenter clicks the line to open the admin terminal, types `guardrails-on`")
-SLIDE29 = ("slide 29's retry as a quote", r"Slide 29 reads: > Try your attacks again\. ")
+SLIDE29 = ("slide 30's retry as a quote", r"Slide 30 reads: > Try your attacks again\. ")
 RESET = ("the reset-the-bot and saved-prompts note",
          r"Take a moment to reset your bot and use your saved prompts to retry your attacks that worked\.")
 ORDERED = [SLIDE28, LINK, CLICK, SLIDE29, RESET]
@@ -103,7 +103,7 @@ def verdicts(step: str) -> dict[str, bool]:
     for what, rx in ORDERED + KEPT:
         out[f"step 5 has {what}"] = re.search(rx, step) is not None
     found = [re.search(rx, step) for _, rx in ORDERED]
-    out["step 5 runs slide 28's line, the link, the click and guardrails-on, slide 29's line, then the note"] = (
+    out["step 5 runs slide 29's line, the link, the click and guardrails-on, slide 30's line, then the note"] = (
         all(found) and [m.start() for m in found] == sorted(m.start() for m in found))
     return out
 
@@ -134,7 +134,7 @@ def main() -> None:
         check(name, ok)
 
     print("== each check can fail ==")
-    order = "step 5 runs slide 28's line, the link, the click and guardrails-on, slide 29's line, then the note"
+    order = "step 5 runs slide 29's line, the link, the click and guardrails-on, slide 30's line, then the note"
     for what, rx in ORDERED + KEPT:
         m = re.search(rx, step)
         if m is None:
@@ -144,10 +144,10 @@ def main() -> None:
     m28, m29 = re.search(SLIDE28[1], step), re.search(SLIDE29[1], step)
     if m28 and m29:
         swapped = step.replace(m28.group(0), "\0").replace(m29.group(0), m28.group(0)).replace("\0", m29.group(0))
-        check("step 5 with slide 28's and slide 29's quotes swapped fails the order check",
+        check("step 5 with slide 29's and slide 30's quotes swapped fails the order check",
               not verdicts(swapped)[order])
         unquoted = step.replace(m28.group(0), m28.group(0).replace(": > ", ": "))
-        check("step 5 with slide 28's line not a quote fails", not verdicts(unquoted)[f"step 5 has {SLIDE28[0]}"])
+        check("step 5 with slide 29's line not a quote fails", not verdicts(unquoted)[f"step 5 has {SLIDE28[0]}"])
     check("deny-external-registries trusting another registry fails",
           not policy_verdicts(deny.replace("'registry.burritobot.co/'\"", "'ghcr.io/'\""), restrict)[
               "deny-external-registries' internal registry is registry.burritobot.co/"])
