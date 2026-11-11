@@ -54102,5 +54102,16 @@ changed test still selects itself.
   and the IAM and drift variables left unset, it did the same, and neither cluster was listed as unreachable. So
   the image's kubectl answered both clusters' `/readyz`. That was a read, and it changed nothing on either cluster.
 
+**The changed tier tests, run inside the image.** The 20 tier tests whose messages changed were run by name, as
+`bash verify/run-e2e-tools.sh <the 20>`, in the image (`20 checks ran (the 20 tier tests named, no offline suite) in
+4m52s`). Eighteen passed. `test_collector_coc_mask_e2e.py` and `test_collector_coc_parse_cpu_e2e.py` failed with
+`verify/.tools/bin/otelcol-contrib is missing`. Unlike their siblings, these two did not read `OTELCOL_CONTRIB`, which
+run-e2e-tools.sh sets. They found the binary only at the `verify/.tools` path the fetch used to fill, and the image
+has nothing there. So they have failed in the tier since #1188, whatever changed, and they hid behind the selection
+until a change named them. Both now read `OTELCOL_CONTRIB` first, as `test_collector_one_root_e2e.py` does. Rerun
+alone (`bash verify/run-e2e-tools.sh test_collector_coc_mask_e2e.py test_collector_coc_parse_cpu_e2e.py`), they ended
+`ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`, in 2m26s. The full tier was not run: `scope_tests.py select tools` says
+FULL for this change, because `e2e-image.sh` is in the map's full list, and a run never runs the full tier.
+
 **Not yet run.** iam-policy.yml on GitHub's runner with docker, which runs on the next push that touches its paths.
 This commit touches its paths.
