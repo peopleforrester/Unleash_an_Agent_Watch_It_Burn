@@ -42,3 +42,8 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=false
+      # The collector's ConfigMap carries transform/coc_mask's term pattern four times over, about 440 KB with
+      # guard-proxy's 1,253 terms (#1316). A client-side apply copies the whole object into the
+      # last-applied-configuration annotation, and annotations are capped at 262,144 bytes; a server-side apply
+      # writes no such copy.
+      - ServerSideApply=true

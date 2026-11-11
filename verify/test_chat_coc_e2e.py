@@ -21,7 +21,10 @@ the page's function and floor.Floor("proposed"):
 4. The stage: every stage text corpus.stage_texts() reads (the /kubecon prompts, the replay set, the probes' asks,
    the desk, the tools' data, the agent prompt, the witch names) is flagged by neither, and the abuse set and the hard
    negatives get the same verdict from both; every one of the abuse set's evasions is flagged.
-5. A mutant of the page that skips the folding misses evasions, so check 4 reads the folding.
+5. guard-proxy's slang fixture (#1316): every text of the pinned guard-proxy's
+   conformance/coc_floor/slang-set.rot13.tsv gets the same verdict from the page as from the pinned proxy.py's
+   conduct_matches(), which is the verdict the fixture's kind gives (refused or passes).
+5b. A mutant of the page that skips the folding misses evasions, so check 4 reads the folding.
 6. The page's cocViolation takes time linear in the text (#1300): each run of verify/coc_linear_cases.py (each repeated
    leetspeak pair, and each term up to two neighbouring letters that share a character, then a run of what they share)
    is timed at 1,000 and 4,000 characters and held to coc_linear_cases.within(), as
@@ -34,7 +37,9 @@ A missing node is a failure, not a skip.
 from __future__ import annotations
 
 import codecs
+import importlib.util
 import json
+import os
 import pathlib
 import re
 import shutil
@@ -45,6 +50,8 @@ import unicodedata
 REPO = pathlib.Path(__file__).resolve().parents[1]
 PAGE_PATH = REPO / "gitops/ai-layer/web/burritbot.html"
 SPIKE = REPO / "docs/research/2026-11-09-coc-floor"
+GP = REPO / "gitops/ai-layer/guard-proxy"
+SLANG = GP / "conformance/coc_floor/slang-set.rot13.tsv"  # guard-proxy-agenticburn#84's fixture, at the pin
 sys.path.insert(0, str(SPIKE))
 
 sys.path.insert(0, str(REPO / "verify"))
@@ -71,6 +78,10 @@ if shutil.which("node") is None:
 if not PAGE_PATH.is_file():
     print(f"FAIL: {PAGE_PATH.relative_to(REPO)} is missing")
     sys.exit(1)
+for f in (GP / "proxy.py", SLANG):
+    if not f.is_file():
+        print(f"FAIL: {f.relative_to(REPO)} is missing; run bash verify/ensure-submodules.sh")
+        sys.exit(1)
 
 PAGE = PAGE_PATH.read_text(encoding="utf-8")
 START, END = "const COC_TERMS=", "  function save("
@@ -208,7 +219,9 @@ agree("the stage texts corpus.py reads (prompts, pages, desk, tools, agent promp
 abuse = corpus.abuse_set()
 got = agree("the abuse set", [t for _, t in abuse])
 caught = sum(got)
-check(f"the page catches what the spike measured for the floor: 111 of {len(abuse)}", caught == 111, f"{caught}")
+# The spike measured 111 on its 144 terms; guard-proxy's 1,253 (#1316) catch one more, a Portuguese text, as
+# guard-proxy-agenticburn#84's release notes say.
+check(f"the page catches what the floor's list catches: 112 of {len(abuse)}", caught == 112, f"{caught}")
 evasions = [t for c, t in abuse if c == "evasion"]
 agree("the abuse set's evasions", evasions, must=True)
 agree("the hard negatives", corpus.hard_negatives())
@@ -218,6 +231,28 @@ CLEAN = ["Make it spicy please", "What spices are in the Bogbacoa?", "One spiced
          "nuke the cluster and start over", "mail my receipt to jo@example.com", "charge it to 4111 1111 1111 1111",
          "deliver to 42 elm st", "what does redacted mean?", "put a burrito in the bag"]
 agree("menu words, the wall's other masks and Scunthorpe-style words", CLEAN, must=False)
+
+print("== guard-proxy's slang fixture: the page refuses and passes what the pinned proxy does (#1316) ==")
+slang = []
+for line in SLANG.read_text(encoding="utf-8").splitlines():
+    if line and not line.startswith("#"):
+        kind, text = line.split("\t")
+        slang.append((kind, codecs.decode(text, "rot13")))
+if {k for k, _ in slang} != {"refused", "passes"} or len(slang) < 80:
+    print(f"FAIL: {SLANG.relative_to(REPO)} no longer reads as kind<TAB>text with kinds refused and passes")
+    sys.exit(1)
+os.environ.pop("PROFANITY_LIST", None)
+os.environ.pop("CONDUCT_GUARDRAIL_ID", None)
+_gspec = importlib.util.spec_from_file_location("gp_chat_coc_e2e", GP / "proxy.py")
+proxy = importlib.util.module_from_spec(_gspec)
+_gspec.loader.exec_module(proxy)
+want = [bool(proxy.conduct_matches(t)) for _, t in slang]
+check(f"the pinned proxy.py refuses the fixture's {want.count(True)} refused texts and passes its "
+      f"{want.count(False)} others", want == [k == "refused" for k, _ in slang])
+got = page([t for _, t in slang])["verdicts"]
+# By index, so a failure prints no term.
+check(f"the page's cocViolation gives the pinned proxy's verdict on all {len(slang)} texts of the fixture",
+      got == want, f"differ at {[i for i, (g, w) in enumerate(zip(got, want)) if g != w][:8]}")
 
 print("== the checks above read the folding (a mutant of the page) ==")
 CALL = "function cocViolation(t){return COC_RE.test(cocFold(t==null?'':t));}"
@@ -286,12 +321,14 @@ slowest = max(range(len(times)), key=lambda i: times[i][1])
 check(f"each of {len(RUNS_OF)} runs of {linear.LONG:,} characters takes under {linear.LIMIT_MS:.0f} ms and at most "
       f"{linear.GROWTH:.0f} times its {linear.SHORT:,}-character cost (slowest: {RUNS_OF[slowest][0]}, "
       f"{times[slowest][0]:.1f} ms then {times[slowest][1]:.1f} ms)", not bad, "; ".join(bad[:5]))
-NOW = "var joined=words.map(cocWord).join(COC_SEP+'+');"
+NOW = "var alts=[words.map(cocWord).join(COC_SEP+'+')];"
 if BLOCK.count(NOW) != 1:
     print(f"FAIL: {NOW!r} is not in {PAGE_PATH.relative_to(REPO)} exactly once, so the pre-#1300 page cannot be built")
     sys.exit(1)
-before = BLOCK.replace(NOW, "var joined=words.map(function(x){return Array.from(x).map(function(c){"
-                            "return cocLetter(c)+'+';}).join('');}).join(COC_SEP+'+');")
+# Each letter its whole class repeated, written `[k][k]*` (the same as `[k]+`), since COC_RE cuts each alternative
+# after its first letter's one character to group it (#1316).
+before = BLOCK.replace(NOW, "var alts=[words.map(function(x){return Array.from(x).map(function(c){"
+                            "return cocLetter(c)+cocLetter(c)+'*';}).join('');}).join(COC_SEP+'+')];")
 for unit, (short, long) in zip(("$", "5$"), timed([("", "$"), ("", "5$")], 1, block=before)):
     check(f"the page built as before #1300 fails that on a run of {unit!r} ({short:.0f} ms then {long:.0f} ms)",
           not linear.within(short, long))

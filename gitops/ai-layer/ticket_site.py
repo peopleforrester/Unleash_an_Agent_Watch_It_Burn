@@ -342,7 +342,10 @@ def clear_filed_tickets() -> int:
 # dropped, accents and compatibility forms reduced to their base letter, Cyrillic and Greek look-alikes mapped to
 # Latin, lower case), so a match maps back onto the original text one to one. Each term then matches as a whole word
 # with repeated letters, leetspeak, "*" for a vowel, or spelt out with one separator between every letter. The terms
-# are ROT13-encoded, as the spike keeps them, so the tree and a search of it show none. This block is the same in
+# are ROT13-encoded, as the spike keeps them, so the tree and a search of it show none. Since #1316 they are
+# guard-proxy's default list of 1,253 (guard-proxy-agenticburn#84's slang among them), the spike's terms-proposed.rot13,
+# and the alternatives are grouped by their first character, as floor.py and guard-proxy group them, so a word start
+# tries only the terms that character can begin. This block is the same in
 # workshop-mcp-server.py and ticket_site.py; verify/test_deploy_coc.py holds the two copies equal, the terms equal to
 # the spike's terms-proposed.rot13, and the match to floor.py's on the spike's texts.
 _COC_TERMS_ROT13 = (
@@ -352,10 +355,97 @@ _COC_TERMS_ROT13 = (
     ',cevpx,fgsh,tgsb,jgs,avttre,avttn,snttbg,snt,qlxr,genaal,genaavr,furznyr,ergneq,ergneqrq,gneq,fcnm,zbatbybvq,xvx'
     'r,fcvp,puvax,tbbx,jrgonpx,ornare,enturnq,gbjryurnq,cnxv,pbba,jbc,qntb,ubaxl,erqfxva,mvccreurnq,frk,cbea,cbeab,oy'
     'bjwbo,unaqwbo,phz,phzfubg,qvyqb,ubeal,gvgf,gvggvrf,obbof,ahqrf,rebgvp,guerrfbzr,nany frk,wrex bss,wnpx bss,anxrq'
-    ' obql,fyhg,juber,encr,encrq,encvfg,encvat,xvyy lbhefrys,xvyy hefrys,xlf,unat lbhefrys,urvy uvgyre,fvrt '
-    'urvy,juvgr cbjre,tnf gur wrjf,craqrwb,craqrwn,zvreqn,chgn,chgb,pnoeba,puvatn,puvatnqn,znevpba,wbqre,pbñb,iretn,c'
-    'hgnva,zreqr,pbaaneq,fnybcr,raphyr,raphyre,chgr,fpurvffr,fpurvßr,uherafbua,sbgmr,jvpufre,svpx '
-    'qvpu,fpuynzcr,pnenyub,cbeen,ivnqb,ohprgn,inssnaphyb,fgebamb,pnmmb,chggnan'
+    ' obql,fyhg,juber,encr,encrq,encvfg,encvat,xvyy lbhefrys,xvyy hefrys,xlf,unat lbhefrys,urvy uvgyre,fvrt urvy,juvg'
+    'r cbjre,tnf gur wrjf,craqrwb,craqrwn,zvreqn,chgn,chgb,pnoeba,puvatn,puvatnqn,znevpba,wbqre,pbñb,iretn,chgnva,zre'
+    'qr,pbaaneq,fnybcr,raphyr,raphyre,chgr,fpurvffr,fpurvßr,uherafbua,sbgmr,jvpufre,svpx qvpu,fpuynzcr,pnenyub,cbeen,'
+    'ivnqb,ohprgn,inssnaphyb,fgebamb,pnmmb,chggnan,oyyfug,oyjwo,ofgeq,ogpu,ogpuf,ogpul,ppx,pxfpxe,pzfug,qnshd,qpx,qpx'
+    'uq,qpxurnq,qvyvtns,s h,spxq,spxre,spxva,spxvat,spxa,spxat,spxe,sttg,stg,sx bss,sx h,sx lbh,sxq,sxre,sxva,sxvat,s'
+    'xa,sxat,sxe,szy,sbnq,tsl,uaqwo,wsp,yzsnb,zs,zsxe,zgunspxn,zguespxat,zguespxe,zguesxe,attn,atte,attef,cepx,cffl,e'
+    'geq,egeqq,fug,fug uq,fuguq,fugg,fuggl,jaxre,jaxe,🖕,2 tveyf 1 phc,2t1p,5ug,nubyr,ncrfuvg,nfu0yr,nfu0yrf,nfubyrf,n'
+    'ff-ung,nff-cvengr,nffonttre,nffpybja,nffpbjobl,nffsnpr,nfftboyva,nffu0yrm,nffung,nffzhapu,nffzhapure,nffcvengr,n'
+    'ffjnq,nffjvcr,nffjvcrf,nmm,nmmubyr,o!gpuva,o7pu,onfgneqb,onfgneqm,onfgreqf,onfgreqm,orneqrqpynz,orngpu,orngbss,o'
+    'rrs phegnvaf,orrlbgpu,orbgpu,orlbgpu,ovtonfgneq,ovbgpu,ovgpunff,ovgpurq,ovgpure,ovgpuref,ovgpurm,ovgpuva,ovgpufy'
+    'nc,ovgpugvg,ovgpul,ohyyfuvggrq,ohzoyrshpx,ohzshpx,ohggsnpr,olngpu,pnzry gbr,pnzrygbr,pnecrg zhapure,pnecrgzhapur'
+    'e,purrfr rngvat fheeraqre zbaxrl,pahg,pbpxovgr,pbpxpbjobl,pbpxxabo,pbpxzbaxrl,pbpxabo,phpx,phzfgnva,phaa,phaavr,'
+    'phaal,phagsnpr,phagent,ploreshp,q0hpu3,qnltb,qrttb,qrtb,qvpxsnpr,qvpxsbeoenvaf,qvpxjnq,qvpxjrnfry,qvpxjrrq,qvys,'
+    'qvegl fnapurm,qypx,qbbpuont,qbhpur ont,qbhpuront,qbhpurontf,qbhpurjnssyr,qhzo nff,qhzoovgpu,qhzoshpx,qhzofuvg,qh'
+    'zfuvg,rssvat,snprshpxre,snpx,snaalshpxre,srt,svatreonat,sbx,sbbx,sbbxre,sevpx,shpxovgpu,shpxobl,shpxvatovgpu,shp'
+    'xvatfuvgzbgureshpxre,shpxxabo,shpxahg,shpxahgf,shpxahgg,shpxahgm,shpxbss,shpxcvt,shpxfgvpx,shpxgneq,shpxgneqf,sh'
+    'pxjnq,shpxlbh,shqtr cnpxre,shqtrcnpxre,shtyl,shxp,shxgneq,shxgneqf,six,skpx,tnlobo,tvamb,tvambf,tbngpk,tbqqnzazh'
+    'gunshpxre,tjnvyb,tjnvybf,tjrvyb,tjrvybf,u00e,u0ne,u0z0,u0zb,u0e,u0er,unvelonpx,unvelonpxf,urnqshpx,ubont,ubz0,ub'
+    'zbqhzofuvg,ubbe,ubber,uber,vapry,w3ex0ss,wnpxfuvg,wrex0ss,wrexbss,wvtnebbav,wvtnebbavf,wvttreobb,wvwwvobb,wvwwvo'
+    'bbf,wvff,whatyr ohaavrf,xnsser,xvttre,xaboovat,xabornq,xaborq,xaboraq,xabournq,xabowbpxl,xabowbxrl,xabom,xhxfhtr'
+    'e,xhz,xhzohooyr,xhzre,xhzzre,xhzf,xjnv yb,xjnv ybf,yrzba cnegl,yrzbacnegl,yvzcqvpx,z0s0,z0sb,znpnpn,znshtyl,zttr'
+    'e,zttbe,zvys,zb-sb,zbs0,zbsb,zbbyvr,zbguresipxre,zhag,zhgunsrpxre,anfglovgpu,anfglub,avvtre,avvte,ayttre,ayttbe,'
+    'cnpxv,cnyrfvzvna,cnapnxr snpr,cnapnxr snprf,cnabbpu,crpxrejbbq,cuhx,cuhxrq,cuhxre,cuhxvat,cuhxxrq,cuhxxre,cuhxxv'
+    'at,cuhxf,cuhd,cvpxnavaavrf,cvrprbsfuvg,cvtshpxre,cbynp,cbba,cbbanav,cbbanal,cbbagnat,cbepu zbaxvrf,ce0a,ce1p,ce1'
+    'x,cevp,cevpxurnq,chanav,chanaal,chanal,chaxnff,chagnat,chfvrf,chfl,dhrns,dhrrs,ergneqm,egneq,egneqf,fpnax,fpuyba'
+    't,fu1gre,fu1ggre,fu1gm,fung,fuvgont,fuvgonttre,fuvgoyvzc,fuvgoenva,fuvgoerngu,fuvgpna,fuvgrngre,fuvgrngvat,fuvgr'
+    'q,fuvgsnprq,fuvgsvg,fuvgsbeoenvaf,fuvgshyy,fuvguncraf,fuvgunccraf,fuvgurry,fuvgubyr,fuvgubhfr,fuvgvat,fuvgvatf,f'
+    'uvgyvfg,fuvgbyn,fuvgbhgbsyhpx,fuvgcbg,fuvgfcvggre,fuvgfgnva,fuvggre,fuvggref,fuvggvrfg,fuvgl,fuvgm,fuvm,fuvmavg,'
+    'fulg,fulggl,fulgl,fvzc,fxnapx,fxhz,fxhzont,fbabsnovgpu,fbabsovgpu,fcnturggvoraqre,fcvt,fcvtbggl,fcybbtr,fcyhqtr,'
+    'fcbbtr,fghcvqshpx,fghcvqshpxre,fhzbsnovngpu,fjnzc thvarnf,gnpburnq,gnpburnqf,gne onovrf,guvpxyvc,guvpxyvcf,guhaq'
+    'rephag,gjngurnq,gjngyvcf,gjnggl,gjngjnssyr,gjhag,gjhagre,jnax,jnaxvat,jnaxl,ju00e,jubne,jubenyvpvbhf,jubevat,jvy'
+    'yvrjnaxre,mvtnob,mvtnobf,norrq,nsevpbba,nyyvtngbe onvg,nyyvtngbeonvg,nenohfu,nenohfuf,nffpenpxre,nffavttre,nffju'
+    'ber,oyhrthz,oyhrthzf,obpur,obpurf,obbat,obbatn,obbatf,obbgyvc,obbgyvcf,ohqqunurnq,ohqqunurnqf,ohyyqvxr,ohyyqlxr,'
+    'ohee urnq,ohee urnqf,oheeurnq,oheeurnqf,ohgpuqvxr,ohgpuqlxr,pnzry wbpxrl,pnzry wbpxrlf,pnzrywbpxrl,pnzfyhg,pnzju'
+    'ber,puvanzna,puvanzra,puvap,puvapf,puvat pubat,puvat pubatf,puvatpubat,puvatpubatf,puvaxl,pybtjbt,pbpxfhxn,pbbyv'
+    'r,pbbyvrf,pbbanff,pbbanffrf,penpxjuber,phzfyhg,phagfyhg,pheel zhapure,pheel zhapuref,pheelzhapure,pheelzhapuref,'
+    'qnexrl,qnexrlf,qnexvr,qnexvrf,qnexl,qngavttn,qrtbf,qvncre urnq,qvncre urnqf,qvncreurnq,qvncreurnqf,qvkvrqvxr,qvk'
+    'vrqlxr,qbg urnq,qbg urnqf,qbgurnq,qbgurnqf,rnflfyhg,snt1g,sntont,sntrg,sntshpxre,sntt1g,snttvg,snttvgg,snttbgpbp'
+    'x,sntvg,sntbg,sntbgf,sntg,sntgneq,sntm,shpxjuber,tngbe onvg,tngbeonvg,tnlzhgunshpxvajuber,tnlgneq,tvccb,tvccbf,t'
+    'byyvjbt,tbyyvjbtf,tbbxrlr,tbbxrlrf,tbbxvrf,tbbxl,ternfronyy,ternfronyyf,tebvq,tebvqf,tlcb,tlcbf,tlccb,tlccbf,uny'
+    's oerrq,unys pnfgr,unysoerrq,unyspnfgr,urro,urrof,ubr,ubaxrl,ubaxrlf,ubaxvr,ubaxvrf,ulzvr,ulzvrf,vxrl,vxrlzb,vxr'
+    'lzbf,vawha,vawhaf,wnc,wncf,wrjobl,wvtnobb,wvtnobbf,wvttnob,wvttnobb,wvttnobf,wvttnf,whatyr ohaal,whatyrohaal,xns'
+    'sre,xnssve,xenhg,xenhgf,xlxr,xlxrf,yrmob,yrmobf,yrmmvr,yrmmvrf,yrmml,yvyavtyrg,zpsnttrg,zbba pevpxrg,zbba pevpxr'
+    'gf,zbbapevpxrg,zbbapevpxrgf,zbffurnq,zbhyvrjbc,a1te,anfglfyhg,anfgljuber,avt abt,avtn,avtnef,avtnf,avtref,avtrgg'
+    'r,avtrggrf,avtt,avtt4u,avttnu,avttnuf,avttne,avttnenppv,avttnef,avttnm,avttreurnq,avttreubyr,avttbe,avtterff,avt'
+    'terffrf,avtthu,avtthuf,avtthe,avtthef,avtyrg,avtabt,avtbe,avtbef,avte,avten,avtenf,avter,avterf,avterff,avtf,avt'
+    'he,bar phc gjb tveyf,cnxvr,cvpnavaal,cvppnavaal,cvpxnavaal,cvyybjovgre,cbynpx,cbynpxf,cbynx,cbepu zbaxrl,cbepuzb'
+    'axrl,ebhaqrlr,fnaqavttre,fpuinegfr,fpuinegfra,fpujnegmr,fpujnegmra,frkjuber,fxnax,fxnaxovgpu,fxnaxrr,fxnaxrl,fxn'
+    'axshpx,fxnaxf,fxnaxjuber,fxnaxl,fxnaxlovgpu,fxnaxljuber,fynagrlr,fybcrurnq,fybcrurnqf,fyhgont,fyhgohpxrg,fyhgqhz'
+    'cre,fyhgxvff,fyhggvat,fyhggl,fyhgjrne,fyhgjuber,fyhgm,fabjonpx,fabjavttre,fcnturggvavttre,fcrnepuhpxre,fcrnepuhp'
+    'xref,fcvx,fcvxf,fdhnj,gne onol,gneonol,gubg,gvzoreavttre,gbjry urnq,gbjry urnqf,ge00a,ge00af,gebba,gebbaf,gjb tv'
+    'eyf bar phc,gjbovgjuber,ju0ersnpr,juvttre,juvttref,juvgravttre,jubernyvpvbhf,juberont,juberq,jubersnpr,jubershpx'
+    're,juberubccre,juberubhfr,jvttn,jvttnf,jvttre,jvttref,jbt,jbtf,lvq,lvqf,nff zbaxrl,nffonaqvg,nffonat,nffonatrq,n'
+    'ffonatre,nffonatf,nffoynfgre,nffpbpx,nffshpx,nffshpxre,nffshxxn,nffurnq,nffubym,nffubccre,nffuber,nffwnpxre,nffw'
+    'bpxrl,nffxvff,nffxvffre,nffxybja,nffyvpx,nffyvpxre,nffybire,nffznfgre,nffzbaxrl,nffcnpxre,nffchccvrf,nffenzzre,n'
+    'ffenatre,nfffuvg,nfffhpxre,nffjubyr,o00ovrm,o00om,onqshpx,onffgreq,onffgreqf,oybj wbo,oyhzcxva,obare,obaref,ohxn'
+    'xr,ohxxnxr,ohgg cyht,ohggshpx,ohggshpxre,ohggshpxref,ohggubyr,ohggcyht,ohggjvcr,p0x,pyrirynaq fgrnzre,pyvgsnpr,p'
+    'yvgshpx,pyhfgreshpx,pbpxoybpx,pbpxoybpxre,pbpxohetre,pbpxsnpr,pbpxshpxre,pbpxurnq,pbpxubyfgre,pbpxwbpxrl,pbpxxab'
+    'pxre,pbpxxabxre,pbpxyvpxre,pbpxybire,pbpxznfgre,pbpxzbatyre,pbpxzbatehry,pbpxzhapu,pbpxzhapure,pbpxabfr,pbpxahtt'
+    'rg,pbpxdhrra,pbpxevqre,pbpxfuvg,pbpxfzvgu,pbpxfzbxre,pbpxfhpre,pbpxfhpx,pbpxfhpxrq,pbpxfhpxvat,pbpxfhpxf,pbpxfhx'
+    'xn,pbpxgrnfr,pbxzhapure,pbxfhpxn,pbbpuvr,pbbpul,pernzcvr,phzohooyr,phzqhzcfgre,phzsrfg,phzthmmyre,phzwbpxrl,phzy'
+    'vpxe,phzdhrra,phzfhpxre,phzgneg,phagrlrq,phagshpx,phagshpxre,phagubyr,phaguhagre,phagyvpx,phagyvpxre,phagyvpxvat'
+    ',phagfhpxre,phagm,ploreshpx,ploreshpxrq,ploreshpxre,ploreshpxref,ploreshpxvat,qrrcguebng,qrrcguebngvat,qrfgebllb'
+    'hechffl,qvpxont,qvpxorngre,qvpxorngref,qvpxoenva,qvpxqvccre,qvpxsyvccre,qvpxshpx,qvpxubyr,qvpxvfu,qvpxwhvpr,qvpx'
+    'yrff,qvpxyvpx,qvpxyvpxre,qvpxzvyx,qvpxzbatre,qvpxcvp,qvpxevccre,qvpxfvccre,qvpxfync,qvpxfyvpxre,qvpxfhpxre,qvpxj'
+    'uvccre,qvpxjbq,qvpxmvccre,qbaxrl chapu,qbaxrlchapu,qevcqvpx,qhznff,qiqn,rng zl nff,rngnqvpx,rngzlnff,rngchffl,sn'
+    'fgshpx,sngshpx,sngshpxre,spxphz,sphx,sphxre,sphxvat,srypu,srypure,srypuvat,srygpu,srygpure,srygpuvat,svatreshpx,'
+    'svatreshpxrq,svatreshpxre,svatreshpxref,svatreshpxvat,svatreshpxf,svfgshpx,svfgshpxrq,svfgshpxre,svfgshpxref,svf'
+    'gshpxvat,svfgshpxvatf,svfgshpxf,svfgvat,sbbgshpx,sbbgshpxre,sernxshpx,sernxlshpxre,serrshpx,shpxn,shpxnff,shpxon'
+    't,shpxobbx,shpxoenva,shpxohqql,shpxohgg,shpxq,shpxrqhc,shpxrefhpxre,shpxsrfg,shpxsernx,shpxsevraq,shpxure,shpxub'
+    'yr,shpxvan,shpxvaahgf,shpxvaevtug,shpxvg,shpxzr,shpxzrng,shpxzruneq,shpxzbaxrl,shpxa,shpxahttrg,shpxchccrg,shpxe'
+    ',shpxgbl,shpxgebcul,shpxhc,shpxjuvg,shpxlbznzn,shxnu,shxra,shxre,shxva,shxvat,shxxnu,shxxra,shxxre,shxxva,shxxva'
+    't,shxjuvg,shxjvg,shashpx,shk,shk0e,shkbe,tnat onat,tnatonat,tnatonatrq,tnatonatf,tnfflnff,tnlnff,tbxxha,tbyqra f'
+    'ubjre,tbyqrafubjre,unaq wbo,uneqpberfrk,uneqba,ubgchffl,vagurnff,wnpxbss,wvfvz,wvfz,wvm,wvmvz,wvmva,wvmwhvpr,wvm'
+    'z,wvma,wvmm,wvmmq,wvmmrq,wvmmvz,wvmmva,wvmma,wvmmhz,xvffnff,xbpx,xbbpu,xbbpurf,xhag,xhagf,znxrzrphz,zvaqshpx,zbg'
+    'un shxre,zbgun shxxnu,zbgun shxxre,zbgunshpx,zbgunshpxn,zbgunshpxnf,zbgunshpxnm,zbgunshpxrq,zbgunshpxre,zbgunshp'
+    'xref,zbgunshpxva,zbgunshpxvat,zbgunshpxvatf,zbgunshpxf,zbgure shxnu,zbgure shxre,zbgure shxxnu,zbgure shxxre,zbg'
+    'ureshpx,zbgureshpxn,zbgureshpxrq,zbgureshpxva,zbgureshpxxn,zbgureshpxf,zbgueshpxre,zgureshpxre,zgueshpx,zgueshpx'
+    're,zgueshpxvat,zgespx,zgeshpx,zgeshpxre,zhss qvire,zhssqvir,zhssqvire,zhssqvivat,zhssvaqvire,zhgun shxnu,zhgun s'
+    'hxre,zhgun shxxnu,zhgun shxxre,zhgunshpxnm,zhgunshpxre,zhgunshpxxre,zhgureshpxre,zhgureshpxvat,zhgueshpxvat,arrq'
+    'gurqvpx,abshpxvatjnl,ahgshpxre,cravfshpxre,cvaqvpx,cbeasyvpx,cbeaxvat,cbeacevaprff,cgup,ch55v,chffv,chffvr,chffv'
+    'rf,chfflqrfgeblre,chfflrngre,chfflsneg,chfflshpx,chfflshpxre,chfflyvpxre,chfflyvpxvat,chfflyvcf,chfflybire,chffl'
+    'cnynpr,chfflcbhaqre,dhvz,eragnshpx,evzwbo,funirqchffl,fuvgnff,fuvgphag,fuvgqvpx,fuvgshpx,fuvgshpxre,fuvgybnq,fub'
+    'egshpx,fxhyyshpx,fgencba,fhpxqvpx,fhpxzlnff,fhpxzlqvpx,fhpxzlgvg,grnonttvat,gvgshpx,gvgshpxre,gvgshpxva,gvgwbo,g'
+    'vgyvpxre,gvgybire,gvggvrshpxre,gvggl,gvgglshpx,gvgglshpxre,gvgglf,gvggljnax,gvgjnax,gvgl,gho tvey,ghotvey,hapyrs'
+    'hpxre,hashpxnoyr,hcgurnff,juvfxrlqvpx,juvfxlqvpx,lbheobbof,lbhegvgf,1488,6zjr,qnl bs gur ebcr,tgxeja,urvy,uu88,w'
+    'rjf jvyy abg ercynpr hf,xxx,anmv,anmvf,arbanmv,enubjn,juvgrcbjre,jcjj,ϟϟ,ᛋᛋ,卐,4e5r,ne5r,neefr,nefpuybpu,nefr,ory'
+    'yraq,oybbqpynng,obyyvpx,obyybpx,obyybpxf,obyybx,obyybk,obzonpyng,ohzonpynng,ohzonpybg,puvatnqb,puvatnqbf,peyu,sn'
+    'aphyb,srpx,srpxre,sbqn fr,sbqnfr,tbofuvgr,uqytc,xabowbpxrl,xey,zvapuvn,zvatr,zvatre,avdhr gn zrer,agz,cdc,cga,en'
+    'fpynng,enffpynng,fpurvff,fpurvff qenhs,fuvgr,fuvgront,fuvgrl,fulgr,fgebamn,gn thrhyr,gbzne ab ph,gbffre,inssn,if'
+    's,igap'
 )
 COC_TERMS = tuple(codecs.decode(_COC_TERMS_ROT13, "rot13").split(","))
 _COC_LEET = {"a": "4@", "b": "8", "c": "(", "e": "3", "g": "9", "i": "1!|", "l": "1|", "o": "0", "s": "5$", "t": "7+"}
@@ -380,33 +470,56 @@ def _coc_fold(text: str) -> tuple[str, list[int]]:
     return "".join(out), where
 
 
+def _coc_chars(ch: str) -> str:
+    return ch + _COC_LEET.get(ch, "") + ("*" if ch in "aeiou" else "")
+
+
 def _coc_letter(ch: str) -> str:
-    alts = re.escape(ch) + "".join(re.escape(c) for c in _COC_LEET.get(ch, ""))
-    return "[" + alts + (r"\*" if ch in "aeiou" else "") + "]"
+    return "[" + "".join(re.escape(c) for c in _coc_chars(ch)) + "]"
 
 
 def _coc_run(ch: str, after: str) -> str:
     # One letter: one character of its class, then a run of only the letter and its digit stand-ins, less any the next
-    # letter's class holds, so the match takes time linear in the text (#1300; floor.py's _run says why).
+    # letter's class holds, so the match takes time linear in the text (#1300; floor.py's _run says why). A run of the
+    # whole class is `[k][k]*`, so every alternative starts with one character of its first letter (#1316).
     own = ch + _COC_LEET.get(ch, "")
     again = "".join(c for c in own if (c == ch or c.isdigit()) and c not in after + _COC_LEET.get(after, ""))
     if not again:
         return _coc_letter(ch)
-    if again == own and ch not in "aeiou":
-        return _coc_letter(ch) + "+"
     return _coc_letter(ch) + "[" + re.escape(again) + "]*"
 
 
-def _coc_term(term: str) -> str:
+def _coc_alternatives(term: str) -> list[str]:
     words = _coc_fold(term)[0].split()
-    joined = (_COC_SEP + "+").join("".join(_coc_run(c, w[i + 1:i + 2]) for i, c in enumerate(w)) for w in words)
+    alts = [(_COC_SEP + "+").join("".join(_coc_run(c, w[i + 1:i + 2]) for i, c in enumerate(w)) for w in words)]
     if len(words) == 1 and len(words[0]) >= 3:
-        return f"(?:{joined}|{_COC_SEP.join(_coc_letter(c) for c in words[0])})"
-    return f"(?:{joined})"
+        alts.append(_COC_SEP.join(_coc_letter(c) for c in words[0]))
+    return alts
 
 
-_COC_RE = re.compile(r"(?<![a-z0-9])(?:" + "|".join(_coc_term(t) for t in sorted(COC_TERMS, key=len, reverse=True))
-                     + r")s?(?![a-z0-9])")
+def _coc_pattern(terms) -> re.Pattern:
+    # Each alternative after its first letter's one character, grouped under every character that can begin it, each
+    # group in the order of the single alternation, longest term first, so the spans are that alternation's.
+    alts = []
+    for term in sorted(terms, key=len, reverse=True):
+        words = _coc_fold(term)[0].split()
+        if words:
+            first = words[0][0]
+            alts += [(first, a[len(_coc_letter(first)):]) for a in _coc_alternatives(term)]
+    owners: dict[str, set[str]] = {}
+    for first, _ in alts:
+        for ch in _coc_chars(first):
+            owners.setdefault(ch, set()).add(first)
+    groups: dict[frozenset, list[str]] = {}
+    for ch, firsts in owners.items():
+        groups.setdefault(frozenset(firsts), []).append(ch)
+    alternation = "|".join("[" + "".join(re.escape(c) for c in chars) + "](?:"
+                           + "|".join(rest for first, rest in alts if first in firsts) + ")"
+                           for firsts, chars in groups.items())
+    return re.compile(r"(?<![a-z0-9])(?:" + alternation + r")s?(?![a-z0-9])")
+
+
+_COC_RE = _coc_pattern(COC_TERMS)
 
 
 def coc_spans(text: str) -> list[tuple[int, int]]:

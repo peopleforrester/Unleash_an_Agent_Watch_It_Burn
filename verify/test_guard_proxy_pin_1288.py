@@ -170,7 +170,10 @@ def load_proxy(sha: str) -> types.ModuleType:
 
 pinned = load_proxy(pin)
 old = load_proxy(OLD_PIN)
-check("the pinned proxy.py's default PROFANITY has the spike's 144 entries", len(pinned.PROFANITY) == 144,
+# Since #1316 the pin is 0a3ca16 or later, whose list is the 144 followed by guard-proxy-agenticburn#84's slang; this
+# test's floor is that the 144 are still there, first and in order (test_guard_proxy_pin_1316.py holds the rest).
+check("the pinned proxy.py's default PROFANITY starts with the spike's 144 entries, in order",
+      len(pinned.PROFANITY) >= 144 and pinned.PROFANITY[:144] == load_proxy(LINEAR).PROFANITY,
       f"it has {len(pinned.PROFANITY)}")
 for i, text in enumerate(SPELLINGS):
     label = ("the spaced-out spelling", "the fullwidth spelling")[i]

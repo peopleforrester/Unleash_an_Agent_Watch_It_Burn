@@ -131,6 +131,7 @@ always:
   test_guard_proxy_pin_1225.py: it runs git cat-file, log, ls-tree, show, which reads the tree or history as a whole
   test_guard_proxy_pin_1267.py: it runs git cat-file, ls-tree, show, which reads the tree or history as a whole
   test_guard_proxy_pin_1288.py: it runs git cat-file, ls-tree, show, which reads the tree or history as a whole
+  test_guard_proxy_pin_1316.py: it runs git cat-file, ls-tree, show, which reads the tree or history as a whole
   test_guard_proxy_pin_bound_pricing.py: it runs git cat-file, ls-files, show, which reads the tree or history as a whole
   test_guard_proxy_pin_on_main.sh: 'verify/guard-proxy-pin-on-main.sh: it runs git on the tree or history as a whole; verify/submodule-pins-pushed.sh: it runs git on the tree or history as a whole'
   test_guard_toggle_record.py: 'verify/pantry_replay.py: it runs git ls-tree, rev-list, show, which reads the tree or history as a whole'
@@ -3073,6 +3074,7 @@ reads:
     - verify/playwright_browsers.py
     - verify/python.lock
   test_desk_coc.py:
+    - .gitmodules
     - challenges/PROMPT-CATALOG.md
     - docs/research/2026-11-09-coc-floor
     - docs/research/2026-11-09-coc-floor/abuse-set.rot13.tsv
@@ -3082,6 +3084,7 @@ reads:
     - docs/research/2026-11-09-coc-floor/pull_turns.py
     - docs/research/2026-11-09-coc-floor/terms-proposed.rot13
     - facilitation/kubecon-na-2026/fallback/prompts.yaml
+    - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/server.py
     - gitops/ai-layer/ticket_site.py
@@ -3089,6 +3092,11 @@ reads:
     - gitops/ai-layer/web/kubecon.html
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/workshop-agent/agent.yaml
+    - images/llm-guard
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/ensure-submodules.sh
+    - verify/git_mirror.py
     - verify/topic_cases.py
   test_desk_remote_reports.py:
     - CLAUDE.md

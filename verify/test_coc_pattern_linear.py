@@ -160,7 +160,9 @@ for name, fn in COPIES.items():
 
 print("== 2. the check fails the pattern as it was before #1300 ==")
 real = floor._run
-floor._run = lambda ch, after: floor._letter(ch) + "+"  # each letter its whole class repeated, as before #1300
+# Each letter its whole class repeated, as before #1300; written `[k][k]*`, the same as `[k]+`, since #1316's grouping
+# cuts each alternative after its first letter's one character.
+floor._run = lambda ch, after: floor._letter(ch) + floor._letter(ch) + "*"
 try:
     before = floor.proposed_pattern()
 finally:
