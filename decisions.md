@@ -54647,3 +54647,46 @@ feed held their prompts (the wall reads 78 entries). `./fleet.sh reset-bot attac
 the bot's workloads, which would cut that session off mid-use, and `./fleet.sh wall-reset` needs a Railway login this
 run does not have. So both are left for whoever runs the room's reset once that use ends, in that order: `reset-bot` on
 every roster cluster, then `wall-reset`, then `wall-check --empty`.
+
+## 2026-11-11 · #1351 · run 20476 · Run 20471's tests-gate failure: stage_traces.py read the probe's old beat keys
+
+**Why run 20471 failed.** Its tests gate ran the whole offline suite, since `verify/run-e2e.sh` changed. Three tests
+failed: `test_stage_traces.py` and `test_stage_trace_prompts.py` with `KeyError: 'guardrails-on'`, and
+`test_coc_floor_probes_live_checks.py`. `verify/stage_traces.py` builds the stage-trace seed run out of
+`kubecon_probe.ADMIN`'s beats by their keys (`beat["guardrails-on"]`, `beat["guard-agency-on"]`, `beat["guard-input-on"]`,
+`beat["guard-mcp-on"]`), and run 20471 renamed those keys in the probe without renaming them there. The floor-probe check
+holds `test_coc_floor_probes_live.expected_beats` to the probe's beats plus its final one, by the final beat's old key.
+Run 20471 had looked for readers of the switch names, but not for readers of the probe's beat keys.
+
+**The fix.** `stage_traces.py` takes the probe's beats by their new keys (`guardrails-k8s-on`,
+`guardrails-agency-on`, `guardrails-input-on`, `guardrails-mcp-on`), and its docstrings name the new switches and the
+admin reset beat, `guardrails-all-off`. `test_stage_traces.py` expects those keys, its fake terminal answers
+`guardrails-k8s-on`, and it reads the reset beat as `guardrails-all-off`. `test_coc_floor_probes_live_checks.py` expects
+`guardrails-all-off` and `guardrails-k8s-off` as the two runs' final beats, and `test_coc_floor_probes_live.py`'s
+docstring and comment name them and the switches by their new names. A search of `verify/` for every other reader of
+the probe's beat keys, its switch constants, `stage_switch_run`'s renamed `START_ALSO`/`START_FIELDS` and the tuple
+`terminal()` now returns found none outside these files: `test_kubecon_c3_live.py` takes `identity` and `c6-lands`,
+`test_ceo_persona.py` `ceo-friendly`, `test_guard_lease.py` the reset beat by identity, and `test_recipe_block_live.py`
+the probe's `GUARDRAILS_ON`/`GUARDRAILS_OFF` and `judge_guardrails_switched`, whose names did not change.
+
+**Rebased onto staging.** Staging had moved by #1352, which renamed the switches in the run-of-show, /kubecon and the
+fallback kit, and read the run-of-show's new names in `test_kubecon_probe.py` and `test_stage_switch_night_before.py`
+through a `new_name` mapping from the probe's old names. The rebase kept #1352's run-of-show words and anchors with the
+probe's new keys in `STAGE_ANCHORS`. It kept #1352's record-bullet check in the Night Before test, and added this
+change's checks for the closing four, every switch's fields and the `/printed` lines. It also kept this change's
+description of the stage-switch step (the start-state rule, the closing four in order, the printed-read lines). The
+anchor comments run 20471 wrote, about the run-of-show still typing the old names, were rewritten, since it no
+longer does.
+
+**Tests**, each run once and passing: `test_stage_traces.py`, `test_stage_trace_prompts.py`,
+`test_coc_floor_probes_live_checks.py`, `test_kubecon_probe.py`, `test_stage_switch_check.py`,
+`test_stage_switch_run.py`, `test_stage_switch_night_before.py`, `test_switch_names_presenter_docs.py` (#1352's, which
+reads the run-of-show), `test_fetch_inventory.py`, `test_guard_lease.py`, `test_kubecon_c3_live_checks.py`,
+`test_scope_tests.py` and `test_test_map.py`. No skip marker was added (hecaton's `skipmarks.count` on every changed
+test). The full offline suite is left to validation, which runs all of it again since `run-e2e.sh` is in the change.
+
+**Live.** Nothing here changes what the clusters run (`verify/` only), so no switch was run again; run 20471's live run
+(31 PASS, GREEN, above) stands. A read-only check at 20:45 UTC: both `/controls` read every AI guard and every stage
+field off, with Falco on only on the private cluster as before. The private bot's counter reads 0 requests. The
+community bot's reads 170 requests, up from 85 at 19:34 UTC, so someone is still using it. This run sent it nothing and
+did not reset it, for the reason the entry above gives.

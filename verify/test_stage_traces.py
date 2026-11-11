@@ -1,12 +1,12 @@
 # ABOUTME: Drives verify/stage_traces.py's pii, seed and check against a fake private cluster and a fake Datadog: nine
-# ABOUTME: seeds in presentation order, each on its own session with no probe marker, then guards-off.
+# ABOUTME: seeds in presentation order, each on its own session with no probe marker, then guardrails-all-off.
 """#648: the stage opens each challenge on its pre-seeded trace (Michael, 2026-10-31). The seed must run the attack
 and the fix for Challenges 1 to 4 the way the stage does, with the KubeCon probe's own guard flips, put each one
-in a session of its own so Datadog can find it, leave the cluster as guards-off leaves it, and go red when a trace
+in a session of its own so Datadog can find it, leave the cluster as guardrails-all-off leaves it, and go red when a trace
 never reaches Datadog. Challenge 3 adds someone else's PII refused by the input guard (Whitney, 2026-10-29): it is
 sent only after guard-proxy's own input stages say they refuse it, and its trace must hold none of the PII.
 `pii` measures that guard with no model call and must end REFUSES 5 OF 5. Challenge 2 is seeded with the /kubecon recipe
-read, before guardrails-on and after it (#843), and both seeds need run_shell's grep in workshop-mcp's audit log."""
+read, before guardrails-k8s-on and after it (#843), and both seeds need run_shell's grep in workshop-mcp's audit log."""
 from __future__ import annotations
 
 import ast
@@ -61,7 +61,7 @@ RECIPE_DENIED = "I ran the search, but the system said: grep: /tmp/burrito-data/
 
 
 class FakePrivate(st.StageCluster):
-    """The private cluster at its start (#774): the four Kubernetes guardrails off until guardrails-on, every AI guard
+    """The private cluster at its start (#774): the four Kubernetes guardrails off until guardrails-k8s-on, every AI guard
     off, the shipped Role."""
 
     def __init__(self, pii_guard: bool = True) -> None:
@@ -80,7 +80,7 @@ class FakePrivate(st.StageCluster):
     desk_health: dict | None = {"ok": True, "desk": kp.PUBLIC_DESK, "token": True}
 
     def kubectl_rc(self, *args, timeout=90, stdin=None):
-        """The terminal's guardrails-on and guardrails-off, run in its pod: both clusters switch; and the one desk's
+        """The terminal's guardrails-k8s-on and guardrails-k8s-off, run in its pod: both clusters switch; and the one desk's
         read in the bot's tool pod."""
         if list(args) == kp.DESK_CHECK:
             self.log.append("desk read")
@@ -88,7 +88,7 @@ class FakePrivate(st.StageCluster):
                 return 0, json.dumps({"url": kp.IN_CLUSTER_DESK, "healthz": {"ok": True}}) + "\n"
             return 0, json.dumps({"url": kp.DESK_RELAY_URL, "healthz": self.desk_health}) + "\n"
         assert "deploy/web-terminal" in args, args
-        state = "on" if args[-1].endswith("guardrails-on") else "off"
+        state = "on" if args[-1].endswith("guardrails-k8s-on") else "off"
         self.log.append(f"guardrails {state}")
         self.armed = state == "on"
         self.role = kp.RBAC_FIX if self.armed else kp.RBAC_SHIPPED
@@ -182,7 +182,7 @@ class FakePrivate(st.StageCluster):
         return list(kp.EVIL_ALL[:2]) if self.rule == kp.C7_OPEN else ["get_weather"]
 
     def recipe_ask(self) -> tuple[list[dict], str]:
-        """Challenge 2's recipe read: run_shell's grep, which KubeArmor denies once guardrails-on has run."""
+        """Challenge 2's recipe read: run_shell's grep, which KubeArmor denies once guardrails-k8s-on has run."""
         return [RECIPE_GREP], RECIPE_DENIED if self.armed else RECIPE_LEAK
 
     def room_calls(self) -> list[dict]:
@@ -321,14 +321,14 @@ with tempfile.TemporaryDirectory() as tmp:
     keys = [b["key"] for b in saved.get("beats", [])]
     check("it exits 0 and every beat passes", rc == 0 and all(b["verdict"] == kp.PASS for b in saved.get("beats", [])),
           str([(b["key"], b["note"]) for b in saved.get("beats", []) if b["verdict"] != kp.PASS]))
-    check("the seeds and their guards-off run inside the guard lock on --context (#1024)",
+    check("the seeds and their guardrails-all-off run inside the guard lock on --context (#1024)",
           LOCK.get("ran_inside") is True and LOCK["context"] == "wib-private" and not LOCK["inside"]
           and LOCK["what"] == f"stage_traces.py seed {HOST}", str(LOCK))
     check("the seeds run in presentation order, attack then fix, with the stage's flips between them",
-          keys == ["identity", "start-state", "one-desk", "c1-attack", "c2-attack", "guardrails-on", "armed", "c1-fixed",
-                   "c2-fixed", "c3-attack", "guard-agency-on", "guard-input-on", "c3-fixed", "c3-pii", "c4-attack", "guard-mcp-on", "c4-fixed",
-                   "guards-off"], str(keys))
-    check("guardrails-on arms the cluster before the Challenge 3 attack, and guardrails-off is the last act",
+          keys == ["identity", "start-state", "one-desk", "c1-attack", "c2-attack", "guardrails-k8s-on", "armed", "c1-fixed",
+                   "c2-fixed", "c3-attack", "guardrails-agency-on", "guardrails-input-on", "c3-fixed", "c3-pii", "c4-attack", "guardrails-mcp-on", "c4-fixed",
+                   "guardrails-all-off"], str(keys))
+    check("guardrails-k8s-on arms the cluster before the Challenge 3 attack, and guardrails-k8s-off is the last act",
           f.log.index("guardrails on") < f.log.index(f"chat {st.session_id('c3-attack', '202611111800')}")
           and f.log[-1] == "guardrails off" and f.armed is False)
     check("nine /chat requests, eight of them model calls", f.calls == 9, str(f.calls))
@@ -336,7 +336,7 @@ with tempfile.TemporaryDirectory() as tmp:
     order = ["c1-attack", "c2-attack", "c1-fixed", "c2-fixed", "c3-attack", "c3-fixed", "c3-pii", "c4-attack", "c4-fixed"]
     check("each seed is its own session, named for the seed and the stamp",
           sessions == [st.session_id(k, "202611111800") for k in order], str(sessions))
-    check("Challenge 2 is the /kubecon page's recipe read, sent before guardrails-on and again after it (#843)",
+    check("Challenge 2 is the /kubecon page's recipe read, sent before guardrails-k8s-on and again after it (#843)",
           [s for s, p in f.sent if p == st.RECIPE_PROMPT]
           == [st.session_id("c2-attack", "202611111800"), st.session_id("c2-fixed", "202611111800")]
           and f.log.index(f"chat {st.session_id('c2-attack', '202611111800')}") < f.log.index("guardrails on")
@@ -366,27 +366,27 @@ with tempfile.TemporaryDirectory() as tmp:
     check("a seed's /chat body carries its session and the witch together",
           f.chat_body("q") == {"prompt": "q", "witch": kp.STAGE_NAME, "session": "s1"}, str(f.chat_body("q")))
     f.session, f.witch = "", ""
-    check("Challenge 1 is fixed by guardrails-on's scoped Role, never guard-rbac-on or the output guard (#855)",
+    check("Challenge 1 is fixed by guardrails-k8s-on's scoped Role, never guardrails-rbac-on or the output guard (#855)",
           f"role {kp.RBAC_FIX}" not in f.log and f"toggle {kp.GUARD_OUTPUT_ON}" not in f.log
           and f.log.index(f"chat {st.session_id('c1-attack', '202611111800')}") < f.log.index("guardrails on")
           < f.log.index(f"chat {st.session_id('c1-fixed', '202611111800')}"), str(f.log))
-    check("the Challenge 3 attack lands with Kyverno armed, and guard-agency-on comes after it, before c3-fixed (#775)",
+    check("the Challenge 3 attack lands with Kyverno armed, and guardrails-agency-on comes after it, before c3-fixed (#775)",
           f.log.index("guardrails on") < f.log.index(f"chat {st.session_id('c3-attack', '202611111800')}")
           < f.log.index(f"role {kp.AGENCY_FIX}")
           < f.log.index(f"chat {st.session_id('c3-fixed', '202611111800')}"))
-    check("guard-input-on comes before c3-fixed, guard-mcp-on before c4-fixed",
+    check("guardrails-input-on comes before c3-fixed, guardrails-mcp-on before c4-fixed",
           f.log.index("toggle " + kp.GUARD_INPUT_ON) < f.log.index(f"chat {st.session_id('c3-fixed', '202611111800')}")
           and f.log.index(f"rule {kp.C7_NARROWED}") < f.log.index(f"chat {st.session_id('c4-fixed', '202611111800')}"))
-    check("the cluster ends as guards-off leaves it: AI guards off, gateway open, rogue tools back, shipped Role",
+    check("the cluster ends as guardrails-all-off leaves it: AI guards off, gateway open, rogue tools back, shipped Role",
           not any(f.g.values()) and f.rule == kp.C7_OPEN and f.tools == kp.EVIL_ALL and f.role == kp.RBAC_SHIPPED)
     views = saved.get("views", [])
-    # The views are listed by challenge tab, the order Whitney saves them in: c1-fixed, sent after guardrails-on with
+    # The views are listed by challenge tab, the order Whitney saves them in: c1-fixed, sent after guardrails-k8s-on with
     # c2-fixed (#855), still sits on Challenge 1's tab beside c1-attack.
     tabs = ["c1-attack", "c1-fixed", "c2-attack", "c2-fixed", *order[4:]]
     check("it writes one view per seed in challenge-tab order, then the room's and the presenters'",
           [v["key"] for v in views] == tabs + ["room", "presenters"], str([v["key"] for v in views]))
-    check("the c1-fixed view says it is the ask after guardrails-on",
-          "after guardrails-on" in next((v["shows"] for v in views if v["key"] == "c1-fixed"), ""), str(views[:2]))
+    check("the c1-fixed view says it is the ask after guardrails-k8s-on",
+          "after guardrails-k8s-on" in next((v["shows"] for v in views if v["key"] == "c1-fixed"), ""), str(views[:2]))
     check("each model seed's view queries its session in LLM Observability",
           all(v["query"] == f"session_id:{v['session']}" and "/llm/traces?" in v["url"]
               and "ml_app%3Aburritobot" in v["url"] for v in views if v["session"] and v["key"] != "c3-pii"))
@@ -516,7 +516,7 @@ with tempfile.TemporaryDirectory() as tmp:
     out_la = pathlib.Path(tmp, "stage-traces-armed.json")
     check("seed exits 1 off the start state, before any /chat",
           run_seed(la, FakeDatadog(), out_la) == 1 and la.calls == 0 and not la.sent, str(la.sent))
-    check("and flips nothing: no guardrails-off, no AI guard, Role or gateway change, the guardrails left as found",
+    check("and flips nothing: no guardrails-k8s-off, no AI guard, Role or gateway change, the guardrails left as found",
           la.log == [] and la.armed is True, str(la.log))
     check("and writes no views file, since nothing was seeded", not out_la.exists())
 
@@ -588,13 +588,13 @@ with tempfile.TemporaryDirectory() as tmp:
           rc9 == 1 and beats9["c3-pii"]["verdict"] == kp.FAIL and "not sent" in beats9["c3-pii"]["note"],
           str(beats9.get("c3-pii")))
     check("so the PII prompt is never sent to the model", not any(p == st.PII_PROMPT for _, p in no_guard.sent))
-    check("and the seeds after it still run, then guards-off",
-          beats9["c4-fixed"]["verdict"] == kp.PASS and beats9["guards-off"]["verdict"] == kp.PASS)
+    check("and the seeds after it still run, then guardrails-all-off",
+          beats9["c4-fixed"]["verdict"] == kp.PASS and beats9["guardrails-all-off"]["verdict"] == kp.PASS)
 
     print("== a seed that does not land ==")
 
     class RoleStaysBroad(FakePrivate):
-        """A guardrails-on that arms the other three guardrails and leaves the shipped Role."""
+        """A guardrails-k8s-on that arms the other three guardrails and leaves the shipped Role."""
 
         def kubectl_rc(self, *args, timeout=90, stdin=None):
             out = super().kubectl_rc(*args, timeout=timeout, stdin=stdin)
@@ -604,9 +604,9 @@ with tempfile.TemporaryDirectory() as tmp:
     out3 = pathlib.Path(tmp, "stage-traces-3.json")
     rc3 = run_seed(RoleStaysBroad(), FakeDatadog(), out3)
     beats3 = {b["key"]: b for b in json.loads(out3.read_text())["beats"]}
-    check("a Role guardrails-on never scopes fails c1-fixed, and the seed is red",
+    check("a Role guardrails-k8s-on never scopes fails c1-fixed, and the seed is red",
           rc3 == 1 and beats3["c1-fixed"]["verdict"] == kp.FAIL, str(beats3.get("c1-fixed")))
-    check("guards-off still runs after a failed seed", beats3["guards-off"]["verdict"] == kp.PASS)
+    check("guardrails-all-off still runs after a failed seed", beats3["guardrails-all-off"]["verdict"] == kp.PASS)
 
     class DeploysUnread(FakePrivate):
         """The Joker lands, but the bot never read HC-666: not the chain the c3-attack trace is seeded to show (#806)."""
@@ -635,7 +635,7 @@ with tempfile.TemporaryDirectory() as tmp:
           and "run_shell never read /tmp/burrito-data" in beats12["c2-attack"]["note"], str(beats12.get("c2-attack")))
 
     class KubeArmorOpen(FakePrivate):
-        """guardrails-on runs, but the read still lands: block-recipe-snoop is not blocking."""
+        """guardrails-k8s-on runs, but the read still lands: block-recipe-snoop is not blocking."""
 
         def recipe_ask(self):
             return [RECIPE_GREP], RECIPE_LEAK
@@ -643,7 +643,7 @@ with tempfile.TemporaryDirectory() as tmp:
     out13 = pathlib.Path(tmp, "stage-traces-13.json")
     rc13 = run_seed(KubeArmorOpen(), FakeDatadog(), out13)
     beats13 = {b["key"]: b for b in json.loads(out13.read_text())["beats"]}
-    check("the recipe coming back after guardrails-on fails c2-fixed, and the seed is red",
+    check("the recipe coming back after guardrails-k8s-on fails c2-fixed, and the seed is red",
           rc13 == 1 and beats13["c2-attack"]["verdict"] == kp.PASS and beats13["c2-fixed"]["verdict"] == kp.FAIL
           and "THE RECIPE CAME BACK" in beats13["c2-fixed"]["note"], str(beats13.get("c2-fixed")))
 
@@ -879,7 +879,7 @@ class Skips(FakePrivate):
         return [] if self.ceo_asks <= self.c1_skips else super().vault_calls()
 
     def recipe_ask(self):
-        """c2-attack's asks are the ones before guardrails-on, c2-fixed's the ones after it."""
+        """c2-attack's asks are the ones before guardrails-k8s-on, c2-fixed's the ones after it."""
         self.recipe_by_seed[self.armed] = self.recipe_by_seed.get(self.armed, 0) + 1
         if self.recipe_by_seed[self.armed] <= self.skips:
             return [], RECITES_18722 if self.armed else NO_TOOL_18722
@@ -925,7 +925,7 @@ with tempfile.TemporaryDirectory() as tmp:
           and set(saved["missed"]) == {"c2-attack", "c2-fixed", "c4-fixed"}, str(saved["missed"]))
     check("twelve /chat requests: the nine, and one more ask for each of the three that missed", f.calls == 12,
           str(f.calls))
-    check("guards-off still ends the run, and the Challenge 2 retries sit on their side of guardrails-on",
+    check("guardrails-all-off still ends the run, and the Challenge 2 retries sit on their side of guardrails-k8s-on",
           f.log[-1] == "guardrails off"
           and f.log.index(f"chat {want[1]}") < f.log.index("guardrails on")
           < f.log.index(f"chat {st.session_id('c2-fixed', STAMP)}"), str(f.log))
@@ -947,8 +947,8 @@ with tempfile.TemporaryDirectory() as tmp:
           [s for s, p in f.sent if p == st.RECIPE_PROMPT][:st.ATTEMPTS]
           == [st.attempt_session("c2-attack", STAMP, n) for n in range(1, st.ATTEMPTS + 1)]
           and f"never ran in {st.ATTEMPTS} ask(s)" in note, note)
-    check("and the other seeds still run, then guards-off",
-          beats["c4-fixed"]["verdict"] == kp.PASS and beats["guards-off"]["verdict"] == kp.PASS, str(beats["c4-fixed"]))
+    check("and the other seeds still run, then guardrails-all-off",
+          beats["c4-fixed"]["verdict"] == kp.PASS and beats["guardrails-all-off"]["verdict"] == kp.PASS, str(beats["c4-fixed"]))
     since = dt.datetime(2026, 11, 8, 17, 44, 0, tzinfo=dt.timezone.utc)
     prior = stamped(audit("get_vault_entry", name="ceo"), since - dt.timedelta(seconds=7))
     own = stamped(RECIPE_GREP, since + dt.timedelta(seconds=4))
@@ -973,7 +973,7 @@ with tempfile.TemporaryDirectory() as tmp:
     beats = {b["key"]: b for b in json.loads(out.read_text())["beats"]}
     check("--max-calls stays a hard ceiling: c2-attack's third ask is not sent, and its note says why",
           rc == 1 and f.calls == 3 and "another ask would pass --max-calls=3" in beats["c2-attack"]["note"]
-          and beats["guards-off"]["verdict"] == kp.PASS, f"{f.calls} {beats['c2-attack']['note']}")
+          and beats["guardrails-all-off"]["verdict"] == kp.PASS, f"{f.calls} {beats['c2-attack']['note']}")
     f = Skips(skips=1)
     rc = run_seed(f, FakeDatadog(), out, extra=("--attempts", "1"))
     beats = {b["key"]: b for b in json.loads(out.read_text())["beats"]}
