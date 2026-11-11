@@ -2144,6 +2144,14 @@ rules:
       - verify/pii_scrub_cases.py
     tests:
       - verify/test_collector_pii_scrub.py
+  - name: test_collector_pods_ready_live_checks.py
+    paths:
+      - gitops/otel-collector/coc-mask
+      - gitops/otel-collector/coc-mask/**
+      - verify/test_collector_coc_mask_live.py
+      - verify/test_collector_pods_ready_live.py
+    tests:
+      - verify/test_collector_pods_ready_live_checks.py
   - name: test_collector_relay_live_checks.py
     paths:
       - gitops/bootstrap/apps/otel-collector-attendee.yaml

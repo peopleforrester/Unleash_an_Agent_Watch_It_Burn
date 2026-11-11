@@ -52875,3 +52875,57 @@ definition and `transform/coc_mask` in each traces pipeline. Nothing on either c
 
 **Tests run**, each once and passing: `test_collector_relay_live_checks.py`, `test_collector_relay_live.py` live on
 both clusters, `test_scope_tests.py` and `test_test_map.py`. The rest the change selects are left to validation.
+
+## 2026-11-11 · #1341 · run 20320 · a live test holds that both clusters' collector pods run the live coc-mask checksum, ready, unrestarted and logged ready
+
+**Why.** Test review run 20298 found that #1335's criterion "on both clusters the collector pods rolled onto the
+checksum/coc-mask annotation and logged Everything is ready with no restart" lived only in this file. #1339's
+`test_collector_coc_mask_live.py` holds the DaemonSet's template annotation and its rollout counts; no test read the
+pods' own annotation, restart counts or log.
+
+**The test.** `verify/test_collector_pods_ready_live.py` (`# SUITE: e2e`, so `run-e2e.sh` runs it with the
+COMMUNITY_CONTEXT and PRIVATE_CONTEXT it already requires) reads, on each cluster: the context is that cluster; the
+ConfigMap monitoring/otel-collector-coc-mask holds coc-mask.yaml, whose SHA-256 the annotation must be; the collector
+DaemonSet exists and runs exactly one live pod of its own (by owner uid, not being deleted) per scheduled node, with at
+least one node. Then, for each pod: its `pod-template-generation` label is the DaemonSet's
+`deprecated.daemonset.template.generation`; its `checksum/coc-mask` is the live file's SHA-256; it is Running with the
+`opentelemetry-collector` container ready; every container's restart count is 0; and its start-up log holds
+`Everything is ready. Begin running and processing data.`
+
+**Why the log is read from the node.** kubelet rotates a container log at 10Mi and keeps 5 files (read from the
+node's `configz`: `containerLogMaxSize 10Mi`, `containerLogMaxFiles 5`), and `kubectl logs` reads only the newest. The
+collector wrote 1.9 MB in its first 100 minutes on the community cluster, so the start-up line would leave
+`kubectl logs` within a day and the test would fail with the criterion still holding. The test lists the container's
+log directory through `nodes/<node>/proxy/logs/pods/<ns>_<pod>_<uid>/<container>/` and reads the oldest file of the
+running instance (`<restarts>.log`, or the oldest `<restarts>.log.<YYYYmmdd-HHMMSS>[.gz]`), gunzipping it when it is
+gzipped. That reaches back about 40 hours at this rate. Past that the oldest kept file no longer starts at the
+container's start, and the check fails, printing the file's first timestamp next to the container's `startedAt` and
+saying the start-up log has rotated away; a fresh roll of the collector makes it readable again. The naming was
+checked on a real rotated log: the datadog agent pod on watch-it-burn-community holds `0.log`,
+`0.log.20261109-225351.gz` and `0.log.20261111-000256`, and `startup_log` picked the gzipped file and read it back
+to the container's first line (2026-11-08T23:20:46Z, the pod's start). The test needs `get nodes/proxy`, which the
+run's role and the admin running `run-e2e.sh` both have.
+
+**Its offline half.** `verify/test_collector_pods_ready_live_checks.py` runs the test's `run` against fake clusters
+with two collector pods each, whose checksum is the SHA-256 of this checkout's
+`gitops/otel-collector/coc-mask/configmap.yaml`. The healthy pair passes all 28 checks, and so does a start-up line
+found only in the oldest rotated file, gzipped or not, which it also holds is the file read. Twenty-two breaks on the
+community cluster each fail on the check that names them while the private cluster stays green: the ConfigMap gone or
+without its key; the DaemonSet gone or scheduling no node; a pod missing, or stood in for by another owner's pod or one
+being deleted; a pod on an older template, or a DaemonSet with no template generation; an older or no checksum, or the
+live file changed under it; a pod Pending, the collector not ready, or no collector status; the collector or a sidecar
+restarted, or no container statuses; a log without the line, rotated away, holding only another instance's file, or a
+pod with no node. A context naming the wrong cluster, a cluster that cannot be read and a log directory the node does
+not serve fail too. It reads the manifest itself rather than through `verify/collector_render.py`: thirty tests import
+that helper already, and a 31st would make it a shared helper that runs the whole suite on every change to it. The
+scope map and test map gain the checks file's entry.
+
+**Live check, 08:20Z, staging `264b5215`.** `COMMUNITY_CONTEXT=watch-it-burn-community
+PRIVATE_CONTEXT=watch-it-burn-private python3 verify/test_collector_pods_ready_live.py` passed 18 of 18 and exited 0.
+On each cluster one collector pod (community `otel-collector-opentelemetry-collector-agent-9zznp`, generation 30;
+private `otel-collector-opentelemetry-collector-agent-8qxf4`, generation 29) carried `checksum/coc-mask`
+`829e6a36...0455`, the live file's SHA-256, was Running and ready with 0 restarts, and its `0.log` held the ready
+line (community 06:32:12Z, private 06:31:48Z), as #1335 recorded. Nothing on either cluster changed.
+
+**Tests run**, each once and passing: `test_collector_pods_ready_live_checks.py`, `test_collector_pods_ready_live.py`
+live on both clusters, and `scope_tests.py check`. The rest the change selects are left to validation.

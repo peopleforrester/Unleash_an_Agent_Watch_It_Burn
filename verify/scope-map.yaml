@@ -2465,6 +2465,11 @@ reads:
     - verify/e2e-tools.lock
     - verify/fetch-e2e-tools.sh
     - verify/pii_scrub_cases.py
+  test_collector_pods_ready_live_checks.py:
+    - gitops/otel-collector/coc-mask
+    - gitops/otel-collector/coc-mask/configmap.yaml
+    - verify/test_collector_coc_mask_live.py
+    - verify/test_collector_pods_ready_live.py
   test_collector_relay_live_checks.py:
     - gitops/bootstrap/apps/otel-collector-attendee.yaml
     - gitops/bootstrap/apps/otel-collector-burn.yaml
