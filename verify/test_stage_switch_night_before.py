@@ -126,13 +126,11 @@ names = [f"`{new_name(s)}`" for s in ssc.SWITCHES]
 talk_order = f"runs {', '.join(names[:-1])} and {names[-1]} in talk order"
 check(f"the step says it {talk_order!r}", talk_order in flat)
 for switch, fields in ssc.SWITCHES.items():
-    if new_name(switch) == "guardrails-k8s-on":
-        continue  # the step names its four fields as "the four Kubernetes guardrails"
     for _, key in fields:
         check(f"the PASS bullet names {new_name(switch)}'s field {key}", f"`{key}`" in flat)
-_close = [new_name(c) for c in ssr.CLOSE]
-check(f"the step names the closing pair in order ({', '.join(_close)})",
-      0 <= flat.find(f"`{_close[0]}` and `{_close[1]}`"))
+# The run closes with each switch's -off, the last switch first (#1351).
+closing = ", ".join(f"`{new_name(c)}`" for c in ssr.CLOSE[:-1]) + f" and `{new_name(ssr.CLOSE[-1])}`"
+check(f"the step names the closing -off switches in order ({closing})", closing in flat)
 # A dated record ("- On 2026-11-09 (run 19175) ...") keeps the names typed then, so its bullet is left out.
 _RECORD = "  - On 2026-11-09 (run 19175)"
 if _RECORD not in step:
@@ -149,6 +147,9 @@ check("the step has a PASS bullet and a FAIL bullet", "- **PASS**" in step and "
 for word in ("start-state", "as-found", "terminal"):
     check(f"the step explains the {word!r} lines", f"`{word}`" in flat)
     check(f"the script prints a {word!r} line", f'"{word}"' in RUNNER)
+# Each switch's own closing /controls read is judged per cluster, on a `<cluster>/printed` line (#1351).
+check("the step explains the printed-read lines, one per cluster",
+      all(f"`{c}/printed`" in flat for c in ssc.CLUSTERS) and 'f"{cluster}/printed"' in RUNNER)
 for verdict in ("STAGE SWITCH CHECK GREEN", "STAGE SWITCH CHECK RED", "STAGE SWITCH CHECK NOT RUN"):
     check(f"the step names {verdict!r}", f"`{verdict}" in flat)
     check(f"the script prints {verdict!r}", verdict in RUNNER)

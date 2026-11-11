@@ -1,5 +1,5 @@
-# ABOUTME: Offline checks for verify/stage_switch_check.py (#1182): each switch's PASS, a FAIL on one cluster only, a
-# ABOUTME: missing field naming #1132, unreadable reads, the start state, and the field names held to guard-proxy's.
+# ABOUTME: Offline checks for verify/stage_switch_check.py (#1182, #1351): each switch's PASS, a FAIL on one cluster, a
+# ABOUTME: missing field naming #1132, the start state, the printed /controls read, and field names held to guard-proxy's.
 """Holds the stage-switch judge to its contract on recorded /controls reads, with no cluster.
 
 START is the shape both KubeCon clusters' /controls answered on 2026-11-08 (run 18703, a plain GET of each): every
@@ -68,7 +68,7 @@ BOTH_PASS = {"private": ssc.PASS, "community": ssc.PASS}
 
 # --- the switches and their fields, held to guard-proxy and the probe --------------------------------------------
 
-check(list(ssc.SWITCHES) == ["guardrails-on", "guard-agency-on", "guard-input-on", "guard-mcp-on"],
+check(list(ssc.SWITCHES) == ["guardrails-k8s-on", "guardrails-agency-on", "guardrails-input-on", "guardrails-mcp-on"],
       "the switches are the four stage switches, in talk order")
 check(set(ssc.CLUSTERS.values()) == {"burritobot-private.burritobot.co", "attackme.burritobot.co"},
       "the two clusters are the private bot and the room's bot")
@@ -111,42 +111,42 @@ for switch in ssc.SWITCHES:
 
 # the reads may arrive as JSON text or bytes, as the runner fetches them
 before = with_agency(START)
-after = switched(before, "guard-input-on")
-v = ssc.judge_switch("guard-input-on", {c: json.dumps(r) for c, r in before.items()},
+after = switched(before, "guardrails-input-on")
+v = ssc.judge_switch("guardrails-input-on", {c: json.dumps(r) for c, r in before.items()},
                      {c: json.dumps(r).encode() for c, r in after.items()})
 check(results(v) == BOTH_PASS, f"a switch judged on JSON text and bytes passes the same: {v}")
 
-# guardrails-on does not own agency_scoped, so it passes while /controls lacks it
-v = ssc.judge_switch("guardrails-on", START, switched(START, "guardrails-on"))
-check(results(v) == BOTH_PASS, f"guardrails-on passes on the reads of 2026-11-08, with no agency_scoped: {v}")
+# guardrails-k8s-on does not own agency_scoped, so it passes while /controls lacks it
+v = ssc.judge_switch("guardrails-k8s-on", START, switched(START, "guardrails-k8s-on"))
+check(results(v) == BOTH_PASS, f"guardrails-k8s-on passes on the reads of 2026-11-08, with no agency_scoped: {v}")
 
 # --- FAIL on one cluster only -------------------------------------------------------------------------------------
 
-after = switched(START, "guardrails-on")
+after = switched(START, "guardrails-k8s-on")
 after["community"]["infra"]["kubearmor"] = False
-v = ssc.judge_switch("guardrails-on", START, after)
-check(results(v) == {"private": ssc.PASS, "community": ssc.FAIL}, f"guardrails-on missing KubeArmor on the community "
+v = ssc.judge_switch("guardrails-k8s-on", START, after)
+check(results(v) == {"private": ssc.PASS, "community": ssc.FAIL}, f"guardrails-k8s-on missing KubeArmor on the community "
       f"cluster fails there only: {v}")
 check("infra.kubearmor" in v["community"].reason and "infra.kyverno" not in v["community"].reason,
       f"the community FAIL names infra.kubearmor and only it: {v['community'].reason!r}")
 
-after = switched(with_agency(START), "guard-mcp-on", clusters=("private",))
-v = ssc.judge_switch("guard-mcp-on", with_agency(START), after)
+after = switched(with_agency(START), "guardrails-mcp-on", clusters=("private",))
+v = ssc.judge_switch("guardrails-mcp-on", with_agency(START), after)
 check(results(v) == {"private": ssc.PASS, "community": ssc.FAIL},
-      f"guard-mcp-on that reached only the private cluster fails on the community one: {v}")
+      f"guardrails-mcp-on that reached only the private cluster fails on the community one: {v}")
 check("infra.tool_allowlist reads false after the switch" in v["community"].reason, v["community"].reason)
 
 # half a switch is not the switch
-after = switched(START, "guard-input-on")
+after = switched(START, "guardrails-input-on")
 after["private"]["ai"]["input_classifier"] = False
-v = ssc.judge_switch("guard-input-on", START, after)
+v = ssc.judge_switch("guardrails-input-on", START, after)
 check(results(v) == {"private": ssc.FAIL, "community": ssc.PASS} and "ai.input_classifier" in v["private"].reason,
-      f"guard-input-on with only the blocklist on fails on that cluster, naming the classifier: {v}")
+      f"guardrails-input-on with only the blocklist on fails on that cluster, naming the classifier: {v}")
 
-# --- FAIL on a missing field: guard-agency-on until the repin, naming #1132 ----------------------------------------
+# --- FAIL on a missing field: guardrails-agency-on until the repin, naming #1132 ----------------------------------------
 
-v = ssc.judge_switch("guard-agency-on", START, START)
-check(results(v) == {"private": ssc.FAIL, "community": ssc.FAIL}, f"guard-agency-on fails on both clusters while "
+v = ssc.judge_switch("guardrails-agency-on", START, START)
+check(results(v) == {"private": ssc.FAIL, "community": ssc.FAIL}, f"guardrails-agency-on fails on both clusters while "
       f"/controls has no agency_scoped: {v}")
 for c in ssc.CLUSTERS:
     check("#1132" in v[c].reason and "infra.agency_scoped" in v[c].reason,
@@ -157,39 +157,39 @@ after = copy.deepcopy(START)
 after["private"]["infra"]["agency_scoped"] = True
 before = copy.deepcopy(START)
 before["private"]["infra"]["agency_scoped"] = False
-v = ssc.judge_switch("guard-agency-on", before, after)
+v = ssc.judge_switch("guardrails-agency-on", before, after)
 check(results(v) == {"private": ssc.PASS, "community": ssc.FAIL}, f"agency_scoped turned on where it is sent passes "
       f"there and fails where it is missing: {v}")
 check("#1132" in v["community"].reason and "#1132" not in v["private"].reason, v["community"].reason)
 
 # a field guard-proxy did send before, now gone: FAIL, but not blamed on #1132
-after = switched(START, "guardrails-on")
+after = switched(START, "guardrails-k8s-on")
 del after["private"]["infra"]["kyverno"]
-v = ssc.judge_switch("guardrails-on", START, after)
+v = ssc.judge_switch("guardrails-k8s-on", START, after)
 check(v["private"].result == ssc.FAIL and "does not carry infra.kyverno" in v["private"].reason
       and "#1132" not in v["private"].reason, f"a dropped field fails without naming #1132: {v['private'].reason!r}")
 
 # --- not off before, or not on after ------------------------------------------------------------------------------
 
-v = ssc.judge_switch("guard-mcp-on", switched(START, "guard-mcp-on"), switched(START, "guard-mcp-on"))
+v = ssc.judge_switch("guardrails-mcp-on", switched(START, "guardrails-mcp-on"), switched(START, "guardrails-mcp-on"))
 check(results(v) == {"private": ssc.FAIL, "community": ssc.FAIL} and "already on before" in v["private"].reason,
       f"a field already on before the switch is not shown turned on by it: {v}")
 
-after = switched(START, "guard-mcp-on")
+after = switched(START, "guardrails-mcp-on")
 after["community"]["infra"]["tool_allowlist"] = None
-v = ssc.judge_switch("guard-mcp-on", START, after)
+v = ssc.judge_switch("guardrails-mcp-on", START, after)
 check(v["community"].result == ssc.FAIL and "reads null after the switch" in v["community"].reason,
       f"a field guard-proxy could not measure (null) after the switch fails: {v['community'].reason!r}")
 
 before = copy.deepcopy(START)
 before["private"]["infra"]["tool_allowlist"] = None
-v = ssc.judge_switch("guard-mcp-on", before, switched(START, "guard-mcp-on"))
+v = ssc.judge_switch("guardrails-mcp-on", before, switched(START, "guardrails-mcp-on"))
 check(v["private"].result == ssc.FAIL and "read null before the switch" in v["private"].reason,
       f"a field read null before the switch fails: {v['private'].reason!r}")
 
-after = switched(START, "guard-mcp-on")
+after = switched(START, "guardrails-mcp-on")
 after["private"]["infra"]["tool_allowlist"] = "true"
-v = ssc.judge_switch("guard-mcp-on", START, after)
+v = ssc.judge_switch("guardrails-mcp-on", START, after)
 check(v["private"].result == ssc.FAIL, f"only JSON true is on, not the string \"true\": {v['private'].reason!r}")
 
 # --- an unreadable /controls --------------------------------------------------------------------------------------
@@ -203,15 +203,15 @@ UNREADABLE = {
     "infra not an object": ({"ai": {}, "infra": None}, "no infra object"),
 }
 for label, (raw, words) in UNREADABLE.items():
-    after = switched(START, "guardrails-on")
+    after = switched(START, "guardrails-k8s-on")
     after["community"] = raw
-    v = ssc.judge_switch("guardrails-on", START, after)
+    v = ssc.judge_switch("guardrails-k8s-on", START, after)
     check(results(v) == {"private": ssc.PASS, "community": ssc.FAIL} and words in v["community"].reason
           and "after the switch" in v["community"].reason,
           f"{label} after the switch fails that cluster only, saying why: {v['community'].reason!r}")
     before = copy.deepcopy(START)
     before["private"] = raw
-    v = ssc.judge_switch("guardrails-on", before, switched(START, "guardrails-on"))
+    v = ssc.judge_switch("guardrails-k8s-on", before, switched(START, "guardrails-k8s-on"))
     check(results(v) == {"private": ssc.FAIL, "community": ssc.PASS} and "before the switch" in v["private"].reason,
           f"{label} before the switch fails that cluster: {v['private'].reason!r}")
     reads = copy.deepcopy(with_agency(START))
@@ -220,27 +220,28 @@ for label, (raw, words) in UNREADABLE.items():
     check(results(v) == {"private": ssc.FAIL, "community": ssc.PASS} and words in v["private"].reason,
           f"{label} at the start-state check fails that cluster: {v['private'].reason!r}")
 
-v = ssc.judge_switch("guardrails-on", {"private": START["private"]}, switched(START, "guardrails-on"))
+v = ssc.judge_switch("guardrails-k8s-on", {"private": START["private"]}, switched(START, "guardrails-k8s-on"))
 check(results(v) == {"private": ssc.PASS, "community": ssc.FAIL}, f"a cluster with no read at all fails: {v}")
 
 # a read filed under the wrong cluster
-after = switched(START, "guardrails-on")
+after = switched(START, "guardrails-k8s-on")
 after["private"], after["community"] = after["community"], after["private"]
-v = ssc.judge_switch("guardrails-on", START, after)
+v = ssc.judge_switch("guardrails-k8s-on", START, after)
 check(results(v) == {"private": ssc.FAIL, "community": ssc.FAIL} and "answers as" in v["private"].reason,
       f"swapped reads fail on both clusters, naming who answered: {v}")
 # the burritobot.co name and an empty host are the cluster's own (guard-proxy sends WIB_PUBLIC_HOST, maybe "")
 for host in ("burritobot-private.burritobot.co", ""):
-    after = switched(START, "guardrails-on")
+    after = switched(START, "guardrails-k8s-on")
     after["private"]["host"] = host
-    v = ssc.judge_switch("guardrails-on", START, after)
+    v = ssc.judge_switch("guardrails-k8s-on", START, after)
     check(v["private"].result == ssc.PASS, f"host {host!r} is read as the private cluster: {v['private']}")
 
 try:
-    ssc.judge_switch("guards-on", START, START)
+    # An old name (guardrails-on is guardrails-k8s-on since #1350) is not a stage switch here.
+    ssc.judge_switch("guardrails-on", START, START)
     check(False, "an unknown switch name raises")
 except ValueError as e:
-    check("guards-on" in str(e), f"an unknown switch name raises, naming it: {e}")
+    check("'guardrails-on'" in str(e), f"an unknown switch name raises, naming it: {e}")
 
 # --- the start state ----------------------------------------------------------------------------------------------
 
@@ -254,7 +255,7 @@ for c in ssc.CLUSTERS:
     check("infra.agency_scoped" in v[c].reason and "#1132" in v[c].reason and "cannot be read as off" in v[c].reason,
           f"the {c} start-state FAIL names agency_scoped and #1132: {v[c].reason!r}")
 
-# guards-off ran but guardrails-off did not reach the community cluster
+# guardrails-k8s-off did not reach the community cluster
 reads = with_agency(START)
 reads["community"]["infra"].update(kyverno=True, networkpolicy=True)
 v = ssc.judge_start_state(reads)
@@ -283,6 +284,96 @@ reads["community"]["infra"]["falco"] = True
 reads["private"]["infra"]["falco"] = False
 reads["private"]["ai"]["topic"] = True
 check(results(ssc.judge_start_state(reads)) == BOTH_PASS, "Falco and the topic guard do not decide the start state")
+
+# --- the -off pairs and the read each switch prints (#1351) -------------------------------------------------------
+
+check(ssc.OFF == {"guardrails-k8s-on": "guardrails-k8s-off", "guardrails-agency-on": "guardrails-agency-off",
+                  "guardrails-input-on": "guardrails-input-off", "guardrails-mcp-on": "guardrails-mcp-off"},
+      f"each switch's pair is its -off ({ssc.OFF})")
+ENTRY = REPO / "gitops/ai-layer/web-terminal/entrypoint.sh"
+term = ENTRY.read_text(encoding="utf-8")
+for name in [*ssc.SWITCHES, *ssc.OFF.values()]:
+    check(term.count(f'cat > "$HOME/{name}" <<') == 1, f"the terminal writes {name} as a script of its own")
+# The terminal's own formatter (_ctlfmt), run on /controls reads, is what printed_controls reads back.
+OPEN, CLOSE_FMT = "_ctlfmt() { python3 -c '", "' \"$1\"; }"
+if OPEN not in term or CLOSE_FMT not in term.split(OPEN, 1)[1]:
+    sys.exit(f"ANCHOR MISSING: the _ctlfmt() {{ python3 -c '...' \"$1\"; }} formatter in {ENTRY.relative_to(REPO)}")
+FMT = term.split(OPEN, 1)[1].split(CLOSE_FMT, 1)[0]
+labels = dict(re.findall(r'\("(\w+)", "([^"]+)"\)', FMT))
+check({k: lbl for (_, k), lbl in ssc.PRINTED_LABELS.items()} == labels,
+      f"PRINTED_LABELS names each field as _ctlfmt prints it ({labels})")
+check(term.count(f'echo "{ssc.PRINTED_HEADER}') == 1, "the terminal's _controls prints PRINTED_HEADER before its read")
+
+import subprocess  # noqa: E402
+
+
+def printed(reads: dict, names=("watch-it-burn-private (this cluster)", "watch-it-burn-community"),
+            unread: tuple = ()) -> str:
+    """What a switch prints at its end: _controls' header, then _ctlfmt on each cluster's read, as the terminal runs it."""
+    out = ["Some switch's own lines.", ssc.PRINTED_HEADER + ", what each chat page's badges show:"]
+    for (cluster, read), name in zip(reads.items(), names):
+        if cluster in unread:
+            out.append(f"  ⚠️  {name}: /controls could not be read, so its state is not shown.")
+            continue
+        p = subprocess.run([sys.executable, "-c", FMT, name], input=json.dumps(read), capture_output=True, text=True)
+        if p.returncode != 0:
+            sys.exit(f"_ctlfmt failed on {read}: {p.stderr}")
+        out.append(p.stdout.rstrip("\n"))
+    return "\n".join(out) + "\n"
+
+
+state = with_agency(START)
+for switch in ssc.SWITCHES:
+    after = switched(state, switch)
+    v = ssc.judge_printed(switch, printed(after))
+    check(results(v) == BOTH_PASS, f"{switch}'s printed read shows its fields ON on both clusters: {v}")
+    check(all(lbl in v["private"].reason for lbl in (ssc.PRINTED_LABELS[f] for f in ssc.SWITCHES[switch])),
+          f"{switch}'s PASS names the fields it read: {v['private'].reason!r}")
+    state = after
+for switch in reversed(list(ssc.SWITCHES)):
+    after = copy.deepcopy(state)
+    for c in after:
+        for section, key in ssc.SWITCHES[switch]:
+            after[c][section][key] = False
+    v = ssc.judge_printed(ssc.OFF[switch], printed(after))
+    check(results(v) == BOTH_PASS, f"{ssc.OFF[switch]}'s printed read shows its fields off on both clusters: {v}")
+    state = after
+check(state == with_agency(START), "the four -off switches, last first, end at the start state")
+
+parsed = ssc.printed_controls(printed(with_agency(START)))
+check(set(parsed) == {"private", "community"} and all(len(r) == 12 for r in parsed.values())
+      and parsed["private"][("infra", "falco")] is True and parsed["community"][("infra", "falco")] is False,
+      f"printed_controls reads every field on both clusters, by host: {parsed}")
+v = ssc.judge_printed("guardrails-input-on", printed(switched(with_agency(START), "guardrails-input-on",
+                                                              clusters=("private",))))
+check(results(v) == {"private": ssc.PASS, "community": ssc.FAIL}
+      and "input block-list printed off, not ON" in v["community"].reason, f"a switch the printed read shows on one "
+      f"cluster alone fails on the other, naming the field: {v}")
+v = ssc.judge_printed("guardrails-mcp-on", printed(switched(with_agency(START), "guardrails-mcp-on"),
+                                                   unread=("community",)))
+check(results(v) == {"private": ssc.PASS, "community": ssc.FAIL} and "could not be read" in v["community"].reason
+      and "attackme.burritobot.co" in v["community"].reason,
+      f"a cluster the switch could not read is a FAIL that quotes the terminal's warning: {v}")
+reads = switched(with_agency(START), "guardrails-k8s-on")
+reads["private"]["infra"]["kyverno"] = None
+v = ssc.judge_printed("guardrails-k8s-on", printed(reads))
+check(v["private"].result == ssc.FAIL and "Kyverno printed not measured, not ON" in v["private"].reason,
+      f"a field printed as not measured is a FAIL: {v['private']}")
+v = ssc.judge_printed("guardrails-k8s-off", "guardrails-k8s-off exited before it read anything\n")
+check(results(v) == {"private": ssc.FAIL, "community": ssc.FAIL}
+      and all("does not show" in x.reason for x in v.values()), f"no printed read is a FAIL on each cluster: {v}")
+swapped = ssc.judge_printed("guardrails-agency-on", printed(
+    {"private": switched(with_agency(START), "guardrails-agency-on")["private"],
+     "community": with_agency(START)["community"]}).replace("attackme.agenticburn.com", "elsewhere.agenticburn.com"))
+check(swapped["community"].result == ssc.FAIL and "does not show attackme" in swapped["community"].reason,
+      f"a printed read naming another host is not taken for the community cluster: {swapped['community']}")
+two = printed(with_agency(START)) + printed(switched(with_agency(START), "guardrails-input-on"))
+check(results(ssc.judge_printed("guardrails-input-on", two)) == BOTH_PASS, "the last printed read is the one judged")
+try:
+    ssc.judge_printed("guards-off", "")
+    check(False, "an unknown switch name raises in judge_printed")
+except ValueError as e:
+    check("'guards-off'" in str(e), f"an unknown switch name raises in judge_printed, naming it: {e}")
 
 if failures:
     print(f"\n{len(failures)} stage-switch check(s) FAILED")
