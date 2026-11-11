@@ -12,7 +12,8 @@
 #     chat      scripts/capture-fallback-screenshots.py sends that prompts.yaml prompt (its thread up to it) in the
 #               real storefront on `cluster` (community or private) and screenshots the reply. It first reads the
 #               cluster's /controls and refuses the shot unless every control in `controls` reads as listed; it
-#               never flips a guard itself. `toggle` names what the private terminal runs to get there.
+#               never flips a guard itself. `toggle` names the guardrails-<name>-on/off switch the private
+#               terminal runs to get there.
 #     page      the capture script screenshots that URL as it loads.
 #     by_hand   taken from the projector output (a terminal or a signed-in Datadog tab the script cannot drive),
 #               saved under this name.
@@ -57,24 +58,24 @@ screenshots:
   - segment: 3
     file: screenshots/03-5-ceo-forbidden.png
     caption: "After the switch, Challenge 1 again: the scoped Role keeps the CEO's record out of reach."
-    capture: { chat: ceo-gift-basket, cluster: private, toggle: guard-rbac-on, controls: { infra.rbac_scoped: true } }
+    capture: { chat: ceo-gift-basket, cluster: private, toggle: guardrails-rbac-on, controls: { infra.rbac_scoped: true } }
   - segment: 4
     file: screenshots/04-1-hc666-joker.png
     caption: "Challenge 3: an innocent ticket question, and the ticket's hidden paragraph deploys a Joker."
     capture: { chat: hc-666, cluster: community, controls: { ai.input_classifier: false } }
   - segment: 4
     file: screenshots/04-2-hc666-withheld.png
-    caption: "guard-input-on: the ticket comes back withheld, and nothing is deployed."
-    capture: { chat: hc-666, cluster: private, toggle: guard-input-on, controls: { ai.input_classifier: true } }
+    caption: "guardrails-input-on: the ticket comes back withheld, and nothing is deployed."
+    capture: { chat: hc-666, cluster: private, toggle: guardrails-input-on, controls: { ai.input_classifier: true } }
   - segment: 5
     file: screenshots/05-1-weather-chained.png
     caption: "Challenge 4: the weather tool's description chains in a tool nobody asked for."
     capture: { chat: weather-burrito, cluster: community, controls: { infra.tool_allowlist: false } }
   - segment: 5
     file: screenshots/05-2-weather-mcp-guard.png
-    caption: "guard-mcp-on: the gateway allows the weather tool and nothing else."
-    capture: { chat: weather-burrito, cluster: private, toggle: guard-mcp-on, controls: { infra.tool_allowlist: true } }
+    caption: "guardrails-mcp-on: the gateway allows the weather tool and nothing else."
+    capture: { chat: weather-burrito, cluster: private, toggle: guardrails-mcp-on, controls: { infra.tool_allowlist: true } }
   - segment: 6
     file: screenshots/06-1-burritos-only.png
-    caption: "guard-topic-on: the off-topic ask comes back to the menu, the hours and the locations."
-    capture: { chat: salsa-dance, cluster: private, toggle: guard-topic-on, controls: { ai.topic: true } }
+    caption: "guardrails-topic-on: the off-topic ask comes back to the menu, the hours and the locations."
+    capture: { chat: salsa-dance, cluster: private, toggle: guardrails-topic-on, controls: { ai.topic: true } }

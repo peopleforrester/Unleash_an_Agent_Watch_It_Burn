@@ -8108,7 +8108,9 @@ rules:
       - docs/admin-console.md
       - facilitation/kubecon-na-2026-run-of-show.md
       - facilitation/kubecon-na-2026/fallback/README.md
+      - facilitation/kubecon-na-2026/fallback/assets.yaml
       - facilitation/kubecon-na-2026/fallback/prompts.yaml
+      - facilitation/kubecon-na-2026/fallback/screenshots/deck.html
       - gitops/ai-layer
       - gitops/ai-layer/**
       - gitops/workshop-agent/agent.yaml

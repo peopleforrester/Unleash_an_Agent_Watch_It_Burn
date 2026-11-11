@@ -34,6 +34,7 @@ RUN_OF_SHOW = (REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text(e
 KUBECON = (REPO / "gitops/ai-layer/web/kubecon.html").read_text(encoding="utf-8")
 RESOURCES = (REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")
 CONSOLE_CONF = (REPO / "gitops/ai-layer/console.conf").read_text(encoding="utf-8")
+TERMINAL_SH = (REPO / "gitops/ai-layer/web-terminal/entrypoint.sh").read_text(encoding="utf-8")
 
 failures: list[str] = []
 
@@ -469,15 +470,21 @@ for s_ in assets["screenshots"]:
 
 for bad, why in (({"chat": "order"}, "cluster"), ({"chat": "order", "cluster": "community"}, "controls"),
                  ({"chat": "order", "cluster": "community", "controls": {"topic": True}}, "controls"),
-                 ({"chat": "order", "cluster": "community", "controls": {"ai.topic": True}, "toggle": "guard-topic-on"}, "private"),
+                 ({"chat": "order", "cluster": "community", "controls": {"ai.topic": True}, "toggle": "guardrails-topic-on"}, "private"),
+                 ({"chat": "order", "cluster": "private", "controls": {"ai.topic": True}, "toggle": "guard-topic-on"},
+                  "guardrails-<name>-on/off"),
                  ({"page": "http://prompts.burritobot.co"}, "https"), ({"page": "https://x", "by_hand": "y"}, "exactly one"),
                  (None, "exactly one")):
     got = cfa.check_capture(bad)
     check(f"a capture of {bad!r} is refused, saying {why}", why in got, got)
 check("a well-formed private chat capture passes",
-      cfa.check_capture({"chat": "order", "cluster": "private", "controls": {"ai.topic": True}, "toggle": "guard-topic-on"}) == "")
+      cfa.check_capture({"chat": "order", "cluster": "private", "controls": {"ai.topic": True}, "toggle": "guardrails-topic-on"}) == "")
 
 problems = dict(cfa.check(FALLBACK / "assets.yaml"))
+check("every shot's toggle is a guardrails-<name>-on/off switch the private terminal writes (#1364)",
+      all(f'cat > "$HOME/{s_["capture"]["toggle"]}" <<' in TERMINAL_SH
+          for s_ in assets["screenshots"] if "toggle" in s_["capture"]),
+      str([s_["capture"]["toggle"] for s_ in assets["screenshots"] if "toggle" in s_["capture"]]))
 check("the checker finds the committed deck page", assets["deck"] not in problems)
 check("the checker finds every committed shot: the Night Before check passes on a clean clone", problems == {}, str(problems))
 CAP = {"by_hand": "taken at the rehearsal"}

@@ -1,11 +1,12 @@
-# ABOUTME: Holds the run-of-show, /kubecon and the fallback kit's README and prompts to the guardrails-<name>-on/off
-# ABOUTME: switch names (#1352): no old name (#1350's aliases) outside the dated records and alias notes listed here.
+# ABOUTME: Holds the run-of-show, /kubecon and the fallback kit's README, prompts, assets and deck to the
+# ABOUTME: guardrails-<name>-on/off switch names (#1352, #1364): no old name outside the kept spans listed here.
 """The presenter-facing pages name each stage switch by its guardrails-<name>-on/off name (#1352).
 
 #1350 renamed every stage switch on the private terminal to guardrails-<name>-on/off and kept each old name
 (guardrails-on, guards-off, guard-mcp-on and the rest) as an alias until #1363 removes them. #1352 moved the pages the
 presenters read onto the new names: `facilitation/kubecon-na-2026-run-of-show.md` (rehearsal and Night Before steps
-included), `gitops/ai-layer/web/kubecon.html`, and the fallback kit's `README.md` and `prompts.yaml`. Text that records
+included), `gitops/ai-layer/web/kubecon.html`, and the fallback kit's `README.md` and `prompts.yaml`; #1364 moved the
+kit's `assets.yaml` (its shots' toggle fields and captions) and `screenshots/deck.html`. Text that records
 what happened under an old name keeps it, as does the one note on each page that says the old names are aliases.
 
 This test reads the old names from the terminal's own ALIASES table in
@@ -45,6 +46,9 @@ KEPT: dict[str, list[tuple[str, str, str]]] = {
          "the two shots planned for the first full rehearsal, named as they were then"),
     ],
     "facilitation/kubecon-na-2026/fallback/prompts.yaml": [],
+    # The shots' toggle fields and captions, and the deck page's captions built from them (#1364).
+    "facilitation/kubecon-na-2026/fallback/assets.yaml": [],
+    "facilitation/kubecon-na-2026/fallback/screenshots/deck.html": [],
 }
 
 failures: list[str] = []

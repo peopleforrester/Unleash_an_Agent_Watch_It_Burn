@@ -24,6 +24,9 @@ DEFAULT_MANIFEST = REPO / "facilitation/kubecon-na-2026/fallback/assets.yaml"
 CLUSTERS = ("community", "private")
 # A /controls key, as `group.key`: the two groups the storefront's /controls answers with.
 CONTROL_RE = re.compile(r"(ai|infra)\.[a-z_]+")
+# A shot's toggle: a stage switch by its guardrails-<name>-on/off name (#1350, #1364). The old guard-<name>-on names
+# are aliases #1363 removes after the talk, so a shot that names one would send the presenter to a missing command.
+TOGGLE_RE = re.compile(r"guardrails-[a-z0-9]+-o(n|ff)")
 
 
 def kind_ok(path: pathlib.Path, head: bytes) -> bool:
@@ -70,6 +73,8 @@ def check_capture(cap) -> str:
         return "a chat capture's controls map ai.<key> or infra.<key> to true or false"
     if "toggle" in cap and cap["cluster"] != "private":
         return "only the private cluster's terminal flips guards for a shot"
+    if "toggle" in cap and not TOGGLE_RE.fullmatch(str(cap["toggle"])):
+        return f"a toggle names a guardrails-<name>-on/off switch, not {cap['toggle']!r}"
     return ""
 
 
