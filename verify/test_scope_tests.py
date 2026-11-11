@@ -108,7 +108,7 @@ check("the map has an entry for nearly every offline and tier test", len(tests) 
       and sum(1 for t in tests if t in doc["always"] or t in doc["reads"]) > len(tests) * 0.9, str(len(tests)))
 check("test_scope_tests.py is in always, so every change runs it",
       "test_scope_tests.py" in doc["always"])
-for f in ("verify/run-tests.sh", "verify/run-e2e-tools.sh", "verify/scope_tests.py", "verify/no-cloud.sh", "verify/no_cloud.py", "verify/ensure-submodules.sh", "verify/bootstrap_chart.py"):
+for f in ("verify/run-tests.sh", "verify/offline-suite.sh", "verify/run-e2e-tools.sh", "verify/scope_tests.py", "verify/no-cloud.sh", "verify/no_cloud.py", "verify/ensure-submodules.sh", "verify/bootstrap_chart.py"):
     check(f"{f} is in full, so a change to it runs everything", any(st.covers(e, f) for e in doc["full"]))
 
 print("== each bound holds for the repo data its helper builds paths from ==")
@@ -317,6 +317,7 @@ NODE24 = '#!/bin/sh\ncase "$1" in -p) echo 24 ;; --version) echo v24.22.0 ;; esa
 FETCH_STUB = '#!/usr/bin/env bash\necho "fixture fetch ran" >>"$FETCH_LOG"\n'
 FIXTURE_MAP = """full:
   - verify/run-tests.sh
+  - verify/offline-suite.sh
   - verify/run-e2e-tools.sh
   - verify/scope_tests.py
   - verify/no-cloud.sh
@@ -340,8 +341,8 @@ def fixture(tmp: pathlib.Path) -> tuple[pathlib.Path, str]:
     root = tmp / "repo"
     v = root / "verify"
     v.mkdir(parents=True)
-    for name in ("run-tests.sh", "run-e2e-tools.sh", "scope_tests.py", "no-cloud.sh", "ensure-submodules.sh",
-                 "tf_plugin_cache.py", "artifact_cache.py"):
+    for name in ("run-tests.sh", "offline-suite.sh", "run-e2e-tools.sh", "scope_tests.py", "no-cloud.sh",
+                 "ensure-submodules.sh", "tf_plugin_cache.py", "artifact_cache.py"):
         shutil.copy2(VERIFY / name, v / name)
     (v / "fetch-e2e-tools.sh").write_text(FETCH_STUB)
     (v / "playwright_browsers.py").write_text("import sys\nsys.exit(0)\n")

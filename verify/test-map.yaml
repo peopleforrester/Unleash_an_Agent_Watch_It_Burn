@@ -4,6 +4,7 @@ rules:
   - name: full
     paths:
       - verify/run-tests.sh
+      - verify/offline-suite.sh
       - verify/run-e2e-tools.sh
       - verify/scope_tests.py
       - verify/no-cloud.sh
@@ -169,6 +170,7 @@ rules:
       - verify/test_replay_prompts.py
       - verify/test_ros_deployments_removed_row.py
       - verify/test_round_names_retired.py
+      - verify/test_run_tests_files.py
       - verify/test_scope_tests.py
       - verify/test_spec_copies.py
       - verify/test_submodule_pins_pushed.sh
@@ -326,6 +328,7 @@ rules:
       - scripts/audience-qr.py
       - verify/artifact-cache.sh
       - verify/artifact_cache.py
+      - verify/offline-suite.sh
       - verify/package_cache.py
       - verify/playwright_browsers.py
       - verify/python.lock
@@ -3964,6 +3967,7 @@ rules:
   - name: test_gate_commands.py
     paths:
       - AGENTS.md
+      - verify/offline-suite.sh
       - verify/run-e2e-tools.sh
       - verify/run-e2e.sh
       - verify/run-tests.sh
@@ -7110,22 +7114,6 @@ rules:
       - gitops/otel-collector/values.yaml
     tests:
       - verify/test_run_shell_failure.py
-  - name: test_run_tests_files.py
-    paths:
-      - .gitmodules
-      - AGENTS.md
-      - gitops/ai-layer/guard-proxy
-      - gitops/ai-layer/guard-proxy/**
-      - images/llm-guard
-      - images/llm-guard/**
-      - verify
-      - verify/**
-      - verify/**/*.py
-      - verify/**/*.py/**
-      - verify/**/*.sh
-      - verify/**/*.sh/**
-    tests:
-      - verify/test_run_tests_files.py
   - name: test_scheduled_up.sh
     paths:
       - agent

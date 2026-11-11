@@ -86,17 +86,21 @@ down after. There is no production-risk constraint here. Apply these without exc
 4. **Bias to action.** Make the change, provision/validate, iterate. Surface real trade-offs once and
    briefly, then proceed with the change unless told otherwise. Do not re-raise settled objections.
 
-Test command: `bash verify/run-tests.sh`
+Test command: `bash verify/offline-suite.sh`
 Test files: `verify/test_*.py verify/test_*.sh`
 Test map: `verify/test-map.yaml`
 E2E command: `bash verify/run-e2e-tools.sh`
 
 Hecaton's tests gate picks the Test command's files itself (#1319, hecaton#623): of the `Test files:`, those whose
-code spells a changed path, plus what the `Test map:` rules add, passed to `run-tests.sh` in `HECATON_TEST_FILES`, one
-repo path per line, and `run-tests.sh` runs exactly those, still setting `# SUITE: e2e` files aside. The map is written
-from `verify/scope-map.yaml` by `python3 verify/scope_tests.py write`, so a test that globs a directory is picked for
-the files under it, and `verify/test_test_map.py` holds the two equal. Without the variable, `run-tests.sh` scopes
-itself as the next paragraph says.
+code spells a changed path, plus what the `Test map:` rules add, passed to `offline-suite.sh` in `HECATON_TEST_FILES`,
+one repo path per line, and it runs exactly those, still setting `# SUITE: e2e` files aside. The map is written from
+`verify/scope-map.yaml` by `python3 verify/scope_tests.py write`, so a test that globs a directory is picked for the
+files under it, and `verify/test_test_map.py` holds the two equal. `offline-suite.sh` is the suite's core:
+`run-tests.sh`, the command people, CI and the E2E command run, scopes the suite to the change as the paragraph after
+next says and hands it the run, with the same output. The gate runs the whole suite when a change reaches its
+command's own script through the paths each file's code names, and `run-tests.sh` names `scope_tests.py`, whose map
+names nearly every path in the repo. So the declared command is the core, whose code names only `no-cloud.sh` and
+`ensure-submodules.sh`, and `verify/test_run_tests_files.py` holds that.
 
 The E2E command is the cluster-free tier (#572): the offline suite, then every `# E2E TIER: tools` check, run
 with the pinned, checksum-verified binaries in `verify/e2e-tools.lock`, which `verify/fetch-e2e-tools.sh`

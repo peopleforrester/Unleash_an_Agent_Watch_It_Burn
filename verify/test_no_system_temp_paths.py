@@ -216,10 +216,13 @@ print("== both runners hand every test the fallback ==")
 FALLBACK = ('if [[ -z "${TMPDIR:-}" ]]; then\n'
             '    TMPDIR="$(cd "${SCRIPT_DIR}/.." && pwd)/tmp"  # tmp-ok: the checkout\'s own tmp/, not the system one\n'
             '    mkdir -p "${TMPDIR}"\nfi\nexport TMPDIR\n')
-for runner in ("verify/run-tests.sh", "verify/run-e2e-tools.sh"):
+# Each runner, and the first line after which a temp file or a test may be made: run-tests.sh asks scope_tests.py, then
+# hands the run to offline-suite.sh, the gate's Test command, which makes its own scratch (#1319).
+for runner, first_use in (("verify/run-tests.sh", '"${SCRIPT_DIR}/scope_tests.py" select'),
+                          ("verify/offline-suite.sh", "$(mktemp"), ("verify/run-e2e-tools.sh", "$(mktemp")):
     text = read(runner)
     check(f"{runner} exports TMPDIR, else the checkout's tmp/, before any test runs",
-          FALLBACK in text and text.index(FALLBACK) < text.index("$(mktemp"))
+          FALLBACK in text and first_use in text and text.index(FALLBACK) < text.index(first_use))
 check("the checkout's tmp/ is ignored", "/tmp/" in read(".gitignore").splitlines())  # tmp-ok: reads the .gitignore entry for the checkout's tmp/
 
 print("== run-e2e-tools.sh refuses a TMPDIR too long for a Terraform provider's socket (#1313) ==")

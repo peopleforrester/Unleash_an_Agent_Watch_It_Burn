@@ -2,6 +2,7 @@
 # ABOUTME: it reads. `python3 verify/scope_tests.py write` adds what it finds; test_scope_tests.py holds it current.
 full:
   - verify/run-tests.sh
+  - verify/offline-suite.sh
   - verify/run-e2e-tools.sh
   - verify/scope_tests.py
   - verify/no-cloud.sh
@@ -170,6 +171,7 @@ always:
   test_replay_prompts.py: it runs git ls-files, which reads the tree or history as a whole; line 537 builds a path under the repo root from a value it finds at run time
   test_ros_deployments_removed_row.py: 'verify/prose_gate.py: it runs git diff, ls-files, show, which reads the tree or history as a whole'
   test_round_names_retired.py: it runs git ls-files, which reads the tree or history as a whole; line 85 builds a path under the repo root from a value it finds at run time
+  test_run_tests_files.py: 'it runs git ls-files, which reads the tree or history as a whole; verify/scope_tests.py: it runs git archive, blame, cat-file, diff, diff-tree, grep, log, ls-files, ls-tree, rev-list, shortlog, show, whatchanged, which reads the tree or history as a whole; verify/scope_tests.py: it runs grep -r'
   test_scope_tests.py: it holds this map current with every test and what each reads, so every change runs it
   test_spec_copies.py: line 67 builds a path under the repo root from a value it finds at run time
   test_submodule_pins_pushed.sh: 'verify/submodule-pins-pushed.sh: it runs git on the tree or history as a whole'
@@ -362,6 +364,7 @@ reads:
     - scripts/audience-qr.py
     - verify/artifact-cache.sh
     - verify/artifact_cache.py
+    - verify/offline-suite.sh
     - verify/package_cache.py
     - verify/playwright_browsers.py
     - verify/python.lock
@@ -4488,6 +4491,7 @@ reads:
     - verify/run-e2e-tools.sh
   test_gate_commands.py:
     - AGENTS.md
+    - verify/offline-suite.sh
     - verify/run-e2e-tools.sh
     - verify/run-e2e.sh
     - verify/run-tests.sh
@@ -8233,25 +8237,6 @@ reads:
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/otel-collector/values.yaml
-  test_run_tests_files.py:
-    - .gitmodules
-    - AGENTS.md
-    - gitops/ai-layer/guard-proxy
-    - images/llm-guard
-    - verify
-    - verify/artifact-cache.sh
-    - verify/artifact_cache.py
-    - verify/ensure-submodules.sh
-    - verify/git_mirror.py
-    - verify/no-cloud.sh
-    - verify/run-e2e.sh
-    - verify/run-tests.sh
-    - verify/test_*.py
-    - verify/test_*.sh
-    - verify/test_alpha.py
-    - verify/test_beta.py
-    - verify/test_live.py
-    - verify/test_missing.py
   test_scheduled_up.sh:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh

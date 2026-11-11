@@ -31,6 +31,8 @@ import sys
 REPO = pathlib.Path(__file__).resolve().parent.parent
 DECISIONS = (REPO / "decisions.md").read_text(encoding="utf-8")
 RUN_TESTS = (REPO / "verify" / "run-tests.sh").read_text(encoding="utf-8")
+# run-tests.sh hands its run to offline-suite.sh, which prints the lines the record quotes (#1319).
+OFFLINE_SUITE = (REPO / "verify" / "offline-suite.sh").read_text(encoding="utf-8")
 RUN_TOOLS = (REPO / "verify" / "run-e2e-tools.sh").read_text(encoding="utf-8")
 SHEET_PATH = REPO / "verify" / "test_kubecon_prompt_sheet_e2e.py"
 SHEET_TEST = SHEET_PATH.read_text(encoding="utf-8")
@@ -126,8 +128,10 @@ def verdict(decisions: str) -> tuple[bool, str]:
 
 # ---- what the record's words mean: the scripts still print them ----
 print("== the scripts still print the lines the record quotes ==")
-check("run-tests.sh prints its `tests ran` count", "%d tests ran" in RUN_TESTS)
-check(f"run-tests.sh prints {OFFLINE_GREEN!r}", OFFLINE_GREEN in RUN_TESTS)
+check("run-tests.sh hands its run to offline-suite.sh", re.search(r'^exec bash "\$\{SCRIPT_DIR\}/offline-suite\.sh"$', RUN_TESTS, re.M)
+      is not None)
+check("offline-suite.sh prints its `tests ran` count", "%d tests ran" in OFFLINE_SUITE)
+check(f"offline-suite.sh prints {OFFLINE_GREEN!r}", OFFLINE_GREEN in OFFLINE_SUITE)
 check("run-e2e-tools.sh runs run-tests.sh first", re.search(r"^[^#\n]*run-tests\.sh", RUN_TOOLS, re.M) is not None)
 check("run-e2e-tools.sh prints its `checks ran` line with the duration",
       "%d checks ran (the offline suite and %d tier tests) in %dm%02ds" in RUN_TOOLS)

@@ -55,7 +55,7 @@ MAP = VERIFY / "scope-map.yaml"
 # a change to it runs the whole suite, as one to a runner does.
 SHARED_HELPER = 30
 # The runners themselves: a test that names one reads its text, never runs the real suite.
-RUNNERS = {"verify/run-tests.sh", "verify/run-e2e-tools.sh", "verify/run-e2e.sh", "verify/run-all.sh"}
+RUNNERS = {"verify/run-tests.sh", "verify/offline-suite.sh", "verify/run-e2e-tools.sh", "verify/run-e2e.sh", "verify/run-all.sh"}
 # git subcommands that read the repo's tree or history rather than a file of it.
 GIT_READS = {"ls-files", "grep", "log", "show", "diff", "ls-tree", "cat-file", "rev-list", "blame", "archive",
              "diff-tree", "whatchanged", "shortlog"}

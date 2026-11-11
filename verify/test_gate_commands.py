@@ -5,8 +5,9 @@
 Hecaton's promotion gate runs the `E2E command:` that AGENTS.md declares, in preference to the `Test command:`,
 on a host with no attendee cluster, no AWS profile and none of the live suite's tools. While
 `bash verify/run-e2e.sh` was declared there, every promotion failed with `E2E SUITE CANNOT RUN` and 58 merged
-changes sat on staging. AGENTS.md now declares only `Test command: bash verify/run-tests.sh` and documents
-run-e2e.sh as the by-hand check during a cluster build (decisions.md, 2026-10-24, #543).
+changes sat on staging. AGENTS.md then declared only `Test command: bash verify/run-tests.sh` and documented
+run-e2e.sh as the by-hand check during a cluster build (decisions.md, 2026-10-24, #543). Since #1319 it declares
+`bash verify/offline-suite.sh`, the core that run-tests.sh hands its run to.
 
 The declared lines are read the way the gate reads them: at the start of a line, optionally a list item or
 bold, the label in any case, a colon, then the command in single backticks. The first such line wins. A
@@ -50,8 +51,12 @@ run_e2e = RUN_E2E.read_text(encoding="utf-8")
 print("== the gate's Test command is the offline suite ==")
 test_cmd = declared(agents, "Test command")
 check("AGENTS.md declares a Test command", test_cmd is not None)
-check(f"the Test command is `bash verify/run-tests.sh` (got {test_cmd!r})", test_cmd == "bash verify/run-tests.sh")
-check("verify/run-tests.sh exists", (REPO / "verify" / "run-tests.sh").is_file())
+# Since #1319 the declared command is offline-suite.sh, the suite's core, which run-tests.sh hands its run to: the gate
+# passes it the tests a change reaches, and it spells no file whose named-path closure takes in the repo.
+check(f"the Test command is `bash verify/offline-suite.sh` (got {test_cmd!r})", test_cmd == "bash verify/offline-suite.sh")
+check("verify/offline-suite.sh exists", (REPO / "verify" / "offline-suite.sh").is_file())
+check("verify/run-tests.sh hands its run to it",
+      'exec bash "${SCRIPT_DIR}/offline-suite.sh"' in (REPO / "verify" / "run-tests.sh").read_text(encoding="utf-8"))
 
 print("== the gate's E2E command is the cluster-free tier, never the live suite ==")
 e2e_cmd = declared(agents, "E2E command")
