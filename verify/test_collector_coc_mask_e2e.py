@@ -6,8 +6,11 @@
 
 Each profile's collector config is rendered as its cluster builds it (collector_render.py), and its traces processors,
 in that profile's order, are run by verify/.tools/bin/otelcol-contrib, the version the clusters' image runs. Only the
-receiver and the exporter differ: OTLP/HTTP on a loopback port in, a file out. instructor (admin and full) and
-attendee run the same list, so it runs once for both, and burn's, with transform/scrub_pii after the mask, once.
+receiver and the exporter differ: OTLP/HTTP on a loopback port in, a file out. transform/coc_mask itself is not
+re-rendered: the otel-collector-coc-mask ConfigMap's coc-mask.yaml is written out as the cluster mounts it and loaded
+with a second --config, as values.yaml loads it (#1332), so the statements, their alias and their $$ run as deployed.
+instructor (admin and full) and attendee run the same list, so it runs once for both, and burn's, with
+transform/scrub_pii after the mask, once.
 
 Four spans go in, shaped as guard-proxy's chat span, kagent's model calls and kagent's tool call:
 
@@ -48,7 +51,8 @@ import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from coc_mask_cases import MASK, corpora, hc666_ticket, mask, term_cases  # noqa: E402
-from collector_render import REPO, collector_config, feature_gate_args  # noqa: E402
+from collector_render import (COC_MASK_KEY, REPO, coc_mask_configmap, collector_config,  # noqa: E402
+                              feature_gate_args)
 
 OTELCOL = REPO / "verify/.tools/bin/otelcol-contrib"
 LOCK = REPO / "verify/e2e-tools.lock"
@@ -138,22 +142,25 @@ def run(profile: str) -> dict[str, dict]:
         out = pathlib.Path(d) / "spans.json"
         cfg = {
             "receivers": {"otlp": {"protocols": {"http": {"endpoint": f"127.0.0.1:{port}"}}}},
-            "processors": {p: rendered["processors"][p] for p in procs},
+            "processors": {p: rendered["processors"][p] for p in procs if p != MASK},  # the mask: coc_file
             "exporters": {"file": {"path": str(out)}},
             "service": {"telemetry": {"metrics": {"level": "none"}},
                         "pipelines": {"traces": {"receivers": ["otlp"], "processors": procs, "exporters": ["file"]}}},
         }
         cfg_file = pathlib.Path(d) / "config.yaml"
         cfg_file.write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
+        coc_file = pathlib.Path(d) / COC_MASK_KEY
+        coc_file.write_text(coc_mask_configmap()["data"][COC_MASK_KEY], encoding="utf-8")
+        configs = [f"--config={cfg_file}", f"--config={coc_file}"]
         env = {**os.environ, "WIB_CLUSTER_NAME": f"burritobot-{profile}"}
         gates = feature_gate_args(profile)
-        val = subprocess.run([str(OTELCOL), "validate", f"--config={cfg_file}", *gates], capture_output=True,
+        val = subprocess.run([str(OTELCOL), "validate", *configs, *gates], capture_output=True,
                              text=True, env=env)
         check(f"{profile}: the collector accepts the traces processors, {MASK} among them", val.returncode == 0,
               val.stderr)
         log_path = pathlib.Path(d) / "collector.log"
         log = log_path.open("w")
-        proc = subprocess.Popen([str(OTELCOL), f"--config={cfg_file}", *gates], stdout=log, stderr=subprocess.STDOUT,
+        proc = subprocess.Popen([str(OTELCOL), *configs, *gates], stdout=log, stderr=subprocess.STDOUT,
                                 env=env)
         got: dict[str, dict] = {}
         try:

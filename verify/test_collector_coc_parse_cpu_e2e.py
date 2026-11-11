@@ -8,8 +8,9 @@ otelcol-contrib 0.160.0 parses an OTTL string in CPU time that grows with the sq
 code-of-conduct pattern into transform/coc_mask as four statements of 108,437 characters, and the whole config cost
 about 46 s of CPU to build, so the collector crashlooped under its liveness probe (#1326). #1328 cut the pattern into
 floor.portable_patterns(), 36 patterns applied in turn. This runs `otelcol-contrib validate`, which builds every
-component and parses every OTTL statement but starts nothing, on each profile's config as its cluster renders it
-(collector_render.py), with and without datadog-secret, and reads the CPU the child used (user plus system, which a
+component and parses every OTTL statement but starts nothing, on each profile's config files as its pod loads them
+(collector_render.py): relay.yaml, the otel-collector-coc-mask ConfigMap's coc-mask.yaml as written (#1332), and the
+datadog-gate's file, each its own --config, with and without datadog-secret, and reads the CPU the child used (user plus system, which a
 loaded host does not add to the way it adds to the wall clock). Each must succeed and use under BUILD_LIMIT_S.
 
 The same profile's config with one string of #1316's statement's length added must use more than BUILD_LIMIT_S, so
@@ -30,7 +31,8 @@ import tempfile
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from collector_render import PROFILE_APP, REPO, collector_config, feature_gate_args  # noqa: E402
+from collector_render import (GATE_VOLUME, PROFILE_APP, REPO, collector_config, config_paths,  # noqa: E402
+                              datadog_overlay, feature_gate_args, helm_values, mounted_file)
 
 OTELCOL = REPO / "verify/.tools/bin/otelcol-contrib"
 LOCK = REPO / "verify/e2e-tools.lock"
@@ -58,13 +60,29 @@ version = subprocess.run([str(OTELCOL), "--version"], capture_output=True, text=
 check(f"the binary is the pinned {pinned} ({version})", version.endswith(" " + pinned.lstrip("v")))
 
 
-def validate(config: dict, profile: str) -> tuple[int, str, float]:
-    """validate's exit code, its stderr, and the CPU seconds it used."""
+def dump(config: dict) -> str:
+    return yaml.safe_dump(config, sort_keys=False, width=10 ** 9)
+
+
+def pod_files(profile: str, secret: bool) -> list[str]:
+    """The texts the profile's collector loads, in order: relay.yaml, then each further --config, the coc-mask
+    ConfigMap's file as written and the gate's file (the Datadog overlay, or an empty config)."""
+    vals = helm_values(profile)
+    texts = [dump(vals["config"])]
+    for path in config_paths(vals):
+        volume, text = mounted_file(profile, vals, path)
+        texts.append((dump(datadog_overlay(vals)) if secret else "{}") if volume["name"] == GATE_VOLUME else text)
+    return texts
+
+
+def validate(texts: list[str], profile: str) -> tuple[int, str, float]:
+    """validate's exit code, its stderr, and the CPU seconds it used, on the config files given, each a --config."""
     with tempfile.TemporaryDirectory() as d:
-        path = pathlib.Path(d) / "relay.yaml"
-        path.write_text(yaml.safe_dump(config, sort_keys=False, width=10 ** 9), encoding="utf-8")
+        paths = [pathlib.Path(d) / f"config-{i}.yaml" for i in range(len(texts))]
+        for path, text in zip(paths, texts):
+            path.write_text(text, encoding="utf-8")
         before = resource.getrusage(resource.RUSAGE_CHILDREN)
-        run = subprocess.run([str(OTELCOL), "validate", f"--config={path}", *feature_gate_args(profile)],
+        run = subprocess.run([str(OTELCOL), "validate", *(f"--config={p}" for p in paths), *feature_gate_args(profile)],
                              capture_output=True, text=True, env={**os.environ, **ENV})
         after = resource.getrusage(resource.RUSAGE_CHILDREN)
     used = (after.ru_utime - before.ru_utime) + (after.ru_stime - before.ru_stime)
@@ -87,13 +105,14 @@ for profile in PROFILE_APP:
     for secret in (False, True):
         config = collector_config(profile, datadog_secret=secret)
         statements = sum(len(g["statements"]) for g in config["processors"][MASK]["trace_statements"])
-        code, err, used = validate(config, profile)
+        code, err, used = validate(pod_files(profile, secret), profile)
         label = f"{profile} {'with' if secret else 'without'} datadog-secret"
-        check(f"{label}: validate accepts the config ({statements} {MASK} statements)", code == 0, err[-1500:])
+        check(f"{label}: validate accepts the {len(config_paths(helm_values(profile))) + 1} config files "
+              f"({statements} {MASK} statements)", code == 0, err[-1500:])
         check(f"{label}: it used {used:.2f} s of CPU, under {BUILD_LIMIT_S:g} s", used < BUILD_LIMIT_S)
 
 print("== one string of #1316's length, added, does not ==")
-code, err, used = validate(with_long_literal(collector_config("burn", datadog_secret=False)), "burn")
+code, err, used = validate([dump(with_long_literal(collector_config("burn", datadog_secret=False)))], "burn")
 check(f"burn with one {SINGLE_STATEMENT_CHARS:,}-character string added: validate accepts the config and uses "
       f"{used:.1f} s of CPU, over {BUILD_LIMIT_S:g} s, so the measurement tells #1316's form from the cut",
       code == 0 and used > BUILD_LIMIT_S, err[-1500:])

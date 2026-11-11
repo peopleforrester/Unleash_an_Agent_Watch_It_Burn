@@ -22,10 +22,16 @@ times the sum of their squares. It must be under BUILD_LIMIT_S (#1328), and the 
 must be at least SAFETY times it at the CPU limit. The constants are fit to #1328's measurements of the cut at 2,000
 to 8,000 characters and rounded up: the estimate is about 6.8 s for the cut config, against the 6.1 to 6.4 s
 measured, and 59 s for #1316's, against 45 s. SAFETY covers the in-cluster time running about 1.2 to 1.3 times CPU
-over limit. The relay config, as helm writes it into the collector's ConfigMap (every alias written out, no line
-wrapped), must stay under the 1 MiB a ConfigMap holds: each pattern sits in it four times. Mutants with #1316's single
-statements must fail: at the old 500m limit without the startup probe (so the check would have caught #1326), and the
-build limit itself.
+over limit. Mutants with #1316's single statements must fail: at the old 500m limit without the startup probe (so the
+check would have caught #1326), and the build limit itself.
+
+The ConfigMaps (#1332). Written in values.yaml's `config`, transform/coc_mask put each pattern into the chart's relay
+ConfigMap four times, since helm writes the span-event context's alias out in full, and the relay reached about
+885 KB, 84% of the 1,048,576 bytes a ConfigMap's data may hold. The mask is now the otel-collector-coc-mask ConfigMap,
+loaded with a further --config (collector_render.py), which goes to the cluster as written, so each pattern sits in it
+twice. Each profile's relay config, as helm writes it (every alias written out, no line wrapped), and the coc-mask
+ConfigMap's file must each stay under HEADROOM of a ConfigMap, so the code-of-conduct list can grow by a third or more
+before either nears the cap. A mutant with the mask written back into the relay config must fail that check.
 
 Usage: python3 verify/test_collector_startup_budget.py
 """
@@ -39,7 +45,8 @@ import yaml
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from collector_render import PROFILE_APP, collector_config, helm_values  # noqa: E402
+from collector_render import (COC_MASK_KEY, COC_MASK_MANIFEST, PROFILE_APP, coc_mask_configmap,  # noqa: E402
+                              collector_config, config_paths, helm_values)
 
 # otelcol-contrib 0.160.0, fit to `validate` on the mask cut at 2,000, 3,000, 5,000 and 8,000 characters and on #1316's
 # single form (#1328, 2026-11-11), rounded up: 1.06e-9 s a character squared between the cuts, 0.93e-9 on #1316's.
@@ -48,6 +55,7 @@ K_CPU_S_PER_CHAR = 3e-6                    # the parse's part that grows with th
 BASE_CPU_S = 1.0                           # burn's config with the Datadog overlay and no mask: 0.7 s
 BUILD_LIMIT_S = 10.0                       # #1328's criterion: the config builds in under 10 s of CPU
 CONFIGMAP_BYTES = 1_048_576                # what a ConfigMap's data may hold
+HEADROOM = 0.75                            # #1332's criterion: each ConfigMap under 75% of that
 SAFETY = 2.0
 # Kubernetes' probe defaults, which the chart's livenessProbe (httpGet only) takes.
 PROBE_DEFAULTS = {"initialDelaySeconds": 0, "periodSeconds": 10, "failureThreshold": 3}
@@ -133,10 +141,33 @@ for profile in PROFILE_APP:
     check(f"{profile}: the probes allow {budget:.0f} s, at least {SAFETY:g} times the build at the CPU limit "
           f"({need:.0f} s)", budget >= need,
           "raise startupProbe.failureThreshold or the CPU limit, or shorten the OTTL statements")
-    size = relay_bytes(collector_config(profile, datadog_secret=False))
+    size = relay_bytes(vals["config"])
     check(f"{profile}: the relay config is {size:,} bytes as helm writes it, {size / CONFIGMAP_BYTES:.0%} of the "
-          f"{CONFIGMAP_BYTES:,} a ConfigMap holds", size < CONFIGMAP_BYTES,
-          "each pattern sits in the ConfigMap four times; a longer list needs a shorter form")
+          f"{CONFIGMAP_BYTES:,} a ConfigMap holds, under {HEADROOM:.0%} (#1332)", size < HEADROOM * CONFIGMAP_BYTES,
+          "move what grows into a ConfigMap of its own, as transform/coc_mask is (gitops/otel-collector/coc-mask/)")
+    check(f"{profile}: transform/coc_mask is not in the relay config but loaded from /coc-mask/{COC_MASK_KEY} "
+          f"({config_paths(vals)})", MASK not in vals["config"].get("processors", {})
+          and f"/coc-mask/{COC_MASK_KEY}" in config_paths(vals))
+
+# The coc-mask ConfigMap goes to the cluster as its directory source writes it, so its file is its data as written.
+coc_text = coc_mask_configmap()["data"][COC_MASK_KEY]
+coc_size = len(coc_text.encode("utf-8"))
+check(f"the coc-mask ConfigMap's {COC_MASK_KEY} is {coc_size:,} bytes, {coc_size / CONFIGMAP_BYTES:.0%} of a "
+      f"ConfigMap, under {HEADROOM:.0%} (#1332)", coc_size < HEADROOM * CONFIGMAP_BYTES,
+      f"{COC_MASK_MANIFEST.name} carries each pattern twice; a longer list needs a shorter form or a second file")
+check("it writes the span-event context as an alias of the span context's list, so each pattern sits in it twice",
+      coc_text.count("statements: &coc_mask_statements") == 1 and coc_text.count("statements: *coc_mask_statements") == 1)
+
+# #1328's layout: transform/coc_mask in values.yaml's config, so helm writes each pattern into the relay four times.
+# The size check must refuse it.
+for profile in PROFILE_APP:
+    vals = helm_values(profile)
+    inline = copy.deepcopy(vals["config"])
+    inline.setdefault("processors", {})[MASK] = collector_config(profile, datadog_secret=False)["processors"][MASK]
+    size = relay_bytes(inline)
+    check(f"mutant ({profile}, the mask back in relay.yaml as #1328 had it): {size:,} bytes, "
+          f"{size / CONFIGMAP_BYTES:.0%}, over {HEADROOM:.0%}", size >= HEADROOM * CONFIGMAP_BYTES,
+          "the size check would not have caught #1332's 84%")
 
 # The state #1326 found on the cluster: #1316's single statements, no startupProbe and a 500m limit. The checks must
 # refuse it, and the build limit must refuse those statements on any probes.

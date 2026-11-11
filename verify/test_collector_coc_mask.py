@@ -7,6 +7,10 @@ panels on the screen.
 The collector config is rendered as each profile builds it (collector_render.py: the Application's value files, then
 what the datadog-gate loads), with and without datadog-secret, and with one org and two on attendee. This holds:
 
+  - transform/coc_mask is defined in no relay.yaml but in the otel-collector-coc-mask ConfigMap (#1332), which each
+    profile's Application deploys from gitops/otel-collector/coc-mask/ and its collector mounts, not optionally, and
+    loads with a further --config, and whose file's SHA-256 is the checksum/coc-mask pod annotation, so a new list
+    rolls the collector;
   - transform/coc_mask is in the traces pipeline of every render, after transform/adk_model_content and
     transform/adk_tool_content (which copy the content to gen_ai.*), and last but for burn's transform/scrub_pii;
   - every other traces pipeline either receives only from a connector a masked pipeline exports to (traces/llmobs,
@@ -21,10 +25,11 @@ what the datadog-gate loads), with and without datadog-secret, and with one org 
   - applied with Python's re, they mask the term cases and leave HC-666's ticket as it is.
 
 test_collector_coc_mask_e2e.py runs the same cases through the real collector. Offline: reads the collector value
-files, the bootstrap Applications, the spike's term list and gitops/ai-layer/ticket_site.py.
+files, the coc-mask ConfigMap, the bootstrap Applications, the spike's term list and gitops/ai-layer/ticket_site.py.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import pathlib
 import re
@@ -36,7 +41,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from coc_mask_cases import (KEYS, MASK, SECOND_PASS, decode, hc666_ticket, mask, patterns, statements,  # noqa: E402
                             term_cases)
 from coc_mask_cases import floor  # noqa: E402
-from collector_render import REPO, collector_config  # noqa: E402
+from collector_render import (COC_MASK_KEY, COC_MASK_MANIFEST, PROFILE_APP, REPO, collector_config,  # noqa: E402
+                              coc_mask_configmap, config_paths, helm_values, mounted_file)
 
 PORTABLE_LIMIT = floor.PORTABLE_LIMIT
 SCRUB = "transform/scrub_pii"
@@ -52,6 +58,31 @@ def check(name: str, cond: bool, detail: str = "") -> None:
 
 RENDERS = [(p, s, a) for p in ("instructor", "attendee", "burn") for s in (False, True)
            for a in ((True, False) if p == "attendee" and s else (True,))]
+
+print("== every profile: the mask is its own ConfigMap's file, mounted and loaded after relay.yaml (#1332) ==")
+COC_MASK_DIR = COC_MASK_MANIFEST.parent.relative_to(REPO).as_posix()
+for profile, app_path in PROFILE_APP.items():
+    vals = helm_values(profile)
+    app = yaml.safe_load(app_path.read_text(encoding="utf-8"))
+    dirs = [s.get("path") for s in app["spec"]["sources"] if "path" in s and "chart" not in s]
+    check(f"{profile}: {app_path.name} deploys {COC_MASK_DIR} as a source of its own ({dirs})", dirs == [COC_MASK_DIR])
+    check(f"{profile}: relay.yaml (values `config`) does not define {MASK}", MASK not in vals["config"].get("processors", {}))
+    loaded = [p for p in config_paths(vals) if p.endswith("/" + COC_MASK_KEY)]
+    check(f"{profile}: the collector loads {COC_MASK_KEY} with one --config ({config_paths(vals)})", len(loaded) == 1)
+    if len(loaded) == 1:
+        volume, text = mounted_file(profile, vals, loaded[0])
+        check(f"{profile}: from the otel-collector-coc-mask ConfigMap, mounted not optionally (without it the "
+              f"collector would refuse relay.yaml's pipeline)", volume.get("configMap", {}).get("name")
+              == "otel-collector-coc-mask" and not volume["configMap"].get("optional"))
+        check(f"{profile}: that file defines {MASK} and nothing else",
+              list(yaml.safe_load(text)) == ["processors"] and list(yaml.safe_load(text)["processors"]) == [MASK])
+    annotation = (vals.get("podAnnotations") or {}).get("checksum/coc-mask")
+    digest = hashlib.sha256(coc_mask_configmap()["data"][COC_MASK_KEY].encode("utf-8")).hexdigest()
+    check(f"{profile}: the checksum/coc-mask pod annotation is the SHA-256 of the ConfigMap's {COC_MASK_KEY}, so a new "
+          "list rolls the collector (the copies registry's write sets it)", annotation == digest,
+          f"{annotation!r}, not {digest}")
+check("the ConfigMap names no namespace, so it lands in the Applications' destination, monitoring",
+      "namespace" not in yaml.safe_load(COC_MASK_MANIFEST.read_text(encoding="utf-8"))["metadata"])
 
 print("== every profile: the mask is in the traces pipeline, after the content copies, before every exporter ==")
 for profile, secret, admin in RENDERS:

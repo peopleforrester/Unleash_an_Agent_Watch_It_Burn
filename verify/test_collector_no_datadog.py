@@ -162,9 +162,11 @@ check("datadog-gate runs one sh script", gate.get("command") == ["sh", "-c"] and
 check("datadog-gate is a digest-pinned image", "@sha256:" in gate.get("image", ""))
 mounts = {v["name"]: v["mountPath"] for v in gate.get("volumeMounts") or []}
 main_mounts = {v["name"]: v["mountPath"] for v in vals.get("extraVolumeMounts") or []}
-cfg_args = [a.split("=", 1)[1] for a in (vals.get("command") or {}).get("extraArgs") or [] if a.startswith("--config=")]
-check("the collector loads a second config from the gate's volume",
-      len(cfg_args) == 1 and "datadog-gate" in main_mounts and cfg_args[0].startswith(main_mounts["datadog-gate"] + "/"))
+# Every --config after relay.yaml, and the one from the gate's volume among them: since #1332 the collector also loads
+# transform/coc_mask from the otel-collector-coc-mask ConfigMap, so the gate's is one of two.
+all_cfg_args = [a.split("=", 1)[1] for a in (vals.get("command") or {}).get("extraArgs") or [] if a.startswith("--config=")]
+cfg_args = [a for a in all_cfg_args if "datadog-gate" in main_mounts and a.startswith(main_mounts["datadog-gate"] + "/")]
+check(f"the collector loads one further config from the gate's volume ({all_cfg_args})", len(cfg_args) == 1)
 check("the gate writes to that same volume and reads the overlay ConfigMap",
       mounts.get("datadog-gate") == main_mounts.get("datadog-gate") and "datadog-overlay" in mounts)
 written: dict[bool, dict] = {}
@@ -197,7 +199,7 @@ check("the gate reads DD_ADMIN_API_KEY from datadog-admin-secret, optionally",
       and gate_refs["DD_ADMIN_API_KEY"].get("optional") is True)
 
 print("== with datadog-secret: the same profile ships to Datadog as it did before #500 ==")
-full = deep_merge(vals["config"], written.get(True, {}))
+full = deep_merge(bare, written.get(True, {}))  # bare: relay.yaml and the coc-mask file, the gate's empty config
 fp = full["service"]["pipelines"]
 check(f"every pipeline names defined components {reference_problems(full)}", not reference_problems(full))
 check("Datadog is the primary traces exporter and Tempo stays beside it",
