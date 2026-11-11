@@ -1755,6 +1755,15 @@ sites:
     lines: 4
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_run_shell_witch_header.py:
+  - match: \{URL\}|127\.0\.0\.1
+    lines: 10
+    class: loopback
+    why: the curls run_shell runs post to the beacon stand-in the test starts on 127.0.0.1, or to 127.0.0.1:1, where nothing listens (#1345)
+  - match: .
+    lines: 10
+    class: none
+    why: the docstring, comments, the which() lookup of curl and check messages, which name curl and run none
   verify/test_scope_tests.py:
   - match: .
     lines: 3

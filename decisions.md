@@ -53520,6 +53520,7 @@ after these commits reach staging, and on the package being pullable without a l
 
 **Live check.** None: this change touches `verify/`, `.github/workflows/` and prose, and no cluster runs any of it.
 ## 2026-11-11 · #1345 · run 20398 · Every curl BurritoBot's run_shell runs carries the chat's witch name
+## 2026-11-11 · #1345 · runs 20398 and 20424 · Every curl BurritoBot's run_shell runs carries the chat's witch name
 
 Michael, 2026-11-11: "I need the witchy name to show up in the Beacon posting so we know what sessions are in it." In
 Challenge 2C the model writes the curl that sends the customer demographics to the beacon, body and all, so the name
@@ -53543,8 +53544,11 @@ an extra unsigned header does not break a presigned S3 PUT. The image has no wge
 Python is not covered; in the room's sends so far the model has written curl.
 
 **The form the beacon reads.** The header is `X-Witch-Name`, the same name the platform already carries it under.
-provisioning-agenticburn#48, the beacon view's side, is open and was not yet changed when this ran, so the collector does
-not yet store or show it; the report files a follow-up there naming the header, in case #48's change reads another form.
+provisioning-agenticburn#48, the beacon view's side, was open when run 20398 ran. By run 20424 it was closed, merged
+into that repo's staging as `76b655ad36d7`: the collector stores an optional `X-Witch-Name` header (and `X-Cluster`, or
+the `?witch=` and `?cluster=` query parameters) on each beacon row and shows one line per beacon with the witch name.
+So the form this change sends is the one #48 reads, and no follow-up there is needed. This change sends no `X-Cluster`;
+the issue asks for the witch name alone.
 
 **Live, read-only, watch-it-burn-community, 2026-11-11.** The workshop-mcp pod's curl is 8.14.1, as on the test host.
 In the running pod, a curl with `CURL_HOME` set to a scratch directory holding that `.curlrc` sent `> X-Witch-Name:
@@ -53561,3 +53565,16 @@ is unchanged by this change, which adds a header and blocks nothing, but it is c
 **Tests.** `python3 verify/test_run_shell_witch_header.py` (new) exits 0 alone: six curl shapes the model writes,
 two concurrent chats, eight names that send nothing, all 768 names the chat page assigns, and a failed curl that still
 raises `command FAILED`. The scoped suites are left to the gate.
+
+**Run 20424: why run 20398 did not land, and what it adds.** Run 20398's commit failed hecaton's `tests` gate. Run
+20424 cherry-picked it onto staging `ca8e6f05` (only the scope and test maps had drifted, edits in place) and ran the
+scoped `run-tests.sh` for the change: 287 offline tests, one failed, `test_fetch_inventory.py` (#1116). The new test's
+curl lines had no entry in `verify/fetch-inventory.yaml`. Run 20424 adds the entry: 10 lines classed loopback (the
+curls that post to the test's own beacon stand-in on 127.0.0.1, or to 127.0.0.1:1, where nothing listens) and 10 classed
+none (the docstring, comments, the `which("curl")` lookup and check messages). Alone, `test_fetch_inventory.py`,
+`test_run_shell_witch_header.py`, `test_fleet_contract.py`, `test_package_cache.py`, `test_scope_tests.py` and
+`test_test_map.py` then exit 0, and `scope_tests.py check` names 0 problems. The rest of the draft is unchanged. Run
+20424 repeated the read-only curl check in pod `workshop-mcp-67cc87b6bd-s9h8p` on watch-it-burn-community: with the
+`.curlrc` in `CURL_HOME` the request sent `> X-Witch-Name: Agatha the Banshee`, without it none, curl 8.14.1; the
+scratch directory was removed. The Challenge 2C send above is still owed, and it waits only on this change's
+promotion now that #48 is merged.
