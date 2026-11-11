@@ -54569,3 +54569,20 @@ replacement for `guard-mcp-on`, the link read from #1352 instead of #1346, and t
 `test_tests_own_inputs.py` pass. The scoped `run-tests.sh` and `run-e2e-tools.sh` are left to validation.
 
 **Live check.** Skipped: the change touches only `verify/` files no cluster runs, and decisions.md.
+
+## 2026-11-11 · #1365 · run 20481 · The deck-shift citation test reads the new map test as a reader of today's deck
+
+**Why run 20478 failed.** Its tests gate ran the whole offline suite (the scope map changed) and
+`test_deck_shift_slide_citations.py` (#1099) failed: it reads every file under `verify/` for a hash of `#/43` or more,
+taken as a citation of the deck before its shift, and the new `test_deck_do_note_switch_map_comment.py` quotes `#/52`,
+`#/74` and `#/121`. Those are the hashes of the deck rounds serves today (read from rounds `4627d95` for #1352), not
+of the old deck. Run 20478 ran only the tests that name its changed files, and this one reads the whole tree, so it was
+not among them.
+
+**Fix.** The new test joins `SEG4_READERS`, the citation test's list of tests that quote the current deck's hashes,
+with a line in its comment saying why, as each earlier reader did (#1138, #1270, #1327). The DO note hashes stay as
+they are in the map test: they are the slides #171's table is keyed on.
+
+**Checked.** `test_deck_shift_slide_citations.py`, `test_scope_tests.py` and `test_deck_do_note_switch_map_comment.py`
+each pass once alone; `scope_tests.py write` changes nothing, since the citation test already runs on every change.
+The scoped `run-tests.sh` is left to validation. Live check skipped: only `verify/` files no cluster runs changed.
