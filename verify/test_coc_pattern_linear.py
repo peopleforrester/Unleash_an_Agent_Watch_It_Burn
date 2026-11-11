@@ -174,7 +174,9 @@ for unit in ("$", "5$"):
           f"{LONG:,})", not ok)
 
 print("== 3. the cases reach every pair of neighbouring letters that share a character ==")
-covered = {(label.split("where ")[1][:-1]) for label, prefix, _ in ALL if prefix}
+# Every in-term case, its label read after "(where "; a pair at a term's start has an empty prefix (#1316's list has
+# terms that begin with a doubled letter), and is covered all the same.
+covered = {label.rsplit("(where ", 1)[1][:-1] for label, _, _ in ALL if "(where " in label}
 pairs = set()
 for term in cases.corpus.terms("proposed"):
     text = " ".join(floor.fold(term)[0].split())
