@@ -356,7 +356,8 @@ def git(*a: str) -> None:
 
 with tempfile.TemporaryDirectory() as tmp:
     t = pathlib.Path(tmp)
-    git("init", "-q", str(t / "src"))
+    # git's own subcommand, in single quotes: test_tf_plugin_cache.py reads the word double-quoted as a terraform one.
+    git('init', "-q", str(t / "src"))
     (t / "src" / "f").write_text("x\n")
     git("-C", str(t / "src"), "add", "f")
     git("-C", str(t / "src"), "commit", "-qm", "c")

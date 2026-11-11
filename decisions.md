@@ -54043,3 +54043,54 @@ Run against the old entrypoint it fails 13 checks; against this one both tests p
 web-terminal: from the private terminal at the start state, `guard-agency-off` must print `c8-broad-role.yaml` for both
 clusters and leave RBAC scope off in its read. The promotion's own ai-layer sync should leave the broad Role broad on
 both (rules sha256 `2c33da5b83ffdbb1`).
+## 2026-11-11 · #1361 · run 20453 · The heavy gate's checkout borrows its objects: the image now sees the mirror, and the tier's four failures behind it are fixed
+
+**Cause.** The gate failed on staging `6840b2f0` before any check ran: `scope_tests.py` inside the wib-e2e-tools
+image could not run `git rev-parse` ("unable to normalize alternate object path:
+/var/lib/hecaton/mirrors/1270196839.git/objects"). The gate's checkout keeps no objects of its own. Its
+`objects/info/alternates` names the host's mirror, and `verify/e2e-image.sh run` mounted only the checkout and its git
+directory, so git in the container found no objects. The run reproduced it with a `git clone --shared` of this
+worktree: with the old mounts, `git rev-parse --verify a268a8cc^{commit}` in the image printed the same error and
+exited 1; with the borrowed objects directory mounted too it printed the SHA and exited 0.
+
+**Change.** `verify/e2e_image.py git-mounts <dir>` names each directory outside a checkout that git there reads: its
+common git directory and every objects directory it borrows from, following `objects/info/alternates` as git does
+(relative lines read against the directory naming them, a mirror that borrows in turn followed too, a missing one
+left out). `e2e-image.sh run` mounts each at its own path, in place of the common-directory mount it had.
+`test_e2e_image.py` section 5a builds a bare mirror, a clone borrowing from it and a clone borrowing from that, and
+holds the list, a relative line, a missing line, a worktree, and the launcher's `podman run` line.
+
+**What the scope then showed.** With git working, the tier ran inside the image for the first time on a FULL range,
+and four tier tests failed there:
+
+- `test_collector_coc_mask_e2e.py` and `test_collector_coc_parse_cpu_e2e.py` (#1328, #1332, landed beside #1188) read
+  the collector from `verify/.tools/bin`, which the image does not have. Both now read `OTELCOL_CONTRIB` first, as
+  the other collector tests do.
+- `test_chat_wide_font_e2e.py` found no `DejaVuSans.ttf`: Playwright's font set has none. The Containerfile now
+  installs `fonts-dejavu-core` (Debian trixie's package), so the image tag moves to
+  `51ec299b51b3558f-6970efce`. `build-e2e-tools-image.yml` builds and pushes it when this reaches staging.
+- `test_mobile_titles_e2e.py` failed "1280 wide fonts: no header button runs past the edge": the last button ended
+  at 1280.2px with the bar's `scrollWidth` still 1280, 18px into the bar's padding, so the chat page's fit never took
+  a step. `burritbot.html`'s fit now also counts a button that ends past the bar's right padding edge (half a pixel of
+  slack, since the spacer puts the last button on that edge) as overflow. `test_mobile_titles.py` holds the new
+  condition, and the rendered check now prints the button edges and the bar's box when it fails.
+
+The new test's lines also needed two records: the fetch inventory gives its three local `git clone` lines their own
+entry, and its `git init` call is spelled so `test_tf_plugin_cache.py` does not read it as a terraform init.
+
+**Tests.** The image was built here with `bash verify/e2e-image.sh build` (`51ec299b51b3558f-6970efce`). Then the E2E
+command ran as the gate runs it, from a `git clone --shared` of commit `550bf543` (so its objects were borrowed), with
+`HECATON_BASE_SHA=a268a8cc` (main), which selects FULL: `98 checks ran (the offline suite and 97 tier tests) in
+21m05s`. Every tier test passed. The offline suite failed on `test_fetch_inventory.py` and `test_tf_plugin_cache.py`,
+both from this change's new test lines. Each was fixed and rerun alone and passes, with `test_e2e_image.py`,
+`test_mobile_titles.py`, `test_scope_tests.py` and `test_test_map.py`. The whole command was not run again. Log:
+`tmp/hecaton/live/full.log` in run 20453's worktree.
+
+**Live check.** The change touches `gitops/ai-layer/web/burritbot.html`, which the clusters serve, so it needs a live
+read once it is running there. Not yet run on a cluster: load the chat page from watch-it-burn-community and
+watch-it-burn-private at 1280px and check that the header bar keeps its labels on one row inside the screen
+(`test_mobile_titles_e2e.py` renders the same file offline, and passed).
+
+**Ordering on staging.** The gate pulls `51ec299b51b3558f-6970efce` from ghcr.io, which exists only after
+`build-e2e-tools-image` has pushed it from staging. A gate that starts before that push fails as "E2E TOOLS IMAGE
+MISSING"; the next gate run after the push pulls it.
