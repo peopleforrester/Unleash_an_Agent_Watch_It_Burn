@@ -51908,3 +51908,100 @@ the live `code-of-conduct-names` policy was not touched.
 otel-collector Application syncs with `ServerSideApply=true` and its ConfigMap holds the new pattern, which
 `verify/pii_scrub_live.py` reads. The namespaces Application syncs the new `code-of-conduct-names`. Then
 `verify/kubecon_probe.py`'s community and admin runs are green.
+
+## 2026-11-11 · #1326 · run 20240 · #1316 checked live: guard-proxy and the name policy hold, the collector crashloops on its own config, fixed with a startup probe
+
+`bash verify/prior-drafts.sh 1326 origin/staging` printed NONE and the issue had no comments. Both clusters' Argo CD
+track staging, and staging's tip cbb03a48 carries #1316 (32962d85).
+
+**guard-proxy (criterion 1, met on both).** Held `verify/guard_lease.py`'s lock on each cluster in turn, read the
+Deployment and the running file, read `/toggle`, set the five guards off, posted three of the 70 `refused` texts of
+`conformance/coc_floor/slang-set.rot13.tsv` at 0a3ca16 (the first, the middle one and the last) to
+`http://localhost:8080/chat` from inside the proxy container, then set each guard back as found:
+
+    == watch-it-burn-community 2026-11-11T03:14:51Z
+      checksum/proxy-py ef48fb92f4d9; /app/proxy.py sha256 ef48fb92f4d9; 0a3ca16's proxy.py ef48fb92f4d9; equal True
+      found: every guard False, cost_cap_usd 25.0
+      /chat slang refused #0 (29 chars): HTTP 200 4.1 ms, refused True, the code-of-conduct reply, tokens 0/0
+      /chat slang refused #1 (8 chars): HTTP 200 2.9 ms, refused True, tokens 0/0
+      /chat slang refused #2 (9 chars): HTTP 200 96.1 ms, refused True, tokens 0/0
+      end: as found True
+    == watch-it-burn-private 2026-11-11T03:15:43Z
+      the same: checksum, file and 0a3ca16 equal; three refusals at 105.2, 3.1 and 2.6 ms, tokens 0/0; end as found
+
+Every guard was already off on both, so the off request changed nothing and nothing needed restoring.
+
+**Name policy (criterion 3, met on both).** The `namespaces` Application is Synced at cbb03a48 on both. The live
+`code-of-conduct-names` floor variable is 52,863 characters and equal to staging's, typeChecking empty,
+observedGeneration 5, and the binding is Deny. Server dry runs in `agent` (nothing created): ConfigMaps named
+`joker-<term>` for three of `terms-proposed.rot13`'s plain terms refused by `code-of-conduct-names` on both, and
+`hecaton-1326-plain-name` admitted on both. The probes, 03:20Z to 03:31Z:
+
+- `python3 verify/kubecon_probe.py admin burritobot-private.burritobot.co --context watch-it-burn-private --kubeconfig
+  "$KUBECONFIG" --profile accen-dev`: `34 beats: 34 PASS, 0 FAIL`, `KUBECON PROBE GREEN`, $0.0836 over 14 model calls.
+  HC-666 landed joker-agatha-the-banshee with Kyverno on, so the new name policy admitted the stage's Joker.
+- `python3 verify/kubecon_probe.py community attackme.burritobot.co --context watch-it-burn-community --switch-context
+  watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile accen-dev`: `22 beats: 22 PASS, 0 FAIL`,
+  `KUBECON PROBE GREEN`, $0.0965 over 10 model calls.
+
+guard-proxy logged 3 `conduct_refused` on each cluster over the 40 minutes, the three this run sent, and no
+`conduct_masked`, so the code-of-conduct list touched no probe turn. No guard lease was left on either cluster.
+
+**The collector (criterion 2, not met).**
+
+*Private's sync raced its own Application.* At 02:46:45Z Argo CD started the auto-sync of `otel-collector` to
+cbb03a48 with the sync options the Application had then, `CreateNamespace=false` only. `lab-bootstrap` wrote
+`ServerSideApply=true` into the Application at 02:47:19Z, but an operation keeps the options it started with, so its
+five retries all applied client-side and failed: `ConfigMap "otel-collector-opentelemetry-collector-agent" is invalid:
+metadata.annotations: Too long: may not be more than 262144 bytes`. It ended Failed at 02:52:17Z and Argo CD did not
+try that revision again. Community's `lab-bootstrap` happened to sync first, at 02:49Z, and its collector sync applied
+every resource server-side. At 02:55:13Z this run patched one sync operation into private's Application with the
+Application's own options, the way #883's run patched `kubearmor`:
+
+    kubectl --context watch-it-burn-private -n argocd patch application otel-collector --type merge \
+      -p '{"operation":{"initiatedBy":{"username":"hecaton-run-20240"},"sync":{"prune":true,"syncOptions":["CreateNamespace=false","ServerSideApply=true"]}}}'
+    phase Succeeded 02:55:13Z to 02:55:18Z, every resource serverside-applied; Synced, Healthy
+
+Both ConfigMaps then held staging's four `transform/coc_mask` statements (108,437 characters each, sha256 006f3a4b5ba5),
+none of the pre-#1316 ones, `transform/coc_mask` in the traces pipeline, and no last-applied annotation (relay.yaml
+570,116 bytes on community, 568,404 on private). The race needs one commit that changes both an Application's sync
+options and content that needs them; the next such change can split them across two commits.
+
+*The collector cannot start on #1316's config.* Community's collector pod restarted from 02:49:39Z on, exit code 2,
+no log line at all, killed by its liveness probe (the chart's, at Kubernetes' defaults of every 10 s and 3 failures)
+about 30 s after each start: 19 restarts by 03:34Z, the Application Progressing, no trace leaving the cluster.
+Private's pod started at 02:46:51Z, when the failed sync had rolled the DaemonSet but not the ConfigMap, so it runs
+the pre-#1316 pattern from memory and reads Healthy. It will crash the same way at its next restart. The cause is the
+OTTL parse, measured with the pinned otelcol-contrib 0.160.0 `validate` on the live relay.yaml, in CPU time:
+
+    pre-#1316 config (private's ConfigMap before the sync): 2.8 s     #1316's config: 45.4 s (private), 46.8 s (community)
+    one coc_mask statement alone: 12.9 s; two: 23.1 s
+    set(attributes["x"], "<the same 108,370-character literal>"): 10.3 s, so it is the string, not the regex
+    set() of n letters a: 0.54 s at 13,500, 1.41 s at 27,000, 4.51 s at 54,000, 15.45 s at 108,000
+
+The parse costs the square of a statement's length. On watch-it-burn-community, two one-off pods in a scratch namespace
+`otel-1326-probe` ran the collector's own image with `validate` on a copy of the live relay.yaml, the DaemonSet's
+512Mi limit and GOMEMLIMIT: 110 s at a 500m CPU limit, 30 s at 2 CPUs, both exit 0, no OOM. The namespace was deleted.
+
+*The fix (d20a0643).* `gitops/otel-collector/values.yaml`, which all three profiles take, gives the collector a
+`startupProbe` on the health_check port (every 5 s, 60 failures, 300 s before liveness can act) and a CPU limit of 2
+instead of 500m; requests stay 100m. Rendered with the pinned helm and chart 0.173.1, the instructor and burn
+DaemonSets carry both. New `verify/test_collector_startup_budget.py` estimates each profile's build at 3 s plus
+15.45 s per 108,000 characters squared over every processor string, and holds the probes' allowance at twice that at
+the CPU limit: 65 s needed and 300 s allowed on each profile. On the base values it fails (30 s allowed, 261 s
+needed), and its mutant of the 2026-11-11 state must fail too. Splitting the pattern into shorter statements would cut
+the parse cost by the square but changes what #1316's factored form masks, so it is left to its own issue.
+
+`verify/pii_scrub_live.py` (through `test_collector_pii_scrub_live.py`, `WIB_PII_WAIT=120`) failed at 03:17Z:
+`POST /api/v2/spans/events/search -> 429: ["Too many requests"]`, with community's collector not ready. It was not
+run again: it cannot pass until the collector runs.
+
+**Tests run.** `test_collector_startup_budget.py` (new), `test_scope_tests.py` and `test_test_map.py`, scoped to this
+change, each once and passing. The rest of the tests that read `values.yaml`, and the tier tests that run it through
+otelcol-contrib, are left to validation.
+
+**Not yet run on a cluster.** After Argo CD syncs d20a0643 from staging, on both clusters: the collector DaemonSet
+carries the startupProbe and the 2-CPU limit, its pod is Ready with no restart after the rollout and logs
+`Everything is ready`, the `otel-collector` Application is Synced and Healthy, and
+`COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_collector_pii_scrub_live.py` passes. Until then
+community ships no traces, and private's collector crashloops if its pod restarts.
