@@ -52494,3 +52494,76 @@ because they ran before `git add`, when ci-uv.sh and test_ci_uv.py were untracke
 
 The real script on the real archive, with the cache warm: exit 0, no fetch, and `uv` the only file unpacked. Each
 changed test was run once after the commit, with every file tracked.
+
+## 2026-11-11 · #1334 · run 20287 · The collector at the room's ceiling: 193 s of CPU for a 500-phone replay, flat at one core, no throttling, no restart
+
+**The question.** #1333 (run 20273) measured the community collector at 289 to 642 ms of CPU per /chat turn, one turn
+at a time, and scaled that to guard-proxy's ceiling of 150 turns a minute: 0.72 to 1.61 CPU against the collector's
+2-CPU limit. #1334 asked for a reading taken at that ceiling, during #644's 500-phone load replay.
+
+**What ran.** On watch-it-burn-community (one t3.2xlarge node, one collector pod, limit 2 CPU and 512 MiB), this run
+ran #644's replay itself on the Night Before, under `verify/guard_lease.py hold`. The DevOpsDays Portland harvest is
+not on this host, so it used `--source catalog`, the stage's own asks (the C5, C6 and C7 challenge asks, the order, the
+off-topic and on-topic asks), which call tools more often than the harvest's turns do:
+
+    python3 verify/guard_lease.py hold --context watch-it-burn-community --profile accen-dev -- \
+        python3 verify/load_replay.py attackme.burritobot.co --yes --source catalog --users 500 --seed 1334 --json-out <scratch>
+
+The collector's cumulative CPU (`usageCoreNanoSeconds`) was read from the kubelet's stats summary about every 11 s
+(the kubelet refreshes it every 11 to 20 s), from 100 s before the replay to 4 minutes after it. Throttling came from
+the kubelet's cAdvisor counters `container_cpu_cfs_periods_total` and `container_cpu_cfs_throttled_periods_total`,
+and restarts from the pod's status, before and after.
+
+**The first replay is not the reading.** The first replay (06:30 UTC, seed 644) served 387 turns, but at 06:31:46
+Argo CD synced #1332 (staging 88f86a72, `transform/coc_mask` moved into its own `otel-collector-coc-mask` ConfigMap)
+and the collector pod was replaced during it, so its CPU over the replay could not be read whole. The second replay,
+from 06:35:52, ran on the new pod with #1332's config, the config the room will meet, and is the reading below.
+
+**The replay.** 1,500 turns from 500 sessions over 154.5 s from one address, as a venue NAT sends them:
+
+    served 386, refused by guard-proxy's cluster window 1,109, HTTP 502 4, HTTP 504 1
+    served turns over time: 150 by 38 s, 300 by 70 s, 386 by 154 s: guard-proxy's 150 a minute, reached and held
+    sends: 1,500 in 154.5 s, about 580 a minute offered
+    /cost: $4.1008 before, $7.8353 after; this replay $3.7344, $0.0097 a served turn
+
+**The collector's CPU over it.**
+
+    cumulative CPU, 06:36:04 to 06:40:02    44.228 s to 237.275 s: 193.0 s of CPU (idle is 1 to 5 mCPU, under 1 s of it)
+    per served turn                          about 500 ms (the 1,109 refused turns' spans are in it too)
+    spans through the debug exporter         9,730 in the window, about 20 ms of CPU a span
+    rate, each kubelet interval              0.54, then 0.86 to 1.04 CPU from 06:36:21 to 06:39:34, highest 1.036
+    usageNanoCores, highest read             1.003 CPU
+    CFS periods                              602 before, 3,345 after: 2,743 periods, 0 throttled, 0 s throttled
+    restarts                                 0 before, 0 after (pod otel-collector-opentelemetry-collector-agent-9zznp)
+    working set                              180 MiB at most, of 512 MiB; the memory limiter's 400 MiB was not reached
+
+So the collector stayed under its 2-CPU limit at the room's ceiling, never throttled and never restarted. 500 ms a
+served turn sits inside #1333's 289 to 642 ms, and 150 turns a minute at 500 ms comes to 1.25 CPU of work.
+
+**What the reading adds: the collector used one core, not two.** The CPU held flat at 0.9 to 1.0 CPU for three
+minutes and went on for about 70 s after the replay's last reply (the replay ended 06:38:26; the collector went back to
+idle between 06:39:34 and 06:40:02). The debug exporter wrote batches of about 1,000 spans every 15 to 50 s through it.
+That is the shape of a pipeline that runs on one goroutine: in the traces pipeline of the deployed relay ConfigMap
+(`gitops/otel-collector/values.yaml` and the burn overlay) every processor after `batch`, ten of them from `resource`
+to `transform/coc_mask` and `transform/scrub_pii`, runs on the batch processor's one export goroutine, so 1.25 CPU of work took about 200 s of one core for 154 s of
+traffic. The 2-CPU limit is not what binds; the one core is. Over a short burst at the ceiling the collector catches up
+a minute late, as here. If the room held the ceiling with this mix for many minutes, the backlog would grow by about a
+quarter of the elapsed time, and what then happens to the senders' span queues was not read: the collector's own
+metrics on :8888 did not answer through the API server's pod proxy within two minutes. A follow-up is filed for both.
+
+**The five failed turns.** As in the first replay (three 502s at 06:31:18 to 06:31:22), the second replay's 502s
+and its 504 came at 06:37:06 to 06:37:08, 15 to 60 s after they were sent, in the seconds after guard-proxy's cluster
+window reopened and let about 140 queued turns through at once. None is a 120 s `PROXY_TIMEOUT` cut like #644's
+thirteen on 2026-11-05, and guard-proxy's log does not name their sessions. They are not this issue's question
+(the collector exports spans after the reply, off the turn's path), so they are filed as a follow-up with these times.
+
+**Cluster state.** The two replays added $7.47 to attackme's spend counter, now $7.84 of its $25 cap; the Night
+Before's `./fleet.sh reset-bot watch-it-burn-community` zeroes it, as it does for #644's own step. The C6 asks made
+the bot deploy four `joker-*` Deployments in `agent` (created 06:30:21 to 06:36:32, already scaled to 0), which this
+run deleted; `joker-ichabod-the-werewolf` (2026-11-07) and `svc/jokers` (2026-11-03) were there before and stay. The
+guard lock was taken and released for each replay. The replay reports, the kubelet reads and the collector log stayed
+in this run's scratch directory.
+
+**Tests.** No code or test changed; the change is this entry alone, so the prose gate is the one check it needs.
+
+No dependency was added.
