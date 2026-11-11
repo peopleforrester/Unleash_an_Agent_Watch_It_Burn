@@ -2390,6 +2390,12 @@ reads:
     - verify/e2e-tools.lock
     - verify/fetch-e2e-tools.sh
     - verify/pii_scrub_cases.py
+  test_collector_startup_budget.py:
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/otel-collector
+    - verify/collector_render.py
   test_community_banner.py:
     - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/resources.yaml

@@ -1023,12 +1023,25 @@ extraEnvsFrom:
 service:
   enabled: true
   type: ClusterIP
+# Startup is mostly OTTL parsing, and the parse costs the square of a statement's length (#1326). transform/coc_mask
+# carries #1316's 108,437-character statement four times, so building the config costs about 46 s of CPU, against 3 s
+# before #1316. Measured on watch-it-burn-community 2026-11-11 with this image and the live relay.yaml, `validate` took
+# 110 s at a 500m limit and 30 s at 2 CPUs. The liveness probe alone (k8s defaults: every 10 s, 3 failures) killed
+# the container at about 30 s, before it ever logged, so the DaemonSet crashlooped and no trace left the cluster. The
+# startup probe holds liveness off for up to 300 s, and the 2-CPU limit keeps a restart's gap in traces near 30 s.
+# verify/test_collector_startup_budget.py holds the budget to the config's own statements.
+startupProbe:
+  httpGet:
+    port: 13133
+    path: /
+  periodSeconds: 5
+  failureThreshold: 60
 resources:
   requests:
     cpu: 100m
     memory: 256Mi
   limits:
-    cpu: 500m
+    cpu: "2"
     memory: 512Mi
 ports:
   otlp:
