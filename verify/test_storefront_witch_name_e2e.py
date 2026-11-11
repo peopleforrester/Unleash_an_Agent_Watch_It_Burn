@@ -15,6 +15,11 @@ the vocabulary did not make, gets a fresh one from the page itself, written back
 Since #802 the test clicks the "Get a new witch name" button: the header, the cookie, the desk's /me and the next
 /chat call all move to the new name, and the button only ever shows its label.
 
+Since #1347 a page on an agenticburn.com host, the community cluster's other name, asks its burritobot.co twin for
+event.js and goes there when it answers, so the name, the desk and the deployments page agree; where the twin fails
+or never answers, the page stays and names the visitor in a cookie on .agenticburn.com. The harness answers the probe
+as each case says.
+
 Needs node. A missing node is a failure, not a skip. Nothing here touches the network or a cluster.
 """
 from __future__ import annotations
@@ -143,9 +148,16 @@ async function run(c) {
   const stub = () => ({textContent: '', disabled: false, style: {}, appendChild() {}, remove() {}});
   const chats = [];
   const known = {witch: witch.el, newwitch: btn.el, inp, mydeploys: null};
-  const doc = {getElementById: id => id in known ? known[id] : stub(), createElement: stub};
+  // The twin probe (#1347): a <script> the page appends to <head>. Its twin answers as the case says: 'up' loads it,
+  // 'down' fails it, 'silent' never answers, so only the page's timer settles it. Every timer runs once the script has.
+  const probes = [], replaced = [], timers = [];
+  const doc = {getElementById: id => id in known ? known[id] : stub(),
+               createElement: tag => tag === 'script' ? {} : stub(),
+               head: {appendChild(s) { probes.push(s.src);
+                                       if (c.twin === 'up') s.onload(); else if (c.twin === 'down') s.onerror(); }}};
   Object.defineProperty(doc, 'cookie', {get: () => jar.header(c.host), set: v => jar.set(String(v), c.host)});
-  const ctx = {location: {hostname: c.host}, document: doc, CHAT_ENDPOINT: '/chat',
+  const ctx = {location: {hostname: c.host, pathname: '/', search: '', hash: '', replace: u => replaced.push(u)},
+               setTimeout: f => timers.push(f), document: doc, CHAT_ENDPOINT: '/chat',
                busy: false, tokens: 0, costUsd: 0, unreachable: 0, getSession: () => 'sess-802',
                bubble() {}, save() {}, growComposer() {}, botReply() {}, noBurritos() {}, winBubble() {},
                fetch: async (url, opt) => { chats.push({url, body: JSON.parse(opt.body)});
@@ -159,6 +171,7 @@ async function run(c) {
   ctx.Math = M;
   vm.createContext(ctx);
   vm.runInContext(block + send, ctx);
+  for (const f of timers.splice(0)) f();
   const steps = [];
   for (let i = 0; i <= c.clicks; i++) {
     if (i > 0) for (const f of btn.el.listeners.click || []) f.call(btn.el, {type: 'click'});
@@ -169,7 +182,7 @@ async function run(c) {
                 cookie: doc.cookie, store: jar.rows.map(r => Object.assign({}, r)), desk: jar.header(deskHost),
                 sent: ctx.WITCH_NAME, chats: chats.slice(before)});
   }
-  return {steps, unused: left.length, witchWrites: witch.writes,
+  return {steps, unused: left.length, witchWrites: witch.writes, probes, replaced,
           button: {hidden: btn.el.hidden, attrs: Object.assign({}, btn.el.attrs),
                    writes: btn.writes, clicks: (btn.el.listeners.click || []).length}};
 }
@@ -203,8 +216,8 @@ def reroll(j: int) -> float:
     return (j + 0.5) / (N_NAMES - 1)
 
 
-def case(host: str, seed: list, pinned: list[float], clicks: int = 0) -> dict:
-    return {"host": host, "seed": seed, "draws": pinned, "clicks": clicks}
+def case(host: str, seed: list, pinned: list[float], clicks: int = 0, twin: str = "") -> dict:
+    return {"host": host, "seed": seed, "draws": pinned, "clicks": clicks, "twin": twin}
 
 
 # A name drawn at random once made a check fail one run in 32 (#583: "Prudence" contains "rude"). Each case pins its
@@ -215,7 +228,12 @@ def case(host: str, seed: list, pinned: list[float], clicks: int = 0) -> dict:
 CASES = {
     "named": case("attackme.burritobot.co", [OTHER, DESK_SEED], []),
     "none": case("attackme.burritobot.co", [OTHER], draws(0)),
-    "other_domain": case("attackme.agenticburn.com", [DESK_SEED], []),
+    # The community cluster's other name (#1347): its burritobot.co twin answers, so the page goes there, draws nothing
+    # and writes no cookie; where the twin fails or never answers it stays and names the visitor on .agenticburn.com.
+    "other_domain": case("attackme.agenticburn.com", [DESK_SEED], [], twin="up"),
+    "private_twin": case("burritobot-private.agenticburn.com", [DESK_SEED], [], twin="up"),
+    "twin_down": case("attackme.agenticburn.com", [DESK_SEED], draws(5), twin="down"),
+    "twin_silent": case("attackme.agenticburn.com", [DESK_SEED], draws(7), twin="silent"),
     "private": case("burritobot-private.burritobot.co", [DESK_SEED], []),
     # A first visit, then three clicks on the button: to the first name, the last, and one in between.
     "reroll_fresh": case("attackme.burritobot.co", [OTHER], draws(3) + [reroll(0), reroll(N_NAMES - 2), reroll(400)],
@@ -321,7 +339,7 @@ check("and sends it with the /chat call", none["sent"] == fresh and chat_witch(n
 check("the desk's /me then shows that same name, and sets no cookie of its own",
       fresh is not None and desk_takes(none, fresh), f"{none['desk']!r} -> {desk_name(none['desk'])!r}")
 
-print("== a cookie the vocabulary did not make is replaced; off the domain the page shows nothing (#762) ==")
+print("== a cookie the vocabulary did not make is replaced with a generated name (#762) ==")
 bad, unaccepted = [], []
 for i, key in enumerate(RUDE_KEYS):
     rude = RESULTS[key]["steps"][0]
@@ -336,11 +354,37 @@ for i, key in enumerate(RUDE_KEYS):
 check(f"a cookie that is not a generated name is replaced with one, for each of the {N_FIRST} first names"
       " (Prudence among them)", len(RUDE_KEYS) == N_FIRST and "Prudence" in site.FIRST and not bad, "; ".join(bad[:3]))
 check("and the desk's /me shows each replacement", not unaccepted, "; ".join(unaccepted[:3]))
-check("agenticburn.com shows nothing (the cookie is not sent there)", other_domain["hidden"] is True
-      and other_domain["sent"] == "" and other_domain["cookie"] == "" and chat_witch(other_domain) == "",
-      repr(other_domain))
-check("and writes no cookie there: the browser holds only the desk's", [c["name"] for c in other_domain["store"]]
-      == ["wib_witch"] and witch_rows(other_domain)[0]["value"] == cookie.split("=", 1)[1], repr(other_domain["store"]))
+
+print("== on agenticburn.com the page goes to its burritobot.co twin, or names the visitor where it is (#1347) ==")
+for key, host, twin in (("other_domain", "attackme.agenticburn.com", "attackme.burritobot.co"),
+                        ("private_twin", "burritobot-private.agenticburn.com", "burritobot-private.burritobot.co")):
+    res, step = RESULTS[key], RESULTS[key]["steps"][0]
+    check(f"{host}: the page asks its twin {twin} for its own event.js",
+          res["probes"] == [f"https://{twin}/event.js?twin=1"], repr(res["probes"]))
+    check(f"{host}: the twin answers, so the page goes to the same path there",
+          res["replaced"] == [f"https://{twin}/"], repr(res["replaced"]))
+    check(f"{host}: before it goes it shows no name, sends none and writes no cookie: the browser holds only the desk's",
+          step["hidden"] is True and step["sent"] == "" and chat_witch(step) == ""
+          and [c["name"] for c in step["store"]] == ["wib_witch"]
+          and witch_rows(step)[0]["value"] == cookie.split("=", 1)[1], repr(step))
+for key, why, k in (("twin_down", "the twin fails to answer", 5), ("twin_silent", "the twin never answers", 7)):
+    res, step = RESULTS[key], RESULTS[key]["steps"][0]
+    want = f"{site.FIRST[k]} the {site.CREATURES[k]}"
+    mine = [c for c in witch_rows(step) if c["domain"] == "agenticburn.com"]
+    check(f"{key}: {why}, so the page stays where it is", res["replaced"] == [] and len(res["probes"]) == 1,
+          repr(res))
+    check(f"{key}: and shows a name of its own as plain text, the one the pinned draws pick",
+          plain(step) and shown(step) == want, repr(step["text"]))
+    check(f"{key}: and keeps it in wib_witch on .agenticburn.com, for every host under it",
+          len(mine) == 1 and not mine[0]["hostOnly"] and mine[0]["value"] == site.slug(want)
+          and mine[0]["maxAge"] == "172800", repr(step["store"]))
+    check(f"{key}: and sends it with the /chat call", step["sent"] == want and chat_witch(step) == want,
+          repr(step["chats"]))
+    check(f"{key}: the desk's own cookie on .burritobot.co is left as it was", desk_takes(step, given), step["desk"])
+check("on a burritobot.co host the page asks no twin and goes nowhere",
+      all(RESULTS[k]["probes"] == [] and RESULTS[k]["replaced"] == []
+          for k in RESULTS if k not in ("other_domain", "private_twin", "twin_down", "twin_silent")),
+      repr({k: (r["probes"], r["replaced"]) for k, r in RESULTS.items() if r["probes"] or r["replaced"]}))
 
 print("== the 'Get a new witch name' button re-rolls the name everywhere the name is used (#762, #802) ==")
 for key in ("reroll_fresh", "reroll_desk", "reroll_pinned"):

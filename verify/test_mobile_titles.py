@@ -65,7 +65,12 @@ check("the title never wraps or shrinks",
       "flex-shrink:0;white-space:nowrap}" in PAGE)
 check("in icon mode a button's label is hidden", "header.hbicons a.hb .hbl{display:none}" in bar)
 buttons = re.findall(r'<a class="hb" id="(\w+)"[^>]*>(.*?)</a>', PAGE)
-check("the four header buttons are in the markup", [b[0] for b in buttons] == ["vttbtn", "bbbtn", "ddbtn", "fbbtn"])
+# The VTT's four, plus the room's Deployments, Support and Beacon before Feedback (#1347), which ship hidden and show
+# only with an event's URLs (verify/test_audience_page_e2e.py runs that).
+check("the header buttons are in the markup, in order",
+      [b[0] for b in buttons] == ["vttbtn", "bbbtn", "ddbtn", "depbtn", "supbtn", "bcnbtn", "fbbtn"])
+check("the room's three ship hidden",
+      all(" hidden" in re.search(rf'<a class="hb" id="{b}"[^>]*>', PAGE).group(0) for b in ("depbtn", "supbtn", "bcnbtn")))
 for bid, inner in buttons:
     tag = re.search(rf'<a class="hb" id="{bid}"[^>]*>', PAGE).group(0)
     label = re.search(r'<span class="hbl"> ([^<]+)</span>', inner)
@@ -86,17 +91,24 @@ check("at any width the bar counts as overflowing when it is wider than its box 
 check("a button counts as overflowing when its label is wider than its box", "a.scrollWidth>a.clientWidth" in fit)
 steps = ["if(over()) bar.classList.add('hbnodom');", "if(phone.matches && over()) bar.classList.add('hbicons');",
          "if(over()) bar.classList.add('hbtight');",
-         "while(px>8 && over()){ px-=0.5; hb.forEach(function(a){ a.style.fontSize=px+'px'; }); }"]
+         "while(px>8 && over()){ px-=0.5; hb.forEach(function(a){ a.style.fontSize=px+'px'; }); }",
+         "bar.classList.add('hbmin');"]
 at = [fit.find(s) for s in steps]
 check("while it overflows the bar drops its domain, then on a phone switches to icons, then closes its gaps, then "
-      "all the buttons step down together, half a pixel at a time, never below 8px, in that order (#1253)",
+      "all the buttons step down together, half a pixel at a time, never below 8px, then halve their padding, in that "
+      "order (#1253, #1347)",
       -1 not in at and at == sorted(at))
 check("those classes drop the domain and close the bar's padding and gaps",
       "header.hbnodom .brand .dom{display:none}" in PAGE
       and "header.hbtight{padding-left:8px;padding-right:8px;gap:4px}" in PAGE
       and "header.hbtight a.hb{margin-left:2px;padding-left:6px;padding-right:6px}" in PAGE)
+check("the last step halves the buttons' padding, and only a bar still over at 8px takes it (#1347)",
+      "header.hbmin a.hb{margin-left:1px;padding-left:3px;padding-right:3px}" in PAGE
+      and "if(!over()) return;\n        // Halved padding" in fit)
+check("after it the buttons step back up, never past the CSS size, to the largest that fits",
+      "while(px<css){ px+=0.5;" in fit and "if(over()){ px-=0.5;" in fit)
 check("each fit starts again from the labels and the CSS size",
-      "bar.classList.remove('hbnodom','hbicons','hbtight');" in fit
+      "bar.classList.remove('hbnodom','hbicons','hbtight','hbmin');" in fit
       and "hb.forEach(function(a){ a.style.fontSize=''; });" in fit)
 check("it fits again on a resize", "window.addEventListener('resize', fitAll);" in fit)
 check("and once the main script has hidden the public bot's buttons and shown the witch name",

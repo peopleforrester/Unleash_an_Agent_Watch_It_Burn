@@ -140,8 +140,9 @@ check("/deployments.json carries the row with its witch name and an empty cluste
       len(rows) == 1 and rows[0].get("witch") == "Hazel the Witch" and rows[0].get("cluster") == "", str(rows))
 code, page = plain.get("/")
 script = page[page.find("<script>"):page.find("</script>")]
-check("the deployments page shows a row's cluster only when it has one, so this page reads as it did",
-      "if(x.cluster){" in script and "k.textContent=x.cluster" in script, script[-600:])
+check("the row's server is empty too, so the page names no server for it", rows[0].get("server") == "", str(rows))
+check("the deployments page names a row's server only when it has one, so this page reads as it did",
+      "if(x.server){" in script and "k.textContent='from '+x.server" in script, script[-600:])
 check("/remote-landed under the deployments host is a 404 too",
       plain.post("/remote-landed", report("x"), host=DEPLOYMENTS, headers={HEADER: TOKEN})[0] == 404)
 for headers, why in (({}, "no token header"), ({HEADER: TOKEN}, "a token header")):
@@ -195,8 +196,16 @@ check("one witch's rows keep their cluster", [(r["name"], r["cluster"]) for r in
 code, chat = desk.get("/deployments.json", host="attackme.burritobot.co")
 check("the chat page's own /deployments.json carries the cluster too",
       code == 200 and [r["cluster"] for r in json.loads(chat)] == ["community", "private", "private"], chat[:300])
+check("each row names its server in the room's words (#1347): attackme for community, presenters for private",
+      [(r["cluster"], r["server"]) for r in rows]
+      == [("community", "attackme"), ("private", "presenters"), ("private", "presenters")], str(rows))
+check("the chat page's own /deployments.json names the server too",
+      code == 200 and [r["server"] for r in json.loads(chat)] == ["attackme", "presenters", "presenters"], chat[:300])
+check("a label the table does not know is shown as it is", desk.site.server_name("other") == "other")
 code, page = desk.get("/")
 check("the deployments page styles the cluster tag", code == 200 and ".cluster{" in page)
+check("the tag reads 'from <server>' and says so on hover",
+      "k.textContent='from '+x.server" in page and "deployed from the '+x.server+' server'" in page)
 
 print("== a cluster read greys its own cluster's rows alone: in-cluster for community, with the token for private ==")
 

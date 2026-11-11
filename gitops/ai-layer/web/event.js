@@ -34,5 +34,12 @@ window.WIB_EVENT = {
   hideDatadogOnPublic: true,
   // Every name the public bot answers on (#651: agenticburn.com and burritobot.co are both served). The
   // Terminal and Datadog buttons hide on each of them; publicUrl's host is always included.
-  publicHosts: ["attackme.agenticburn.com", "attackme.burritobot.co"]
+  publicHosts: ["attackme.agenticburn.com", "attackme.burritobot.co"],
+  // The room's own pages, one button each at the top right of the storefront, on the public and the private bot
+  // alike (#1347, Michael 2026-11-11: "shouldn't they have a quick link to the rest?"): the one deployments page
+  // and the one support desk both bots use (#1145), and the beacon's view. A button shows only while its URL is
+  // set, and goes there verbatim. Set each to "" for the 2-hour workshop, whose students have none of the three.
+  deploymentsUrl: "https://deployments.burritobot.co/",
+  supportUrl: "https://support.burritobot.co/",
+  beaconUrl: "https://beacon.burritobot.co/beacon/view"
 };

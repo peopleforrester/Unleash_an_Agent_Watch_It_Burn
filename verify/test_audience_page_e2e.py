@@ -8,7 +8,8 @@
    stub DOM: once with the committed event.js and once with no event at all. The Feedback href that comes
    out is what a phone would get. With the event set it must be the talk form's URL exactly (#1162), with no cluster
    or user. Without it, it must be the workshop's /quick form carrying both. On the public bot's hosts the
-   Terminal button (#645) and the Datadog button (#647) are hidden; elsewhere both stay.
+   Terminal button (#645) and the Datadog button (#647) are hidden; elsewhere both stay. On every host the event's
+   Deployments, Support and Beacon buttons (#1347) show with the event's URLs, and with no event none of them does.
 2. scripts/audience-qr.py --check re-renders the QR from event.js with segno 1.6.6 (the package cache's segno
    environment, so nothing is installed globally) and fails if the committed SVG differs by one byte.
 
@@ -60,6 +61,8 @@ const vm = require('vm');
 const [eventSrc, initSrc, search, host, quick] = JSON.parse(require('fs').readFileSync(0, 'utf8'));
 const els = {};
 for (const id of ['vttbtn', 'bbbtn', 'ddbtn', 'fbbtn', 'clusterid', 'clusterfoot']) els[id] = { href: '', textContent: '', title: '', hidden: false };
+// The room's buttons (#1347) ship hidden with no href, as the markup has them.
+for (const id of ['depbtn', 'supbtn', 'bcnbtn']) els[id] = { href: '', textContent: '', title: '', hidden: true };
 els.fbbtn.href = quick;
 const window = {};
 const ctx = {
@@ -73,7 +76,8 @@ vm.createContext(ctx);
 if (eventSrc) vm.runInContext(eventSrc, ctx);
 vm.runInContext(initSrc, ctx);
 process.stdout.write(JSON.stringify({ fb: els.fbbtn.href, terminalHidden: els.vttbtn.hidden === true,
-                                       datadogHidden: els.ddbtn.hidden === true }));
+                                       datadogHidden: els.ddbtn.hidden === true,
+                                       room: ['depbtn', 'supbtn', 'bcnbtn'].map(id => [els[id].hidden, els[id].href]) }));
 """
 
 
@@ -124,7 +128,30 @@ check("with no event set (the workshop) it stays, even on attackme", run_init(""
 check("hiding the Terminal alone leaves the Datadog button, so each knob is its own",
       run_init('window.WIB_EVENT = { hideTerminalOnPublic: true, publicHosts: ["attackme.agenticburn.com"] };')
       == {"fb": QUICK + "&cluster=watch-it-burn-community&user=a%40b.example", "terminalHidden": True,
-          "datadogHidden": False})
+          "datadogHidden": False, "room": [[True, ""]] * 3})
+
+print("== the room's own pages are a button each, on the public and the private bot alike (#1347) ==")
+ROOM = [[False, "https://deployments.burritobot.co/"], [False, "https://support.burritobot.co/"],
+        [False, "https://beacon.burritobot.co/beacon/view"]]
+for host in ("attackme.burritobot.co", "attackme.agenticburn.com", "burritobot-private.burritobot.co",
+             "burritobot-private.agenticburn.com"):
+    got = run_init(EVENT_JS, host)
+    check(f"on {host}, Deployments, Support and Beacon show, each going to the event's page verbatim",
+          got.get("room") == ROOM, repr(got.get("room")))
+got = run_init(EVENT_JS, "attackme.burritobot.co")
+check("on the public bot the Terminal and Datadog buttons stay hidden beside them",
+      got["terminalHidden"] is True and got["datadogHidden"] is True, repr(got))
+got = run_init(EVENT_JS, "burritobot-private.burritobot.co")
+check("on the private bot the Terminal and Datadog buttons stay beside them",
+      got["terminalHidden"] is False and got["datadogHidden"] is False, repr(got))
+check("with no event set (the workshop) none of the three shows", run_init("").get("room") == [[True, ""]] * 3,
+      repr(run_init("").get("room")))
+got = run_init('window.WIB_EVENT = { supportUrl: "javascript:alert(1)", deploymentsUrl: "http://deployments.burritobot.co/",'
+               ' beaconUrl: "" };')
+check("a URL that is not https leaves its button hidden", got.get("room") == [[True, ""]] * 3, repr(got.get("room")))
+got = run_init('window.WIB_EVENT = { supportUrl: "https://support.burritobot.co/" };')
+check("each button is its own knob: Support alone shows Support alone",
+      got.get("room") == [[True, ""], [False, "https://support.burritobot.co/"], [True, ""]], repr(got.get("room")))
 
 print("== the committed QR is exactly segno's rendering of publicUrl ==")
 r = subprocess.run([*package_cache.run_cmd("segno"), "python", "-I",

@@ -53166,3 +53166,71 @@ validation.
 **Not yet run on a cluster.** The new login sentences in `gitops/ai-layer/web/kubecon.html` and `brief.html` reach the
 private cluster's `/kubecon` and `/brief` only after hecaton promotes this change and Argo CD syncs it; the next run on
 the issue reads both pages there and finds mrf-secrets named for the pair and no "set by hand" sentence.
+
+## 2026-11-11 · #1347 · run 20413 · Deployments, Support and Beacon buttons on both chat pages, each deployment row names its server, and attackme's missing witch name was its agenticburn.com name
+
+Michael, 2026-11-11: deployments should be on both servers and say which server each came from, one support desk for
+every ticket, and why attackme's chat page shows no witch name. His added scope on the issue (comment 6797277243,
+confirmed "Yes"): Deployments, Support and Beacon buttons at the top right of the chat page, on attackme and on
+burritobot-private.
+
+**Why attackme showed no witch name.** In a clean headless Chromium on this host (chrome-headless-shell 1254) at
+390x844 and 1440x900, the live `https://attackme.burritobot.co/` showed a witch name, as
+`https://burritobot-private.burritobot.co/` did, and both served the same `burritbot.html` and `event.js` as staging,
+byte for byte. `https://attackme.agenticburn.com/` showed none: its witch element stayed hidden. The page named the
+visitor only on a `*.burritobot.co` host, because the name's cookie is on `.burritobot.co`, where the desk, the
+deployments page and the beacon read it. The community cluster answers on both domains (#651), and the fleet's own
+name for it is `attackme.agenticburn.com` (fleet.sh `public_host_for`), which several run-of-show entries use too.
+Michael's own browser was not read, so which name he had open is inferred from these reads.
+
+**The witch-name fix.** A page on `<x>.agenticburn.com` loads `https://<x>.burritobot.co/event.js` as a script and,
+once it loads, goes to the same path on that twin, so the name, the desk and the deployments page agree. The router
+answers 404 for a host it does not carry, and a twin that is down answers nothing, so when the probe fails or 4
+seconds pass the page stays and shows a name of its own, in a `wib_witch` cookie on `.agenticburn.com`. That keeps
+#651's reason for the second domain. In headless Chromium against a local server answering for both names: with the
+twin up, `attackme.agenticburn.com` went to `attackme.burritobot.co` and showed a name there; with the twin answering
+404 it stayed and showed one.
+
+**The buttons.** Deployments, Support and Beacon sit before Feedback. Each ships hidden and shows when `event.js` sets
+its URL (`deploymentsUrl`, `supportUrl`, `beaconUrl`: `https://deployments.burritobot.co/`,
+`https://support.burritobot.co/`, `https://beacon.burritobot.co/beacon/view`), so the 2-hour workshop, which sets none,
+shows none. attackme keeps no Terminal and no Datadog button; burritobot-private keeps both, so its bar has seven.
+The Support button reverses #763, which took every desk link off the chat page so the room would not reach Challenge
+3's desk before the presenters introduced it. Michael asked for the button by name, so the room now sees the desk from
+the first minute. `verify/test_chat_no_desk_link.py` now holds that the desk is reached from that one button alone and
+that the witch name is still plain text. Seven icons ran 24px past a 320px phone at the fit's 8px floor, so the fit
+gains one last step, `.hbmin`, which halves the buttons' padding and then steps the size back up to the largest that
+fits. Measured in headless Chromium in the host's fonts and in DejaVu alone: at 320, 360, 390, 412, 768, 840 and
+1280px both bars are one row, none over its width, no button clipped.
+
+**Each deployment names its server.** `ticket_site.py` adds `server` to each `/deployments.json` row, the room's name
+for the row's cluster label: `community` reads `attackme`, `private` reads `presenters`, a label not in the table reads
+as it is, and a row with no label names none, so the 2-hour workshop's page reads as before. The page's tag now reads
+"from attackme" or "from presenters". `cluster` is unchanged, since `kubecon_probe.py`, `one_desk_live.py` and
+desk-relay read it. Each host's deployments view is this one page: `deployments-attackme` is the community desk
+itself, and `deployments-burritobot-private` answers 307 to `deployments.burritobot.co` (#1220).
+
+**One support desk.** Already so since #1145 and #1220. Read live on 2026-11-11 about 14:00Z:
+`support.burritobot.co`, `support-attackme.burritobot.co` and `support-attackme.agenticburn.com` answer
+`/ticket?id=HC-666` with 200, and `support-burritobot-private.burritobot.co` answers 307 to
+`https://support.burritobot.co/ticket?id=HC-666`. In config, the kubecon-private profile's public-desk component points
+the private bot's `TICKET_SITE_URL` at desk-relay, which reads the one desk (`gitops/bootstrap/apps/ai-layer.yaml`),
+and the community bot reads its own cluster's desk, which is the one desk. No presenter ticket was on the desk then
+(HC-900 to HC-912 each answered 404). `deployments.burritobot.co/deployments.json` listed two rows, both labelled
+`private`.
+
+**Tests run**, each once and passing: `test_desk_remote_reports.py`, `test_storefront_witch_name_e2e.py`,
+`test_audience_page_e2e.py`, `test_chat_no_desk_link.py`, `test_mobile_titles.py`, `test_private_chat_deployments.py`
+and `test_witch_name_vocab.py`. This checkout has no guard-proxy submodule and runs no git, so the tests that read
+`proxy.py` or run git stop before their checks here; validation runs them. The tools-tier browser tests that read the
+page (`test_chat_phone_screen_e2e.py`, `test_chat_wide_font_e2e.py`, `test_mobile_titles_e2e.py`,
+`test_chat_pane_overlap_e2e.py`) are left to validation. `verify/scope_tests.py write` needs git and was not run; no
+changed test opens a file it did not open before.
+
+**Not yet run on a cluster.** This run had no `$KUBECONFIG` and no `$HECATON_CLUSTER_ENV`, so no kubectl ran. Once
+hecaton promotes this change and Argo CD syncs it, the next run on the issue runs: `verify/one_desk_live.py` (a ticket
+filed on the desk's form is read by number by both bots, and each bot's deploy shows on the one page),
+`verify/presenter_ticket_live.py` on watch-it-burn-community (the presenters' HC-9xx path),
+`python3 verify/test_chat_phone_screen_e2e.py --live` (both live pages with the new buttons), and a browser read of
+`https://attackme.agenticburn.com/` landing on `attackme.burritobot.co` with a witch name, with
+`deployments.burritobot.co` tagging rows "from attackme" and "from presenters".

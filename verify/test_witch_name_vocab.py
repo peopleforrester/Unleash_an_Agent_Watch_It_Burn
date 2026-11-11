@@ -52,8 +52,11 @@ print("== a name is assigned on first visit and shares the desk's cookie ==")
 check("only a vocabulary name is kept from the cookie (mirrors name_from_slug)",
       "witchFromSlug" in PAGE and "WITCH_FIRST.indexOf" in PAGE and "WITCH_CREATURES.indexOf" in PAGE)
 check("a first visit with no valid cookie assigns a name", "name=randWitch(); setWitchCookie(name);" in PAGE)
-check("the cookie is set on .burritobot.co so the desk and wall share it",
-      "Domain=.burritobot.co" in PAGE and 'document.cookie="wib_witch="' in PAGE)
+# Set on the page's own domain (#1347): .burritobot.co, where the desk and wall read it, or .agenticburn.com on a page
+# that stays there because its burritobot.co twin did not answer (verify/test_storefront_witch_name_e2e.py runs both).
+check("the cookie is set on the page's domain, .burritobot.co for the desk and wall to share",
+      "/\\.(burritobot\\.co|agenticburn\\.com)$/" in PAGE and 'var domain=d ? "; Domain=."+d : "";' in PAGE
+      and 'document.cookie="wib_witch="' in PAGE)
 check("the cookie carries the desk's 48-hour Max-Age", "Max-Age=172800" in PAGE)
 check("the name shows as plain text in the header", "el.textContent='\\uD83E\\uDDD9 You are '+name" in PAGE)
 

@@ -73,6 +73,10 @@
   header.hbnodom .brand .dom{display:none}
   header.hbtight{padding-left:8px;padding-right:8px;gap:4px}
   header.hbtight a.hb{margin-left:2px;padding-left:6px;padding-right:6px}
+  /* The last step (#1347): the private bot's seven icons ran 24px past a 320px phone at 8px, so the buttons give up
+     half their padding. Only a bar that still overflows at the 8px floor takes it. */
+  header.hbmin{gap:2px}
+  header.hbmin a.hb{margin-left:1px;padding-left:3px;padding-right:3px}
   select{font:inherit;font-weight:700;padding:7px 10px;border-radius:8px;border:0;background:#fff;color:var(--ink);cursor:pointer}
   .cost{font-variant-numeric:tabular-nums;font-weight:700;font-size:0.81rem;background:rgba(255,255,255,.16);padding:5px 10px;border-radius:8px}
   /* Per-control badges: a badge APPEARS only when its control is measured ON (no grayed-out
@@ -329,6 +333,15 @@
     <a class="hb" id="vttbtn" href="/lab" target="_blank" rel="noopener" aria-label="Terminal" title="Terminal"><span class="hbi" aria-hidden="true">&#9000;</span><span class="hbl"> Terminal</span></a>
     <a class="hb" id="bbbtn" href="/" aria-label="BurritoBot" title="BurritoBot"><span class="hbi" aria-hidden="true">&#127791;</span><span class="hbl"> BurritoBot</span></a>
     <a class="hb" id="ddbtn" href="https://app.datadoghq.com" target="_blank" rel="noopener" aria-label="Datadog" title="Datadog"><span class="hbi" aria-hidden="true">&#128202;</span><span class="hbl"> Datadog</span></a>
+    <!-- THE ROOM'S OWN PAGES (#1347, Michael 2026-11-11: "Why wouldn't we have buttons for that at the upper
+         right-hand side so they can do it themselves?"). Deployments, Support and Beacon, on the public and the
+         private bot alike. Each is hidden here and shown by the main script when event.js sets its URL
+         (deploymentsUrl, supportUrl, beaconUrl), so the 2-hour workshop, whose event sets none, shows none.
+         The Support button reverses #763, which had taken every desk link off this page so as not to give away
+         Challenge 3 early: Michael asked for it by name. Not in lab.html: these are a talk's pages. -->
+    <a class="hb" id="depbtn" hidden target="_blank" rel="noopener" aria-label="Deployments" title="Deployments"><span class="hbi" aria-hidden="true">&#128230;</span><span class="hbl"> Deployments</span></a>
+    <a class="hb" id="supbtn" hidden target="_blank" rel="noopener" aria-label="Support" title="Support"><span class="hbi" aria-hidden="true">&#127915;</span><span class="hbl"> Support</span></a>
+    <a class="hb" id="bcnbtn" hidden target="_blank" rel="noopener" aria-label="Beacon" title="Beacon"><span class="hbi" aria-hidden="true">&#128225;</span><span class="hbl"> Beacon</span></a>
     <!-- /quick, not the long end-of-workshop form (#364). This is the tab a student sits in for the
          whole workshop, so it is the likeliest place a thought gets dropped mid-attack, and /quick stays
          on the page after a send. source=burritobot separates a note left here from one left in the
@@ -343,8 +356,9 @@
        at the first that fits: .hbnodom drops the brand's domain (#1253: the private bot's bar ran 29px past a
        768px screen in DejaVu Sans), then below 760px .hbicons shows each button's icon alone (#1214), then
        .hbtight closes the bar's padding and gaps (#1253: the icons ran past a 320px screen on the widest fonts),
-       and last all the buttons step down together, half a pixel at a time, never below 8px (#1047: four labels
-       across a 360px phone fit in Liberation Sans and ran 4px past in DejaVu Sans). A desktop bar in Liberation
+       then all the buttons step down together, half a pixel at a time, never below 8px (#1047: four labels
+       across a 360px phone fit in Liberation Sans and ran 4px past in DejaVu Sans), and last .hbmin halves the
+       buttons' padding (#1347: the private bot's seven icons ran past a 320px phone at 8px). A desktop bar in Liberation
        Sans or DejaVu Sans fits as it is and takes no step.
        THE WITCH LINE ON ONE LINE (#1253). On a phone the witch name and its "Get a new witch name" button are one
        short line under the card header's row (#1214). In DejaVu Sans the widest name and the button take 358px,
@@ -355,7 +369,7 @@
        the button's text, title and label are the main script's alone (#762).
        Both fits run again on a resize, once the fonts load, and once the page's main script has run, since that
        hides the Terminal and Datadog buttons on the public bot (#645, #647), which can leave room for the labels,
-       and shows the witch name; the witch line fits again after each re-roll. This is its own script, not part
+       shows the event's Deployments, Support and Beacon buttons (#1347), which take room, and shows the witch name; the witch line fits again after each re-roll. This is its own script, not part
        of the page's main one below: verify/chat-saved-harness.js runs that one in a stub DOM with no layout. -->
   <script id="hbfit">
     (function fitHeaderButtons(){
@@ -367,15 +381,20 @@
                hb.some(function(a){ return a.scrollWidth>a.clientWidth; });
       }
       function fit(){
-        bar.classList.remove('hbnodom','hbicons','hbtight');
+        bar.classList.remove('hbnodom','hbicons','hbtight','hbmin');
         hb.forEach(function(a){ a.style.fontSize=''; });
         if(!hb.length) return;
         if(over()) bar.classList.add('hbnodom');
         if(phone.matches && over()) bar.classList.add('hbicons');
         if(over()) bar.classList.add('hbtight');
         if(!over()) return;
-        var px=parseFloat(getComputedStyle(hb[0]).fontSize);
+        var px=parseFloat(getComputedStyle(hb[0]).fontSize), css=px;
         while(px>8 && over()){ px-=0.5; hb.forEach(function(a){ a.style.fontSize=px+'px'; }); }
+        if(!over()) return;
+        // Halved padding frees room, so the buttons step back up to the largest size that still fits.
+        bar.classList.add('hbmin');
+        while(px<css){ px+=0.5; hb.forEach(function(a){ a.style.fontSize=px+'px'; });
+          if(over()){ px-=0.5; hb.forEach(function(a){ a.style.fontSize=px+'px'; }); break; } }
       }
       function fitWitchLine(){
         var name=document.querySelector('.chathead .witch'), roll=document.querySelector('.chathead .newwitch');
@@ -960,6 +979,12 @@
     // Datadog only when the presenters put it on the big screen.
     var ddb=document.getElementById('ddbtn');
     if(ddb && ev.hideDatadogOnPublic===true && onPublic) ddb.hidden=true;
+    // The room's own pages (#1347): a button shows, on every host, only when event.js names its page, and goes
+    // there verbatim, with no cluster or user, as the event's Feedback form does.
+    [['depbtn','deploymentsUrl'],['supbtn','supportUrl'],['bcnbtn','beaconUrl']].forEach(function(p){
+      var b=document.getElementById(p[0]), u=ev[p[1]];
+      if(b && typeof u==='string' && /^https:\/\//.test(u)){ b.href=u; b.hidden=false; }
+    });
     if(nq.length){
       var vt=document.getElementById('vttbtn'); if(vt)vt.href='/lab?'+nq.join('&');
       // Join with & when the href already carries a query string (#364). A bare '?' on a URL that
@@ -978,8 +1003,8 @@
     loadSaved();
     setBackendUp(false); checkBackend(); setInterval(checkBackend, 12000);
   })();
-  // The visitor's witchy name (#685, #762/#763). The name shows as PLAIN TEXT with no link (#763): linking the
-  // header to the support desk gave away Challenge 3 before the presenters reached it. Every visitor gets a name
+  // The visitor's witchy name (#685, #762/#763). The name shows as PLAIN TEXT with no link (#763). The desk is the
+  // header's Support button since #1347, which Michael asked for, and only on an event that sets it. Every visitor gets a name
   // on their FIRST visit (#762): the page picks one from the same vocabulary the support desk uses and sets the
   // wib_witch cookie on .burritobot.co itself, so the desk, /me and the projected wall all find the person's
   // Joker under one name. WITCH_FIRST and WITCH_CREATURES are mirrored from ticket_site.py's FIRST and CREATURES
@@ -1012,30 +1037,57 @@
     if(f>=0 && c>=0 && i>=f*C+c) i++;
     return WITCH_FIRST[Math.floor(i/C)]+" the "+WITCH_CREATURES[i%C];
   }
+  // The page's own one of the platform's two domains (#651), which its witch cookie is set on; "" on any other host.
+  function witchDomain(host){ var m=/\.(burritobot\.co|agenticburn\.com)$/.exec(host||""); return m ? m[1] : ""; }
   function setWitchCookie(name){
-    var host=location.hostname||"";
-    var domain=/\.burritobot\.co$/.test(host) ? "; Domain=.burritobot.co" : "";
+    var d=witchDomain(location.hostname||"");
+    var domain=d ? "; Domain=."+d : "";
     document.cookie="wib_witch="+witchSlug(name)+"; Path=/; Max-Age=172800; SameSite=Lax"+domain;
+  }
+  // WHY ATTACKME SHOWED NO WITCH NAME (#1347). Every roster host answers on agenticburn.com and on burritobot.co at
+  // once (#651, fleet.sh twin_rows), and the fleet's own name for the community cluster is attackme.agenticburn.com
+  // (fleet.sh public_host_for). The name lived only on burritobot.co hosts, since its cookie is on .burritobot.co
+  // where the desk, the deployments page and the beacon read it, so on attackme.agenticburn.com this page showed
+  // none, while burritobot-private.burritobot.co showed one. A page on <x>.agenticburn.com now goes to the same path
+  // on its twin <x>.burritobot.co, where the name and those pages agree. It goes only once the twin has served this
+  // page's own event.js: the router answers 404 for a host it does not carry, and a twin that is down answers
+  // nothing, so where agenticburn.com is the way in that #651 keeps it for, the page stays and shows a name of its
+  // own, in a cookie on .agenticburn.com.
+  function twinHost(host){ return /^[a-z0-9-]+\.agenticburn\.com$/.test(host||"") ? host.replace(/\.agenticburn\.com$/,'.burritobot.co') : ""; }
+  function goToTwin(twin, stay){
+    var s=document.createElement('script'), done=false;
+    function settle(go){ if(done) return; done=true; go(); }
+    s.onload=function(){ settle(function(){ location.replace('https://'+twin+location.pathname+location.search+location.hash); }); };
+    s.onerror=function(){ settle(stay); };
+    setTimeout(function(){ settle(stay); },4000);
+    s.src='https://'+twin+'/event.js?twin=1';
+    document.head.appendChild(s);
   }
   (function witchName(){
     var host=location.hostname||"", el=document.getElementById('witch'), btn=document.getElementById('newwitch');
-    if(!el || !/\.burritobot\.co$/.test(host))return;   // the desk and wall live on burritobot.co; other domains show no name
-    el.removeAttribute('href'); el.removeAttribute('target'); el.removeAttribute('rel');
-    var m=/(?:^|;\s*)wib_witch=([a-z]+-the-[a-z]+)(?:;|$)/.exec(document.cookie||"");
-    var name = m && witchFromSlug(m[1]);
-    if(!name){ name=randWitch(); setWitchCookie(name); }   // first visit, or a slug from another vocabulary: assign one
-    WITCH_NAME=name;
-    el.textContent='\uD83E\uDDD9 You are '+name;
-    el.hidden=false;
-    if(btn){
-      btn.hidden=false;
-      // Re-roll: a new name, cookie replaced on .burritobot.co. Jokers already deployed under the old name keep it.
-      btn.addEventListener('click',function(){
-        WITCH_NAME=otherWitch(WITCH_NAME); setWitchCookie(WITCH_NAME);
-        el.textContent='\uD83E\uDDD9 You are '+WITCH_NAME;
-        checkMyDeployments();
-      });
+    if(!el || !witchDomain(host))return;   // the desk and wall live on the platform's domains; other hosts show no name
+    function show(){
+      el.removeAttribute('href'); el.removeAttribute('target'); el.removeAttribute('rel');
+      var m=/(?:^|;\s*)wib_witch=([a-z]+-the-[a-z]+)(?:;|$)/.exec(document.cookie||"");
+      var name = m && witchFromSlug(m[1]);
+      if(!name){ name=randWitch(); setWitchCookie(name); }   // first visit, or a slug from another vocabulary: assign one
+      WITCH_NAME=name;
+      el.textContent='\uD83E\uDDD9 You are '+name;
+      el.hidden=false;
+      if(btn){
+        btn.hidden=false;
+        // Re-roll: a new name, cookie replaced on the page's domain. Jokers already deployed under the old name keep it.
+        btn.addEventListener('click',function(){
+          WITCH_NAME=otherWitch(WITCH_NAME); setWitchCookie(WITCH_NAME);
+          el.textContent='\uD83E\uDDD9 You are '+WITCH_NAME;
+          checkMyDeployments();
+        });
+      }
     }
+    var twin=twinHost(host);
+    // Staying on agenticburn.com shows the name after the page's fits ran, so the witch line is fitted again.
+    if(twin) goToTwin(twin, function(){ show(); try{ window.dispatchEvent(new Event('resize')); }catch(e){} });
+    else show();
   })();
   // "see your deployments" (#773, the link #763 removed as "see your Jokers", renamed). Hidden until BurritoBot has
   // deployed something under this visitor's witch name, then a link to the deployments page, filtered to them. The

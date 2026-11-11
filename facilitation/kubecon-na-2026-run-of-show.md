@@ -646,7 +646,11 @@ agenticburn.com behind it (#651).
   Terminal button (#645). This is what the room attacks from their phones for all
   three challenges. Its profile is `kubecon-community`: the burn build plus the four
   Kubernetes guardrails present and off, so Kyverno only audits until `guardrails-on`
-  and C6's deployment lands.
+  and C6's deployment lands. Its top bar has Deployments, Support and Beacon buttons,
+  as the private bot's does (#1347): the one deployments page, whose rows say "from
+  attackme" or "from presenters", the one support desk both bots read, and the beacon's
+  view. Opened as `attackme.agenticburn.com`, the page moves to `attackme.burritobot.co`,
+  so the witch name it shows is the one the desk and the deployments page know.
 - **The private cluster**, `burritobot-private.burritobot.co`, which Michael and
   Whitney share: the full IDP (profile `kubecon-private`), with the AI guardrails and
   the four Kubernetes guardrails present but off at the start so they can be turned

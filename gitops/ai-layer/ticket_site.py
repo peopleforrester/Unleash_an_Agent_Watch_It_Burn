@@ -789,6 +789,17 @@ def record_cluster_read(d, cluster: str | None = None) -> dict:
 # at deployments-<cluster> and deployments.burritobot.co (console.conf), and /deployments.json on the chat page's own
 # host, so the chat page can show "see your deployments" once the visitor's first one lands.
 DEPLOYMENTS_HOST = re.compile(r"^deployments(-[a-z0-9-]+)?\.")
+# The server a row came from, in the room's words (#1347, Michael 2026-11-11: "it should say which server it's coming
+# from"). A row's cluster is the desk's label (DESK_CLUSTER, DESK_REMOTE_CLUSTER), which the probes and desk-relay read
+# and which stays as it is; the page shows this name for it instead. The room knows the public bot as attackme, the
+# name on the slide, and the private bot as the presenters' one. A label not in the table is shown as it is, and a row
+# with no label (the 2-hour workshop's desk sets none) names no server, so that page reads as it did.
+SERVER_NAMES = {"community": "attackme", "private": "presenters"}
+
+
+def server_name(cluster: str) -> str:
+    """The server a row's cluster label names, as the room reads it; "" for a row with no label."""
+    return SERVER_NAMES.get(cluster, cluster) if cluster else ""
 
 
 def image_label(image: str) -> str:
@@ -805,7 +816,8 @@ def deployments(witch_slug: str = "") -> list[dict]:
     # app is what the line names: the image's short name, or the resource's own name for one that runs no image.
     return [{"name": r["name"], "kind": r.get("kind", ""), "image": r.get("image", ""),
              "app": image_label(r.get("image", "")) or r["name"], "witch": r.get("witch", ""), "at": r["at"],
-             "removed_at": r.get("removed_at", ""), "cluster": r.get("cluster", "")} for r in rows[:200]]
+             "removed_at": r.get("removed_at", ""), "cluster": r.get("cluster", ""),
+             "server": server_name(r.get("cluster", ""))} for r in rows[:200]]
 
 
 _DEPLOY_STYLE = ("body{font:22px/1.45 system-ui,sans-serif;max-width:60rem;margin:5vh auto;padding:0 1.25rem;"
@@ -824,8 +836,8 @@ b.textContent=x.witch||'Someone';li.appendChild(b);li.appendChild(document.creat
 const c=document.createElement('code');c.textContent=x.app;if(x.image){c.title=x.image;}li.appendChild(c);
 li.appendChild(document.createTextNode(' at '+x.at));
 if(x.removed_at){li.className='removed';li.appendChild(document.createTextNode(', removed at '+x.removed_at));}
-if(x.cluster){const k=document.createElement('span');k.className='cluster';k.textContent=x.cluster;
-li.appendChild(document.createTextNode(' '));li.appendChild(k);}
+if(x.server){const k=document.createElement('span');k.className='cluster';k.textContent='from '+x.server;
+k.title='deployed from the '+x.server+' server';li.appendChild(document.createTextNode(' '));li.appendChild(k);}
 return li;}));}catch(e){}}
 tick();setInterval(tick,3000);
 </script>"""
