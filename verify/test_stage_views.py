@@ -1,5 +1,6 @@
 # ABOUTME: Offline tests for the stage views and the seeds' retention filter (#648): seven views in presentation order
-# ABOUTME: built from the seed's views file, written only under 'WIB stage ', updated in place, and read back.
+# ABOUTME: built from the seed's views file, written only under 'WIB stage ', updated in place, and read back; and
+# ABOUTME: 'remove' (#1344), which deletes those seven and the filter by id and nothing else.
 """Nothing here reaches Datadog or AWS. The org is a fake that records every call. Its saved-view store holds the
 create schema runs 18770 and 20202 read off Datadog's 400s (the bare object, type and page from fixed lists,
 timerange with "interval" alone) and answers PUT on a view's id; its retention-filter store answers the v2 list and
@@ -10,8 +11,10 @@ included, in presentation order (Challenge 1 to 4, the PII refusal after Challen
 and burritobot-private), with each challenge's attack and fixed seed in one view; their titles are the run-of-show's
 segment headings; --apply creates what is missing, updates a stale one in place, leaves a current one alone, never
 writes or deletes a view of another name, refuses a name two views hold, and passes only on read-back. The retention
-filter is created once, left alone when present, and not edited when its name holds another query. No key value is
-printed.
+filter is created once, left alone when present, and not edited when its name holds another query. `remove` (#1344)
+deletes by id the seven views and the seeds' filter and nothing else: not a logs view of a stage name, not another
+view or filter, not a name two views hold, not the filter's name on another query; it passes only when none of the
+eight reads back and every other view and filter is still there. No key value is printed.
 """
 from __future__ import annotations
 
@@ -115,6 +118,21 @@ class FakeOrg:
                 if v["id"] == int(m.group(1)):
                     self.views[i] = {"id": v["id"], **data, "timerange": {"interval_ms": data["timerange"]["interval"]}}
                     return 200, {"logs_view": self.views[i]}
+            return 404, {"errors": ["Not found"]}
+        if m and method == "DELETE":
+            if self.refuse:
+                return self.refuse.pop(0), {"errors": ["Forbidden"]}
+            for i, v in enumerate(self.views):
+                if v["id"] == int(m.group(1)):
+                    del self.views[i]
+                    return 200, {}
+            return 404, {"errors": ["Not found"]}
+        m = re.fullmatch(re.escape(sv.RETENTION_PATH) + r"/([^/]+)", path)
+        if m and method == "DELETE":
+            for i, f in enumerate(self.filters):
+                if f["id"] == m.group(1):
+                    del self.filters[i]
+                    return 200, {}
             return 404, {"errors": ["Not found"]}
         if path == sv.RETENTION_PATH and method == "GET":
             return 200, {"data": copy.deepcopy(self.filters)}
@@ -252,6 +270,82 @@ org = FakeOrg(filters=[{"id": "x", "attributes": {"name": sv.RETENTION_NAME, "fi
                                                   "rate": 1.0, "trace_rate": 1.0, "enabled": True}}])
 rc, out = run(["retention"] + LIVE + ["--apply"], org)
 check("its name with another query is not edited", rc == 1 and not org.writes(), out)
+
+print("== remove, after the talk (#1344) ==")
+check("stage_names is the seven wanted() builds, in order",
+      sv.stage_names() == [(v["name"], v["type"]) for v in sv.wanted(traces())], str(sv.stage_names()))
+OTHER_STAGE = {"id": 4819999, "name": "WIB stage 7: someone's own", "type": "llmobs", "page": "llm_obs_explorer",
+               "search": "ml_app:burritobot", "timerange": {"interval_ms": 900000}}
+DEFAULT_FILTER = {"id": "dflt", "attributes": {"name": "Default retention filter", "filter": {"query": "*"},
+                                               "rate": 0.1, "trace_rate": 0.0, "enabled": True}}
+
+
+def built_org() -> FakeOrg:
+    org = FakeOrg([OTHER, LOGS, OTHER_STAGE], filters=[OTHER_FILTER, DEFAULT_FILTER])
+    assert run(["views"] + LIVE + ["--apply"], org)[0] == 0 and run(["retention"] + LIVE + ["--apply"], org)[0] == 0
+    org.calls.clear()
+    return org
+
+
+org = FakeOrg()
+rc, out = run(["remove"], org)
+check("a dry run of remove reads nothing and names the seven and the filter",
+      rc == 0 and org.calls == [] and out.count("remove view 'WIB stage ") == 7 and sv.RETENTION_NAME in out, out)
+rc, out = run(["remove"], FakeOrg(), tr={})
+check("remove needs no seed file", rc == 0, out)
+org = FakeOrg(org="Some Other Org")
+rc, out = run(["remove"] + LIVE + ["--apply"], org)
+check("remove in another org reads and deletes nothing",
+      rc == 1 and [p for _, p, _ in org.calls] == ["/api/v2/current_user"], out)
+
+org = built_org()
+ids = sorted(v["id"] for v in org.views if (v["name"], v["type"]) in sv.stage_names())
+rc, out = run(["remove"] + LIVE + ["--list"], org)
+check("remove --list sends GETs only and names the seven and the filter",
+      rc == 0 and not org.writes() and out.count("--apply would delete view") == 7
+      and out.count("--apply would delete retention filter") == 1, out)
+check("remove --list names what it keeps",
+      "keeps: views id 4805197 'Every prompt'; id 4819999 'WIB stage 7: someone's own'; retention filters id kXys "
+      "'Error Default'; id dflt 'Default retention filter'" in out, out)
+rc, out = run(["remove"] + LIVE + ["--apply"], org)
+dels = [p for m, p, _ in org.writes()]
+check("remove --apply sends eight DELETEs, by id, and nothing else",
+      rc == 0 and {m for m, _, _ in org.writes()} == {"DELETE"}
+      and sorted(dels) == sorted([f"{sv.VIEWS_PATH}/{i}" for i in ids] + [f"{sv.RETENTION_PATH}/new1"]), str(dels))
+check("it ends GREEN", "STAGE REMOVAL GREEN: 7 view(s) and 1 filter(s) deleted, 0 problem(s)" in out, out)
+check("every other view is still there: another name, a logs view of a stage name, a 'WIB stage 7'",
+      org.views == [OTHER, LOGS, OTHER_STAGE], str(org.views))
+check("Datadog's filters are still there, unchanged", org.filters == [OTHER_FILTER, DEFAULT_FILTER], str(org.filters))
+check("the listings afterwards are printed",
+      "after: 2 LLM Observability and APM saved view(s), 1 named 'WIB stage ...'; 2 APM retention filter(s): "
+      "'Error Default'; 'Default retention filter'" in out, out)
+check("no key value is printed by remove", API not in out and APP not in out)
+org.calls.clear()
+rc, out = run(["remove"] + LIVE + ["--apply"], org)
+check("a second remove deletes nothing and is GREEN",
+      rc == 0 and not org.writes() and "none of the seven views" in out and "STAGE REMOVAL GREEN" in out, out)
+
+dup = sv.body(sv.PREFIX + "2: Challenge 2, the Kubernetes catch-all", sv.LLMOBS, "x", 1)
+org = built_org()
+org.views += [{**dup, "id": 77, "timerange": {"interval_ms": 1}}]
+rc, out = run(["remove"] + LIVE + ["--apply"], org)
+check("a name two views hold is not deleted, the rest are, and the run is RED",
+      rc == 1 and not [p for _, p, _ in org.writes() if p.endswith("/77")]
+      and len([v for v in org.views if v["name"] == dup["name"]]) == 2
+      and len(org.writes()) == 7 and "STAGE REMOVAL RED" in out, out)
+
+org = built_org()
+org.filters[-1]["attributes"]["filter"]["query"] = "service:other"
+rc, out = run(["remove"] + LIVE + ["--apply"], org)
+check("the filter's name on another query is not deleted, and the run is RED",
+      rc == 1 and not [p for _, p, _ in org.writes() if sv.RETENTION_PATH in p]
+      and any(f["attributes"]["name"] == sv.RETENTION_NAME for f in org.filters) and "STAGE REMOVAL RED" in out, out)
+
+org = built_org()
+org.refuse = [403]
+rc, out = run(["remove"] + LIVE + ["--apply"], org)
+check("a refused delete is RED and reads back as still there",
+      rc == 1 and "-> 403" in out and "view still there" in out and "STAGE REMOVAL RED" in out, out)
 
 print("== the key ==")
 seen = []

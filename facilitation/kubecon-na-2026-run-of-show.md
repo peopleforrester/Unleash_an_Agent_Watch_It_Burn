@@ -2895,6 +2895,19 @@ hosts at peak, down to 1 within three hours).
   naming `wib-pii-scrub-check`. `verify/test_dd_purge_public_live.py` reads that
   comment, runs `--verify` on its window and on `--service wib-pii-scrub-check`, and
   stays red until no Agent Observability or APM span is left (#1166).
+- With the purge, remove the stage's eight objects from Whitney's org (#1344): the
+  seven `WIB stage` saved views (ids 4819010 to 4819016) and the APM retention filter
+  `WIB stage seeds (#648)`, which keeps indexing every new `wib-stage-` session until
+  it is gone. From any checkout, with the accen-dev session, `--list` names the eight
+  and what it keeps, and `--apply` deletes those eight by id and nothing else:
+
+  ```bash
+  python3 infra/datadog-room/stage_views.py remove --profile accen-dev --region us-west-2 --list
+  python3 infra/datadog-room/stage_views.py remove --profile accen-dev --region us-west-2 --apply
+  ```
+
+  It must end `STAGE REMOVAL GREEN`. Record its `DELETED` lines and its `after:` line,
+  the org's listings once the eight are gone, in decisions.md under #1344.
 - Record the real spend once the fleet is down, with `teardown/delivery-cost.py
   --start <first build day> --end <day after the last teardown> --event kubecon-na-2026`
   and a `--profile` for each fleet account, saved as `cost/measured/kubecon-na-2026.txt`

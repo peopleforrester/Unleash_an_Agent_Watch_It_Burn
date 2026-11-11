@@ -53047,3 +53047,44 @@ verify/run-tests.sh`: 187 of 455 offline tests, `ALL OFFLINE RENDER-GATE TESTS G
 **Live, read-only, 13:03Z.** `python3 verify/stage_traces.py check --profile accen-dev --stamp 202611110035` read
 `STAGE TRACES GREEN`, and `stage_views.py views --list` read all seven `WIB stage` views `OK` with nothing to write.
 The change itself is prose in `facilitation/` and `decisions.md`, which no cluster runs, so there is no other live check.
+
+## 2026-11-11 · #1344 · run 20383 · `stage_views.py remove`: the eight stage objects come out of Whitney's org after the talk
+
+**What #1344 asks.** Run 20202 (#648) put eight objects in Whitney's sandbox Datadog org for the 2026-11-12
+session: the seven `WIB stage` saved views (ids 4819010 to 4819016) and the APM retention filter `WIB stage seeds
+(#648)` (id W0CFEfLXRCmykjfq8cio8w), which indexes every span whose session id starts `wib-stage-`. They come out
+after the talk, with the burritobot-public purge #647 plans.
+
+**Not deleted today.** This run is on 2026-11-11, the day before the talk, and the views are the stage's links. The
+deletion is a Teardown step, run on or after 2026-11-13; the issue waits for that date.
+
+**The verb.** `stage_views.py remove` lists the org's LLM Observability and APM views and its APM retention filters,
+and deletes by id only a view whose name and type are one of the seven `stage_names()` gives (the names `wanted()`
+builds, with no seed file needed) and a filter named `WIB stage seeds (#648)` on the seeds' query. A name two views
+of one type hold, or the filter's name on another query, is not deleted and the run ends RED. After the deletes it
+lists again and passes only when none of the eight reads back and every other view and filter is still listed, then
+prints the listings in an `after:` line. `--list` reads only and names what `--apply` would delete and what it keeps.
+The views go through `DELETE /api/v1/logs/views/<id>`, the store #792 found, which run 20202 already writes with PUT
+on an id; the filter goes through `DELETE /api/v2/apm/config/retention-filters/<id>`, Datadog's documented call.
+Datadog's default filters cannot be deleted and the verb never names them. The run-of-show's Teardown has the step,
+after the purge.
+
+**Live, read-only, 2026-11-11.** With the run's session, `python3 infra/datadog-room/stage_views.py remove --profile
+accen-dev --region us-west-2 --list` exited 0 in org `Datadog` (datadoghq.com): `8 LLM Observability and APM saved
+view(s), 5 APM retention filter(s)`; `--apply would delete` views 4819010, 4819011, 4819012, 4819013 (type trace, the
+PII refusal), 4819014, 4819015 and 4819016 and retention filter W0CFEfLXRCmykjfq8cio8w `'WIB stage seeds (#648)'
+query 'service:burritobot @session.id:wib-stage-*' rate 1 trace_rate 1 enabled True`; `keeps: views id 4805197 'Every
+prompt'; retention filters id cEmJ59wrSUqppKdfyY7d_Q 'Dynamic Instrumentation Default'; id kT4ymdCqQAmtSOCUXbKO3Q 'App
+and API Protection Default'; id 8ty0zGjrQd-03PoVNDkjQg 'Synthetics Default'; id kXys4IF3T8CYtK0FnkEtqg 'Error
+Default'`. Nothing was written. The change is a script under `infra/` that no cluster runs, the run-of-show and this
+file, so there is no cluster check.
+
+**Tests.** `python3 verify/test_stage_views.py` exits 0 alone, with 16 new checks on `remove` against the fake org:
+a dry run reads nothing and needs no seed file; another org is refused before any read; `--list` sends only GETs;
+`--apply` sends eight DELETEs by id and ends GREEN, leaving another view, a logs view of a stage name, a `WIB stage 7`
+view and the default filters untouched; a second run deletes nothing; a doubled name, the filter's name on another
+query and a refused delete each end RED.
+
+**Not yet run.** On or after 2026-11-13: `remove --apply`, which must end `STAGE REMOVAL GREEN`, with its `DELETED`
+and `after:` lines recorded here. The expected `after:` line reads one view, `Every prompt`, and four retention
+filters, the four defaults above.
