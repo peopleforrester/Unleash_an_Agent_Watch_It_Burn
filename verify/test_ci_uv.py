@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# ABOUTME: Runs verify/ci-uv.sh (#1331) beside a stub artifact-cache.sh: uv and uvx unpacked under RUNNER_TEMP, PATH and
+# ABOUTME: Runs verify/ci-uv.sh (#1331) beside a stub artifact-cache.sh: uv alone unpacked under RUNNER_TEMP, PATH and
 # ABOUTME: UV_PYTHON_INSTALL_DIR written as setup-uv wrote them, and every way it can go wrong fails, writing nothing. Offline.
 """Offline.
 
@@ -11,10 +11,10 @@ archive from the host artifact cache by its pinned SHA-256 and puts uv on the jo
 The script runs here from a copy in a throwaway directory, beside a stub artifact-cache.sh that logs its arguments and
 prints the path of an archive the test builds, so nothing is fetched and the real cache is never touched. The stub's
 log shows the script asks the cache for the SHA-256 and URL its own UV_SHA256 and UV_URL name. A run that passes
-leaves uv and uvx under $RUNNER_TEMP/uv-<version>, appends to GITHUB_PATH the three directories setup-uv added on a
+leaves uv alone under $RUNNER_TEMP/uv-<version>, appends to GITHUB_PATH the three directories setup-uv added on a
 self-hosted runner, in its order, and writes UV_PYTHON_INSTALL_DIR to GITHUB_ENV (the runner's own value when it has
 one). Each failure (no cache root, no GITHUB_PATH, GITHUB_ENV or RUNNER_TEMP, a cache that fails or names no file, an
-archive without uvx, a uv that fails or reports another version, 0.13.70 included) exits 1 with CI UV FAILED and
+archive without uv, a uv that fails or reports another version, 0.13.70 included) exits 1 with CI UV FAILED and
 leaves GITHUB_PATH and GITHUB_ENV as they were.
 """
 from __future__ import annotations
@@ -85,7 +85,8 @@ def archive(path: Path, members: dict[str, bytes]) -> Path:
     return path
 
 
-GOOD = {"uv": uv_stub(f"uv {VERSION} (x86_64-unknown-linux-gnu)"), "uvx": uv_stub(f"uvx {VERSION}")}
+# The release archive holds a second binary beside uv; the stub stands in for it, and it is never unpacked.
+GOOD = {"uv": uv_stub(f"uv {VERSION} (x86_64-unknown-linux-gnu)"), "other-tool": uv_stub("other")}
 
 
 def run(tmp: Path, members: dict[str, bytes] | None = None, *, drop: tuple[str, ...] = (), mode: str = "",
@@ -119,7 +120,8 @@ def case(label: str, **kw) -> tuple[int, str, dict]:
         code, out, left = run(Path(t), **kw)
         left = {**left, "uv_ok": (left["rt"] / f"uv-{VERSION}" / "uv").is_file()
                 and os.access(left["rt"] / f"uv-{VERSION}" / "uv", os.X_OK),
-                "uvx_ok": (left["rt"] / f"uv-{VERSION}" / "uvx").is_file(),
+                "only_uv": sorted(p.name for p in (left["rt"] / f"uv-{VERSION}").iterdir())
+                if (left["rt"] / f"uv-{VERSION}").is_dir() else [],
                 "rt": str(left["rt"]), "home": str(left["home"])}
         return code, out, left
 
@@ -129,7 +131,8 @@ code, out, left = case("good", drop=("UV_PYTHON_INSTALL_DIR", "XDG_BIN_HOME", "X
 home, rt = left["home"], left["rt"]
 check("a good run exits 0", code == 0, out)
 check("it asks the cache once, for the pinned SHA-256 and URL", left["log"] == [f"get {SHA} {URL}"], str(left["log"]))
-check("uv and uvx are unpacked under RUNNER_TEMP/uv-<version>", left["uv_ok"] and left["uvx_ok"], out)
+check("uv alone is unpacked under RUNNER_TEMP/uv-<version>", left["uv_ok"] and left["only_uv"] == ["uv"],
+      f"{left['only_uv']}\n{out}")
 check("GITHUB_PATH gets ~/.local/bin, uv's directory and the Python directory, in setup-uv's order",
       left["path"] == [f"{home}/.local/bin", f"{rt}/uv-{VERSION}", f"{home}/.local/share/uv/python"], str(left["path"]))
 check("GITHUB_ENV gets UV_PYTHON_INSTALL_DIR at setup-uv's default", left["env"] == [
@@ -162,7 +165,7 @@ refused("no RUNNER_TEMP", "RUNNER_TEMP", asks_cache=False, drop=("RUNNER_TEMP",)
 refused("a RUNNER_TEMP that is not a directory", "RUNNER_TEMP", asks_cache=False, RUNNER_TEMP="/nonexistent/rt")
 refused("the cache failing", "could not serve uv", mode="fail")
 refused("the cache naming no file", "which is not a file", archive_path="/nonexistent/uv.tar.gz")
-refused("an archive without uvx", "cannot unpack", members={"uv": GOOD["uv"]})
+refused("an archive without uv", "cannot unpack", members={"other-tool": GOOD["other-tool"]})
 refused("a uv that reports 0.13.6", "not uv " + VERSION, members={**GOOD, "uv": uv_stub("uv 0.13.6 (x86)")})
 refused(f"a uv that reports {VERSION}0", "not uv " + VERSION, members={**GOOD, "uv": uv_stub(f"uv {VERSION}0")})
 refused("a uv that fails", "--version failed", members={**GOOD, "uv": uv_stub(f"uv {VERSION}", code=3)})

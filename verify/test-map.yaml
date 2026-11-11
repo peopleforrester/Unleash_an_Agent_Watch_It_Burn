@@ -1651,7 +1651,6 @@ rules:
       - verify/artifact_cache.py
       - verify/ci-artifact-cache.sh
       - verify/ci-uv.sh
-      - verify/ci-uv.sh/**
     tests:
       - verify/test_ci_uv.py
   - name: test_cluster_provenance.py

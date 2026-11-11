@@ -543,10 +543,6 @@ sites:
     kind: tool
     pin: verify/ci-uv.sh (UV_SHA256, uv's release archive from Astral's mirror, in place of astral-sh/setup-uv, #1331)
     cached: true
-  - match: .
-    lines: 2
-    class: none
-    why: the tar that unpacks uv and uvx from the archive the cache served, and its failure message; neither fetches
   verify/ci_chromium_libs.py:
   - match: '"-q", "(update|download)"'
     lines: 2
@@ -1126,9 +1122,9 @@ sites:
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   verify/test_ci_uv.py:
   - match: .
-    lines: 9
+    lines: 2
     class: none
-    why: a stub uv and uvx the test packs, a stub artifact cache beside ci-uv.sh, and checks on their names and on the script's text; nothing leaves the host
+    why: the check that ci-uv.sh runs no curl or wget outside its comments; nothing leaves the host
   verify/test_chat_span_token_counts.py:
   - match: urlopen
     lines: 1

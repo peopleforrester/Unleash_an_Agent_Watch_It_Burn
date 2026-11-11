@@ -52478,3 +52478,19 @@ the written PATH.
 read after hecaton promotes this branch and verify-suites runs on the new staging tip.
 
 **No live cluster check.** The change touches .github/ and verify/ files no cluster runs.
+
+**Run 20286.** Run 20271's branch failed hecaton's tests gate on two offline tests, which passed in that run only
+because they ran before `git add`, when ci-uv.sh and test_ci_uv.py were untracked and neither test's
+`git ls-files` saw them.
+- `test_package_cache.py` forbids the name of uv's second binary, the ad hoc tool runner, in any tracked file outside
+  its allowlist, and ci-uv.sh unpacked it. No job runs it and the test bans running it, so ci-uv.sh now unpacks the
+  uv binary alone, and test_ci_uv.py checks that uv is the only file left under `$RUNNER_TEMP/uv-0.13.7`. Allowlisting
+  the two files would have kept a binary nobody may use on PATH.
+- `test_test_map.py`: `scope_tests.py write` had run while ci-uv.sh was untracked, and wrote a `verify/ci-uv.sh/**`
+  glob for it. Written again with the file tracked, the line is gone.
+- fetch-inventory.yaml drops the two lines the tar no longer gives the scan, and test_ci_uv.py's count falls to 2.
+- The gate's output opened with `FAIL: --context is empty`. That is test_burritobot_cluster_live_logic.py's own
+  empty-context case printing its expected error; the gate named only the two tests above as failed.
+
+The real script on the real archive, with the cache warm: exit 0, no fetch, and `uv` the only file unpacked. Each
+changed test was run once after the commit, with every file tracked.

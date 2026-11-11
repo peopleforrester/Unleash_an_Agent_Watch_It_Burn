@@ -19,6 +19,8 @@
 # $XDG_DATA_HOME/../bin, else $HOME/.local/bin), uv's own directory, and UV_PYTHON_INSTALL_DIR, which it also exported
 # (the runner's own value, else $HOME/.local/share/uv/python). This does the same, so verify/package_cache.py finds and
 # installs its Pythons where it did before. uv is unpacked under $RUNNER_TEMP, which the runner empties for every job.
+# Only the uv binary is unpacked: the archive's second binary runs tools ad hoc, which no job here does and
+# verify/test_package_cache.py forbids, so it is left in the archive.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -46,8 +48,8 @@ archive="$(bash "${SCRIPT_DIR}/artifact-cache.sh" get "${UV_SHA256}" "${UV_URL}"
 dest="${RUNNER_TEMP}/uv-${UV_VERSION}"
 rm -rf "${dest}"
 mkdir -p "${dest}"
-tar -xzf "${archive}" -C "${dest}" --strip-components=1 "${UV_MEMBER_DIR}/uv" "${UV_MEMBER_DIR}/uvx" \
-    || fail "cannot unpack ${UV_MEMBER_DIR}/uv and ${UV_MEMBER_DIR}/uvx from ${archive}"
+tar -xzf "${archive}" -C "${dest}" --strip-components=1 "${UV_MEMBER_DIR}/uv" \
+    || fail "cannot unpack ${UV_MEMBER_DIR}/uv from ${archive}"
 
 got="$("${dest}/uv" --version 2>&1)" || fail "${dest}/uv --version failed: ${got}"
 [[ "${got}" == "uv ${UV_VERSION}" || "${got}" == "uv ${UV_VERSION} "* ]] \
