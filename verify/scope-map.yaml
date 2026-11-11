@@ -2998,6 +2998,26 @@ reads:
     - infra/datadog-fleet/leaderboard.yaml
     - infra/datadog-fleet/monitors.yaml
     - verify/dd_traces.py
+  test_deck_do_note_switch_map_comment.py:
+    - CLAUDE.md
+    - decisions.md
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/chart_fetch.py
+    - verify/charts.lock
+    - verify/charts_lock.py
+    - verify/gh_comments.py
   test_delivered_tags.py:
     - verify/delivered_tags.py
   test_delivered_tags_github_e2e.py:
