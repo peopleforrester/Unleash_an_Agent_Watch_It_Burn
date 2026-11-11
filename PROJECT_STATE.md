@@ -117,7 +117,7 @@ record is in the run-of-show.
 Fixed 2026-10-27 and 10-28: the Bedrock profile description comma (#610); the guard-proxy re-pin (#487, #519,
 #486, #455); the probe and the gateway pin writing Argo-managed objects as the principals block-argocd-drift
 admits (#630); the C6 image named in full (#627); the probe judging C7 as the stage shows it (#628); Falco
-0.45.1 for kernel 6.18 (#626); the event-tag test (#631); the per-conversation rate limit (#450; the timeout ladder and readable refusals followed on 2026-10-29; the per-network ceiling added then was taken out on 2026-11-01 by Michael's ruling after the #644 load run, live since 2026-11-03 and load tested on 2026-11-05 at 500 and 150 phones, where guard-proxy's 150 a minute was the only limit met);
+0.45.1 for kernel 6.18 (#626); the event-tag test (#631); the per-conversation rate limit (#450: `/chat` takes 10 a minute per conversation in console nginx and in guard-proxy, with no per-network limit, and the room is held by guard-proxy's 150 a minute for the cluster and the $25 cost cap; `verify/test_audience_path_live.py` exited 0 on watch-it-burn-community on 2026-11-05, 2026-11-08 and 2026-11-11; the timeout ladder and readable refusals followed on 2026-10-29; the per-network ceiling added then was taken out on 2026-11-01 by Michael's ruling after the #644 load run, live since 2026-11-03 and load tested on 2026-11-05 at 500 and 150 phones, where guard-proxy's 150 a minute was the only limit met);
 the Datadog org verifier against the read-only key (#629). Merged on Michael's approval: customer-stream
 removal (#473), Loki and Alloy removal (#474), the plan-time policy (#200).
 

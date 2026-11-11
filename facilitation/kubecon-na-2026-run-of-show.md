@@ -701,13 +701,16 @@ The limit is per person (Michael, 2026-11-01, #450), and none is per network.
 Most of the room leaves the venue Wi-Fi through one NAT address, so a per-address
 limit is one bucket for the whole ballroom: the #644 load run sent 1,500 turns
 from 500 sessions on one address, and the old 120-a-minute address zone refused
-1,164 of them. Each phone gets its own 10 a minute, and the room as a whole shares
-guard-proxy's 150 a minute and the $25 cost cap; with about 150 people in the room,
+1,164 of them. Each phone gets its own 10 a minute per conversation, counted in
+nginx and again in guard-proxy, and the room as a whole shares guard-proxy's 150 a
+minute for the cluster and the $25 cost cap; with about 150 people in the room,
 the 150 a minute is the limit that binds. Every refusal shows on the phone as a sentence,
 "Slow down, hungry traveler.", and a turn that runs out of time reads "BurritoBot's
 kitchen isn't answering", never a bare status code. `verify/test_audience_path.py`
 holds all of this offline; `CONTEXT=<community ctx> python3
-verify/test_audience_path_live.py` checks it through the apex on the live cluster.
+verify/test_audience_path_live.py` checks it through the apex on the live cluster,
+and has exited 0 on watch-it-burn-community on 2026-11-05 (#830), 2026-11-08 (#612)
+and 2026-11-11 (#788).
 
 ### Standbys and automatic promotion (#643)
 
@@ -2731,13 +2734,16 @@ is merely slow rather than rebuilding:
   python3 verify/load_replay.py attackme.burritobot.co --yes --harvest ~/repos/talks/Unleash_an_Agent_Watch_It_Burn/.harvest/devopsdays-portland/prompts --json-out tmp/load-replay-attackme.json
   ```
 
-  The estimate: at most $7.50 if all 1500 turns reached the model at $0.005 a call;
-  about $1.90 predicted for about 375 served turns, because guard-proxy's cluster
-  window passes about 150 a minute over the run's 2.5 minutes. From one
-  machine every turn leaves through one address, as a venue NAT's do, and since
-  #450 nothing in front of guard-proxy keys on the address. For the room Michael
+  The estimate, as `load_replay.py` prints it from the limits in git: at most $7.50 if
+  all 1500 turns reached the model at $0.005 a call; $1.88 predicted for about 375
+  served turns over about 2.5 minutes, because guard-proxy's cluster window passes
+  150 a minute. Each phone's 10 a minute per conversation, in nginx and in
+  guard-proxy, holds none of its three turns, and there is no per-network bucket:
+  from one machine every turn leaves through one address, as a venue NAT's do, and
+  since #450 nothing in front of guard-proxy keys on the address. For the room Michael
   expects, run it again with `--users 150` (the commands are in
-  `facilitation/kubecon-na-2026-load-test.md`). The report gives latency percentiles,
+  `facilitation/kubecon-na-2026-load-test.md`); the tool predicts the same $1.88 for
+  about 375 of its 450 turns, at most $2.25. The report gives latency percentiles,
   outcomes by limit (nginx per conversation, guard-proxy per session and per cluster, the cluster's cost cap, a
   conversation's budget), errors by
   HTTP status (502, 504, 429), timeouts, and the `/cost` spend before and after. It
@@ -2980,9 +2986,12 @@ number and says who settled it and when, so references to it elsewhere still lan
    not been run yet. It needs the accen-dev credentials. Record its date and output
    on #453.
 7. **The audience rate limit, venue NAT, and timeouts (#450, #451).** Sized in git
-   for a ballroom on one venue Wi-Fi NAT ("The audience path" above), and proven on
-   attackme: `verify/test_audience_path_live.py` exited 0 on 2026-11-05 (#830) and
-   again on 2026-11-08 (#612), the load replays from one address ran on 2026-11-05
+   for a ballroom on one venue Wi-Fi NAT ("The audience path" above): `/chat` takes
+   10 a minute per conversation in nginx and in guard-proxy, with no per-network
+   bucket (Michael, 2026-11-01), and the room as a whole is held by guard-proxy's 150
+   a minute for the cluster and the $25 cost cap. Proven on attackme:
+   `verify/test_audience_path_live.py` exited 0 on watch-it-burn-community on
+   2026-11-05 (#830), 2026-11-08 (#612) and 2026-11-11 (#788), the load replays from one address ran on 2026-11-05
    and 2026-11-08 (`facilitation/kubecon-na-2026-load-test.md`), and Michael signed
    off the real-phone check on 2026-11-01 (#451). Still open: whether to raise
    guard-proxy's 150 a minute for the cluster, which refused 139 of 450 turns at 150

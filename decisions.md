@@ -53289,3 +53289,36 @@ in a browser at 390x844 and 1440x900, `https://attackme.agenticburn.com/` landin
 with a witch name and the Deployments, Support and Beacon buttons and no Terminal or Datadog, and
 `https://burritobot-private.burritobot.co/` with all seven; and reads `https://deployments.burritobot.co/deployments.json`
 for a `server` of `attackme` or `presenters` on each labelled row.
+## 2026-11-11 · #788 · The KubeCon docs give /chat as 10 a minute per conversation, with the #644 estimate held to load_replay.py
+
+**What was left.** Between run 16547's draft (`origin/agent/788-16519`, which ended on a stale authorization and not
+on its content) and today, staging had written most of #788's text: the audience path table gives nginx 10 a minute
+per conversation and none per network, readiness row 9 is READY with the live runs of 2026-11-05 and 2026-11-08, and
+open question 7 records them. Against the criteria four things were still open: the paragraph after the table gave
+each phone "its own 10 a minute" without naming the two places that count it; the #644 step gave "about $1.90" where
+`verify/load_replay.py` predicts $1.88; open question 7 and the #450 note in `PROJECT_STATE.md` did not state the
+limit; and `PROJECT_STATE.md` did not say whether `verify/test_audience_path_live.py` had run.
+
+**What changed.** In `facilitation/kubecon-na-2026-run-of-show.md`, the paragraph after the table names the 10 a
+minute per conversation in nginx and again in guard-proxy, the room held by guard-proxy's 150 a minute for the cluster
+and the $25 cost cap, and the three dates the live test exited 0 on watch-it-burn-community. The #644 step quotes the
+tool's plan line for the default plan, $7.50 at most and $1.88 predicted for about 375 served turns over about 2.5
+minutes, says there is no per-network bucket, and gives the tool's $1.88 for about 375 of 450 turns, at most $2.25,
+for `--users 150`. Open question 7 states the limit and the room's two holds. Readiness row 9 names guard-proxy's
+per-conversation count beside nginx's and adds today's live run; the #450 note in `PROJECT_STATE.md` states the limit
+and the three live runs. The draft's "has not run" wording is replaced, since the test has run three times since.
+
+**A check for the estimate,** ported from the draft: `verify/test_load_replay.py` builds the worst case and the
+predicted cost and served turns from `Plan` and `deployed_limits()` and finds both phrases in the run-of-show with its
+line breaks folded. It fails on the old "$1.90" text and passes on this one. `verify/scope-map.yaml` needs no change:
+`test_load_replay.py` already runs on every change.
+
+**Live check.** 2026-11-11 14:22 UTC, with the ai-layer Application on watch-it-burn-community Synced and Healthy at
+staging `a53c340d`: `CONTEXT=watch-it-burn-community python3 verify/test_audience_path_live.py` exited 0. Every check
+PASS: the cluster runs git's console.conf and guard-proxy's PROXY_TIMEOUT 120, TURN_TIMEOUT 270,
+RATE_LIMIT_SESSION_RPM 10, RATE_LIMIT_RPM 150 and COST_CAP_USD 25; 10 of 12 sends in one conversation got through and
+the other 2 were refused in a sentence naming 10 a minute per conversation; all 80 fresh conversations sent at once
+from one address got through nginx, which refused none; the probe turn was answered in 3.7 s. It changes nothing on
+the cluster. The #644 load replays were not rerun; nothing here changes what they test.
+
+No dependency was added.
