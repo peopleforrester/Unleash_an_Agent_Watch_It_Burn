@@ -52677,3 +52677,90 @@ span in Whitney's org under burritobot-public, which the post-talk purge deletes
 neither is no hit; the fake org answers only the narrowed query; and the cap check names how many spans were read.
 With the old cluster-only query put back, the test fails, and with `@events:*` taken out of the query, it fails on
 two checks. The Agent Observability scan is unchanged: it read 23,813, also under half the cap.
+## 2026-11-11 · #1337 · run 20296 · The eight 502 and 504 turns never reached guard-proxy: its listen queue of 5 overflowed while it sat at its 250m CPU limit
+
+**The question.** Run 20287 (#1334) ran #644's 500-phone replay twice at attackme.burritobot.co on
+watch-it-burn-community, and eight turns came back 502 or 504 15 to 60 s after they were sent, in the seconds after
+guard-proxy's 150-a-minute cluster window reopened. guard-proxy's log named none of them. #1337 asked for each turn's
+cause, from the logs and traces, and for a fix or proof that the phone read a sentence.
+
+**Where each turn ended.** Run 20296 read the console's nginx log (access and error lines, both on the pod's stdout
+and stderr), guard-proxy's log and workshop-agent's log from 06:28 UTC, about 20 minutes after the replays, with every
+pod still the one that served them. Each of the eight is in nginx's error log, matched to its session by send time
+plus latency from run 20287's replay output (within 50 ms each):
+
+    session                       sent          after    nginx at       nginx's error line
+    wib-load-202611110630-0155    06:31:18.646  18.10 s  06:31:36.710   recv() failed (104: Connection reset by peer) while reading response header from upstream
+    wib-load-202611110630-0478    06:31:20.092  16.65 s  06:31:36.710   recv() failed (104: Connection reset by peer) while reading response header from upstream
+    wib-load-202611110630-0230    06:31:22.390  16.90 s  06:31:39.260   recv() failed (104: Connection reset by peer) while reading response header from upstream
+    wib-load-202611110635-0167    06:37:06.342  15.99 s  06:37:22.300   recv() failed (104: Connection reset by peer) while reading response header from upstream
+    wib-load-202611110635-0468    06:37:07.392  14.95 s  06:37:22.311   recv() failed (104: Connection reset by peer) while reading response header from upstream
+    wib-load-202611110635-0472    06:37:06.665  20.80 s  06:37:27.430   recv() failed (104: Connection reset by peer) while reading response header from upstream
+    wib-load-202611110635-0328    06:37:06.697  20.76 s  06:37:27.431   recv() failed (104: Connection reset by peer) while reading response header from upstream
+    wib-load-202611110635-0145    06:37:08.182  60.31 s  06:38:08.457   upstream timed out (110: Operation timed out) while connecting to upstream
+
+The two pairs answered within 11 ms and 2 ms of each other cannot be told apart by time, but both lines of each pair
+carry the same error, so every turn has its cause. nginx answered all eight itself: the access log's bodies are 123
+bytes (`@chat_kitchen_down`'s 502) and 147 bytes (`@chat_kitchen_slow`'s 504), where guard-proxy's own 502 body is
+130 bytes, and guard-proxy logged no `forward_error`, `turn_timeout` or broken pipe on any POST in those minutes. The
+504 is nginx's default 60 s `proxy_connect_timeout`: the console's `/chat` sets only the read timeout.
+
+**Why guard-proxy did not take them.** proxy.py serves with the stdlib's `ThreadingHTTPServer`, which listens with
+`request_queue_size` 5. Read inside the guard-proxy pod at 06:57, the pod's network namespace counted 3,227
+`ListenOverflows` and 969 `TCPReqQFullDoCookies` since the pod started at 02:49, and the pod's `somaxconn` reads 4096. A
+connection that finds the accept queue full has its SYN or its final ACK dropped: nginx either waits on SYN
+retries (the 504, which never connected in 60 s) or believes it connected, sends the turn, and is reset when the
+kernel gives up on it (the seven 502s, 15 to 21 s in). The queue was full because the process was not accepting fast
+enough. Datadog (`burritobot-public`, the community cluster's name there) shows guard-proxy's `proxy` container at
+247 mCPU, its 250m limit, in the 15 s intervals stamped 06:31:36 and 06:37:22, throttled in 9.95 and 9.98 periods a
+second (every 100 ms period) with 2.79 and 2.73 s of throttled time a second across its threads, and throttled in
+4.6 to 7.3 periods a second in the intervals either side: the windows of the eight failures. Its memory peaked at 84Mi of 256Mi and its threads at 60. The same minutes have
+the prompt wall's `GET /prompts` and `GET /cost` answered 499 at 06:37:10 to 06:37:30 and guard-proxy's broken pipes
+on three late GETs, a process too slow to answer a read of a few bytes. The pod has 1,655 throttled periods and 267 s
+of throttled time over its life, and 0 restarts.
+
+**A third replay confirmed the shape.** Another run replayed 1,500 turns at the same host from 07:02 to 07:05.
+guard-proxy sat at its limit again (10 throttled periods a second at 07:04:06), and `ListenOverflows` rose from 3,227
+to 4,568. That replay had no failed turn (1,500 answered 200), so an overflow mostly costs a SYN retry of 1 to 3 s,
+and fails a turn only when its connection is dropped long enough.
+
+**What the phone read.** All eight were the console's sentences, not bare status codes. The replay recorded each as
+"chat json, with a reply", and the storefront's `burritbot.html` shows the `reply` of a non-2xx answer: "BurritoBot's
+kitchen isn't answering. Try again in a moment." for the 502s and "BurritoBot's kitchen isn't answering: that one
+took too long. Try again in a moment." for the 504. They are failures the room would see, so the cause is fixed.
+
+**The fix.** In `gitops/ai-layer/resources.yaml`, guard-proxy's Deployment:
+
+- The command runs proxy.py through `python -c` after setting `ThreadingHTTPServer.request_queue_size` to 1024,
+  `runpy.run_path('/app/proxy.py', run_name='__main__')`. proxy.py builds its server as
+  `ThreadingHTTPServer(("0.0.0.0", 8080), Handler)`, so the class attribute reaches it. The pinned proxy.py, run that
+  way on this host with the server bound to a loopback port, reached `serve_forever` with a backlog of 1024. A burst
+  now waits in the queue under nginx's 285 s read timeout instead of being dropped.
+- The CPU limit goes from 250m to 1 CPU. One Python process uses about one core at most, so 1 CPU is the useful
+  ceiling; the request stays 50m, so no cluster's scheduling changes.
+
+The proper home of the backlog is proxy.py itself, in guard-proxy-agenticburn; a follow-up asks for it there, and the
+wrapper goes when a pin carries it. The Go build (#738) replaces the command and listens with net/http's `somaxconn`
+backlog. `verify/test_guard_proxy_go_otel.py`, `verify/test_guard_proxy_spend_store.py` and
+`verify/test_challenge_fallbacks.py` read "runs proxy.py" as the exact command `["python", "/app/proxy.py"]`; they
+now read a python command that names `/app/proxy.py`.
+
+**Live check.** The change touches `gitops/`. On both clusters guard-proxy runs `["python","/app/proxy.py"]` at
+250m today. The rendered Deployment, server-side dry-run applied (`kubectl apply --server-side --dry-run=server`),
+was admitted on watch-it-burn-community (`serverside-applied (server dry run)`); on watch-it-burn-private Kyverno's
+`block-argocd-drift` refused it, as it refuses any change by a principal other than Argo CD. Nothing was changed on
+either cluster.
+
+**Not yet run on a cluster.** After Argo CD syncs this from staging: on watch-it-burn-community, read guard-proxy's
+`ListenOverflows` from `/proc/net/netstat` in its pod, run #644's replay (`verify/load_replay.py
+attackme.burritobot.co --yes --source catalog --users 500` under `verify/guard_lease.py hold`), and read the counter
+again. It should end with 0 turns answered 502 or 504, no new overflows, and guard-proxy's CPU under 1 CPU in
+Datadog (`container.cpu.usage{kube_cluster_name:burritobot-public,kube_container_name:proxy}`).
+
+**Tests.** `verify/test_guard_proxy_backlog.py` (new, offline) reads the Deployment's command and runs it as written,
+with `/app/proxy.py` pointed at a stand-in that builds its server the way proxy.py does and never accepts: under the
+command the server listens with 1024 and takes 64 loopback connections at once; the stand-in alone listens with 5 and
+takes 6, so the probe tells the two apart. It also holds the pinned proxy.py's server line and the 1 CPU floor. It
+passed, as did the three changed tests, `verify/test_scope_tests.py` and `verify/test_test_map.py`.
+
+No dependency was added.

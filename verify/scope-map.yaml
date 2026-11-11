@@ -4915,6 +4915,15 @@ reads:
     - scripts/reload-routes.sh
     - verify/no-cloud.sh
     - verify/no_cloud.py
+  test_guard_proxy_backlog.py:
+    - .gitmodules
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - images/llm-guard
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/ensure-submodules.sh
+    - verify/git_mirror.py
   test_guard_proxy_go_otel.py:
     - gitops/ai-layer
     - gitops/ai-layer-otel
