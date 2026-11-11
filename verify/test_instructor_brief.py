@@ -4,7 +4,7 @@
 
 The brief was two numbered passes and a handoff: the first with nothing on, the second with the same
 prompts and the guardrails flipped, then a hand-off to the students. Every part of that is now wrong.
-Rounds are retired fleet-wide, and the guardrails-on contrast is no longer a demo the presenters perform: it
+Rounds are retired fleet-wide, and the guardrails-k8s-on contrast is no longer a demo the presenters perform: it
 is the thing each student does on their own cluster, one control at a time.
 
 This is the one page where being stale is most expensive. A student reading an out-of-date lab page is
@@ -259,11 +259,11 @@ for b in SHOWN_BEATS:
               'class="prompt"' in blk and 'class="cp"' in blk)
         check(f"{b} block {i} has a success marker", 'class="marker"' in blk)
 
-# The toggles, where one applies, on the private terminal, each inside its beat's block: guardrails-on in segment 3's
+# The toggles, where one applies, on the private terminal, each inside its beat's block: guardrails-k8s-on in segment 3's
 # switch beat (#774), C6 and C7 in segments 4 and 5, the on-topic guard in segment 6. C5 has none since the 2026-11-01
 # review (#776): Challenge 1 runs no fix of its own, and its RBAC arms with segment 3's switch. C1, C2, C3 and the
 # off-topic beat have no toggle of their own either: the switch arms all four Kubernetes guardrails at once.
-BEAT_TOGGLE = {"guardrails": "guardrails-on", "C6": "guard-input-on", "C7": "guard-mcp-on", "on-topic": "guard-topic-on"}
+BEAT_TOGGLE = {"guardrails": "guardrails-k8s-on", "C6": "guardrails-input-on", "C7": "guardrails-mcp-on", "on-topic": "guardrails-topic-on"}
 for b, cmd in BEAT_TOGGLE.items():
     in_a_block = any(f'class="toggle"' in blk and cmd in blk for blk in beat_blocks.get(b, []))
     check(f"{b} carries its toggle ({cmd}) inside the beat block", in_a_block)
@@ -340,14 +340,16 @@ for b, n in (("C5", 1), ("C6", 3), ("C7", 4)):
     # Datadog Challenge N tab (#1249), as the run-of-show's Night Before step "Seed the stage's Datadog traces" says.
     check(f"{b} reaches its trace by the seed's session id, wib-stage-c{n}-attack-<stamp>, on Past 7 Days",
           f"<code>wib-stage-c{n}-attack-&lt;stamp&gt;</code> on Past 7 Days" in " ".join(blk.split()))
-# The 2026-11-01 review (#776): Challenge 1 runs no fix of its own; RBAC arms with segment 3's guardrails-on (#774).
+# The 2026-11-01 review (#776): Challenge 1 runs no fix of its own; RBAC arms with segment 3's guardrails-k8s-on (#774).
 # The output guard is still not a fix for it (Michael, 2026-10-31).
 _c5 = " ".join(" ".join(beat_blocks.get("C5", [])).split())
-check("Challenge 1 runs no fix: no toggle in its block, no guard-rbac-on, and no output guard",
-      'class="toggle"' not in _c5 and "guard-rbac-on" not in _c5 and "guard-output-on" not in _c5)
-check("Challenge 1 says there is no fix here and that RBAC arms with Challenge 2's guardrails-on",
-      "No fix here (#776)" in _c5 and "RBAC arms with Challenge 2's <code>guardrails-on</code>" in _c5)
-check("the stage no longer runs guard-rbac-on anywhere on the page", "guard-rbac-on" not in KUBECON)
+check("Challenge 1 runs no fix: no toggle in its block, no guardrails-rbac-on, and no output guard",
+      'class="toggle"' not in _c5 and not any(n in _c5 for n in ("guardrails-rbac-on", "guard-rbac-on",
+                                                                    "guardrails-output-on", "guard-output-on")))
+check("Challenge 1 says there is no fix here and that RBAC arms with Challenge 2's guardrails-k8s-on",
+      "No fix here (#776)" in _c5 and "RBAC arms with Challenge 2's <code>guardrails-k8s-on</code>" in _c5)
+check("the stage no longer runs guardrails-rbac-on (or its old name) anywhere on the page",
+      "guardrails-rbac-on" not in KUBECON and "guard-rbac-on" not in KUBECON)
 # The deck opens the 2026 edition since rounds 4627d95 (rounds-agenticburn#172, #1348), where Excessive Agency is LLM03.
 check("Challenge 1 ends on the OWASP GenAI LLM Top 10 2026, naming LLM02 and LLM03, as the run-of-show's segment 2 does",
       'href="https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/"' in _c5
@@ -355,7 +357,7 @@ check("Challenge 1 ends on the OWASP GenAI LLM Top 10 2026, naming LLM02 and LLM
       and "<b>LLM03</b> Excessive Agency" in _c5 and "genai.owasp.org/resource/owasp-genai-llm-top-10-2026/" in ROS
       and "genai.owasp.org/llm-top-10/" not in ROS)
 # Each challenge's trace comes right after the presenters' live attack and before its fix (#818).
-for b, n, fix in (("C5", 1, None), ("C6", 3, "guard-agency-on"), ("C7", 4, "guard-mcp-on")):
+for b, n, fix in (("C5", 1, None), ("C6", 3, "guardrails-agency-on"), ("C7", 4, "guardrails-mcp-on")):
     blk = " ".join(" ".join(beat_blocks.get(b, [])).split())
     tab = "The trace, after the attack"
     check(f"{b}'s private-bot attack marker comes before its trace, The trace, after the attack",
@@ -381,11 +383,11 @@ check("Challenge 3's fixed and PII seeds are found by their own session ids, c3-
       "<code>wib-stage-c3-fixed-&lt;stamp&gt;</code>" in _flat_page
       and "<code>service:burritobot @session.id:wib-stage-c3-pii-&lt;stamp&gt;</code> on Past 7 Days" in _flat_page
       and "@session.id:wib-stage-c3-pii-<stamp>" in ROS)
-check("Challenge 3's trace comes before its fix, guard-agency-on, and the attack's seed before the fixed one",
+check("Challenge 3's trace comes before its fix, guardrails-agency-on, and the attack's seed before the fixed one",
       _before(_flat_page, "wib-stage-c3-attack-&lt;stamp&gt;", "wib-stage-c3-fixed-&lt;stamp&gt;"))
-check("Challenge 3 runs least privilege as guard-agency-on, and admission is not one of its fixes (#775)",
-      "guard-agency-on" in " ".join(beat_blocks.get("C6", []))
-      and "guard-admission-on" not in " ".join(beat_blocks.get("C6", [])))
+check("Challenge 3 runs least privilege as guardrails-agency-on, and admission is not one of its fixes (#775)",
+      "guardrails-agency-on" in " ".join(beat_blocks.get("C6", []))
+      and not any(n in " ".join(beat_blocks.get("C6", [])) for n in ("guardrails-admission-on", "guard-admission-on")))
 print("== the per-challenge pattern and the OWASP close (#687) ==")
 # Since the 2026-11-01 slide-by-slide review (#776, #818) the room tries first and each trace follows the
 # presenters' attack; the page's pattern line follows the run-of-show's numbered pattern (#848).
@@ -410,7 +412,7 @@ check("and the run-of-show's numbered pattern runs in the same order",
 check("the KubeCon opening carries no deleted-cluster story (#740)",
       "deleted-cluster" not in KUBECON and "Cold open" not in KUBECON
       and "deleted-cluster hook" not in ROS and "### Segment 1: Opening" in ROS)
-# Since the 2026-11-01 review (#776, #820, #821) segment 2 runs no fix, and segment 3's guardrails-on (#774) turns
+# Since the 2026-11-01 review (#776, #820, #821) segment 2 runs no fix, and segment 3's guardrails-k8s-on (#774) turns
 # all four Kubernetes layers on together, RBAC among them. The cut table's rows follow that flow (#847).
 _CUT_ROW_ANCHORS = ("| Challenge 1, the CEO's record (", "| Challenge 2, the Kubernetes catch-all (")
 _cut_rows = {a: next((ln for ln in ROS.splitlines() if ln.startswith(a)), None) for a in _CUT_ROW_ANCHORS}
@@ -418,15 +420,15 @@ for _a, _row in _cut_rows.items():
     if _row is None:
         sys.exit(f"anchor {_a!r} is not a row in facilitation/kubecon-na-2026-run-of-show.md: reword the test with it")
 _cut1, _cut2 = (_cut_rows[a] for a in _CUT_ROW_ANCHORS)
-check("Challenge 1's cut-table row runs no fix in segment 2, has RBAC arrive with guardrails-on, and offers no "
+check("Challenge 1's cut-table row runs no fix in segment 2, has RBAC arrive with guardrails-k8s-on, and offers no "
       "output guard (#739, #847)",
-      "output guard optional" not in ROS and "no fix in segment 2" in _cut1 and "`guardrails-on`" in _cut1
-      and "no output guard" in _cut1 and "guard-rbac-on" not in _cut1)
-check("Challenge 2's cut-table row has guardrails-on turn on all four layers, not name them untoggled (#847)",
-      "`guardrails-on`" in _cut2 and all(w in _cut2 for w in ("RBAC", "Kyverno", "KubeArmor", "NetworkPolicy"))
+      "output guard optional" not in ROS and "no fix in segment 2" in _cut1 and "`guardrails-k8s-on`" in _cut1
+      and "no output guard" in _cut1 and "guardrails-rbac-on" not in _cut1 and "guard-rbac-on" not in _cut1)
+check("Challenge 2's cut-table row has guardrails-k8s-on turn on all four layers, not name them untoggled (#847)",
+      "`guardrails-k8s-on`" in _cut2 and all(w in _cut2 for w in ("RBAC", "Kyverno", "KubeArmor", "NetworkPolicy"))
       and "not toggled" not in _cut2)
 
-print("== Challenge 2 starts with the four Kubernetes guardrails off and ends on guardrails-on (#774, #821) ==")
+print("== Challenge 2 starts with the four Kubernetes guardrails off and ends on guardrails-k8s-on (#774, #821) ==")
 _seg3 = " ".join(KUBECON.split('<span class="n">SEGMENT 3', 1)[1].split('<span class="n">SEGMENT 4', 1)[0].split())
 _ros_s3 = " ".join(ROS.split("### Segment 3:", 1)[1].split("### Segment 4:", 1)[0].split())
 _sw = " ".join(" ".join(beat_blocks.get("guardrails", [])).split())
@@ -437,20 +439,20 @@ check("the setup says both clusters start with the four Kubernetes guardrails of
       and "Both clusters start with the four Kubernetes guardrails present and off" in _ros_s3)
 for b in ("C2", "C3", "C1"):
     blk = " ".join(" ".join(beat_blocks.get(b, [])).split())
-    check(f"{b}'s marker lands on either bot before the switch and is stopped after guardrails-on",
-          _before(blk, "Before the switch, on either bot", "After <code>guardrails-on</code>"))
+    check(f"{b}'s marker lands on either bot before the switch and is stopped after guardrails-k8s-on",
+          _before(blk, "Before the switch, on either bot", "After <code>guardrails-k8s-on</code>"))
 check("Whitney's attack and its trace come after the three asks and before the switch, and name #843",
       _before(_seg3, 'data-beat="C1"', "Whitney's attack, then its trace")
       and _before(_seg3, "Whitney's attack, then its trace", 'data-beat="guardrails"') and "(#843)" in _seg3
       and "#843" in ROS)
-check("the switch beat runs guardrails-on, ends on its own last line, and the room retries Challenges 1 and 2",
-      'class="toggle"' in _sw and "guardrails-on" in _sw and 'class="marker"' in _sw and 'class="fallback"' in _sw
+check("the switch beat runs guardrails-k8s-on, ends on its own last line, and the room retries Challenges 1 and 2",
+      'class="toggle"' in _sw and "guardrails-k8s-on" in _sw and 'class="marker"' in _sw and 'class="fallback"' in _sw
       and "all four Kubernetes guardrails are on." in _sw and "the room retries Challenges 1 and 2" in _sw
       and "all four Kubernetes guardrails are $st." in TERMINAL)
 # Slide 28's 2026-11-07 text, then slide 29's retry (rounds-agenticburn#77, #1095).
-check("the run-of-show's segment 3 runs the same switch from slide 28's link, names it guardrails-on, and retries on 30",
+check("the run-of-show's segment 3 runs the same switch from slide 28's link, names it guardrails-k8s-on, and retries on 30",
       "> Let's turn on Kubernetes guardrails." in ROS.split("### Segment 3:", 1)[1].split("### Segment 4:", 1)[0]
-      and "That command is `guardrails-on`" in _ros_s3
+      and "That command is `guardrails-k8s-on`" in _ros_s3
       and "`https://burritobot-private.burritobot.co/lab`" in _ros_s3
       and "> Try your attacks again." in ROS.split("### Segment 3:", 1)[1].split("### Segment 4:", 1)[0]
       and "reset your bot and use your saved prompts" in _ros_s3)
@@ -473,7 +475,7 @@ for _h, _line, _fb in _sets:
     check(f"the set {_h.strip('*')} quotes its slide's line and keeps its fallback",
           _h in _step6 and _line in _blk and _fb in _blk)
 # Each set recalls its attack on its first slide, names the fix on the next, then shows the YAML, and the YAML it
-# describes is the YAML guardrails-on applies (#1111). Every literal read here is checked first, by name.
+# describes is the YAML guardrails-k8s-on applies (#1111). Every literal read here is checked first, by name.
 _STEP6_ANCHOR = "6. **One set per guardrail (slides 30 to 42).**"
 if _STEP6_ANCHOR not in _ros_s3 or "**Delivers:**" not in _ros_s3.split(_STEP6_ANCHOR, 1)[1]:
     sys.exit(f"anchor {_STEP6_ANCHOR!r} or the **Delivers:** after it is not in segment 3 of "
@@ -531,7 +533,7 @@ check("the Kyverno and KubeArmor sets say their notes name the product the slide
 
 
 def _fix_doc(name: str) -> str:
-    """The first YAML document of one challenge-fixes ConfigMap file that guardrails-on applies, by its key."""
+    """The first YAML document of one challenge-fixes ConfigMap file that guardrails-k8s-on applies, by its key."""
     key = f"\n  {name}: |\n"
     if key not in RES:
         sys.exit(f"anchor {key.strip()!r} is not in gitops/ai-layer/resources.yaml: reword the test with it")
@@ -544,9 +546,9 @@ def _secrets_rule(role: str) -> str:
 
 
 _broad, _scoped = _secrets_rule(_fix_doc("c8-broad-role.yaml")), _secrets_rule(_fix_doc("c5-scoped-role.yaml"))
-check("slide 32's rule is guardrails-off's Role: get and list on every Secret, no resourceNames",
+check("slide 32's rule is guardrails-k8s-off's Role: get and list on every Secret, no resourceNames",
       'verbs: ["get", "list"]' in _broad and "resourceNames" not in _broad)
-check("slide 33's rule is guardrails-on's Role: get on the workshop-agent Secret alone",
+check("slide 33's rule is guardrails-k8s-on's Role: get on the workshop-agent Secret alone",
       'resourceNames: ["workshop-agent"]' in _scoped and 'verbs: ["get"]' in _scoped
       and '"list"' not in _scoped and "c5-scoped-role.yaml" in TERMINAL and "c8-broad-role.yaml" in TERMINAL)
 _DER = (REPO / "policies/kyverno-breakout/deny-external-registries.yaml").read_text(encoding="utf-8")
@@ -555,17 +557,17 @@ check("slide 36's rule is deny-external-registries, which admits registry.burrit
       "name: deny-external-registries" in _DER and "expression: \"'registry.burritobot.co/'\"" in _DER
       and "message: >-" in _DER and "deny-external-registries" in TERMINAL)
 _ka = _fix_doc("c3-kubearmor-policy.yaml")
-check("slide 39's policy is the block-recipe-snoop guardrails-on applies: the legacy dir, recursive, Block",
+check("slide 39's policy is the block-recipe-snoop guardrails-k8s-on applies: the legacy dir, recursive, Block",
       "name: block-recipe-snoop" in _ka and "- dir: /tmp/burrito-data/config/legacy/" in _ka
       and "recursive: true" in _ka and "action: Block" in _ka and "c3-kubearmor-policy.yaml" in TERMINAL)
 _np = _fix_doc("c1-network-policy.yaml")
-check("slide 42's policy is the agent-egress-allowlist guardrails-on applies: every pod in agent, to 10.0.0.0/16",
+check("slide 42's policy is the agent-egress-allowlist guardrails-k8s-on applies: every pod in agent, to 10.0.0.0/16",
       "name: agent-egress-allowlist" in _np and "namespace: agent" in _np and "podSelector: {}" in _np
       and "cidr: 10.0.0.0/16" in _np and "0.0.0.0/0" not in _np and "c1-network-policy.yaml" in TERMINAL)
 check("the run-of-show no longer has one slide per guardrail or the four slides",
       "one slide per guardrail" not in " ".join(ROS.split()).lower() and "its four slides" not in " ".join(ROS.split()))
 # The page's segment 3 follows the run-of-show's steps 5 and 6 (#1096): slide 28's text, clicked to open the admin
-# terminal, then guardrails-on; slide 29's retry from saved prompts; then one set per guardrail on slides 30 to 42,
+# terminal, then guardrails-k8s-on; slide 29's retry from saved prompts; then one set per guardrail on slides 30 to 42,
 # with Kyverno shown as an admission policy and KubeArmor as runtime security, as the slides name them.
 _S28, _S29 = "Let's turn on Kubernetes guardrails.", "Try your attacks again."
 _SET_RANGES = (("RBAC", "30 to 33"), ("Kyverno", "34 to 36"), ("KubeArmor", "37 to 39"), ("NetworkPolicy", "40 to 42"))
@@ -575,11 +577,11 @@ if _premise_m is None:
 _premise = _premise_m.group(1)
 check("the run-of-show's step 6 sets cover the slide ranges the page names",
       all(f"{n}, " in _step6 and f"slides {r}.**" in _step6 for n, r in _SET_RANGES))
-check("the page's segment 3 summary names slide 28's text, clicked to the admin terminal, then guardrails-on",
+check("the page's segment 3 summary names slide 28's text, clicked to the admin terminal, then guardrails-k8s-on",
       f'slide 28, "{_S28}"' in _premise and "<code>https://burritobot-private.burritobot.co/lab</code>" in _premise
-      and _before(_premise, f'"{_S28}"', "clicks it and types <code>guardrails-on</code>"))
+      and _before(_premise, f'"{_S28}"', "clicks it and types <code>guardrails-k8s-on</code>"))
 check("then slide 29's retry from the room's saved prompts, then one set per guardrail on slides 30 to 42",
-      _before(_premise, "<code>guardrails-on</code>", f'slide 29, "{_S29}"')
+      _before(_premise, "<code>guardrails-k8s-on</code>", f'slide 29, "{_S29}"')
       and "resets its bot and retries its saved prompts" in _premise
       and _before(_premise, f'"{_S29}"', "one set per guardrail on slides 30 to 42"))
 check("the summary names each set's slides, in the deck's order, Kyverno as an admission policy and KubeArmor as "
@@ -687,10 +689,10 @@ check("so the close maps LLM03 to Challenges 1 to 4 in the run-of-show and on th
 # table (rounds-agenticburn) is the copy that follows.
 _page_seg4 = " ".join(KUBECON.split('<span class="n">SEGMENT 4', 1)[1].split('<span class="n">SEGMENT 5', 1)[0].split())
 check("and Challenge 3's least-privilege fix is named LLM03, Excessive Agency, on the page too (#849, #1348)",
-      "guard-agency-on</code>, takes Deployments away from the bot (OWASP LLM03, Excessive Agency)" in _page_seg4)
+      "guardrails-agency-on</code>, takes Deployments away from the bot (OWASP LLM03, Excessive Agency)" in _page_seg4)
 # C6's two fixes are shown in one order on both pages (#775): HC-666's image is the internal registry's, which
 # Kyverno trusts, so the Joker lands with the guardrails on. Least privilege comes first, so the private bot's
-# deploy_app is Forbidden before guard-input-on, and after the toggle there is no deploy_app call left to refuse.
+# deploy_app is Forbidden before guardrails-input-on, and after the toggle there is no deploy_app call left to refuse.
 # That is the order the probe runs (verify/kubecon_probe.py).
 _ros_seg3 = ROS.split("### Segment 4:", 1)[1].split("### Segment 5:", 1)[0]
 _ros_fix = " ".join(_ros_seg3.split("- **Fix, two AI-era layers", 1)[1].split("\n- **", 1)[0].split())
@@ -700,21 +702,22 @@ _c6 = " ".join(" ".join(beat_blocks.get("C6", [])).split())
 _premise = _page_seg3.split('<p class="premise">', 1)[1].split("</p>", 1)[0] if '<p class="premise">' in _page_seg3 else ""
 
 
-check("the run-of-show's Challenge 3 row puts guard-agency-on before guard-input-on",
-      _before(_ros_row3, "`guard-agency-on`", "`guard-input-on`") and "guard-admission-on" not in _ros_row3)
-check("the run-of-show's C6 fix says admission is not one of them, shows the Forbidden, then guard-input-on",
-      _before(_ros_fix, "admission is not one of them", "Run `guard-agency-on`")
-      and _before(_ros_fix, "the Kubernetes API answers Forbidden", "Then `guard-input-on`"))
+check("the run-of-show's Challenge 3 row puts guardrails-agency-on before guardrails-input-on",
+      _before(_ros_row3, "`guardrails-agency-on`", "`guardrails-input-on`")
+      and "guardrails-admission-on" not in _ros_row3 and "guard-admission-on" not in _ros_row3)
+check("the run-of-show's C6 fix says admission is not one of them, shows the Forbidden, then guardrails-input-on",
+      _before(_ros_fix, "admission is not one of them", "Run `guardrails-agency-on`")
+      and _before(_ros_fix, "the Kubernetes API answers Forbidden", "Then `guardrails-input-on`"))
 check("the run-of-show names least privilege OWASP LLM03, Excessive Agency",
       "OWASP LLM03, Excessive Agency" in _ros_fix)
 check("the run-of-show says HC-666's deployment lands with Kyverno at Deny, from a registry it trusts",
       "Kyverno is at Deny on both clusters by now and admits it" in " ".join(_ros_seg3.split()))
-check("the page's C6 premise puts least privilege before guard-input-on, and says Kyverno trusts the image",
-      _before(_premise, "guard-agency-on", "guard-input-on") and "the internal registry Kyverno trusts" in _premise)
-check("the page's C6 block runs guard-agency-on, shows the Forbidden, then guard-input-on, then the withheld ticket",
-      _before(_c6, "guard-agency-on", "answers Forbidden")
-      and _before(_c6, "answers Forbidden", "guard-input-on")
-      and _before(_c6, "guard-input-on", "[input guard] withheld"))
+check("the page's C6 premise puts least privilege before guardrails-input-on, and says Kyverno trusts the image",
+      _before(_premise, "guardrails-agency-on", "guardrails-input-on") and "the internal registry Kyverno trusts" in _premise)
+check("the page's C6 block runs guardrails-agency-on, shows the Forbidden, then guardrails-input-on, then the withheld ticket",
+      _before(_c6, "guardrails-agency-on", "answers Forbidden")
+      and _before(_c6, "answers Forbidden", "guardrails-input-on")
+      and _before(_c6, "guardrails-input-on", "[input guard] withheld"))
 check("the page names the before-toggle marker least privilege and the after-toggle one the input guard",
       _before(_c6, "before the toggle (least privilege)", "after the toggle (the input guard)"))
 check("C6's least-privilege fallback asks the API whether workshop-mcp may create Deployments, without the model",
@@ -778,9 +781,10 @@ check("a glance table lists the six segments in order",
       and re.findall(r"<tr><td>(\d)</td>", _glance.group(1)) == ["1", "2", "3", "4", "5", "6"])
 check("it names each challenge's toggle, and Challenge 1 has none",
       _glance is not None and all(t in _glance.group(1) for t in
-                                  ("guardrails-on", "guard-agency-on", "guard-input-on", "guard-mcp-on",
-                                   "guard-topic-on"))
-      and "guard-rbac-on" not in _glance.group(1) and "none: no fix here" in _glance.group(1))
+                                  ("guardrails-k8s-on", "guardrails-agency-on", "guardrails-input-on", "guardrails-mcp-on",
+                                   "guardrails-topic-on"))
+      and "guardrails-rbac-on" not in _glance.group(1) and "guard-rbac-on" not in _glance.group(1)
+      and "none: no fix here" in _glance.group(1))
 _glance_min = [(int(n), int(m)) for n, m in re.findall(r"<tr><td>(\d)</td><td>(\d+)</td>", _glance.group(1))] \
     if _glance else []
 check(f"its minutes are the run-of-show's (glance {_glance_min})", _glance_min == ros_segments)
@@ -796,7 +800,7 @@ check("every prompt and toggle stays visible",
 # 2,100 since #773: Challenge 2's ask is the 2026-11-01 Tron prompt and its follow-up, word for word (83 words,
 # where the promo-mascot prompt was 41; #1105 cut the follow-up and the ticket number, about 16 words), and its marker was cut to one line to make room. 2,300 since #844: the
 # 2026-11-01 flow adds a visible cue per challenge for the presenters' attack and its trace, Challenge 1's close on
-# the OWASP page, Challenge 2's before-and-after markers and its guardrails-on switch beat; the story, notes and
+# the OWASP page, Challenge 2's before-and-after markers and its guardrails-k8s-on switch beat; the story, notes and
 # fallbacks added with them are folded. 2,400 since #952: C3's recipe read is now the conversational recon-then-attack
 # pair (#925), so it carries a second copy-ready prompt and a second success marker where it had one of each; the two
 # markers are cut terse to hold the growth to the recon prompt itself. 2,450 since #1096: the 2026-11-07 deck closes

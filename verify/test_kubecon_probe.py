@@ -2251,15 +2251,15 @@ ROS_PATH = REPO / "facilitation/kubecon-na-2026-run-of-show.md"
 STAGE_ANCHORS = {
     (kp.PLAY, "Challenge 1"): ("2", "Challenge 1: the two-slide tee-up"),
     (kp.PLAY, "Challenge 2"): ("3", "Challenge 2, the Kubernetes catch-all"),
-    (kp.SWITCH, "guardrails-on"): ("3", "`guardrails-on` arms RBAC"),
+    (kp.SWITCH, "guardrails-on"): ("3", "`guardrails-k8s-on` arms RBAC"),
     (kp.RETRY, "Challenge 1"): ("3", '"Try your attacks again." (slide 29)'),
     (kp.RETRY, "Challenge 2"): ("3", '"Try your attacks again." (slide 29)'),
     (kp.PLAY, "Challenge 3"): ("4", "| Challenge 3, "),
-    (kp.SWITCH, "guard-agency-on"): ("4", "`guard-agency-on`, then"),
-    (kp.SWITCH, "guard-input-on"): ("4", "`guard-input-on`, run on the private bot"),
+    (kp.SWITCH, "guard-agency-on"): ("4", "`guardrails-agency-on`, then"),
+    (kp.SWITCH, "guard-input-on"): ("4", "`guardrails-input-on`, run on the private bot"),
     (kp.RETRY, "Challenge 3"): ("4", '"Try your attack again."'),
     (kp.PLAY, "Challenge 4"): ("5", "| Challenge 4, "),
-    (kp.SWITCH, "guard-mcp-on"): ("5", "`guard-mcp-on` on the private bot"),
+    (kp.SWITCH, "guard-mcp-on"): ("5", "`guardrails-mcp-on` on the private bot"),
     (kp.RETRY, "Challenge 4"): ("5", '"Try your attack again."'),
 }
 _ros_text = ROS_PATH.read_text(encoding="utf-8")
@@ -2806,9 +2806,9 @@ check("Night Before runs the probe on the private cluster the presenters share",
 check("Night Before says it must end KUBECON PROBE GREEN", "KUBECON PROBE GREEN" in nb)
 check("Night Before counts the community run's 10 model calls and the admin run's 14, under the default of 23",
       "(default 23): a community run makes 10 model calls, an admin run 14" in nb)
-check("Night Before runs no guard-rbac-on: Challenge 1's retry comes after guardrails-on, probe and seed alike (#855)",
-      "guard-rbac-on" not in nb and "C5 asked again and out of reach" in nb
-      and "`c1-fixed`, is the CEO ask sent again after\n  `guardrails-on`" in nb)
+check("Night Before runs no rbac switch: Challenge 1's retry comes after guardrails-k8s-on, probe and seed alike (#855)",
+      "guard-rbac-on" not in nb and "guardrails-rbac-on" not in nb and "C5 asked again and out of reach" in nb
+      and "`c1-fixed`, is the CEO ask sent again after\n  `guardrails-k8s-on`" in nb)
 
 print("== the stage promises what the probe proves (#530) ==")
 beat2 = re.sub(r"\s+", " ", brief.split("<h3>2. A reason it likes</h3>", 1)[1].split('<div class="note">', 1)[0])
@@ -3531,17 +3531,19 @@ def community_c4_listed_checks() -> None:
     step = between(nb, "**Every shown beat works, on the clusters that will be on stage (#503).**",
                    "- Every prompt it sends carries guard-proxy's probe marker", ros_path)
     community = between(step, "- Community (segments 1 to 5):", "- Admin: the kube-context", ros_path)
-    wanted = ["`guardrails-on`", "HC-666", "then `guard-agency-on` and `guard-input-on`, each run in the private terminal",
+    # The run-of-show names the switches by their #1350 names (#1352); the probe still types the old ones, aliases.
+    wanted = ["`guardrails-k8s-on`", "HC-666",
+              "then `guardrails-agency-on` and `guardrails-input-on`, each run in the private terminal",
               "reaching the public bot since #1132",
               "then Challenge 4's `/kubecon` weather ask sent once to the public bot with the four Kubernetes "
-              "guardrails and both fixes on", "(#1129)", "`guard-input-off`, `guard-mcp-off` and `guardrails-off`"]
+              "guardrails and both fixes on", "(#1129)", "`guardrails-input-off`, `guardrails-mcp-off` and `guardrails-k8s-off`"]
     check("the Night Before step's community entry lists guard-agency-on and guard-input-on from the private "
           "terminal, then Challenge 4's /kubecon ask with both fixes on, in the run's order",
           not out_of_order(community, wanted), f"missing or out of order: {out_of_order(community, wanted)}\n        {community}")
     check("the Night Before step's stage-state note puts Challenge 4 after guard-agency-on and guard-input-on, "
           "with the four and both of those on",
           not out_of_order(step, ["the room's Challenge 3 attempt with the four Kubernetes guardrails on and "
-                                  "`guard-agency-on` and `guard-input-on` still off",
+                                  "`guardrails-agency-on` and `guardrails-input-on` still off",
                                   "Challenge 4 with the four and both of those on"]), step[:600])
 
     # The checker itself fails when a beat goes or moves: each of these edits of the real entries is caught.
@@ -3551,8 +3553,8 @@ def community_c4_listed_checks() -> None:
         ("the docstring entry without the Challenge 4 ask", beats.replace("Challenge 4's /kubecon weather ask", "a weather ask"),
          ["Challenge 4's /kubecon weather ask chaining the rogue tool with those on"]),
         ("the Night Before entry with Challenge 4 ahead of the fixes",
-         community.replace("then `guard-agency-on` and `guard-input-on`, each run in the private terminal", "")
-         + " then `guard-agency-on` and `guard-input-on`, each run in the private terminal",
+         community.replace("then `guardrails-agency-on` and `guardrails-input-on`, each run in the private terminal", "")
+         + " then `guardrails-agency-on` and `guardrails-input-on`, each run in the private terminal",
          ["reaching the public bot since #1132"]),
     ]
     for label, text, missing in mutations:

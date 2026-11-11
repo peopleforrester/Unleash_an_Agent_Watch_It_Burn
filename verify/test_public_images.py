@@ -3,7 +3,7 @@
 """Why this exists (#773, Michael's approval 2026-11-01; #991, Michael and Whitney in person, 2026-11-06).
 
 The breakout room has only phones. Challenge 2's lesson is the untrusted source: the room gets BurritoBot to deploy an
-image off the public internet while the guardrails are off, and Kyverno refuses it once guardrails-on runs. Until #991
+image off the public internet while the guardrails are off, and Kyverno refuses it once guardrails-k8s-on runs. Until #991
 deploy_app stopped the room before Kyverno could: a six-image list (#773, gone with #992), a Docker Hub rewrite and
 refusal (#714), and a name-only manifest served on nginx (#939), so "deploy Tron" reported success and ran nginx. Now
 the image the manifest names reaches the apply exactly as written, from any registry, Docker Hub included, and a
@@ -204,7 +204,7 @@ check("and that requested_by is the name the person chatting gave", "requested_b
 check("images.lock keeps no row for the landing nginx or the old pins", not [
       r for r in lock if r.startswith("public.ecr.aws/docker/library/")], str([r for r in lock if "docker/library" in r]))
 
-print("== restrict-image-registries refuses every game, so the platform says no after guardrails-on ==")
+print("== restrict-image-registries refuses every game, so the platform says no after guardrails-k8s-on ==")
 policy = yaml.safe_load((REPO / "policies/kyverno/restrict-image-registries.yaml").read_text())
 vars_ = {v["name"]: v["expression"] for v in policy["spec"]["variables"]}
 allowed = re.findall(r"'([^']+)'", vars_["allowedRegistries"])
@@ -548,15 +548,15 @@ marker = re.search(r'<div class="marker">(.*?)</div>', beat, re.S)
 marker = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", marker.group(1))) if marker else ""
 check("the marker reads open before the switch: any image the bot picks lands (#993)",
       "Before the switch, on either bot, any image the bot picks lands" in marker, marker)
-check("and refused at admission by both registry policies after guardrails-on",
-      "After guardrails-on: refused at admission by Kyverno, restrict-image-registries and deny-external-registries"
+check("and refused at admission by both registry policies after guardrails-k8s-on",
+      "After guardrails-k8s-on: refused at admission by Kyverno, restrict-image-registries and deny-external-registries"
       in marker, marker)
 check("the beat lists none of the old six as the images deploy_app pulls by name", not OLD_LIST.search(beat)
       and not re.search(r"[Ss]ix[- ]image|[Cc]urated list|PUBLIC_IMAGES", beat))
 check("and says nothing of a public.ecr.aws rewrite or a landing nginx (#991)",
       not re.search(r"public\.ecr\.aws|pinned nginx|landing page on", beat), beat[:300])
 
-print("== the run-of-show's Segment 3 and the system prompt read Challenge 2 as open until guardrails-on (#993) ==")
+print("== the run-of-show's Segment 3 and the system prompt read Challenge 2 as open until guardrails-k8s-on (#993) ==")
 ROS_PATH = REPO / "facilitation/kubecon-na-2026-run-of-show.md"
 ROS = ROS_PATH.read_text()
 for anchor in ("### Segment 3: Challenge 2", "### Segment 4: "):

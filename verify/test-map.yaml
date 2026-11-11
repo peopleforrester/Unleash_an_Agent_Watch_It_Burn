@@ -8086,6 +8086,53 @@ rules:
       - gitops/ai-layer/web/event.js
     tests:
       - verify/test_support_desk_private_banner.py
+  - name: test_switch_names_presenter_docs.py
+    paths:
+      - agent
+      - agent/**
+      - agent/**/*
+      - agent/**/*/**
+      - challenges/**/*
+      - challenges/**/*/**
+      - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+      - challenges/c1-network-policy.yaml
+      - challenges/c1-network-policy.yaml/**
+      - challenges/c3-kubearmor-policy.yaml
+      - challenges/c3-kubearmor-policy.yaml/**
+      - challenges/c5-scoped-role.yaml
+      - challenges/c5-scoped-role.yaml/**
+      - challenges/c8-broad-role.yaml
+      - challenges/c8-broad-role.yaml/**
+      - cost
+      - cost/**
+      - docs/admin-console.md
+      - facilitation/kubecon-na-2026-run-of-show.md
+      - facilitation/kubecon-na-2026/fallback/README.md
+      - facilitation/kubecon-na-2026/fallback/prompts.yaml
+      - gitops/ai-layer
+      - gitops/ai-layer/**
+      - gitops/workshop-agent/agent.yaml
+      - infra/datadog-fleet
+      - infra/datadog-fleet/**
+      - infra/org/boundary
+      - infra/org/boundary/**
+      - infra/terraform/aws/cluster/main.tf
+      - infra/terraform/aws/network
+      - infra/terraform/aws/network/**
+      - infra/terraform/fleet
+      - infra/terraform/fleet/**
+      - infra/terraform/fleet/providers/**/*.sh
+      - infra/terraform/fleet/providers/**/*.sh/**
+      - scripts/harvest_cluster_access.sh
+      - scripts/harvest_cluster_access.sh/**
+      - scripts/harvest_terminal_credential.sh
+      - scripts/harvest_terminal_credential.sh/**
+      - scripts/push_vtt_aws_creds.sh
+      - scripts/push_vtt_aws_creds.sh/**
+      - scripts/reload-routes.sh
+      - scripts/reload-routes.sh/**
+    tests:
+      - verify/test_switch_names_presenter_docs.py
   - name: test_tagging.py
     paths:
       - agent

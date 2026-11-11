@@ -129,8 +129,8 @@ def c3_failures(page: str, show: bool = True) -> list[str]:
     check("the attack marker calls for the reset", "Reset the chat first." in attack_marker)
     check("before the switch the recipe card comes back",
           "Before the switch, on either bot: the recipe card comes back." in attack_marker)
-    check("after guardrails-on KubeArmor's block-recipe-snoop denies the read, with its Block alert",
-          "After <code>guardrails-on</code>:" in attack_marker
+    check("after guardrails-k8s-on KubeArmor's block-recipe-snoop denies the read, with its Block alert",
+          "After <code>guardrails-k8s-on</code>:" in attack_marker
           and "<code>Permission denied</code> from KubeArmor <code>block-recipe-snoop</code>" in attack_marker
           and '"PolicyName":"block-recipe-snoop"' in attack_marker and '"Action":"Block"' in attack_marker)
 
@@ -210,7 +210,7 @@ MUTATIONS = {
     "KubeArmor's deny dropped from the attack marker": (
         mutate(_attack_marker_div, _attack_marker_div.replace("Permission\n      denied", "Forbidden")
                .replace("Permission denied", "Forbidden")),
-        "after guardrails-on KubeArmor's block-recipe-snoop"),
+        "after guardrails-k8s-on KubeArmor's block-recipe-snoop"),
     "the attack prompt out of step with the fallback deck": (
         mutate(_attack_div, _attack_div.replace("at midnight", "at noon")),
         "the attack prompt is the fallback deck's c3-attack"),

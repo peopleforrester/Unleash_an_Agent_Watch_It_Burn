@@ -6,8 +6,12 @@ The step tells the presenter which command to run and what its PASS, FAIL and cl
 read from the script here, not typed twice: the flags from its argparse, the switches and their fields from
 stage_switch_check.SWITCHES, the closing commands from stage_switch_run.CLOSE, the verdict words from what the script
 prints, and the two NOT RUN exit codes from guard_lease.BUSY_EXIT and stage_switch_run.NOT_AT_START_EXIT. The step
-sits after the guardrails-switch step (#774), whose guardrails-on and guardrails-off it builds on, and before the
+sits after the guardrails-switch step (#774), whose guardrails-k8s-on and guardrails-k8s-off it builds on, and before the
 admin probe, which also switches both clusters and holds the same lock.
+
+Since #1352 the step names every switch by its guardrails-<name>-on/off name (#1350). The scripts may still type an old
+name, which the terminal runs as an alias of its new one, so each name read from a script is mapped through the
+terminal's ALIASES table before it is looked for in the step, and the step itself names no old switch.
 """
 from __future__ import annotations
 
@@ -63,6 +67,18 @@ night = section(ROS, "Night Before")
 items = steps(night)
 titles = [i.splitlines()[0] for i in items]
 
+# A command the terminal has: a heredoc it writes, or an old name its ALIASES table writes as an alias of one (#1350).
+_term = (REPO / "gitops/ai-layer/web-terminal/entrypoint.sh").read_text(encoding="utf-8")
+if "<<'ALIASES'\n" not in _term:
+    sys.exit("ANCHOR MISSING: the <<'ALIASES' table of old switch names in gitops/ai-layer/web-terminal/entrypoint.sh")
+_aliases = dict(ln.split() for ln in _term.split("<<'ALIASES'\n", 1)[1].split("\nALIASES\n", 1)[0].splitlines())
+
+
+def new_name(switch: str) -> str:
+    """The switch's guardrails-<name> name: an old name through the terminal's ALIASES table, a new one as it is."""
+    return _aliases.get(switch, switch)
+
+
 print("== the anchors this test reads ==")
 for anchor in (STEP_TITLE, GUARDRAILS_TITLE, PROBE_TITLE):
     found = any(anchor in t for t in titles)
@@ -106,16 +122,25 @@ check("the step says the kubeconfig holds both clusters' contexts, named for the
       "`watch-it-burn-private` and `watch-it-burn-community`" in re.sub(r"\s+", " ", step))
 
 print("== the switches, their fields and the closing pair are the script's ==")
-names = [f"`{s}`" for s in ssc.SWITCHES]
+names = [f"`{new_name(s)}`" for s in ssc.SWITCHES]
 talk_order = f"runs {', '.join(names[:-1])} and {names[-1]} in talk order"
 check(f"the step says it {talk_order!r}", talk_order in flat)
 for switch, fields in ssc.SWITCHES.items():
-    if switch == "guardrails-on":
+    if new_name(switch) == "guardrails-k8s-on":
         continue  # the step names its four fields as "the four Kubernetes guardrails"
     for _, key in fields:
-        check(f"the PASS bullet names {switch}'s field {key}", f"`{key}`" in flat)
-check(f"the step names the closing pair in order ({', '.join(ssr.CLOSE)})",
-      0 <= flat.find(f"`{ssr.CLOSE[0]}` and `{ssr.CLOSE[1]}`"))
+        check(f"the PASS bullet names {new_name(switch)}'s field {key}", f"`{key}`" in flat)
+_close = [new_name(c) for c in ssr.CLOSE]
+check(f"the step names the closing pair in order ({', '.join(_close)})",
+      0 <= flat.find(f"`{_close[0]}` and `{_close[1]}`"))
+# A dated record ("- On 2026-11-09 (run 19175) ...") keeps the names typed then, so its bullet is left out.
+_RECORD = "  - On 2026-11-09 (run 19175)"
+if _RECORD not in step:
+    sys.exit(f"ANCHOR MISSING: the dated record bullet {_RECORD.strip()!r} in the step of {ROS_PATH.relative_to(REPO)}")
+_live = unwrap(re.sub(r"^  - On \d{4}-\d{2}-\d{2} .*?(?=^ {0,2}\S|\Z)", "", step, flags=re.M | re.S))
+_old = sorted(o for o in _aliases if f"`{o}`" in _live)
+check(f"outside its dated record the step names no old switch name, only the guardrails-<name> ones (#1352) {_old}",
+      not _old and "run 19175" not in _live)
 check("the step names both hosts the script reads",
       all(f"`{h}`" in flat for h in ssc.CLUSTERS.values()))
 
@@ -135,14 +160,9 @@ check(f"the step's not-at-start exit is stage_switch_run.NOT_AT_START_EXIT ({ssr
       f"exit {ssr.NOT_AT_START_EXIT} is a cluster not at the start state" in flat)
 check("the step says the summary names the lines that wait on #1132", "wait on #1132" in flat
       and "waiting on #1132" in RUNNER)
-# A command the terminal has: a heredoc it writes, or an old name its ALIASES table writes as an alias of one (#1350).
-_term = (REPO / "gitops/ai-layer/web-terminal/entrypoint.sh").read_text(encoding="utf-8")
-if "<<'ALIASES'\n" not in _term:
-    sys.exit("ANCHOR MISSING: the <<'ALIASES' table of old switch names in gitops/ai-layer/web-terminal/entrypoint.sh")
-_aliases = dict(ln.split() for ln in _term.split("<<'ALIASES'\n", 1)[1].split("\nALIASES\n", 1)[0].splitlines())
-check("each -off command the FAIL bullet names is one the terminal has",
-      all(f'cat > "$HOME/{_aliases.get(c, c)}" <<' in _term
-          for c in re.findall(r"`(guard-[a-z]+-off)`", flat)) and bool(re.findall(r"`(guard-[a-z]+-off)`", flat)))
+_offs = re.findall(r"`(guardrails-[a-z0-9]+-off)`", flat)
+check("each -off command the FAIL bullet names is one the terminal writes",
+      bool(_offs) and all(f'cat > "$HOME/{c}" <<' in _term for c in _offs))
 
 if failures:
     print(f"\n{len(failures)} FAILED", file=sys.stderr)

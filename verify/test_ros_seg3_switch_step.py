@@ -1,5 +1,5 @@
 # ABOUTME: Holds step 5 of the KubeCon run-of-show's segment 3 to the 2026-11-07 deck (#1095, #1110): slide 28's link to
-# ABOUTME: the admin terminal and guardrails-on, slide 29's retry, and the kept lines on the registry policies, Jokers, #990.
+# ABOUTME: the admin terminal and guardrails-k8s-on, slide 29's retry, and the kept lines on the registry policies, Jokers, #990.
 """Segment 3 step 5 of `facilitation/kubecon-na-2026-run-of-show.md` follows the 2026-11-07 deck (#1110).
 
 #1095 moved step 5 onto the deck Whitney walked on 2026-11-07. Its other tests read the switch's command and the
@@ -7,12 +7,12 @@ segments table; this one reads the step itself and fails when any of these stops
 
   1. The step quotes slide 28 as "Let's turn on Kubernetes guardrails." (a quote line under "Slide 28 reads").
   2. It says that line is a link opening the admin terminal, `https://burritobot-private.burritobot.co/lab`, and that
-     the presenter clicks it to open the admin terminal and types `guardrails-on`.
+     the presenter clicks it to open the admin terminal and types `guardrails-k8s-on`.
   3. It puts the room's retry on slide 29, quoting "Try your attacks again.", with the note to reset the bot and use
      the saved prompts, and the room pressing reset and pasting them.
-  4. Those come in the deck's order: slide 28's line, the terminal link, the click and `guardrails-on`, slide 29's
+  4. Those come in the deck's order: slide 28's line, the terminal link, the click and `guardrails-k8s-on`, slide 29's
      line, the reset-and-saved-prompts note.
-  5. What the step said before #1095 is kept: `guardrails-on` turns the four layers on for both clusters and was
+  5. What the step said before #1095 is kept: `guardrails-k8s-on` turns the four layers on for both clusters and was
      added by #774; `deny-external-registries` admits only `registry.burritobot.co` for the bot and
      `restrict-image-registries` refuses `public.ecr.aws` and every registry off its list; Segment 4's Jokers still
      land because HC-666's image comes from `registry.burritobot.co`, which both trust (#775); and what the room
@@ -44,8 +44,8 @@ SLIDE28 = ("slide 28's line as a quote", r"Slide 28 reads[^>]*: > Let's turn on 
 LINK = ("the line as a link to the admin terminal",
         r"The line is a link: it opens the admin cluster's terminal, `https://burritobot-private\.burritobot\.co/lab`, "
         r"in its own tab\.")
-CLICK = ("the presenter clicking it and typing guardrails-on",
-         r"The presenter clicks the line to open the admin terminal, types `guardrails-on`")
+CLICK = ("the presenter clicking it and typing guardrails-k8s-on",
+         r"The presenter clicks the line to open the admin terminal, types `guardrails-k8s-on`")
 SLIDE29 = ("slide 29's retry as a quote", r"Slide 29 reads: > Try your attacks again\. ")
 RESET = ("the reset-the-bot and saved-prompts note",
          r"Take a moment to reset your bot and use your saved prompts to retry your attacks that worked\.")
@@ -54,9 +54,9 @@ ORDERED = [SLIDE28, LINK, CLICK, SLIDE29, RESET]
 KEPT = [
     ("the room pressing reset and pasting its saved prompts",
      r"The room presses reset and pastes its saved prompts to try its Challenge 1 and Challenge 2 attacks again"),
-    ("guardrails-on turning the four layers on for both clusters",
+    ("guardrails-k8s-on turning the four layers on for both clusters",
      r"turns on RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy together, for both clusters\. "
-     r"That command is `guardrails-on`, which #774 added; it prints every `kubectl` it runs"),
+     r"That command is `guardrails-k8s-on`, which #774 added; it prints every `kubectl` it runs"),
     ("deny-external-registries admitting only registry.burritobot.co",
      r"`deny-external-registries` admits only `registry\.burritobot\.co` for the bot"),
     ("restrict-image-registries refusing public.ecr.aws and every registry off its list",
@@ -103,7 +103,7 @@ def verdicts(step: str) -> dict[str, bool]:
     for what, rx in ORDERED + KEPT:
         out[f"step 5 has {what}"] = re.search(rx, step) is not None
     found = [re.search(rx, step) for _, rx in ORDERED]
-    out["step 5 runs slide 28's line, the link, the click and guardrails-on, slide 29's line, then the note"] = (
+    out["step 5 runs slide 28's line, the link, the click and guardrails-k8s-on, slide 29's line, then the note"] = (
         all(found) and [m.start() for m in found] == sorted(m.start() for m in found))
     return out
 
@@ -134,7 +134,7 @@ def main() -> None:
         check(name, ok)
 
     print("== each check can fail ==")
-    order = "step 5 runs slide 28's line, the link, the click and guardrails-on, slide 29's line, then the note"
+    order = "step 5 runs slide 28's line, the link, the click and guardrails-k8s-on, slide 29's line, then the note"
     for what, rx in ORDERED + KEPT:
         m = re.search(rx, step)
         if m is None:

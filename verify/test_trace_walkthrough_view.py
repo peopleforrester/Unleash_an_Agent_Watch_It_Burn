@@ -3,7 +3,7 @@
 """Why this exists (#500, #675).
 
 The trace walk-through shows that each guardrail did its job, for the beats just run: the C5 read of the CEO's Secret
-(the record before guardrails-on, Forbidden after it, #852), the C6 ticket the input guard withheld, the C7 call that
+(the record before guardrails-k8s-on, Forbidden after it, #852), the C6 ticket the input guard withheld, the C7 call that
 never reached read_internal_config. Datadog
 Agent Observability is the primary surface and needs a Datadog org pool (#454); without one the run-of-show
 falls back to a Grafana view on the private cluster, which reads Tempo.
@@ -131,9 +131,9 @@ check("it stamps the session before any guard answers, so a blocked turn carries
 check("the storefront sends its session with every /chat",
       re.search(r"session:\s*getSession\(\)", (REPO / "gitops/ai-layer/web/burritbot.html").read_text(encoding="utf-8")) is not None)
 
-print("== C5: Challenge 1's read of the CEO's Secret, the record before guardrails-on and Forbidden after (#852) ==")
+print("== C5: Challenge 1's read of the CEO's Secret, the record before guardrails-k8s-on and Forbidden after (#852) ==")
 q5 = query(beat["C5"])
-# Since the 2026-11-01 review (#776) Challenge 1 runs no output guard: its fix is RBAC, in segment 3's guardrails-on.
+# Since the 2026-11-01 review (#776) Challenge 1 runs no output guard: its fix is RBAC, in segment 3's guardrails-k8s-on.
 # So the panel lists the get_vault_entry calls on the CEO's Secret, and the tool's result says which side of the
 # switch each one ran on. A query on the output guard's [REDACTED] would list nothing on stage.
 ROOT5 = '{ resource.service.name = "burritobot" && span.url.path = "/chat" && span.session.id =~ "$session" }'
@@ -153,7 +153,7 @@ check("a refused read returns the HTTP status, so the Forbidden one reads HTTP 4
       'return f"error reading vault entry {name!r} (HTTP {code}): {body[:300]}"' in MCP)
 res = (REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")
 term = (REPO / "gitops/ai-layer/web-terminal/entrypoint.sh").read_text(encoding="utf-8")
-check("guardrails-on's RBAC step applies c5-scoped-role.yaml",
+check("guardrails-k8s-on's RBAC step applies c5-scoped-role.yaml",
       'on:rbac)       c=("$@" apply -f "$HOME/challenges/c5-scoped-role.yaml")' in term)
 scoped = res[res.index("  c5-scoped-role.yaml: |"):]
 scoped = yaml.safe_load(scoped[scoped.index("apiVersion:"):scoped.index("\n  c6-least-privilege-role.yaml:")]
@@ -206,8 +206,8 @@ check("the C6 beat is the HC-666 turn: the model is called, the ticket comes bac
       and "Grafana C6 panel lists exactly these turns (#709)" in seg)
 check("it walks each beat's panel", all(f"**{b}:**" in seg for b in ("C5", "C6", "C7")))
 c5_note = seg[seg.index("**C5:**"):seg.index("**C6:**")] if "**C5:**" in seg and "**C6:**" in seg else ""
-check("the C5 beat is the CEO's Secret read: the record in segment 2, Forbidden after guardrails-on (#852)",
-      "`get_vault_entry`" in c5_note and "`ceo-personal-record`" in c5_note and "`guardrails-on`" in c5_note
+check("the C5 beat is the CEO's Secret read: the record in segment 2, Forbidden after guardrails-k8s-on (#852)",
+      "`get_vault_entry`" in c5_note and "`ceo-personal-record`" in c5_note and "`guardrails-k8s-on`" in c5_note
       and "`HTTP 403`" in c5_note and "Forbidden" in c5_note
       and "came back redacted" not in c5_note and "`[REDACTED]`" not in c5_note)
 check("it names the session picker", "**Session**" in seg)
