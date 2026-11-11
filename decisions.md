@@ -54192,3 +54192,17 @@ tier tests the change selects (`test_iam_policy_structural.py`, `test_image_vers
 `test_kyverno_counter_fix_cache.py`, `test_wib_digests_signed.py`, all reading the fetch inventory).
 
 **Live check.** None on a cluster: the change touches `.github/workflows/` and `verify/` files no cluster runs.
+
+**The issue's precondition, CI green through the image.** It has not happened yet, and the steps could not change
+that. Actions run 43063737491 (agent/1188-20434 at 769c04c8, the commits staging took as 5a3ab270) pulled
+`wib-e2e-tools:51ec299b51b3558f-65501e27` and ran `98 checks ran (the offline suite and 97 tier tests) in 35m45s`
+inside it, with both steps still in the job, and failed six: `test_collector_coc_mask_e2e.py` and
+`test_collector_coc_parse_cpu_e2e.py` (`verify/.tools/bin/otelcol-contrib is missing`), `test_chat_wide_font_e2e.py`
+(`no DejaVuSans.ttf under any font directory`), `test_mobile_titles_e2e.py` (`1280 wide fonts: no header button runs
+past the edge`), and `test_injection_classifier.py` and `test_topic_classifier.py` (a subprocess timeout). The two
+staging runs since (5a3ab270, 6840b2f0) were cancelled by newer pushes, and #1361 holds the heavy gate's red run of the
+tier on 6840b2f0. None of the six comes from the removed steps: `verify/e2e-image.sh` passes the container only
+`HECATON_BASE_SHA`, `HECATON_TEST_FILES`, `E2E_TOOLS_JOBS` and `TF_CACHE_LOCK_WAIT`, so the host's setup-node Node
+and the `LD_LIBRARY_PATH` and `FONTCONFIG_FILE` that `ci_chromium_libs.py` wrote to `GITHUB_ENV` never reached a tier
+test, and the image brings its own Node 24.22.2 and Chromium. With no fallback to the host's tools, keeping the steps
+would not make the job pass. The six failures are #1361's to fix.
