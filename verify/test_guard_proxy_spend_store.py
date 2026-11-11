@@ -44,7 +44,9 @@ def guard_proxy(docs):
 
 def runs_proxy_py(docs):
     c = guard_proxy(docs)["spec"]["template"]["spec"]["containers"][0]
-    return c.get("command") == ["python", "/app/proxy.py"]
+    # proxy.py runs under a python -c wrapper that sets its listen backlog (#1337); the Go build has no python.
+    cmd = c.get("command") or []
+    return cmd[:1] == ["python"] and "/app/proxy.py" in " ".join(cmd)
 
 
 def store_checks(docs, label):

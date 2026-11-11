@@ -106,7 +106,7 @@ check("workshop-mcp is deployed with a container named shim, as its own workshop
       and obj("Deployment", "workshop-mcp")["spec"]["template"]["spec"].get("serviceAccountName") == "workshop-mcp")
 _proxy = containers("guard-proxy").get("proxy", {})
 check("guard-proxy is deployed with a container named proxy running /app/proxy.py on 8080",
-      _proxy.get("command") == ["python", "/app/proxy.py"]
+      (_proxy.get("command") or [])[:1] == ["python"] and "/app/proxy.py" in " ".join(_proxy.get("command") or [])
       and any(p.get("containerPort") == 8080 for p in _proxy.get("ports", [])))
 check("guard-proxy's code has the routes and the output path the C5/C6 fallback calls",
       all(r in PROXY_PY for r in ('"/guards"', '"/toggle"', '"/chat"', "def output_scrub(")))

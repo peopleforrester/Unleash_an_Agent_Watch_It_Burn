@@ -4390,6 +4390,20 @@ rules:
       - verify/no_cloud.py
     tests:
       - verify/test_guard_mcp_both.py
+  - name: test_guard_proxy_backlog.py
+    paths:
+      - .gitmodules
+      - gitops/ai-layer/guard-proxy
+      - gitops/ai-layer/guard-proxy/**
+      - gitops/ai-layer/resources.yaml
+      - images/llm-guard
+      - images/llm-guard/**
+      - verify/artifact-cache.sh
+      - verify/artifact_cache.py
+      - verify/ensure-submodules.sh
+      - verify/git_mirror.py
+    tests:
+      - verify/test_guard_proxy_backlog.py
   - name: test_guard_switch_both.py
     paths:
       - agent

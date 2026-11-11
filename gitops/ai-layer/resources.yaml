@@ -559,7 +559,18 @@ spec:
       containers:
         - name: proxy
           image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e # verify-at-build: bake proxy.py into an image for prod (#411, #412)
-          command: ["python", "/app/proxy.py"]
+          # THE LISTEN QUEUE (#1337). proxy.py serves with the stdlib's ThreadingHTTPServer, which listens with a
+          # backlog of 5. In run 20287's 500-phone replays the console's connections arrived faster than the process,
+          # pinned at its CPU limit, accepted them: the pod's kernel counted 3,227 ListenOverflows, seven turns came
+          # back 502 (nginx: "Connection reset by peer while reading response header") and one 504 (nginx: "upstream
+          # timed out while connecting"), and guard-proxy never saw any of the eight. So proxy.py runs under a class
+          # attribute that sets the backlog to 1024 (the node's somaxconn is 4096) before it starts. The Go build
+          # (#738) replaces this command and listens with net/http's somaxconn backlog. Remove this once
+          # proxy.py sets its own request_queue_size. verify/test_guard_proxy_backlog.py runs this command.
+          command:
+            - python
+            - -c
+            - "import http.server, runpy; http.server.ThreadingHTTPServer.request_queue_size = 1024; runpy.run_path('/app/proxy.py', run_name='__main__')"
           ports: [{ name: http, containerPort: 8080 }]
           env:
             # Forward through agentgateway (the A2A L7 hop), which proxies to workshop-agent:8080. This is
@@ -700,7 +711,13 @@ spec:
           # under 50 live attendees an OOMing proxy takes chat and the guard toggles down with it.
           # 256Mi limit, 128Mi request. A live `kubectl set resources` is reverted by Argo selfHeal,
           # so the fix has to live here.
-          resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 250m, memory: 256Mi } }
+          # 1 CPU, not 250m (#1337). In run 20287's two 500-phone replays guard-proxy ran at 247 mCPU, its limit, and
+          # was throttled in every 100 ms period (about 10 throttled periods a second, 2.7 to 2.8 s of throttled time
+          # a second across its threads) in the 15 s after the cluster window reopened. In those seconds its accept
+          # loop fell behind and the listen queue overflowed (see command above). Memory peaked at 84Mi. One Python
+          # process uses about one core at most, so 1 CPU is the useful ceiling; the request stays 50m, so no
+          # cluster's scheduling changes. verify/test_guard_proxy_backlog.py holds the floor.
+          resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: "1", memory: 256Mi } }
           volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
       volumes:
         - name: src
