@@ -46,7 +46,7 @@ bounds:
       - observability-idp
       - security
   verify/collector_render.py:
-    why: value_files() reads each $values/ file the collector Applications name
+    why: value_files() reads each $values/ file the collector Applications name, and directory_manifests() each in-repo directory source of theirs (#1332)
     paths:
       - gitops/otel-collector
   verify/git_mirror.py:
