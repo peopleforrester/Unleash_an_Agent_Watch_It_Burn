@@ -53481,3 +53481,41 @@ host-side refusal wait on the workflow's first push. The repository is public, b
 whatever its repository is, so the next run checks that the gate's podman pulls it with no login.
 
 **Live check.** None: this change touches `verify/`, `.github/workflows/` and prose, and no cluster runs any of it.
+
+## 2026-11-11 · #1188 · run 20420 · The image half again, with the fetch inventory that failed runs 19536 and 20049
+
+**What.** Run 20049's draft (`origin/agent/1188-20049`, nine commits) was cherry-picked onto staging `a53c340d`.
+`verify/prior-drafts.sh 1188 origin/staging` named eight paths staging had edited in place since the draft was cut,
+and one conflicted: `verify/test_no_system_temp_paths.py`, where #1315 (`cebbb7b4`) had put a `tmp-ok` reason on each
+exception line. Both sides were kept, and the draft's `e2e-image.sh` exception and that file's two lines naming a temp
+directory carry `tmp-ok` reasons too.
+
+**Why the tests gate failed.** The gate's output is not quoted on the issue, so this run ran the 136 offline tests the
+change can reach: those `scope_tests.select` picks for the branch with `run-e2e-tools.sh` left out of the map's full
+list, which is what else selects them. Two failed. `verify/test_fetch_inventory.py` (#1116, #1251, in staging since
+2026-11-08, so in both drafts' bases) fails on any fetch call site `verify/fetch-inventory.yaml` does not class, and
+the draft added 18: the Containerfile's FROM, its apt-get, uv's two Pythons, crane's row, Playwright's Chromium,
+`install.sh`'s checked curl, and the stubs and assertions in `test_e2e_image.py`. That is the likely failure of both
+runs. `verify/test_test_map.py` (#1319, after the draft's base) failed because `verify/test-map.yaml` was behind the
+scope map.
+
+**Change.** `fetch-inventory.yaml` gains entries for `verify/e2e-image/Containerfile` (the FROM as a pinned
+container image by digest, apt-get as the live Debian archive, `uv python install` and crane's row as pinned tools,
+Chromium as a pinned browser from `python.lock`), `verify/e2e-image/install.sh` (its curl, pinned by the lock's
+SHA-256), and `verify/test_e2e_image.py` (stubs and checks, nothing leaves the host). `test-map.yaml` was rewritten by
+`python3 verify/scope_tests.py write`. The tag is now `51ec299b51b3558f-65501e27`; the lock's half is unchanged.
+
+**Checked in this run.** The 136 tests ran once through `run-tests.sh` with `HECATON_TEST_FILES`: 134 passed and the
+two above failed. After the fix, each passed alone: `test_fetch_inventory.py`, `test_test_map.py`,
+`test_e2e_image.py`, `test_gh_relay.py`, `test_no_system_temp_paths.py`, `test_workflow_artifact_cache.py`,
+`test_scope_tests.py`, with `scope_tests.py check` and `fetch_inventory.py check` clean and the prose gate passing.
+`bash verify/e2e-image.sh build` built `ghcr.io/peopleforrester/wib-e2e-tools:51ec299b51b3558f-65501e27` with podman
+(2.83 GB, exit 0), and the workflow's own check inside it passed: `e2e_image.py matches` on the image's `tools.txt`,
+Node v24.22.2, uv 0.13.7 and PyYAML, with no `.fetch` scratch left in `/opt/wib-e2e-tools`. The whole offline suite was
+not run: because `run-e2e-tools.sh` changed, the gate runs it.
+
+**What is left, unchanged.** ghcr.io answered 403 to an anonymous token read for the package on 2026-11-11, so the
+runner switch, CI and the gate using the image, and the host-side refusal test still wait on the workflow's first push
+after these commits reach staging, and on the package being pullable without a login.
+
+**Live check.** None: this change touches `verify/`, `.github/workflows/` and prose, and no cluster runs any of it.
