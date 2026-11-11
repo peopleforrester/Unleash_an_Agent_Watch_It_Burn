@@ -6731,6 +6731,7 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/no-cloud.sh
+    - verify/offline-suite.sh
     - verify/run-tests.sh
   test_one_desk_tools.py:
     - CLAUDE.md

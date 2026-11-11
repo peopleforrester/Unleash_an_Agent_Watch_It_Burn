@@ -25,10 +25,13 @@ check("beat-cost.sh exists and is executable", (VERIFY / "beat-cost.sh").stat().
 # removing one test deleted the whole `for` line with it; the suite then failed to parse for four days,
 # undetected, because the only thing that reports the suite broken is the suite. A list also omits every
 # test written after it, which is the quieter half of the same failure.
-runtests = (VERIFY / "run-tests.sh").read_text()
-check("run-tests.sh globs for its tests", 'test_*.py' in runtests and 'test_*.sh' in runtests)
-check("run-tests.sh names no individual test", "test_fleet_contract.py" not in runtests)
-check("run-tests.sh fails when it finds nothing to run", "NO TESTS FOUND" in runtests)
+# run-tests.sh scopes the suite and hands the run to offline-suite.sh, the core, which finds and runs the tests (#1319).
+check("run-tests.sh hands its run to offline-suite.sh",
+      'exec bash "${SCRIPT_DIR}/offline-suite.sh"' in (VERIFY / "run-tests.sh").read_text())
+runtests = (VERIFY / "offline-suite.sh").read_text()
+check("offline-suite.sh globs for its tests", 'test_*.py' in runtests and 'test_*.sh' in runtests)
+check("offline-suite.sh names no individual test", "test_fleet_contract.py" not in runtests)
+check("offline-suite.sh fails when it finds nothing to run", "NO TESTS FOUND" in runtests)
 # Every test in the directory has to be reachable by that glob, or it is dead weight nothing runs.
 strays = [p.name for p in VERIFY.glob("test_*") if p.suffix not in (".py", ".sh")]
 check(f"no test is unreachable by the runner's glob ({', '.join(strays) or 'none'})", not strays)
@@ -36,8 +39,8 @@ check(f"no test is unreachable by the runner's glob ({', '.join(strays) or 'none
 # The light and heavy suites split by a `# SUITE: e2e` line in the test, never by what the machine has.
 # A runner that turned a missing tool or credential into a skip went green on machines that ran nothing.
 rune2e = (VERIFY / "run-e2e.sh").read_text()
-check("run-tests.sh has no skip outcome", "skipped" not in runtests)
-check("run-tests.sh hands `# SUITE: e2e` tests to run-e2e.sh", "# SUITE: e2e" in runtests)
+check("offline-suite.sh has no skip outcome", "skipped" not in runtests)
+check("offline-suite.sh sets `# SUITE: e2e` tests aside for run-e2e.sh", "# SUITE: e2e" in runtests)
 check("run-e2e.sh globs for the same marker", "# SUITE: e2e" in rune2e and 'test_*.py' in rune2e and 'test_*.sh' in rune2e)
 check("run-e2e.sh has no skip outcome", "skipped" not in rune2e)
 check("run-e2e.sh runs the live beat harness", "run-all.sh" in rune2e)

@@ -5763,6 +5763,7 @@ rules:
       - scripts/reload-routes.sh
       - scripts/reload-routes.sh/**
       - verify/no-cloud.sh
+      - verify/offline-suite.sh
       - verify/run-tests.sh
     tests:
       - verify/test_offline_suite_no_cloud.sh

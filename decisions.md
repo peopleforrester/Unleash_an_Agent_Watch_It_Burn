@@ -51908,3 +51908,57 @@ the live `code-of-conduct-names` policy was not touched.
 otel-collector Application syncs with `ServerSideApply=true` and its ConfigMap holds the new pattern, which
 `verify/pii_scrub_live.py` reads. The namespaces Application syncs the new `code-of-conduct-names`. Then
 `verify/kubecon_probe.py`'s community and admin runs are green.
+
+## 2026-11-11 · #1319 · run 20239 · The gate's Test command is the suite's core, offline-suite.sh, so a config change is scoped
+
+**What was found.** hecaton#623 closed and deployed (release 0219092fddb2) after run 20175's entry above. That entry left
+the third criterion waiting on it: a candidate changing one config file shows `ran N of M test files` in the tests
+gate's detail. Driving the deployed `testscope.scope()` on a scratch commit that appends a comment to
+`platform-baseline.yaml`, with staging cbb03a48 as the base, gave `full suite: platform-baseline.yaml changed, and the
+command's own verify/run-tests.sh reads it`. The gate runs every test when a change reaches the Test command's own
+script, and it reads "reaches" through every chain of named paths: `platform-baseline.yaml` is named in
+`verify/scope-map.yaml`, `scope_tests.py` names the map, and `run-tests.sh` names `scope_tests.py`. Swept over the tree,
+1,274 of the 1,476 tracked paths reached `run-tests.sh` that way, so the gate scoped almost nothing. With the two maps
+left out of the walk, 250 still did, through the kustomizations `scope_tests.py` reads and the `bash verify/run-e2e.sh`
+the runner printed for e2e files.
+
+**What changed.** The runner is split in two. `verify/offline-suite.sh` is the suite's core: it runs the files
+`HECATON_TEST_FILES` names, else every offline test, setting `# SUITE: e2e` files aside and running each under
+`no_cloud_run`, with the output `run-tests.sh` printed before. Its code names only `no-cloud.sh` and
+`ensure-submodules.sh`, which six paths reach, all on the map's full list. AGENTS.md declares it as the Test command,
+since the gate reads the declared command's script as "own". `verify/run-tests.sh`, the command people, CI and the
+E2E command run, keeps its interface: with `HECATON_BASE_SHA` set and no list it asks `scope_tests.py select offline`
+and passes the names to the core in `OFFLINE_SUITE_SCOPE`, set even when empty, then hands the core the run. The core's
+e2e line no longer spells the live suite's file name, nor AGENTS.md, which would have tied every AGENTS.md change to
+the full suite. The core joins the scope map's full list.
+
+**What the deployed gate selects now.** With this commit as the base, the same probe gives `ran 135 of 616 test files`,
+passed in `HECATON_TEST_FILES` to `bash verify/offline-suite.sh`: 104 offline tests, `test_platform_baseline.py` among
+them, and 31 e2e files the core sets aside. `scope_tests.py select offline` picks 89 for the same change, all inside the
+gate's 104. The other 15 read the runner chain's text (`test_gate_commands.py`, `test_952_suite_record.py`,
+`test_verify_harness.py` and the like), which the gate reaches by walking through the maps. Only 7 of the 1,477 paths
+now reach the declared command.
+
+**What a full gate run costs now.** When the gate does run the whole command, for a path on the full list, a pytest
+config name or a dependency file, the core runs every offline test: it does not read `HECATON_BASE_SHA`, since
+following it means naming `scope_tests.py`. On the full list `scope_tests.py` says FULL as well; the dependency files
+are the difference.
+
+**Tests.** `verify/test_run_tests_files.py` now checks AGENTS.md declares `bash verify/offline-suite.sh` with the
+`Test files:` line beside it. It also reads the core's code as the gate does (whole-line comments dropped, every name a
+run of path characters spells) and checks it names exactly `no-cloud.sh` and `ensure-submodules.sh`. Every fixture
+case runs through both scripts, and `OFFLINE_SUITE_SCOPE` gets its own cases: one name, empty, a gate list winning
+over it, and `run-tests.sh` dropping one it did not set. That check runs `git ls-files`, so the map moved the test to
+`always`; it takes 1.5 s of CPU. `test_gate_commands.py`, `test_verify_harness.py`, `test_offline_suite_no_cloud.sh`,
+`test_952_suite_record.py` and `test_no_system_temp_paths.py` read the core where they read the runner's loop, and
+`test_scope_tests.py` and `test_e2e_tools_gate_scope.py` copy it into their fixtures. Run through the new path,
+`HECATON_TEST_FILES=<list> bash verify/run-tests.sh` and `bash verify/offline-suite.sh`, these passed with the
+others that read the changed files: `test_test_map.py`, `test_dispatched_runs.py`,
+`test_verify_suites_workflow.py`, `test_images_saved_judge.py`, `test_kubecon_c3_live_checks.py`, and seven tests that
+scan every script (`test_lint.py`, `test_kube_safety.py` among them), each `ALL OFFLINE RENDER-GATE TESTS GREEN`. The
+change edits files on the map's full list, so validation runs the whole offline suite; that is left to validation.
+The change touches only `verify/` and AGENTS.md, which no cluster runs, so there is no live check.
+
+**Left to hecaton.** The gate's walk passes through files that only list paths: its own declared Test map, and this
+repo's scope map, both of which name nearly every path. That is where the 15 extra tests come from, and the walk alone
+reaches a median of 62 tests per path. A follow-up on hecaton asks it to leave the declared Test map out of the walk.

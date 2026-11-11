@@ -31,8 +31,11 @@ no_cloud_setup "${T}/guard"
 run() { rc=0; out="$(no_cloud_run "$@" 2>&1)" || rc=$?; }
 
 echo "== the runner puts every offline test through the guard =="
-RT="${HERE}/run-tests.sh"
-check "run-tests.sh sources no-cloud.sh and sets the guard up before any test" \
+# run-tests.sh hands the run to offline-suite.sh, the suite's core, which runs the tests (#1319).
+check "run-tests.sh hands its run to offline-suite.sh" \
+  'grep -qxF "exec bash \"\${SCRIPT_DIR}/offline-suite.sh\"" "${HERE}/run-tests.sh"'
+RT="${HERE}/offline-suite.sh"
+check "offline-suite.sh sources no-cloud.sh and sets the guard up before any test" \
   'grep -qF ". \"\${SCRIPT_DIR}/no-cloud.sh\"" "${RT}" && grep -qF "no_cloud_setup \"\${NO_CLOUD_DIR}\"" "${RT}"'
 check "and run_one runs each test through no_cloud_run" \
   '[[ "$(sed -n "/^run_one() {/,/^}/p" "${RT}" | grep -c "no_cloud_run \"\${interp\[@\]}\" \"\$1\"")" -eq 1 ]]'
