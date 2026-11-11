@@ -806,6 +806,12 @@ reads:
     - gitops/ai-layer/kubearmor-ordering-gate.yaml
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/otel-ordering-gate.yaml
+  test_ai_layer_role_sync.py:
+    - VERSIONS.lock
+    - gitops
+    - gitops/**.y*ml
+    - gitops/ai-layer/resources.yaml
+    - gitops/bootstrap/apps/ai-layer.yaml
   test_ai_layer_rollout.py:
     - gitops/ai-layer
     - gitops/ai-layer/kustomization.yaml

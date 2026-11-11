@@ -739,6 +739,15 @@ rules:
       - gitops/ai-layer/**
     tests:
       - verify/test_ai_layer_gates.py
+  - name: test_ai_layer_role_sync.py
+    paths:
+      - VERSIONS.lock
+      - gitops
+      - gitops/**
+      - gitops/**/*.y*ml
+      - gitops/**/*.y*ml/**
+    tests:
+      - verify/test_ai_layer_role_sync.py
   - name: test_allergen_card.py
     paths:
       - gitops/workshop-agent/agent.yaml
