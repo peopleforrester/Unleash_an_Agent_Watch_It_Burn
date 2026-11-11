@@ -850,17 +850,44 @@ def cmd_pii(args) -> int:
     return 0 if ok else 1
 
 
+def from_stamp(stamp: str, sessions: list[str]) -> tuple[str, dict[str, str]] | None:
+    """A seed's start and its retried seeds' sessions, from the stamp and KEY=SESSION pairs, for a checkout that has
+    no views file: tmp/ is not committed, and the seed may have run elsewhere (run 18879 rebuilt run 18805's views
+    from the stamp by hand). None when the stamp is not a UTC minute or a pair names no seed or another seed's session."""
+    try:
+        start = dt.datetime.strptime(stamp, "%Y%m%d%H%M").replace(tzinfo=dt.timezone.utc)
+    except ValueError:
+        return None
+    keys = {k for k, *_ in SEEDS}
+    out = {}
+    for pair in sessions:
+        key, _, sess = pair.partition("=")
+        if key not in keys or not sess.startswith(session_id(key, stamp)):
+            return None
+        out[key] = sess
+    return start.isoformat(), out
+
+
 def cmd_check(args) -> int:
-    if not args.out.exists():
-        log.error("no %s: run seed first", args.out)
+    if args.stamp:
+        rebuilt = from_stamp(args.stamp, args.session)
+        if rebuilt is None:
+            log.error("--stamp %s or --session %s is not a seed's: the stamp is the UTC minute (YYYYmmddHHMM), and "
+                      "each --session KEY=wib-stage-KEY-<stamp>-N", args.stamp, args.session)
+            return 2
+        seeded_at, sessions = rebuilt
+        saved = {"seeded_at": seeded_at, "views": None}
+    elif not args.out.exists():
+        log.error("no %s: run seed first, or pass the seed's --stamp", args.out)
         return 2
-    saved = json.loads(args.out.read_text())
+    else:
+        saved = json.loads(args.out.read_text())
     if not saved.get("seeded_at"):
         log.error("%s has no seeded_at, so check cannot tell how far back to read: run seed again", args.out)
         return 2
     hours = lookback_hours(saved["seeded_at"], dt.datetime.now(dt.timezone.utc))
-    dd, _ = datadog(args.profile, args.region)
-    rows = saved["views"]
+    dd, site = datadog(args.profile, args.region)
+    rows = saved["views"] if saved["views"] is not None else views(site, args.stamp, sessions=sessions)
     log.info("reading the last %d hours, back to the seed at %s", hours, saved["seeded_at"])
     ok = report(rows, read_seeds(dd, rows, hours))
     log.info("STAGE TRACES %s", "GREEN" if ok else "RED")
@@ -890,6 +917,9 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--lock-wait", type=float, default=guard_lease.WAIT_S,
                    help=f"seconds to wait for another run's guard lock (default {guard_lease.WAIT_S}, #1024)")
     c = sub.add_parser("check", help="re-read the seeded traces from LLM Observability")
+    c.add_argument("--stamp", help="the seed's stamp, read in place of --out when this checkout has no views file")
+    c.add_argument("--session", action="append", default=[], metavar="KEY=SESSION",
+                   help="with --stamp, a seed asked again: its key and the session that made the call (#1210)")
     for p in (s, c):
         p.add_argument("--profile", required=True, help="AWS profile holding watch-it-burn/datadog")
         p.add_argument("--region", default="us-west-2")

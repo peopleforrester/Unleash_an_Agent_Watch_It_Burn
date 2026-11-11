@@ -2498,12 +2498,18 @@ is merely slow rather than rebuilding:
       --context <private-context> --kubeconfig /tmp/kubecon.kubeconfig --profile accen-dev
   ```
 
-  Then, in Whitney's org, an APM retention filter that keeps the seeds: APM, then
-  Retention Filters, query `service:burritobot @session.id:wib-stage-*`, 100% of
+  Then, in Whitney's org, an APM retention filter that keeps the seeds: the APM
+  retention filter `WIB stage seeds (#648)`, query `service:burritobot @session.id:wib-stage-*`, 100% of
   spans and 100% of traces. The PII seed's trace lives in APM, not LLM Observability
   (a refused prompt has no gen_ai span), and APM keeps a span past Live Search's
-  15 minutes only when a retention filter indexes it. The repo's Datadog key is
-  read-only, so this is a click in the UI.
+  15 minutes only when a retention filter indexes it. A filter applies as spans
+  arrive, so it goes in before the seed. It has been in place since 2026-11-11
+  (run 20202), so this prints `OK` and writes nothing; it uses the secret's
+  unscoped `write-app-key`, as `fleet.sh monitors --apply` does:
+
+  ```bash
+  python3 infra/datadog-room/stage_views.py retention --profile accen-dev --region us-west-2 --apply
+  ```
 
   ```bash
   python3 verify/stage_traces.py seed burritobot-private.burritobot.co \
@@ -2598,6 +2604,39 @@ is merely slow rather than rebuilding:
   morning of: `python3 verify/stage_traces.py check --profile accen-dev` must end
   `STAGE TRACES GREEN`. A red `c3-pii` there means the retention filter did not keep
   it: check the filter and run `seed` again.
+- [ ] **The stage views in Whitney's org (#648), after a green seed.** From the same
+  checkout, which holds the seed's `tmp/stage-traces.json`:
+
+  ```bash
+  python3 infra/datadog-room/stage_views.py views --profile accen-dev --region us-west-2 --apply
+  ```
+
+  It must end `STAGE VIEWS GREEN`. It keeps seven views in Whitney's org, named so
+  Datadog lists them in presentation order. Each challenge view holds that
+  challenge's attack and fixed seeds on Past 7 Days, by the sessions the seed's file
+  names (a `-2` ask included); the two cluster views are live, on Past 15 Minutes.
+  After a new seed the same command points the five seed views at its sessions, in
+  place, by id, so the links below stay the same. It writes only views named
+  `WIB stage ...` and deletes nothing.
+
+  | View | Explorer | What it holds |
+  |---|---|---|
+  | `WIB stage 1: Challenge 1, the CEO's secret` | Agent Observability | `c1-attack`, `c1-fixed` |
+  | `WIB stage 2: Challenge 2, the Kubernetes catch-all` | Agent Observability | `c2-attack`, `c2-fixed` |
+  | `WIB stage 3: Challenge 3, prompt injection through a support ticket` | Agent Observability | `c3-attack`, `c3-fixed` |
+  | `WIB stage 3b: Challenge 3, someone else's PII refused` | APM Trace Explorer | `c3-pii` |
+  | `WIB stage 4: Challenge 4, the poisoned weather tool` | Agent Observability | `c4-attack`, `c4-fixed` |
+  | `WIB stage 5: burritobot-public` | Agent Observability | the room's bot, live |
+  | `WIB stage 6: burritobot-private` | Agent Observability | the presenters' bot, live |
+
+  The deck's four links stay the way in on stage; a view is the quicker way to the
+  same trace when a search comes up empty. On 2026-11-11 (run 20202) they were kept
+  from seed stamp `202611110035` as views 4819010 to 4819016, in the order above,
+  for example `https://app.datadoghq.com/llm/traces?saved-view-id=4819010` for
+  Challenge 1 and `https://app.datadoghq.com/apm/traces?saved-view-id=4819013` for
+  the PII refusal. `tmp/` is not committed, so a checkout that did not run the seed
+  checks it from the stamp: `python3 verify/stage_traces.py check --profile accen-dev
+  --stamp 202611110035`, with `--session <key>=<session>` for a seed asked again.
 - [ ] **Agent Observability is receiving from both bots (#783).** Before every
   run-through, the Night Before and the morning of:
   `python3 verify/agent_obs_flow.py chat --profile accen-dev`. It sends one marked

@@ -459,6 +459,30 @@ with tempfile.TemporaryDirectory() as tmp:
     check("check on a views file with no seeded_at: status 2, naming the field",
           st.main(["check", "--profile", "accen-dev", "--out", str(out_bare)]) == 2)
 
+    print("== check from the seed's stamp, in a checkout with no views file ==")
+    nowhere = pathlib.Path(tmp, "no-such-stage-traces.json")
+    st.datadog = lambda profile, region: (FakeDatadog(), "datadoghq.com")  # noqa: E731
+    check("check --stamp rebuilds the nine seeds' views and is green",
+          st.main(["check", "--profile", "accen-dev", "--out", str(nowhere), "--stamp", "202611111800"]) == 0)
+    st.datadog = lambda profile, region: (FakeDatadog(missing=("c3-pii",)), "datadoghq.com")  # noqa: E731
+    check("check --stamp is red when the PII trace is gone",
+          st.main(["check", "--profile", "accen-dev", "--out", str(nowhere), "--stamp", "202611111800"]) == 1)
+    check("check with neither a views file nor --stamp: status 2",
+          st.main(["check", "--profile", "accen-dev", "--out", str(nowhere)]) == 2)
+    check("a stamp that is not a UTC minute: status 2",
+          st.main(["check", "--profile", "accen-dev", "--out", str(nowhere), "--stamp", "last-night"]) == 2)
+    check("a --session of another seed's id: status 2",
+          st.main(["check", "--profile", "accen-dev", "--out", str(nowhere), "--stamp", "202611111800",
+                   "--session", "c2-fixed=wib-stage-c2-attack-202611111800-2"]) == 2)
+    got = st.from_stamp("202611110035", ["c2-fixed=wib-stage-c2-fixed-202611110035-2"])
+    check("from_stamp reads the stamp as the seed's UTC start and keeps a retried seed's session",
+          got == ("2026-11-11T00:35:00+00:00", {"c2-fixed": "wib-stage-c2-fixed-202611110035-2"}), str(got))
+    rebuilt = st.views("datadoghq.com", "202611110035", sessions=got[1])
+    check("the rebuilt views read the retried session, every other seed its first ask",
+          {r["key"]: r["session"] for r in rebuilt if r["session"]}["c2-fixed"] == "wib-stage-c2-fixed-202611110035-2"
+          and {r["key"]: r["session"] for r in rebuilt if r["session"]}["c1-attack"]
+          == "wib-stage-c1-attack-202611110035")
+
     print("== each seed's link opens on the seed's own window ==")
     seeded_ms = int(dt.datetime.fromisoformat(old["seeded_at"]).timestamp() * 1000)
 
