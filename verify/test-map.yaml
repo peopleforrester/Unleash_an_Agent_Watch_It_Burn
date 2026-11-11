@@ -6050,6 +6050,10 @@ rules:
       - agent/**
       - gitops/ai-layer/resources.yaml
       - gitops/otel-collector/values-burn.yaml
+      - infra/datadog-fleet/dashboard.yaml
+      - infra/datadog-fleet/fleet_monitors.py
+      - infra/datadog-fleet/leaderboard.yaml
+      - infra/datadog-fleet/monitors.yaml
       - verify/pii_scrub_cases.py
       - verify/pii_scrub_live.py
     tests:

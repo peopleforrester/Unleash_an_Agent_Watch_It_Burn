@@ -14,7 +14,10 @@ import sys
 
 import yaml
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+HERE = pathlib.Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parent / "infra/datadog-fleet"))
+import fleet_monitors as fm  # noqa: E402
 import pii_scrub_live as live  # noqa: E402
 from pii_scrub_cases import ATTENDEE, ATTENDEE_SCRUBBED, SCRUB, burn_scrub  # noqa: E402
 
@@ -112,11 +115,13 @@ class FakeDD:
         raise AssertionError(f"unexpected Datadog call {method} {path}")
 
 
-def run(kubectl=None, dd=None, send=lambda argv, body: "") -> list[live.Check]:
+def run(kubectl=None, dd=None, send=lambda argv, body: "", slept=None) -> list[live.Check]:
     t = [0.0]
 
     def sleep(s):
         t[0] += s
+        if slept is not None:
+            slept.append(s)
     return live.run(["fake-kubectl"], kubectl or fake_kubectl(relay()), dd or FakeDD(), 168, 60,
                     send=send, sleep=sleep, clock=lambda: t[0], ids=lambda: (TRACE, SPAN, STAMP),
                     now_ns=lambda: NOW, log=lambda s: None)
@@ -193,6 +198,48 @@ red("a stored APM span with a raw SSN in a span event", run(dd=FakeDD(stored=[ra
 red("a stored Agent Observability span with a raw card",
     run(dd=FakeDD(stored_lo=[llmobs_span("card 4111111111111111")])), "Agent Observability (ml_app:burritobot): no raw")
 red("a scan that cannot finish", run(dd=FakeDD(endless=True)), "the scan read every span")
+
+print("== Datadog's rate limit (#1335) ==")
+
+
+def throttled(fake: FakeDD, n: int, status: int = 429):
+    """fleet_monitors.Datadog itself, its HTTP answered by fake, except that the first n stored-span scan searches
+    get status, as the org's 50-a-minute span search limit answered on 2026-11-11. calls counts those searches."""
+    left, calls = [n], [0]
+
+    def http(method, url, headers, body):
+        b = json.loads(body) if body else None
+        if b and b["data"]["attributes"]["filter"]["query"].startswith("kube_cluster_name:"):
+            calls[0] += 1
+            if left[0] > 0:
+                left[0] -= 1
+                return status, {"errors": ["Too many requests"]}
+        return 200, fake.call(method, url.removeprefix(dd.base), b)
+    dd = fm.Datadog("datadoghq.com", "api", "app", http=http)
+    return dd, calls
+
+
+slept: list[float] = []
+dd, calls = throttled(FakeDD(), 2)
+checks = run(dd=dd, slept=slept)
+check("two 429s on the stored scan are waited out and it ends green", not failed(checks), str(failed(checks)))
+check(f"each 429 waits one {live.RATE_PERIOD}s period before the search is asked again",
+      slept.count(live.RATE_PERIOD) == 2 and calls[0] == 4, f"slept {slept}, {calls[0]} scan searches")
+dd, calls = throttled(FakeDD(), live.RATE_TRIES)
+try:
+    run(dd=dd)
+    check(f"{live.RATE_TRIES} 429s in a row fail the run", False, "run() returned")
+except RuntimeError as e:
+    check(f"{live.RATE_TRIES} 429s in a row fail the run, naming the 429, after {live.RATE_TRIES} tries",
+          "429" in str(e) and calls[0] == live.RATE_TRIES, f"{e}; {calls[0]} scan searches")
+dd, calls = throttled(FakeDD(), 1, status=403)
+slept = []
+try:
+    run(dd=dd, slept=slept)
+    check("any other refusal fails the run at once", False, "run() returned")
+except RuntimeError as e:
+    check("any other refusal fails the run at once, with no wait",
+          "403" in str(e) and calls[0] == 1 and live.RATE_PERIOD not in slept, f"{e}; slept {slept}")
 
 print("== what the stored scan leaves alone ==")
 ids = apm_span(custom__session={"id": "admin@kagent.dev 5035550142"},

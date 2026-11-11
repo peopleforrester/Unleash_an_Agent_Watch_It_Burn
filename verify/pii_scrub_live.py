@@ -62,6 +62,12 @@ LLMOBS_SPANS = "/api/v2/llm-obs/v1/spans/events"
 # A page of the stored-span scan, and how many spans it reads before it stops and fails as incomplete.
 PAGE = 1000
 CAP = 100_000
+# Datadog's span search allows the org 50 requests in each 60 s (x-ratelimit-name spans_public_api, limit 50,
+# period 60, read 2026-11-11), and the scan pages through up to 100 pages with no pause, so a 7-day scan ran into a
+# 429 twice on 2026-11-11 (#1335). A 429 is waited out for one period and asked again, RATE_TRIES times at most.
+RATE_PERIOD = 60
+RATE_TRIES = 5
+RATE_LIMITED = re.compile(r" -> 429: ")
 
 SESSION = "wib-pii-scrub-jo.example+kc@example.co.uk"
 TOOL_ARGS = json.dumps({"email": "jo.example+kc@example.co.uk", "phone": "(503) 555-0142"})
@@ -347,11 +353,31 @@ def scan_checks(where: str, n: int, hits: list, complete: bool, hours: int) -> l
              f"{len(hits)} match(es): {shown}")]
 
 
+class Patient:
+    """dd, with each call that Datadog answers 429 (fleet_monitors.Datadog.call's "-> 429:" error) waited out for
+    RATE_PERIOD and asked again, up to RATE_TRIES times in all; the last 429, and every other error, is raised."""
+
+    def __init__(self, dd, sleep: Callable[[float], None], log: Callable[[str], None]):
+        self.dd, self.sleep, self.log = dd, sleep, log
+
+    def call(self, method: str, path: str, body=None):
+        for attempt in range(1, RATE_TRIES + 1):
+            try:
+                return self.dd.call(method, path, body)
+            except RuntimeError as e:
+                if not RATE_LIMITED.search(str(e)) or attempt == RATE_TRIES:
+                    raise
+                self.log(f"  Datadog answered 429 on {method} {path.split('?')[0]}; waiting {RATE_PERIOD}s, "
+                         f"then try {attempt + 1} of {RATE_TRIES}")
+                self.sleep(RATE_PERIOD)
+
+
 def run(kubectl_argv: list[str], kubectl: Callable[[list[str]], str], dd, hours: int, wait_s: float,
         send: Callable[[list[str], bytes], str] = send_through_forward,
         sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic,
         ids: Callable[[], tuple[str, str, str]] = new_ids, now_ns: Callable[[], int] = time.time_ns,
         log: Callable[[str], None] = print) -> list[Check]:
+    dd = Patient(dd, sleep, log)
     checks: list[Check] = []
     log("== 1. the community cluster's collector runs the scrub ==")
     checks += collector_checks(kubectl)
