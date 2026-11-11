@@ -51496,3 +51496,62 @@ This run changed nothing in AWS, in git outside this entry, or on either cluster
 
 **Tests.** None changed: this entry is the only file the run touches. The prose gate was run on it; the scoped Test
 command is left to validation.
+## 2026-11-11 · #1308 · run 20218 · #1288's repin runs on both KubeCon clusters, and /chat refuses both spellings with every guard off
+
+**What the issue asks.** Once #1288's repin to guard-proxy 0627502 syncs, read `checksum/proxy-py` on both clusters,
+then with every guard off send "f u c k" and its fullwidth spelling to `/chat` and a 4,000-character run of `$`, and
+put the toggles back as found. `bash verify/prior-drafts.sh 1308 origin/staging` printed NONE, and the issue had no
+comments. No file but this one changes.
+
+**The sync.** Staging moved to 1cf4adec (#1288) at 01:17:29Z. At 01:19Z both `ai-layer` Applications still read
+Synced at 60e95562, the commit before it. At 01:21:29Z both Deployments read the new annotation, and
+`kubectl rollout status deploy/guard-proxy` returned rolled out on each:
+
+```
+watch-it-burn-community  ai-layer Synced 1cf4adec63f6 Healthy  checksum/proxy-py d7efbfee76b7 ready=1 updated=1 replicas=1
+watch-it-burn-private    ai-layer Synced 1cf4adec63f6 Healthy  checksum/proxy-py d7efbfee76b7 ready=1 updated=1 replicas=1
+sha256sum /app/proxy.py in the proxy container, both clusters: d7efbfee76b79c9e66a312e9424543bb6602e06ee518170141b3aa18ad9c1156
+sha256sum of gitops/ai-layer/guard-proxy/proxy.py at 0627502:  d7efbfee76b79c9e66a312e9424543bb6602e06ee518170141b3aa18ad9c1156
+```
+
+**The /chat check.** A script in the run's scratch directory held `verify/guard_lease.py`'s lock on each cluster in
+turn (the lock was free on both). It read `/toggle` with no query, set `input_blocklist`, `input_classifier`, `output`,
+`budget` and `topic` off, and posted each prompt to `http://localhost:8080/chat` from inside the proxy container,
+timing the request there. Then it set back on any guard it had found on and read `/toggle` again. Every guard was
+already off on both clusters, with `cost_cap_usd` 25.0, so the off request changed nothing, there was nothing to
+restore, and guard-proxy logged no `guard_toggle` line in the window. `/controls` read `always_on.code_of_conduct` true
+on both. No model call was made: each prompt was refused before the agent, with 0 tokens.
+
+```
+== watch-it-burn-community  2026-11-11T01:23:02Z
+  /chat spaced (7 chars): 116.1 ms, {"reply": "Let's keep it kind: BurritoBot only answers within the event's code of conduct.", "guarded": false, "input_tokens": 0, "output_tokens": 0}
+  /chat fullwidth (4 chars): 100.7 ms, same reply
+  /chat '$'*4000 + ' f u c k' (4008 chars): 501.4 ms, same reply
+  conduct_matches('$'*n) in the pod, CPU ms: [(1000, 6.16, 0), (4000, 24.97, 0), (16000, 100.71, 0)]
+  found and end: all five guards false, cost_cap_usd 25.0; log since start: 5 conduct_refused, 0 guard_toggle
+== watch-it-burn-private  2026-11-11T01:24:33Z
+  /chat spaced (7 chars): 124.4 ms, same reply
+  /chat fullwidth (4 chars): 120.3 ms, same reply
+  /chat '$'*4000 + ' f u c k' (4008 chars): 431.5 ms, same reply
+  conduct_matches('$'*n) in the pod, CPU ms: [(1000, 7.64, 0), (4000, 32.1, 0), (16000, 111.94, 0)]
+  found and end: all five guards false, cost_cap_usd 25.0; log since start: 3 conduct_refused, 0 guard_toggle
+```
+
+The community cluster logged two more `conduct_refused` events than the check sent. It is the room's public bot, so
+those two are other people's turns in the same window.
+
+**The run of `$`.** A run of `$` alone is no term, so `/chat` would pass it to the Bedrock guardrail and the model and
+answer in model time. The check therefore sent the run with a term after it. The matcher has to read the whole run
+before it reaches the term, and the turn is refused with no model call. It was answered in 431 to 501 ms, under a
+second, against the 2,243 ms that f75aa2f's matcher alone took on 4,000 characters (run 19825). The matcher
+itself, timed with the pod's own `proxy.py` in a fresh process, took 25 to 32 ms of CPU at 4,000 characters and grows
+in step with the length (6 to 8 ms at 1,000, 101 to 112 ms at 16,000). The rest of the wall time is the pod's CPU
+limit. The proxy container's limit is 250m (`cpu.max` reads `25000 100000`), and a refused turn reads the prompt with
+the matcher three times: the refusal, `conduct_mask` and `moderate()` for the side-screen feed (`STREAM_PROMPTS` is on).
+In the pod those three took 93.8 ms of CPU on community and 103.9 ms on private, about four 25 ms quota periods,
+which is the 400 ms or so seen.
+
+**Live check.** Run on both clusters as above; the clusters are left as found: every guard off as it was, the
+cost cap at 25.0, the lock released. `agent/terminal-auth` was not read or touched.
+
+**Tests.** None changed: this entry is the only file the run touches. The prose gate was run on it.
