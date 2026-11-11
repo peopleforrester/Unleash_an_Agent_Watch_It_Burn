@@ -51837,13 +51837,14 @@ the 2,201 string literals of the probes and servers.
 **Tests changed** for the list, each run once here and passing: test_chat_coc.py (Go's `\u` escapes; entries ROT13
 leaves as they are), test_chat_coc_e2e.py (112 of 155; the pre-#1300 mutant written `[k][k]*`; the slang fixture),
 test_desk_coc.py (the slang fixture through the real desk), test_coc_admission.py, test_coc_pattern_copies.py,
-test_coc_pattern_linear.py (its mutant), test_coc_floor_spike.py (the ports' own term literal left out),
+test_coc_pattern_linear.py (its mutant, and a pair of letters at a term's start counted as covered), test_coc_floor_spike.py (the ports' own term literal left out),
 test_deploy_coc.py (the emoji's escape), test_guard_proxy_pin_1288.py and the new test_guard_proxy_pin_1316.py.
 Also run, unchanged and passing: test_collector_coc_mask.py, test_coc_floor_mapping.py, test_coc_floor_latency.py,
 test_proxy_checksum.py, test_guard_proxy_pin_1267.py, 1225, 1048 and test_guard_proxy_pin_on_main.sh. The tier test
 `bash verify/run-e2e-tools.sh test_collector_coc_mask_e2e.py` ran the factored pattern through the pinned
-otelcol-contrib on the instructor and burn configs: `ALL E2E TOOLS TIER CHECKS GREEN`, 2m17s. The rest of the
-scoped suites is left to validation.
+otelcol-contrib on the instructor and burn configs: `ALL E2E TOOLS TIER CHECKS GREEN`, 1m52s on the final form.
+test_chat_coc_e2e.py ran in node in 110 s, and test_scope_tests.py passed. The rest of the scoped suites is left to
+validation.
 
 **Criterion 2.** On guard-proxy's `conformance/coc_floor/slang-set.rot13.tsv` at the pin (70 refused, 17 passes), the
 pinned `proxy.py` refuses the 70 and passes the 17. The page's `cocViolation`, run in node, gives its verdict on all
