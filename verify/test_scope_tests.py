@@ -137,6 +137,12 @@ bound = doc["bounds"]["verify/collector_render.py"]["paths"]
 named = [os.path.relpath(f, REPO) for app in cr.PROFILE_APP.values() for f in cr.value_files(app)]
 check("every values file the collector Applications name is inside collector_render.py's bound",
       named and all(any(st.covers(e, f) for e in bound) for f in named), str(named))
+# directory_manifests() (#1332) reads each in-repo directory source of the collector Applications, the coc-mask
+# ConfigMap's directory among them.
+dirs = [s["path"] for app in cr.PROFILE_APP.values()
+        for s in yaml.safe_load(app.read_text(encoding="utf-8"))["spec"].get("sources", []) if "path" in s]
+check("every directory source of the collector Applications is inside collector_render.py's bound",
+      dirs and all(any(st.covers(e, d) for e in bound) for d in dirs), str(dirs))
 # git_mirror.py (#1122) runs git cat-file on a mirror and ls-files for the gitlinks; its bound names what it reads of
 # this tree, so a test that runs ensure-submodules.sh is not sent to always by those calls, and reads the bound instead.
 bound = doc["bounds"]["verify/git_mirror.py"]["paths"]
@@ -203,7 +209,7 @@ check("sister_tree.py runs git only to clone another repo and to read that clone
       and doc["bounds"]["verify/sister_tree.py"]["paths"] == [], str(git_calls))
 # A bound stands in for every run-time path and git read of its file, so one added later would hide behind it. Each
 # bounded file's own count of those is pinned: a new one fails here until its bound is reread against it.
-BOUNDED_READS = {"verify/app_render.py": 2, "verify/bootstrap_chart.py": 1, "verify/collector_render.py": 1,
+BOUNDED_READS = {"verify/app_render.py": 2, "verify/bootstrap_chart.py": 1, "verify/collector_render.py": 2,
                  "verify/git_mirror.py": 1, "verify/sister_tree.py": 1, "verify/test_bootstrap_chart_render.py": 1,
                  "verify/test_datadog_log_services_render.py": 4, "verify/test_enforce_floor.py": 3,
                  "verify/test_image_registry_render.py": 3, "verify/test_kubearmor_config_render.py": 1,

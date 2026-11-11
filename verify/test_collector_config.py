@@ -25,7 +25,12 @@ import yaml
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 VALUES = REPO / "gitops/otel-collector/values.yaml"
+COC_MASK = REPO / "gitops/otel-collector/coc-mask/configmap.yaml"
+# relay.yaml, then the file the collector loads after it from the otel-collector-coc-mask ConfigMap, which defines
+# transform/coc_mask (#1332): both are config the collector refuses whole on one map-shaped statement.
 CFG = (yaml.safe_load(VALUES.read_text(encoding="utf-8")) or {}).get("config", {})
+CFG.setdefault("processors", {}).update(
+    yaml.safe_load(yaml.safe_load(COC_MASK.read_text(encoding="utf-8"))["data"]["coc-mask.yaml"])["processors"])
 
 failures: list[str] = []
 
