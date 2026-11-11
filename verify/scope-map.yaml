@@ -2276,6 +2276,15 @@ reads:
     - verify/fetch-e2e-tools.sh
     - verify/git_mirror.py
     - verify/topic_cases.py
+  test_collector_coc_mask_live_checks.py:
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/otel-collector
+    - gitops/otel-collector/coc-mask
+    - gitops/otel-collector/coc-mask/configmap.yaml
+    - verify/collector_render.py
+    - verify/test_collector_coc_mask_live.py
   test_collector_coc_parse_cpu_e2e.py:
     - gitops/bootstrap/apps/otel-collector-attendee.yaml
     - gitops/bootstrap/apps/otel-collector-burn.yaml

@@ -52610,3 +52610,39 @@ scan will stop at the cap and fail as incomplete, so this is filed as a followup
 **Tests run**, each once and passing: `test_pii_scrub_live_logic.py`, `test_scope_tests.py`, `test_test_map.py`, and
 `test_collector_pii_scrub_live.py` live on watch-it-burn-community. The other tests the change selects are left to
 validation.
+
+## 2026-11-11 · #1339 · run 20301 · a live test holds #1335's criterion on both clusters
+
+Test review run 20298 found that no test read the live state #1335 recorded: the `otel-collector` Application Synced
+and Healthy on both KubeCon clusters, and the otel-collector-coc-mask ConfigMap in monitoring. Only the source was
+held, offline, by `test_collector_coc_mask.py`.
+
+**The test.** `verify/test_collector_coc_mask_live.py` (`# SUITE: e2e`, so `run-e2e.sh` runs it, with the
+COMMUNITY_CONTEXT and PRIVATE_CONTEXT that script already requires) runs twelve read-only checks on each of
+watch-it-burn-community and watch-it-burn-private. The context is that cluster. Argo CD has the `otel-collector`
+Application, and it is Synced and Healthy. Its destination is monitoring and it deploys `gitops/otel-collector/coc-mask`
+from this repo. Argo CD tracks ConfigMap monitoring/otel-collector-coc-mask among its resources, Synced. The ConfigMap
+is in monitoring, its tracking id names the `otel-collector` Application, and its `coc-mask.yaml` defines
+`transform/coc_mask` and nothing else. The collector DaemonSet exists, mounts the ConfigMap not optionally, carries a
+`checksum/coc-mask` equal to the SHA-256 of the live file, and has that template available on every node. The last
+three tie "the ConfigMap is in monitoring" to the collector running on it, since relay.yaml names the processor and a
+collector without it refuses its config. The test reads no repo copy of the file, so a change to the term list on a
+branch does not fail it before Argo CD syncs the change.
+
+**Its offline half.** `verify/test_collector_coc_mask_live_checks.py` runs the test's `run` against fake clusters built
+from this checkout's ConfigMap. The healthy pair passes all 24 checks. Each of 25 breaks on the community cluster
+(no Application, OutOfSync, Degraded, Progressing, no status, another destination, the coc-mask source dropped or from
+another repo, the ConfigMap untracked or tracked OutOfSync, gone, put there by another Application, without its key,
+with a second processor, not YAML, a mask with no statements, no DaemonSet, no mount, an optional mount, an older
+checksum, a changed file under the old checksum, a template not observed, a node not updated or unavailable, no node
+scheduled) fails on the check that names it, with the private cluster still green. A context naming the wrong cluster
+and a cluster that cannot be read fail too. The scope map gains the checks file's entry.
+
+**Live check, 07:06Z, staging `de5b9a2c`.** `COMMUNITY_CONTEXT=watch-it-burn-community
+PRIVATE_CONTEXT=watch-it-burn-private python3 verify/test_collector_coc_mask_live.py` passed 24 of 24 and exited 0.
+On both clusters the live `coc-mask.yaml` and the DaemonSet's `checksum/coc-mask` read
+`829e6a368fc264835e01983a0de2bb3adb5f95004449d9d6ed42ff4ccbb00455`, as #1335 recorded. Nothing on either cluster
+changed.
+
+**Tests run**, each once and passing: `test_collector_coc_mask_live_checks.py`, `test_collector_coc_mask_live.py` live
+on both clusters, `test_scope_tests.py` and `test_test_map.py`. The rest the change selects are left to validation.
