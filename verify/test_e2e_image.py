@@ -264,6 +264,40 @@ check("and no container runs, and nothing is downloaded instead",
 check("e2e-image.sh never runs fetch-e2e-tools.sh",
       "fetch-e2e-tools" not in (HERE / "e2e-image.sh").read_text(encoding="utf-8"))
 
+print("== 5b. e2e-image.sh build uses the runtime WIB_CONTAINER_RUNTIME names, though podman is on PATH too (#1355) ==")
+
+
+def builder(named: str | None) -> tuple[subprocess.CompletedProcess, str]:
+    """Run `e2e-image.sh build` with podman and docker stand-ins both on PATH, as on GitHub's ubuntu-latest runner."""
+    with tempfile.TemporaryDirectory() as tmp:
+        t = pathlib.Path(tmp)
+        fakebin = t / "bin"
+        fakebin.mkdir()
+        log = t / "calls.log"
+        for name in ("podman", "docker"):
+            (fakebin / name).write_text(f'#!/bin/sh\necho "{name} $*" >> "{log}"\nexit 0\n')
+            (fakebin / name).chmod(0o755)
+        env = {k: v for k, v in os.environ.items() if k != "WIB_CONTAINER_RUNTIME"}
+        env["PATH"] = f"{fakebin}:{os.environ['PATH']}"
+        if named is not None:
+            env["WIB_CONTAINER_RUNTIME"] = named
+        r = subprocess.run(["bash", str(HERE / "e2e-image.sh"), "build"], capture_output=True, text=True, env=env,
+                           timeout=120)
+        return r, (log.read_text() if log.exists() else "")
+
+
+r, calls = builder("docker")
+check("WIB_CONTAINER_RUNTIME=docker builds with docker and never with podman",
+      r.returncode == 0 and calls.startswith("docker build ") and "podman" not in calls, calls + r.stderr)
+check("under the lock's tag, labelled with it", f"-t {REF} " in calls
+      and f"io.github.peopleforrester.watch-it-burn.source-tree={REF.rsplit(':', 1)[1]}" in calls, calls)
+r, calls = builder(None)
+check("with nothing named, podman is picked first, as before", r.returncode == 0 and calls.startswith("podman build "),
+      calls + r.stderr)
+r, calls = builder("nerdctl")
+check("a runtime that is neither podman nor docker fails naming it, and nothing builds",
+      r.returncode == 1 and "nerdctl" in r.stderr and calls == "", calls + r.stderr)
+
 print("== 6. the workflow builds and pushes only for a new lock or build ==")
 wf_path = REPO / ".github/workflows/build-e2e-tools-image.yml"
 wf = yaml.safe_load(wf_path.read_text(encoding="utf-8"))
@@ -282,6 +316,17 @@ check("it checks the pins before it builds", runs_text.index("e2e_image.py check
 check("it pushes through scripts/ghcr_version_tag.py, which never pushes over an existing tag",
       'python3 scripts/ghcr_version_tag.py "${REF}" "${REF}"' in runs_text and "docker push" not in runs_text)
 check("it may write packages", wf["permissions"].get("packages") == "write")
+# Run 43045328973 built into podman's store and checked with docker, which found no image and exited 125 (#1355).
+push_src = (REPO / "scripts/ghcr_version_tag.py").read_text(encoding="utf-8")
+check("the push helper tags, inspects and pushes with docker alone",
+      '["docker", "push"' in push_src and '"podman"' not in push_src)
+check("so the job names docker as its one runtime, for e2e-image.sh build to use",
+      job.get("env", {}).get("WIB_CONTAINER_RUNTIME") == "docker", str(job.get("env")))
+check("and no step names a runtime of its own: the check and the login go through that one",
+      "podman" not in runs_text and "docker " not in runs_text
+      and '"${WIB_CONTAINER_RUNTIME}" run --rm --pull=never' in runs_text
+      and '"${WIB_CONTAINER_RUNTIME}" login ghcr.io' in runs_text
+      and not any("WIB_CONTAINER_RUNTIME" in (s.get("env") or {}) for s in job["steps"]), runs_text)
 check("the build labels the image with its tag, which ghcr_version_tag.py reads as its source",
       'io.github.peopleforrester.watch-it-burn.source-tree=${ref##*:}' in (HERE / "e2e-image.sh").read_text())
 

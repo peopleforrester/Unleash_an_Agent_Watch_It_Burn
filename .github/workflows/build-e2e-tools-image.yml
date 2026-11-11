@@ -7,7 +7,10 @@
 # other build inputs', so a tag never names two images. The paths below are those inputs; a push that changes none of
 # them does not start this workflow, and a run whose tag ghcr.io already has pushes nothing.
 #
-# It builds on a GitHub-hosted runner, which has Docker and fetches from GitHub's own network, not on Tanjiro. The push
+# It builds on a GitHub-hosted runner, which has Docker and fetches from GitHub's own network, not on Tanjiro. Build,
+# check and push use one runtime, docker, named once in the job's WIB_CONTAINER_RUNTIME (#1355): the runner has podman
+# as well, which e2e-image.sh picks first when nothing names one, and run 43045328973 built into podman's store, so
+# docker's check found no image, tried ghcr.io, was denied, and exited 125 with nothing pushed. The push
 # goes through scripts/ghcr_version_tag.py (#816), which never pushes over a tag ghcr.io has: the image's source-tree
 # label is its tag, so an existing tag reads as this build's and is left alone. GITHUB_TOKEN writes the package, which
 # it creates linked to this repository on its first push.
@@ -41,6 +44,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      # docker, since scripts/ghcr_version_tag.py tags, inspects and pushes with docker alone.
+      WIB_CONTAINER_RUNTIME: docker
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -63,7 +69,7 @@ jobs:
           REF: ${{ steps.image.outputs.ref }}
         run: |
           set -euo pipefail
-          docker run --rm -v "${PWD}:/w:ro" -w /w "${REF}" bash -c \
+          "${WIB_CONTAINER_RUNTIME}" run --rm --pull=never -v "${PWD}:/w:ro" -w /w "${REF}" bash -c \
             'python3 verify/e2e_image.py matches "${WIB_E2E_TOOLS}/tools.txt" && node --version && uv --version && python3 -c "import yaml"'
 
       - name: Push to the tag, unless ghcr.io has it
@@ -73,5 +79,5 @@ jobs:
           REF: ${{ steps.image.outputs.ref }}
         run: |
           set -euo pipefail
-          printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
+          printf '%s' "${GHCR_TOKEN}" | "${WIB_CONTAINER_RUNTIME}" login ghcr.io -u "${GHCR_USER}" --password-stdin
           python3 scripts/ghcr_version_tag.py "${REF}" "${REF}" verify/e2e-image/Containerfile

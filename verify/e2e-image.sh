@@ -9,7 +9,8 @@
 #                                     run `bash verify/run-e2e-tools.sh` inside it, with the tier tests named, if any,
 #                                     passed on to run alone (#1190)
 #
-# The runtime is podman when the host has it, else docker. `run` uses the image when the host holds the tag, pulls it
+# The runtime is the one WIB_CONTAINER_RUNTIME names (podman or docker), else podman when the host has it, else
+# docker. `run` uses the image when the host holds the tag, pulls it
 # once when it does not, and then starts it with --pull=never, so a second run on the host pulls nothing. When neither
 # works it exits 1 naming the image and how to build it; it never fetches a binary itself.
 #
@@ -27,8 +28,19 @@ export TMPDIR
 
 die() { printf 'E2E IMAGE FAILED: %s\n' "$*" >&2; exit 1; }
 
+# WIB_CONTAINER_RUNTIME names the runtime outright, and then nothing else is tried (#1355). The workflow sets it to
+# docker: its runner has podman too, and a podman build sat in a store docker's check and ghcr_version_tag.py's push
+# never saw, so docker went to ghcr.io for the image, was denied, and exited 125 (Actions run 43045328973).
 runtime() {
-    if command -v podman >/dev/null 2>&1; then
+    if [[ -n "${WIB_CONTAINER_RUNTIME:-}" ]]; then
+        case "${WIB_CONTAINER_RUNTIME}" in
+            podman|docker) ;;
+            *) die "WIB_CONTAINER_RUNTIME is '${WIB_CONTAINER_RUNTIME}'; it names podman or docker" ;;
+        esac
+        command -v "${WIB_CONTAINER_RUNTIME}" >/dev/null 2>&1 \
+            || die "WIB_CONTAINER_RUNTIME names ${WIB_CONTAINER_RUNTIME}, which is not on PATH"
+        printf '%s\n' "${WIB_CONTAINER_RUNTIME}"
+    elif command -v podman >/dev/null 2>&1; then
         printf 'podman\n'
     elif command -v docker >/dev/null 2>&1; then
         printf 'docker\n'
