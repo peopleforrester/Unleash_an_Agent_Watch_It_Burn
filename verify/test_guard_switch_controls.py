@@ -99,6 +99,10 @@ if mode != "no-topic":
 if "apply" in a:
     state.setdefault("applied", []).append([ctx, os.path.basename(a[-1])])
     print("role.rbac.authorization.k8s.io/workshop-agent configured")
+elif a == ["-n", "agent", "get", "role", "workshop-agent", "-o", "json"]:
+    # guard-agency-on's and guard-agency-off's read of the live Role (_keep_secrets, #1358, #1362): the shipped Role's
+    # Secret rule, every Secret, which test_guard_switch_both.py holds the choice of file to.
+    print(json.dumps({"kind": "Role", "rules": [{"apiGroups": [""], "resources": ["secrets"], "verbs": ["get", "list"]}]}))
 else:
     path = None
     if a[:4] == ["-n", "agent", "exec", "deploy/guard-proxy"]:

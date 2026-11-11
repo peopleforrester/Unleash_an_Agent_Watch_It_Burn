@@ -54115,3 +54115,58 @@ FULL for this change, because `e2e-image.sh` is in the map's full list, and a ru
 
 **Not yet run.** iam-policy.yml on GitHub's runner with docker, which runs on the next push that touches its paths.
 This commit touches its paths.
+
+## 2026-11-11 · #1362 · run 20456 · guard-agency-on keeps each cluster's Secret rule too, so a rehearsal from the start state ends there
+
+**The choice.** The issue offered two ways out: a broad-Secret variant of the c6 Role that guard-agency-on picks where
+the live Role is broad, or leaving guard-agency-on alone and telling the reset steps to run guardrails-off after it.
+This takes the first. It is the same rule #1358 gave guard-agency-off, so the two commands read alike, and a reset step
+that depends on an extra command being remembered is the failure #1358 started from.
+
+**The change.** challenge-fixes (gitops/ai-layer/resources.yaml) gains `c6-broad-secrets-role.yaml`: c6's workload rules
+(get and list on Deployments and Pods, patch on deployments/scale, configmaps and services as before) with
+c8-broad-role.yaml's get and list on every Secret. In .guardlib, #1358's role read moved into `_keep_secrets <broad>
+<scoped>`, unchanged in what it reads (guard-proxy's own rbac_scoped test), and both steps are one line on it:
+`_agency_on` picks c6-broad-secrets-role.yaml or c6-least-privilege-role.yaml, `_agency_off` c8-broad-role.yaml or
+c5-scoped-role.yaml. guard-agency-on runs `_both _agency_on`. In talk order, after guardrails-on, it still applies c6.
+Its message now says the CEO's record is left as each cluster had it, as guard-agency-off's does. guard-proxy's
+/controls (submodule 0a3ca16, proxy.py) reads the new Role as rbac_scoped false and agency_scoped true. The peer's
+guardrails-switch grant (get, patch, escalate on the workshop-agent Role) already covers the read and the apply.
+`verify/agency_role_check.py` counts either c6 Role as applied and names which, and `verify/room_reader_rbac.py` lists
+the new Role among the swaps, so workshop-mcp's room reader is checked under it too. The run-of-show and kubecon.html
+say that both commands keep the Secret rule.
+
+**Live check on both KubeCon clusters.** As found at 17:49Z: both Roles c8-broad-role.yaml (rules sha256
+`2c33da5b83ffdbb1`), `agency_role_check.py` reading "not applied ... c8-broad-role.yaml" on both. The new .guardlib,
+guard-agency-on and guard-agency-off, taken from this commit's entrypoint, and the challenge-fixes files, were run from
+this run's host in a scratch HOME under $TMPDIR, with `kubectl` for watch-it-burn-private (every call naming
+`--context watch-it-burn-private`) and the community cluster reached through private's guardrails-peer Secret as the
+guardrails-switch ServiceAccount, the identity the private terminal uses there. guard-agency-on, 17:49:29Z: "Switched on
+both clusters", exit 0, and the read `Kubernetes ON: Falco, least privilege off: ... RBAC scope` on private and `ON:
+least privilege off: ... RBAC scope` on community; both Roles then held get and list on Deployments and Pods and get
+and list on Secrets. guard-agency-off, 17:49:58Z: "Switched on both clusters", exit 0, the read `ON: Falco off: ...
+RBAC scope, least privilege` on private and `ON: none off: ... RBAC scope, least privilege` on community, both Roles
+back to rules sha256 `2c33da5b83ffdbb1`. The old guard-agency-on would have left both scoped.
+
+**Left as found.** The client-side applies added the last-applied annotation, removed with `kubectl annotate role
+workshop-agent kubectl.kubernetes.io/last-applied-configuration-` on each, as #1358 did. Afterwards both Roles read
+rules sha256 `2c33da5b83ffdbb1` with only Argo CD's tracking-id annotation, agent-sa can list Secrets (`auth can-i`
+`yes`), and ai-layer is Synced and Healthy on both. kubectl-client-side-apply now owns `f:rules` until the next ai-layer
+sync, which #1358 measured migrating it back. The scratch HOME, with the peer kubeconfig, was removed.
+
+**Tests.** verify/test_guard_switch_both.py holds guard-agency-on from c8, c5 and a mixed pair (each cluster keeps
+its Secret rule and loses workload writes), an unreadable Role left unwritten, the new Role as c6's workload rules with
+c8's Secret rule, and the rehearsal: guardrails-off, guard-agency-on (c6-broad-secrets on both, the read showing least
+privilege on and RBAC scope off), guard-agency-off (c8 on both, the read showing both off). Against the old entrypoint
+it fails 15 checks. verify/test_guard_switch_controls.py's fake kubectl now answers the Role read. Run once each and
+passing: test_guard_switch_both, test_guard_switch_controls, test_agency_role_check, test_room_reader_rbac,
+test_guard_commands_echo, test_trace_walkthrough_view (with the guard-proxy submodule checked out), test_guards_all_both,
+test_kubecon_seg4_flow, test_ros_seg4_flow, test_stage_traces, test_ai_layer_role_sync, test_guardrails_switch,
+test_kubecon_probe, test_scope_tests. `scope_tests.py write` changed nothing. The rest of the scoped selection is left
+to validation.
+
+**Not yet run on a cluster.** The deployed commands, once hecaton promotes this change and Argo CD rolls web-terminal
+and the challenge-fixes ConfigMap: from the private terminal at the start state, `guard-agency-on` must print
+`c6-broad-secrets-role.yaml` for both clusters, then `guard-agency-off` `c8-broad-role.yaml` for both, and
+`python3 verify/agency_role_check.py watch-it-burn-community watch-it-burn-private` must read c8-broad-role.yaml on
+both afterwards.
