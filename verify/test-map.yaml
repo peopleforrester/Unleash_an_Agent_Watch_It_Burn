@@ -2161,6 +2161,16 @@ rules:
       - verify/test_collector_pods_ready_live.py
     tests:
       - verify/test_collector_pods_ready_live_checks.py
+  - name: test_collector_relay.py
+    paths:
+      - gitops/bootstrap/apps/otel-collector-attendee.yaml
+      - gitops/bootstrap/apps/otel-collector-burn.yaml
+      - gitops/bootstrap/apps/otel-collector.yaml
+      - gitops/otel-collector
+      - gitops/otel-collector/**
+      - verify/collector_render.py
+    tests:
+      - verify/test_collector_relay.py
   - name: test_collector_relay_live_checks.py
     paths:
       - gitops/bootstrap/apps/otel-collector-attendee.yaml

@@ -42,8 +42,8 @@ def check(name: str, cond: bool) -> None:
 # Exporters whose backend runs in the cluster: the gitops/bootstrap/apps Application that installs it.
 IN_CLUSTER = {"prometheusremotewrite": "prometheus.yaml", "otlp_grpc/tempo": "tempo.yaml"}
 # Exporters that need nothing installed: Datadog is SaaS (its Agent Observability intake too, #746), debug writes to
-# the collector's own log.
-NO_BACKEND = {"datadog", "datadog/admin", "otlp_http/llmobs", "otlp_http/llmobs_admin", "debug"}
+# the collector's own log, and otlp_grpc/relay sends to the collector's own otlp/relay receiver on localhost (#1336).
+NO_BACKEND = {"datadog", "datadog/admin", "otlp_http/llmobs", "otlp_http/llmobs_admin", "debug", "otlp_grpc/relay"}
 
 
 def selected(profile: str) -> set[str]:

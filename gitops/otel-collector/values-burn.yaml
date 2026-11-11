@@ -61,10 +61,8 @@ config:
         # values.yaml's traces processors, in order, with the scrub last: after transform/adk_tool_content has
         # copied the tool content to gen_ai.*, so both copies are scrubbed, and before every exporter.
         processors:
-          - memory_limiter
           - transform/kagent_service_name
           - filter/drop_noise
-          - batch
           - resource
           - transform/set_peer_service
           - transform/set_llmobs_workflow
