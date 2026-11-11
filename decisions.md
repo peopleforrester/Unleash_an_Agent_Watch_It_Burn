@@ -54517,3 +54517,31 @@ syncs this change.
 **Not yet run on a cluster.** /kubecon serving the new names: after promotion,
 `curl -fsS https://burritobot-private.burritobot.co/kubecon | grep -c guardrails-k8s-on` is non-zero and
 `python3 verify/test_ros_deck_live.py` passes.
+
+## 2026-11-11 · #1364 · run 20477 · The fallback kit's assets.yaml and deck.html name the guardrails-<name>-on switches
+
+**What changed.** #1352 left two files in the fallback kit on the old switch names, and filed them here. In
+`facilitation/kubecon-na-2026/fallback/assets.yaml` the four `toggle:` fields are now `guardrails-rbac-on`,
+`guardrails-input-on`, `guardrails-mcp-on` and `guardrails-topic-on`, and the three captions that open with a switch
+open with the new name. `screenshots/deck.html` was rewritten from the manifest by
+`python3 scripts/check-fallback-assets.py --write-deck`, so its three captions changed with no hand edit; the checker
+then reported all 14 files in place. The manifest's header now says a `toggle` names a guardrails-<name>-on/off switch.
+
+**The checker refuses an old name.** `check_capture` in `scripts/check-fallback-assets.py` now refuses a toggle that is
+not shaped `guardrails-<name>-on` or `-off`, so after #1363 drops the aliases no shot can send the presenter to a
+command the terminal no longer has. `scripts/replay-prompts.py`, which the issue names, types no switch and reads no
+toggle field, so it is unchanged; the readers of `toggle` are the checker and `capture-fallback-screenshots.py`, which
+only prints it.
+
+**Tests.** `verify/test_replay_prompts.py`: its two synthetic private captures use `guardrails-topic-on`, a capture
+with `guard-topic-on` is refused naming the shape, and each committed shot's toggle is a switch the terminal's
+`entrypoint.sh` writes (`cat > "$HOME/<name>" <<`). `verify/test_switch_names_presenter_docs.py` now holds
+assets.yaml and deck.html to no old name, with no kept span, and its put-back check catches an old name in each; the
+scope map gains those two reads from `scope_tests.py write`. Run once alone, each passed: `test_replay_prompts.py`,
+`test_switch_names_presenter_docs.py`, `test_c2_tron_single_prompt.py` (it reads assets.yaml), `test_test_map.py`,
+`test_scope_tests.py`, and the tier test `test_fallback_deck_e2e.py` in the image
+(`bash verify/e2e-image.sh run test_fallback_deck_e2e.py`: FALLBACK DECK GREEN, 1 check in 0m06s, exit 0).
+`scope_tests.py check` reports 0 problems. The rest of the scoped `run-tests.sh` is left to validation.
+
+**No live check.** The change touches only `facilitation/`, `scripts/check-fallback-assets.py` (run on a presenter
+laptop) and `verify/`, none of which a cluster runs.
