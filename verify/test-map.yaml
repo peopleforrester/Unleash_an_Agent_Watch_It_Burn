@@ -129,6 +129,7 @@ rules:
       - verify/test_guard_proxy_pin_1225.py
       - verify/test_guard_proxy_pin_1267.py
       - verify/test_guard_proxy_pin_1288.py
+      - verify/test_guard_proxy_pin_1316.py
       - verify/test_guard_proxy_pin_bound_pricing.py
       - verify/test_guard_proxy_pin_on_main.sh
       - verify/test_guard_toggle_record.py
@@ -2701,10 +2702,13 @@ rules:
       - verify/test_deployments_private_banner.py
   - name: test_desk_coc.py
     paths:
+      - .gitmodules
       - challenges/PROMPT-CATALOG.md
       - docs/research/2026-11-09-coc-floor
       - docs/research/2026-11-09-coc-floor/**
       - facilitation/kubecon-na-2026/fallback/prompts.yaml
+      - gitops/ai-layer/guard-proxy
+      - gitops/ai-layer/guard-proxy/**
       - gitops/ai-layer/resources.yaml
       - gitops/ai-layer/server.py
       - gitops/ai-layer/ticket_site.py
@@ -2712,6 +2716,12 @@ rules:
       - gitops/ai-layer/web/kubecon.html
       - gitops/ai-layer/workshop-mcp-server.py
       - gitops/workshop-agent/agent.yaml
+      - images/llm-guard
+      - images/llm-guard/**
+      - verify/artifact-cache.sh
+      - verify/artifact_cache.py
+      - verify/ensure-submodules.sh
+      - verify/git_mirror.py
       - verify/topic_cases.py
     tests:
       - verify/test_desk_coc.py

@@ -8,18 +8,24 @@ docs/research/2026-11-09-coc-floor), outside Kyverno so that guardrails-off leav
 
 1. The shape: the policy and binding, Deny, failurePolicy Fail, CREATE and UPDATE of every namespaced kind, bound to
    `agent` alone, scoped to the room's and people's writes, in the namespaces Application that every profile lists.
-2. The pattern is floor.portable_pattern() exactly, and the message and expressions name no term.
+2. The pattern is floor.name_pattern() exactly (#1316): on any text a name and labels can make it refuses what
+   floor.portable_pattern(), the collector's form, refuses, which this checks on every term's spellings and on
+   random name text; and the message and expressions name no term.
 3. The text CEL matches is what this test builds (the expressions are held literally), and on it every Joker slug of
    the 768 witch names, built as deploy_app builds it, every stage image's Deployment the agent prompt names, and every
-   object under gitops/ passes, while every term the list holds, in a name or a label, is refused.
+   object under gitops/ passes, while every term the list holds, in a name or a label, is refused. The longest of
+   those texts costs CEL's matches() well inside its 1,000,000 a call, so none is refused for its length.
 4. guardrails-off, guards-off and the reset scripts leave it in place: neither terminal entrypoint nor fleet.sh names
    an admission policy, the files guardrails-off applies and deletes hold none, its Kyverno step patches Kyverno's
    ValidatingPolicy alone, and no Role or ClusterRole in the stage's bundles grants a write on admission policies.
 """
 from __future__ import annotations
 
+import codecs
 import importlib.util
+import math
 import pathlib
+import random
 import re
 import sys
 import types
@@ -135,16 +141,28 @@ check(len(values) >= 6 and not missing, f"every profile ({len(values)}) lists th
 
 print("== 2. the pattern is the floor's RE2 form, and nothing it says names a term ==")
 expr = variables.get("floor", "")
-pattern = floor.portable_pattern()
+pattern = floor.name_pattern()
 check(expr == f"r'{pattern}'" and "'" not in pattern,
-      f"variables.floor is floor.portable_pattern() as one CEL raw string ({len(pattern)} characters)")
-P = re.compile(pattern)
-# RE2's (?i), which CEL's matches() runs, keeps the dotless i (U+0131) apart from i; re.ASCII has Python fold the same
-# way, so this reads the copy as the cluster does. A term spelt with it is refused as guard-proxy's match reads it (#1301).
-_dotless = [t.replace("i", "ı") for t in corpus.terms("proposed") if "i" in t]
-check(bool(_dotless) and all(re.compile(pattern, re.ASCII).search(f"x={t}") for t in _dotless),
-      f"the pattern, folding case as RE2 does, matches each of the {len(_dotless)} terms holding an i spelt with a "
-      "dotless i")
+      f"variables.floor is floor.name_pattern() as one CEL raw string ({len(pattern)} characters)")
+# re.ASCII has Python's (?i) fold ASCII letters alone, as RE2's does in CEL's matches().
+P = re.compile(pattern, re.ASCII)
+# A name or a label holds letters, digits, ".", "-" and "_"; the text joins them with "/" and "=". On such text the
+# name form must refuse exactly what the collector's form refuses. Each term is tried as a name would spell it (its
+# spaces as each separator, spelt out, upper case, plural, inside other words), and so is random name text, seeded.
+PORTABLE = re.compile(floor.portable_pattern(), re.ASCII)
+ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_/="
+_rnd = random.Random(1316)
+names = ["".join(_rnd.choice(ALPHABET) for _ in range(_rnd.randint(1, 48))) for _ in range(20000)]
+for term in corpus.terms("proposed"):
+    word = floor.fold(term)[0]
+    if all(c in ALPHABET or c == " " for c in word):
+        for sep in "-._":
+            slug = word.replace(" ", sep)
+            names += [slug, f"joker-{slug}", f"app={slug}s", sep.join(word.replace(" ", "")), slug.upper(),
+                      f"x{slug}", f"{slug}y", f"a/{slug}/b"]
+differ = [codecs.encode(n, "rot13") for n in names if bool(P.search(n)) != bool(PORTABLE.search(n))]
+check(not differ, f"on {len(names)} texts a name and labels can make, floor.name_pattern() refuses exactly what "
+                  f"floor.portable_pattern() refuses (differ, ROT13: {differ[:5]})")
 folded = floor.Floor("proposed")
 said = [vals[0].get("message", "") if vals else "", variables.get("labelSets", ""), variables.get("text", ""),
         VALIDATION, WHO]
@@ -220,16 +238,33 @@ check(len(objects) > 150 and not unread and not bad,
       f"all {len(objects)} objects under gitops/ and in the terminal's challenge files pass, so Argo CD and the "
       f"switches are never refused (refused: {bad[:5]}; unreadable: {unread})")
 
+
+def cel_cost(text: str) -> int:
+    """What Kubernetes' CEL charges matches() on text with this pattern (k8s.io/apiserver/pkg/cel/library/cost.go):
+    0.1 a character of the text, plus one, times 0.25 a character of the pattern."""
+    return math.ceil((1 + len(text)) * 0.1) * math.ceil(len(pattern) * 0.25)
+
+
+# A Job in agent, 374 characters of name and labels, was the longest a stage identity had written on either cluster on
+# 2026-11-11 (#1316); the room's Jokers and the stage images are above, and every object under gitops/ is here.
+longest = max([cel_text(d) for _, d in objects] + [cel_text(j) for j in jokers] + [cel_text(o) for o in stage]
+              + ["x" * 374], key=len)
+check(cel_cost(longest) * 3 // 2 <= 1_000_000,
+      f"the longest name and labels here ({len(longest)} characters) cost {cel_cost(longest):,} of CEL's 1,000,000 a "
+      f"call with half again to spare; the budget is about {int(1_000_000 / math.ceil(len(pattern) * 0.25) * 10):,} "
+      "characters")
+
 refused_name, refused_label, terms = [], [], corpus.terms("proposed")
 for term in terms:
-    if not term.isascii():
-        continue  # a term with a letter outside ASCII (an accent, "ß") cannot be in a name or a label value at all
-    slug = re.sub(r"[^a-z0-9]+", "-", term.lower()).strip("-")
+    word = floor.fold(term)[0]
+    if not all(c.isascii() and (c.isalnum() or c in " -_.") for c in word):
+        continue  # a term with a letter outside ASCII ("ß", the finger) or a symbol ("!") cannot be spelt in a name
+    slug = re.sub(r"[^a-z0-9._-]+", "-", word).strip("-")
     refused_name.append(bool(P.search(cel_text(deployment(f"joker-{slug}", "x")))))
     obj = deployment("joker-agatha-the-banshee", "x")
     obj["spec"]["template"]["metadata"]["labels"]["mood"] = f"very-{slug}"
     refused_label.append(bool(P.search(cel_text(obj))))
-check(len(refused_name) > 130 and all(refused_name) and all(refused_label),
+check(len(refused_name) > 1200 and all(refused_name) and all(refused_label),
       f"each of the {len(refused_name)} ASCII terms is refused in a Deployment's name and in a pod "
       f"template label (of {len(terms)} terms; {refused_name.count(False)} names and "
       f"{refused_label.count(False)} labels got through)")

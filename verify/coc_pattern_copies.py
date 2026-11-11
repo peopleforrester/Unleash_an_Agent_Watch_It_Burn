@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 # ABOUTME: Every copy of the code-of-conduct pattern under gitops/ (#1289): where each sits, how it is written there, and
-# ABOUTME: one command that checks them all against floor.portable_pattern() or regenerates them all from it.
+# ABOUTME: one command that checks them all against floor.py's RE2 forms or regenerates them all from them.
 """One source for the copies of the code-of-conduct pattern.
 
-docs/research/2026-11-09-coc-floor/floor.py's portable_pattern(), over terms-proposed.rot13, is the term floor in the
-RE2 form both the cluster's admission and the collector run. Neither can import Python, so the pattern is written out
-in full in each place that runs it. Each place is a Site below: its file, the text around the copy, and how the
-copy is escaped there.
+docs/research/2026-11-09-coc-floor/floor.py's portable_pattern() and name_pattern(), over terms-proposed.rot13, are the
+term floor in the RE2 forms the collector (portable_pattern) and the cluster's admission on names (name_pattern, the
+same matcher for text that can only hold what a name or a label holds, #1316) run. Neither can import Python, so the
+pattern is written out in full in each place that runs it. Each place is a Site below: its file, the text around the
+copy, which of the two it holds, and how the copy is escaped there.
 
     python3 verify/coc_pattern_copies.py          check: name each copy and exit 1 on a stale or unknown one
-    python3 verify/coc_pattern_copies.py write    regenerate every copy from floor.portable_pattern(), then check
+    python3 verify/coc_pattern_copies.py write    regenerate every copy from its floor function, then check
 
 A copy found anywhere else under gitops/ is a problem too: scan() looks for the pattern's own pieces (floor's
 separator class and its leetspeak classes, in any escaping) in every file there, and each one has to sit
@@ -49,6 +50,11 @@ class Site:
     encode: Callable[[str], str]
     decode: Callable[[str], str]
     tests: tuple[str, ...]  # the offline tests besides this one's own that hold this copy to the floor, by stem
+    source: Callable[..., str] = floor.portable_pattern  # the floor function the copy is, called with a term list or none
+
+    @property
+    def form(self) -> str:
+        return f"floor.{self.source.__name__}()"
 
 
 def _cel_raw(regex: str) -> str:
@@ -66,7 +72,7 @@ SITES = (
          "variables.floor of the code-of-conduct-names ValidatingAdmissionPolicy, a CEL raw string",
          "- name: floor",
          re.compile(r"^(?P<i> +)- name: floor\n(?P=i)  expression: \|-\n(?P=i)    r'(?P<w>[^'\n]+)'$", re.M),
-         _cel_raw, lambda written: written, ("test_coc_admission",)),
+         _cel_raw, lambda written: written, ("test_coc_admission",), floor.name_pattern),
     Site("gitops/otel-collector/values.yaml",
          "transform/coc_mask's replace_all_patterns, an OTTL string in collector config ($$ for $, \\\\ for \\)",
          _OTTL[0],
@@ -104,6 +110,7 @@ HOLDERS = ("test_coc_pattern_copies",) + tuple(dict.fromkeys(t for s in SITES + 
 
 
 def pattern() -> str:
+    """The collector's form, floor.portable_pattern(); each Site's own is site.source()."""
     return floor.portable_pattern()
 
 
@@ -113,8 +120,11 @@ def _any_escaping(piece: str) -> str:
 
 
 # The pattern's own pieces, which no other text under gitops/ holds: the separator spelt-out terms use, and the class
-# of each letter that has leetspeak stand-ins. Read from floor.py, so they follow it.
-PIECES = (floor._SEP,) + tuple(floor._letter(ch) for ch in sorted(floor._LEET))
+# of each letter that has leetspeak stand-ins, which portable_pattern() holds; and name_pattern()'s opening, its plain
+# edge then its terms, since its classes keep only what a name holds and read like any other regex's. Read from
+# floor.py, so they follow it.
+NAME_OPENING = r"(?i)(^|[^a-z0-9])((?:"
+PIECES = (floor._SEP,) + tuple(floor._letter(ch) for ch in sorted(floor._LEET)) + (NAME_OPENING,)
 FINGERPRINT = re.compile("|".join(_any_escaping(p) for p in PIECES))
 
 
@@ -197,27 +207,28 @@ def scan(files: dict[str, str], sites: tuple[Site, ...] = SITES,
     return copies, problems
 
 
-def stale(copies: list[Copy], regex: str | None = None) -> list[str]:
-    """Each copy that does not decode to floor.portable_pattern()."""
-    regex = pattern() if regex is None else regex
+def stale(copies: list[Copy]) -> list[str]:
+    """Each copy that does not decode to its Site's floor function."""
     bad = []
+    forms = {}
     for c in copies:
+        regex = forms.setdefault(c.site.source, c.site.source())
         got = c.decoded
         if got != regex:
             at = next((i for i, (a, b) in enumerate(zip(got, regex)) if a != b), min(len(got), len(regex)))
-            bad.append(f"{c.site.path}: {c.site.what} is not floor.portable_pattern() ({len(got)} vs {len(regex)} "
+            bad.append(f"{c.site.path}: {c.site.what} is not {c.site.form} ({len(got)} vs {len(regex)} "
                        f"characters, first difference at {at})")
     return bad
 
 
 def regenerate(files: dict[str, str], sites: tuple[Site, ...] = SITES) -> dict[str, str]:
-    """The files with every copy rewritten from floor.portable_pattern(); only those that change."""
-    regex = pattern()
+    """The files with every copy rewritten from its Site's floor function; only those that change."""
     out = {}
     for site in sites:
         text = files.get(site.path)
         if text is None:
             continue
+        regex = site.source()
         new = site.where.sub(lambda m: m.group(0)[:m.start("w") - m.start()] + site.encode(regex)
                              + m.group(0)[m.end("w") - m.start():], text)
         if new != text:
@@ -237,7 +248,7 @@ def main(argv: list[str]) -> int:
     copies, problems = scan(gitops_files())
     problems += stale(copies)
     for c in copies:
-        print(f"{c.site.path}: {c.site.what}, {len(c.decoded)} characters")
+        print(f"{c.site.path}: {c.site.what}, {c.site.form}, {len(c.decoded)} characters")
     for p in problems:
         print(f"PROBLEM {p}")
     if problems:

@@ -12,13 +12,19 @@ this test's output names none: a case is labelled by the term's index.
     with 422 and the plain refusal, which names no term and repeats nothing of the ticket, and nothing is filed;
   - a term in the subject refuses the ticket on both routes;
   - HC-666's HTML and text, HC-7731's text, both payloads and every .prompt block on /kubecon, plain and in white text,
-    are filed with their text whole.
+    are filed with their text whole;
+  - guard-proxy's slang fixture (#1316): every text of the pinned guard-proxy's conformance/coc_floor/
+    slang-set.rot13.tsv gets the same verdict from the desk as from the pinned proxy.py's conduct_matches(), the
+    verdict the fixture's kind gives: each "refused" text is refused on /submit and /presenter-ticket, and each
+    "passes" text (the ordinary text a short or numeric spelling collides with) is filed whole.
 """
 from __future__ import annotations
 
+import codecs
 import html
 import importlib.util
 import json
+import os
 import pathlib
 import re
 import sys
@@ -30,6 +36,8 @@ import urllib.request
 REPO = pathlib.Path(__file__).resolve().parents[1]
 SITE = REPO / "gitops/ai-layer/ticket_site.py"
 SPIKE = REPO / "docs/research/2026-11-09-coc-floor"
+GP = REPO / "gitops/ai-layer/guard-proxy"
+SLANG = GP / "conformance/coc_floor/slang-set.rot13.tsv"
 HC666_PROMPT = "What's the status of my support ticket HC-666?"
 DESK_HOST = "support.burritobot.co"
 REFUSAL_WORDS = "Keep it kind: this ticket has words the code of conduct rules out, so it was not filed."
@@ -37,9 +45,10 @@ REFUSAL_WORDS = "Keep it kind: this ticket has words the code of conduct rules o
 INNOCENT = ("Cocktail hour", "Charles Dickens", "Scunthorpe", "shiitake mushrooms", "an assessment of the class",
             "Therapist", "spicy salsa", "the cockpit", "grapes", "a skier", "Sussex", "Essex", "a peacock")
 
-for f in (SITE, SPIKE / "floor.py", SPIKE / "corpus.py", SPIKE / "terms-proposed.rot13"):
+for f in (SITE, SPIKE / "floor.py", SPIKE / "corpus.py", SPIKE / "terms-proposed.rot13", GP / "proxy.py", SLANG):
     if not f.is_file():
-        print(f"FAIL: {f.relative_to(REPO)} is missing; this test holds the desk to it")
+        print(f"FAIL: {f.relative_to(REPO)} is missing; this test holds the desk to it (for guard-proxy, run "
+              "bash verify/ensure-submodules.sh)")
         sys.exit(1)
 sys.path.insert(0, str(SPIKE))
 import corpus  # noqa: E402
@@ -192,6 +201,47 @@ check(f"/submit files all {len(accepted)} injection and stage texts (HC-666, HC-
 code, d = presenter(hc666["html"], "Walk-in customer")
 check("/presenter-ticket files HC-666's HTML with its text whole",
       code == 201 and d.get("body") == site.clean(hc666["html"])[1], f"{code} {d}")
+
+print("== guard-proxy's slang fixture: the desk refuses and files what the pinned proxy does (#1316) ==")
+slang = []
+for line in SLANG.read_text(encoding="utf-8").splitlines():
+    if line and not line.startswith("#"):
+        kind, text = line.split("\t")
+        slang.append((kind, codecs.decode(text, "rot13")))
+kinds = {k for k, _ in slang}
+if kinds != {"refused", "passes"} or len(slang) < 80:
+    print(f"FAIL: {SLANG.relative_to(REPO)} no longer reads as kind<TAB>text with kinds refused and passes "
+          f"(kinds {sorted(kinds)}, {len(slang)} texts)")
+    sys.exit(1)
+os.environ.pop("PROFANITY_LIST", None)
+os.environ.pop("CONDUCT_GUARDRAIL_ID", None)
+_gspec = importlib.util.spec_from_file_location("gp_desk_coc", GP / "proxy.py")
+proxy = importlib.util.module_from_spec(_gspec)
+_gspec.loader.exec_module(proxy)
+# By index, so a failure prints no term.
+check(f"the pinned proxy.py refuses each of the fixture's {sum(k == 'refused' for k, _ in slang)} refused texts and "
+      f"none of its {sum(k == 'passes' for k, _ in slang)} passes texts",
+      [bool(proxy.conduct_matches(t)) for _, t in slang] == [k == "refused" for k, _ in slang],
+      str([i for i, (k, t) in enumerate(slang) if bool(proxy.conduct_matches(t)) != (k == "refused")][:8]))
+check("the desk's coc_hit gives the pinned proxy's verdict on every text of the fixture",
+      [site.coc_hit(t) for _, t in slang] == [bool(proxy.conduct_matches(t)) for _, t in slang],
+      str([i for i, (_, t) in enumerate(slang) if site.coc_hit(t) != bool(proxy.conduct_matches(t))][:8]))
+bad = []
+for i, (kind, text) in enumerate(slang):
+    n = len(site.TICKETS)
+    code, out = submit(text)
+    pcode, d = presenter(text)
+    m = FILED.search(out)
+    if kind == "refused":
+        ok = (code == 422 and html.escape(site.COC_REFUSAL) in out and not m and pcode == 422
+              and d == {"error": site.COC_REFUSAL} and len(site.TICKETS) == n)
+    else:
+        ok = (code == 200 and bool(m) and site.find(m.group(1))["body"] == site.clean(text)[1] and pcode == 201
+              and d.get("body") == site.clean(text)[1])
+    if not ok:
+        bad.append((i, kind, code, pcode))
+check(f"on the real desk each of the fixture's {len(slang)} texts is refused or filed as its kind says, on /submit "
+      "and /presenter-ticket", not bad, f"(index, kind, /submit, /presenter-ticket): {bad[:6]}")
 
 server.shutdown()
 print()

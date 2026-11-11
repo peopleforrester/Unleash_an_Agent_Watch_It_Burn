@@ -282,6 +282,14 @@ config is written `$$`. https://github.com/open-telemetry/opentelemetry-collecto
   and `fold()` read it as `i`, so every class that holds `i` also takes `ı` and its escape `\u0131` (#1301).
 - The list is `terms-proposed.rot13`, decoded by `corpus.terms("proposed")`. guard-proxy reads its list from
   `PROFANITY_LIST`, so the wall can take the longer list before #78 lands; the folding is code and lands with #78.
+- Since #1316 (2026-11-11) the list is guard-proxy's default list as guard-proxy-agenticburn#84 grew it: the 144
+  terms measured here, then 1,109 entries of slang, alphanumeric spellings, coded hate and regional slang, 1,253 in
+  guard-proxy's order. The figures on this page are the 2026-11-09 measurement of the 144. On the abuse set the longer
+  list catches 112 of 155, one more Portuguese text, and it still flags no stage text. `proposed_pattern()` groups
+  the alternatives by their first character, as guard-proxy does, so a 4,000-character run of `$` costs 0.02 s of
+  CPU, not 0.17 s. `portable_pattern()` is factored on shared leading pieces, 95,245 characters in place of 212,409,
+  and `name_pattern()` is that form cut to what a name or a label can hold, 52,863 characters, for the admission
+  policy, whose CEL cost grows with the pattern's length.
 - A refusal says what happened in plain words ("Keep it kind: that message has words the code of conduct rules out,
   so it was not sent.") and never echoes the term.
 

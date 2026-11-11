@@ -4,11 +4,12 @@
 proposed floor on every assigned code point, the abuse set and the stage's own text. This half needs no node.
 
 Since #1280 the saved-prompts rail keeps off the floor the code-of-conduct spike chose for every surface (#1267,
-docs/research/2026-11-09-coc-floor): its 144 terms, and its folding of leetspeak, spaced letters, repeated letters,
+docs/research/2026-11-09-coc-floor): its terms (guard-proxy's 1,253 since #1316), and its folding of leetspeak, spaced letters, repeated letters,
 zero-width characters, look-alike letters and accents. This half reads the page's one ROT13 term literal and holds it,
 entry for entry and in order, to corpus.terms("proposed"); it holds the page's leetspeak, zero-width and look-alike
 tables to floor.py's _LEET, _ZERO_WIDTH and _HOMOGLYPH, and the separator class to every character Python's \\s
-matches. Since #1288 guard-proxy is pinned at 48cc2ca or later, whose wall and /chat refusal read the same list, so the
+matches. Since #1288 guard-proxy is pinned at 48cc2ca or later (0a3ca16 or later since #1316), whose wall and /chat
+refusal read the same list, so the
 pinned proxy.py's PROFANITY and the Go build's DefaultProfanity must each be the page's list, entry for entry and in
 order, or the rail and the wall would keep off different terms.
 It also checks the function touches nothing but its argument, and the save and load paths of #948.
@@ -103,15 +104,20 @@ check("COC_SEP matches what floor.py's _SEP does: Python's whitespace, a dot, an
       f"floor only: {sorted(map(hex, map(ord, (spaces | set('._*-')) - sep_chars)))}")
 check("cocLetter adds '*' for exactly floor.py's vowels",
       "('aeiou'.indexOf(c)>=0?'*':'')" in page and floor._VOWELS == set("aeiou"))
-check("COC_RE is the whole-word, optional-plural pattern of floor.py's proposed_pattern() on the folded text",
-      "const COC_RE=new RegExp('(?<![a-z0-9])(?:'+COC_TERMS.slice().sort(function(a,b){return b.length-a.length;})"
-      ".map(cocTerm).join('|')+')s?(?![a-z0-9])');" in page
+check("COC_RE is the whole-word, optional-plural pattern of floor.py's proposed_pattern() on the folded text, "
+      "with the 'u' flag so a character past U+FFFF on the list is one character",
+      "return new RegExp('(?<![a-z0-9])(?:'+parts.join('|')+')s?(?![a-z0-9])','u');" in page
       and floor.proposed_pattern().pattern.startswith("(?<![a-z0-9])(?:")
       and floor.proposed_pattern().pattern.endswith(")s?(?![a-z0-9])"))
+check("COC_RE groups the alternatives by the character they start with, longest term first within a group, as "
+      "floor.py's proposed_pattern() and guard-proxy do (#1316)",
+      ".sort(function(a,b){return Array.from(b).length-Array.from(a).length;})" in page
+      and "alts.push([first,a.slice(cocLetter(first).length)]);" in page
+      and "owners.set(ch,new Set());owners.get(ch).add(x[0]);" in page)
 
 print("== the wall's list is the page's ==")
-# Since #1288 the pin is guard-proxy 48cc2ca or later, whose default list is the same 144 entries in the same order, so
-# the wall, the /chat refusal and the rail keep off one list. A term on one side only is named, ROT13.
+# Since #1288 the pin is guard-proxy 48cc2ca or later, whose default list is the page's in the same order (the 144,
+# and since #1316 guard-proxy-agenticburn#84's 1,253), so the wall, the /chat refusal and the rail keep off one list. A term on one side only is named, ROT13.
 check("the pinned proxy.py's PROFANITY is the page's list, entry for entry and in order", proxy.PROFANITY == terms,
       f"proxy only (ROT13): {sorted(codecs.encode(t, 'rot13') for t in set(proxy.PROFANITY) - set(terms))}; "
       f"page only (ROT13): {sorted(codecs.encode(t, 'rot13') for t in set(terms) - set(proxy.PROFANITY))}")
