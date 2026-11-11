@@ -52184,3 +52184,9 @@ new script was restored. `python3 verify/scope_tests.py write` changed nothing. 
 
 **Live check.** None: the change is to a CI script under `verify/` that no cluster runs. The CI job runs it on the
 next push.
+
+**Run 20265.** Run 20263's commit 1907170e failed hecaton's skip-markers gate: the stub timeout in
+`verify/test_verify_suites_workflow.py` guarded its argument layout with `exit 2`, which the gate reads as
+exit-as-skip. The guard is gone. Every logged timeout call is already held to the script's exact call, so a call in
+another shape fails that check by name. `python3 verify/test_verify_suites_workflow.py` exit 0, 89 checks PASS, the
+six #1330 checks among them. No live check: the change is to a CI script and its test under `verify/`.
