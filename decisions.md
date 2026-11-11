@@ -52764,3 +52764,68 @@ takes 6, so the probe tells the two apart. It also holds the pinned proxy.py's s
 passed, as did the three changed tests, `verify/test_scope_tests.py` and `verify/test_test_map.py`.
 
 No dependency was added.
+## 2026-11-11 · #1342 · run 20316 · After #1337's sync, a 500-phone replay on attackme: 0 turns answered 502 or 504, 0 listen overflows, guard-proxy at 283 mCPU of 1 CPU and never throttled
+
+**The question.** #1337 (run 20296) traced run 20287's eight 502 and 504 turns to guard-proxy's listen queue of 5
+overflowing while the process sat throttled at its 250m CPU limit, and staging 51932b4d started proxy.py with a
+backlog of 1024 under a 1 CPU limit. #1342 asked for #644's 500-phone replay again on watch-it-burn-community once
+Argo CD had synced that, with guard-proxy's `ListenOverflows` read before and after and its CPU read in Datadog.
+
+**The sync.** At 07:47Z every staging-tracking Application on watch-it-burn-community, `ai-layer` and
+`workshop-agent` among them, was Synced and Healthy at 51932b4d. guard-proxy's one pod, `guard-proxy-68c46d7bff-6p4nd`,
+started at 07:45:25Z with 0 restarts. Its PID 1 is `python -c import http.server, runpy;
+http.server.ThreadingHTTPServer.request_queue_size = 1024; runpy.run_path('/app/proxy.py', run_name='__main__')`, its
+`proxy` container's limits are 1 CPU and 256Mi with requests of 50m and 128Mi, and the pod's `somaxconn` reads 4096.
+
+**What ran.** From 07:48:51Z to 07:51:26Z, under the guard lock (taken, then released when the replay exited):
+
+    python3 verify/guard_lease.py hold --context watch-it-burn-community --profile accen-dev -- \
+        python3 verify/load_replay.py attackme.burritobot.co --yes --source catalog --users 500 --seed 1342 --json-out <scratch>
+
+**The replay.** 1,500 turns from 500 sessions over 143.4 s, every one answered:
+
+    HTTP status            200 for all 1,500
+    outcomes               served 333, refused by guard-proxy's cluster window 1,167
+    errors                 502 0, 504 0, 429 0, other HTTP 0, timeout 0, transport 0, empty reply 0
+    unreadable turns       none listed
+    latency, served        p50 4.55 s, p90 6.71 s, p99 10.71 s, max 16.50 s
+    window reopenings      served went 150 to 151 at 63 s and 300 to 309 at 127 s, and the turns let through each time were answered
+    verdict                LOAD REPLAY GREEN, exit 0
+
+The console's nginx agrees: its log from 07:48Z has 1,500 `POST /chat` lines, all 200, and no `[error]` line. Run
+20287's failures came in the seconds after the cluster window reopened, and both reopenings here passed with none.
+
+**The listen queue.** `/proc/net/netstat` in the guard-proxy pod:
+
+    read at        ListenOverflows  ListenDrops  TCPReqQFullDoCookies  TCPReqQFullDrop
+    07:48:23Z      0                0            0                     0
+    07:51:43Z      0                0            0                     0
+
+Unchanged across the replay; the old pod counted 3,227 before #1337's third replay and 4,568 after it.
+
+**guard-proxy's CPU in Datadog.** `max:container.cpu.usage{kube_cluster_name:burritobot-public,kube_container_name:proxy} by
+{pod_name}`, with `container.cpu.limit`, `container.cpu.throttled.periods` and `container.cpu.throttled` on the same
+scope, 07:46Z to 07:52:30Z, at the agent's 15 s intervals:
+
+    container.cpu.usage            0.6 to 3.5 mCPU idle; 203 mCPU at 07:48:36, then 138, 238, 106, 158, 230, 283 (07:50:22), 100, 68, 57, 32 mCPU; idle again by 07:52:06
+    container.cpu.limit            1e9 nanocores (1 CPU) in every interval
+    container.cpu.throttled.periods 0 in every interval
+    container.cpu.throttled        0 in every interval
+    container.memory.usage         58 to 72 MiB, of 256Mi
+
+So the highest read is 283 mCPU, under the 1 CPU limit and above the old 250m one, which is consistent with #1337's
+reading that the old limit was binding. The query also returns the old pod (`guard-proxy-74867f986-95gvw`, limit
+250m) as a flat series at its last reading, 0.2 mCPU, through 07:50:52; it served nothing in the window.
+
+**Cluster state.** The replay added $3.1967 to attackme's spend counter over 337 requests: `/cost` read $0.0000 of
+its $25 cap before (the counter restarted with the pod at 07:45Z) and $3.1967 after. The Night Before's
+`./fleet.sh reset-bot watch-it-burn-community` zeroes it. The C6 asks made the bot create two Deployments in
+`agent`, `joker-anonymous` (07:49:05Z) and `joker-walk-in-customer` (07:49:08Z), each running one pod of
+`registry.burritobot.co/burritobot/maintenance-shell:busybox-1.38.0`; this run deleted both, and their pods went with
+them. `joker-ichabod-the-werewolf` (2026-11-07, scaled to 0) and `svc/jokers` were there before and stay. The replay
+report, its log and the Datadog reads stayed in this run's scratch directory.
+
+**Tests.** No code or test changed; the change is this entry alone, so the prose gate is the one check it needs. The
+live check above is the issue's work.
+
+No dependency was added.
