@@ -53370,3 +53370,27 @@ found `finale-cap-on`, `finale-cap-off` and `cost-watch` executable in the termi
 **Not yet run on a cluster.** The new `/kubecon` reaches the private cluster only after hecaton promotes this change
 and Argo CD syncs it; the next run on the issue fetches `https://burritobot-private.burritobot.co/kubecon` and finds
 "the take-home" in segment 6's heading and no "Now break it".
+
+## 2026-11-11 · #1348 · run 20426 · Why run 20422 failed the tests gate, and the fix
+
+Run 20422's change failed two tests that read the changed files through a directory, not by name, so its own sweep
+(the tests naming the run-of-show or `kubecon.html`) never ran them.
+
+- `test_two_domains.py`: `/kubecon` may say "agenticburn" only for the beacon address, and the new segment 6 note
+  cited `rounds-agenticburn#172`. The note now says "the rounds deck's #172".
+- `test_guardrail_slide_citations.py`: its ALLOWED list quotes stale wording other tests carry on purpose. The
+  renumber turned `test_instructor_brief.py`'s "no old slide 29 title" check into "slide 28", but that check names the
+  old 2026-11-06 title and keeps slide 29; it is back. `test_seg3_timing.py`'s docstring now says "slide 29's retry
+  ... slides 30 to 42", and the ALLOWED entry quotes it so. The new `test_ros_seg4_flow.py` docstring said "four
+  slides", a phrase the test bans; it names the CNCF-floor and three break-it slides instead.
+
+**Tests run**, each once and passing: those two, `test_instructor_brief.py`, `test_ros_seg4_flow.py`,
+`test_seg3_timing.py`, `test_lint.py`, `test_kubecon_seg4_flow.py`, `test_finale_cap.py`, `test_finale_cap_peer.py`,
+`test_mcp_vetting_handout.py`, `test_deck_shift_slide_citations.py`, `test_kubecon_private_banner.py`,
+`test_scope_tests.py`, `test_test_map.py`, `test_ros_deck_live.py` against the live deck, and the 31 offline tests
+whose source names `facilitation`, `ai-layer/web` or `docs/` as a directory.
+
+**Live check.** Skipped beyond run 20422's: the only cluster-facing change is one sentence of `kubecon.html`'s segment 6
+note, which reaches the private cluster's `/kubecon` only after promotion. Not yet run on a cluster: fetch
+`https://burritobot-private.burritobot.co/kubecon` then and find "the take-home" in segment 6's heading and no
+"Now break it".

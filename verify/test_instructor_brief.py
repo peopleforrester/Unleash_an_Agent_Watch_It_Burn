@@ -607,7 +607,7 @@ check("its notes give each set's slides, in the deck's order, with what each rec
       and "<b>Runtime security</b> (KubeArmor), slides 37 to 39" in _sw
       and all(f"<code>{n}</code>" in _sw for n in ("deny-external-registries", "block-recipe-snoop",
                                                      "agent-egress-allowlist")))
-check("the page has no one slide per guardrail, and no old slide 28 title",
+check("the page has no one slide per guardrail, and no old slide 29 title",
       "one slide per guardrail" not in " ".join(KUBECON.split()).lower()
       and '"Kubernetes guardrails on" (slide 28)' not in " ".join(KUBECON.split()))
 check("the switch's RBAC fallback reads the Role, which names the one Secret",
