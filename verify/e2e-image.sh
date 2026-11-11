@@ -9,6 +9,8 @@
 #                                     run `bash verify/run-e2e-tools.sh` inside it, with the tier tests named, if any,
 #                                     passed on to run alone (#1190)
 #
+# run-e2e-tools.sh on a host runs `e2e-image.sh run` itself whenever the change needs the tier's tools (#1188).
+#
 # The runtime is the one WIB_CONTAINER_RUNTIME names (podman or docker), else podman when the host has it, else
 # docker. `run` uses the image when the host holds the tag, pulls it
 # once when it does not, and then starts it with --pull=never, so a second run on the host pulls nothing. When neither
@@ -16,8 +18,8 @@
 #
 # Inside, the tier sees this checkout at its own path (and the git directory it points into), the host's artifact
 # cache (Terraform providers, charts and Python wheels, verify/artifact_cache.py) at its own path, and a gh that asks
-# the host's gh for `gh issue view` alone (verify/gh_relay.py). HECATON_BASE_SHA, E2E_TOOLS_JOBS and TF_CACHE_LOCK_WAIT
-# pass through. The AWS session, KUBECONFIG and the host's tools do not: the container has none of them.
+# the host's gh for `gh issue view` alone (verify/gh_relay.py). HECATON_BASE_SHA, HECATON_TEST_FILES, E2E_TOOLS_JOBS
+# and TF_CACHE_LOCK_WAIT pass through. The AWS session, KUBECONFIG and the host's tools do not: the container has none of them.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -118,7 +120,8 @@ case "${cmd}" in
             "${REPO_DIR}/"*) ;;
             *) args+=(-v "${common}:${common}") ;;
         esac
-        for v in HECATON_BASE_SHA E2E_TOOLS_JOBS TF_CACHE_LOCK_WAIT; do
+        # HECATON_TEST_FILES is the gate's own pick of offline tests (#1319), which run-tests.sh inside runs exactly.
+        for v in HECATON_BASE_SHA HECATON_TEST_FILES E2E_TOOLS_JOBS TF_CACHE_LOCK_WAIT; do
             [[ -z "${!v:-}" ]] || args+=(-e "${v}=${!v}")
         done
         # Files the tier writes in the checkout and the cache stay this user's: rootless podman maps the user to

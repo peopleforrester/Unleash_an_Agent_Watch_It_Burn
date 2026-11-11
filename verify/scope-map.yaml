@@ -8,7 +8,8 @@ full:
   - verify/no_cloud.py
   - verify/ensure-submodules.sh
   - verify/git_mirror.py
-  - verify/fetch-e2e-tools.sh
+  - verify/e2e-image.sh
+  - verify/e2e_image.py
   - verify/e2e-tools.lock
   - verify/artifact-cache.sh
   - verify/artifact_cache.py
