@@ -51547,3 +51547,12 @@ The rest of the scoped offline selection is left to validation.
 
 **Not yet run on a cluster.** The /kubecon page with the city named reaches the console once hecaton promotes this and
 Argo CD syncs; the probe already sends the new prompt from the repo, so nothing above waits on that.
+
+**The tests gate, run 20217.** Run 20177 failed hecaton's tests gate on `test_889_probe_record.py` alone, "the off-topic
+note names its re-sends". That check looked in kubecon_probe.py's source for the literal `re-sent once after a Bedrock
+ToolUse 424)`, which the change above replaced with the note's format and a cause name. The probe still prints those
+words, as test_kubecon_probe.py's 424 re-send check holds, so the check now reads both pieces: the format
+`re-sent once after {' or '.join(causes)})` and `return "a Bedrock ToolUse 424"`. Run 20177 had picked its tests by
+hand and missed this reader. This time every offline test whose code names a path the change touches, 152 of them, ran
+through `run-tests.sh` with `HECATON_TEST_FILES`, as the gate passes them: "ALL OFFLINE RENDER-GATE TESTS GREEN", exit 0.
+`test_test_map.py` passed alone. This fix touches only a test no cluster runs, so it needs no live check.
