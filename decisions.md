@@ -53995,3 +53995,11 @@ the no-download checks of both absent cases and the neither case. `python3 verif
 nothing, and `verify/test_scope_tests.py` passes.
 
 **Live check.** None: the change is a test under `verify/` that no cluster runs.
+
+**Run 20467, the tests gate.** Run 20451 failed validation on `test_fetch_inventory.py`: `verify/fetch-inventory.yaml`
+counts the lines in each file that name a fetch command, and the new checks and stand-ins added seven lines naming
+curl, wget or a pull to `test_e2e_image.py` (20 to 27). Each is a stand-in or a check on a stand-in's calls, so the
+entry's class stays `none` and only its count moves. `test_fetch_inventory.py`, `test_e2e_image.py`,
+`test_package_cache.py` and `test_scope_tests.py` pass. `test_fleet_contract.py`, which also reads the inventory,
+could not run here: this workspace has the guard-proxy submodule uninitialised, and the test stops on its missing
+`proxy.py` before any check. The gate's run of it passed.
