@@ -36,6 +36,11 @@
 #      every model the cluster root binds (bedrock_tiers, and the tutor_model default) is checked in every
 #      account. Accepting one is a subscription on the account owner's behalf: this prints the commands and
 #      never runs them.
+#      Only the models something calls are required (#963): the tier the workshop Agent is bound to
+#      (modelConfig: bedrock-<tier> in gitops/workshop-agent/agent.yaml) and the tutor's model. The other
+#      tiers are the optional cost-race comparison, and one without its agreement is a note, not a FAIL.
+#      Michael, 2026-11-11: the demo runs Nova, and the opus agreement stays unaccepted. Repointing the Agent
+#      at a tier makes that tier's agreement required on the next preflight, with nothing else to change.
 #
 # Everything here is a read: sts, service-quotas, iam get-policy, bedrock get-foundation-model-availability,
 # terraform output, and ec2 describe-vpcs.
@@ -48,6 +53,8 @@ readonly LAB_VPC_DIR="${SCRIPT_DIR}/../aws/network"
 readonly BOUNDARY_DIR="${SCRIPT_DIR}/../../org/boundary"
 # The cluster root, where the models every cluster binds are named: local.bedrock_tiers and var.tutor_model.
 readonly CLUSTER_TF="${SCRIPT_DIR}/../aws/cluster/main.tf"
+# The workshop Agent, whose modelConfig names the one tier it calls (#963).
+readonly AGENT_YAML="${SCRIPT_DIR}/../../../gitops/workshop-agent/agent.yaml"
 # Keep in step with local.boundary_name in infra/org/boundary/main.tf and the cluster root's lookup.
 readonly BOUNDARY_NAME="watch-it-burn-permissions-boundary"
 WIB_REGION="${WIB_REGION:-us-west-2}"
@@ -99,7 +106,8 @@ Read-only preflight for a fleet run. Verifies, per account:
   * vCPU / NLB / EKS / VPC / EIP quota headroom for <clusters-per-account>
   * the permissions boundary (${BOUNDARY_NAME}) exists; every cluster plan looks it up by name
   * every Bedrock model the cluster root binds (bedrock_tiers and the tutor_model default) reports
-    agreementAvailability AVAILABLE; without the Marketplace agreement Bedrock refuses the call
+    agreementAvailability AVAILABLE; without the Marketplace agreement Bedrock refuses the call.
+    Required for the Agent's tier (gitops/workshop-agent/agent.yaml) and the tutor; a note for the rest
   * the shared lab VPC exists: its id is read from the tfstate output AND confirmed live in the
     account (a file-existence test passes on a destroyed state, which once hid four missing VPCs)
 and, once, that the local tooling is present.
@@ -160,20 +168,52 @@ bound_models() {
       | awk '{ if ($1 in who) who[$1] = who[$1] "," $2; else who[$1] = $2 } END { for (m in who) print m, who[m] }' | sort
 }
 
+# agent_tier: the bedrock_tiers key the workshop Agent is bound to, from its `modelConfig: bedrock-<tier>`. Prints
+# nothing when the file has no such line, more than one, or a tier the cluster root does not bind.
+agent_tier() {
+    local tiers
+    tiers="$(sed -nE 's/^[[:space:]]*modelConfig:[[:space:]]*bedrock-([a-z0-9_]+)([[:space:]].*)?$/\1/p' "${AGENT_YAML}" 2>/dev/null || true)"
+    [[ -n "${tiers}" && "${tiers}" != *$'\n'* ]] || return 0
+    grep -qE "(^|[ ,])tier:${tiers}(,|$)" <<<"${MODELS}" && printf '%s' "${tiers}"
+    return 0
+}
+
+# optional_model <who>: true when every consumer in <who> is a tier other than the Agent's, so nothing calls the
+# model unless someone repoints the Agent. The tutor, or the Agent's own tier, makes it required. AGENT_TIER is
+# read only when a model is not AVAILABLE, so a fleet whose agreements are all in place never depends on it.
+AGENT_TIER=""; AGENT_TIER_READ=0
+optional_model() {
+    local who="$1" c; local -a consumers
+    if (( ! AGENT_TIER_READ )); then AGENT_TIER="$(agent_tier)"; AGENT_TIER_READ=1; fi
+    [[ -n "${AGENT_TIER}" ]] || return 1
+    IFS=',' read -ra consumers <<<"${who}"
+    for c in "${consumers[@]}"; do
+        [[ "${c}" == tier:* && "${c}" != "tier:${AGENT_TIER}" ]] || return 1
+    done
+    return 0
+}
+
 # model_agreements <profile>: each bound model's agreementAvailability in this account and WIB_REGION.
 model_agreements() {
-    local profile="$1" model who status offers accept
+    local profile="$1" model who status offers accept why
     while read -r model who; do
         status="$(AWS_PROFILE="${profile}" aws bedrock get-foundation-model-availability --model-id "${model}" \
             --region "${WIB_REGION}" --query 'agreementAvailability.status' --output text 2>&1)" || status="unreadable: ${status//$'\n'/ }"
         offers="AWS_PROFILE=${profile} aws bedrock list-foundation-model-agreement-offers --model-id ${model} --region ${WIB_REGION}"
         accept="AWS_PROFILE=${profile} aws bedrock create-foundation-model-agreement --model-id ${model} --offer-token <token from the offers call> --region ${WIB_REGION}"
+        if [[ "${status}" != AVAILABLE ]] && optional_model "${who}"; then
+            note "Bedrock agreement for ${model} (${who}): ${status:-empty answer} in ${profile}; not required, since the workshop Agent runs tier:${AGENT_TIER} (${AGENT_YAML#"${SCRIPT_DIR}/../../../"}) and this is an optional cost-race tier. Bedrock refuses every call to it until the account owner accepts: ${offers}, then ${accept}. Repointing the Agent at it makes this a FAIL"
+            continue
+        fi
+        why=""
+        [[ "${status}" != AVAILABLE && -z "${AGENT_TIER}" && "${who}" != *tutor* ]] &&
+            why=" (the Agent's tier could not be read from ${AGENT_YAML}, as one modelConfig: bedrock-<tier> line naming a bedrock_tiers key, so every tier is held required)"
         case "${status}" in
             AVAILABLE) ok "Bedrock agreement for ${model} (${who}): AVAILABLE" ;;
-            PENDING)   bad "Bedrock agreement for ${model} (${who}): PENDING, accepted and still propagating; re-run in 15 minutes" ;;
+            PENDING)   bad "Bedrock agreement for ${model} (${who}): PENDING, accepted and still propagating; re-run in 15 minutes${why}" ;;
             NOT_AVAILABLE)
-                bad "Bedrock agreement for ${model} (${who}): NOT_AVAILABLE in ${profile}; every call to it is refused. Accepting it is a Marketplace subscription for the account owner to make: ${offers}, then ${accept}" ;;
-            *)  bad "Bedrock agreement for ${model} (${who}) could not be read in ${profile} (${status:-empty answer}); verify by hand: AWS_PROFILE=${profile} aws bedrock get-foundation-model-availability --model-id ${model} --region ${WIB_REGION}" ;;
+                bad "Bedrock agreement for ${model} (${who}): NOT_AVAILABLE in ${profile}; every call to it is refused. Accepting it is a Marketplace subscription for the account owner to make: ${offers}, then ${accept}${why}" ;;
+            *)  bad "Bedrock agreement for ${model} (${who}) could not be read in ${profile} (${status:-empty answer}); verify by hand: AWS_PROFILE=${profile} aws bedrock get-foundation-model-availability --model-id ${model} --region ${WIB_REGION}${why}" ;;
         esac
     done <<<"${MODELS}"
 }

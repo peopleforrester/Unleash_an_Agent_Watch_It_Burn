@@ -52005,3 +52005,48 @@ carries the startupProbe and the 2-CPU limit, its pod is Ready with no restart a
 `Everything is ready`, the `otel-collector` Application is Synced and Healthy, and
 `COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_collector_pii_scrub_live.py` passes. Until then
 community ships no traces, and private's collector crashloops if its pod restarts.
+
+## 2026-11-11 · #963 · run 20251 · the preflight requires only the Agent's tier and the tutor; opus stays unaccepted and is a note
+
+`bash verify/prior-drafts.sh 963 origin/staging` printed NONE: run 17857's draft is already in staging. On the issue
+Michael asked, 2026-11-11 03:40Z, "Why are we running opus in the first place I thought we were running nova", and
+ruled that the opus agreement stays unaccepted and that the Night Before preflight treats its line as not required
+while the default is Nova. Escalation 857, the accept, was dropped.
+
+**The change.** `infra/terraform/fleet/preflight.sh` still reads every model the cluster root binds and asks each one's
+agreement in each account. It now also reads the tier the workshop Agent is bound to, from the one
+`modelConfig: bedrock-<tier>` line in `gitops/workshop-agent/agent.yaml`. A model that is not AVAILABLE is a FAIL when
+the tutor or the Agent's tier binds it, as before; when only other tiers bind it, the line is a `note` that names the
+Agent's tier and still prints the offers and accept commands, and the preflight stays GREEN. The Agent file is read
+only when some model is not AVAILABLE. When it cannot be read as one such line naming a `bedrock_tiers` key (missing,
+`gateway-bedrock-nova`, a tier the root does not bind, two lines), every tier is held required and the FAIL says why,
+so a bad read never turns a FAIL into a note. Repointing the Agent at opus makes opus's line a FAIL with nothing else
+changed. The tier stays in `local.bedrock_tiers` and the `bedrock-opus` ModelConfig stays: Michael kept it as the
+optional cost-race tier and did not ask for it dropped, so criterion 1 is met by the ruling, not by either of its
+two options. The run-of-show's Night Before preflight step says the same.
+
+**Live, as accen-dev (515966504359, us-west-2), 2026-11-11T03:53Z**, `WIB_ATTENDEE_ACCOUNTS=accen-dev WIB_REGION=us-west-2
+bash infra/terraform/fleet/preflight.sh 2`, read-only:
+
+    PASS  Bedrock agreement for amazon.nova-pro-v1:0 (tier:nova): AVAILABLE
+    PASS  Bedrock agreement for anthropic.claude-haiku-4-5-20251001-v1:0 (tier:haiku): AVAILABLE
+    note  Bedrock agreement for anthropic.claude-opus-4-8 (tier:opus): NOT_AVAILABLE in accen-dev; not required, since the workshop Agent runs tier:nova (gitops/workshop-agent/agent.yaml) and this is an optional cost-race tier. ...
+    PASS  Bedrock agreement for anthropic.claude-sonnet-4-6 (tier:sonnet,tutor): AVAILABLE
+    FAIL  no lab VPC state (then the apply line)
+
+The last FAIL is this worktree's: the lab VPC state is gitignored and lives on the machine that applied it, as run
+17857 found. `get-foundation-model-availability` for opus reads agreementAvailability NOT_AVAILABLE,
+authorizationStatus AUTHORIZED, entitlementAvailability AVAILABLE. Nothing was accepted.
+
+**Student accounts (criterion 3).** aws1-student31 to aws1-student34 carry no cluster at KubeCon: every roster cluster
+is in accen-dev (`roster.tsv`), and the run-of-show scopes the preflight to accen-dev because the student accounts have
+no lab VPC for this session. They were not read; this run's session is accen-dev only.
+
+**Tests run.** `verify/test_preflight_model_agreements.sh` (62 checks, 21 new: the opus note and GREEN, PENDING,
+denied and empty on an optional tier, two optional tiers across two accounts, the Agent on opus, the tutor on opus's
+model, four unreadable Agent files, the real cluster root and Agent with opus NOT_AVAILABLE),
+`verify/test_preflight_boundary.sh` (32), `verify/test_night_before_preflight.py`, `verify/test_scope_tests.py`
+and `verify/test_test_map.py`, each once. The rest are left to validation.
+
+**Live check.** The change touches no path a cluster runs (`preflight.sh` runs on the operator's machine before a
+bring-up), so no cluster check beyond the read-only preflight above.

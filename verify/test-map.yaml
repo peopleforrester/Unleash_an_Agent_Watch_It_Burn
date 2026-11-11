@@ -6212,6 +6212,7 @@ rules:
       - verify/test_preflight_boundary.sh
   - name: test_preflight_model_agreements.sh
     paths:
+      - gitops/workshop-agent/agent.yaml
       - infra/terraform/aws/cluster
       - infra/terraform/aws/cluster/**
       - infra/terraform/aws/network

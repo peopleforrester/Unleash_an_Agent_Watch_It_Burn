@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # ABOUTME: Behavioural tests for #882: preflight checks, in every account, that each Bedrock model the cluster root binds
 # ABOUTME: (bedrock_tiers and the tutor_model default) reports agreementAvailability AVAILABLE. Offline: aws is a shim.
+# ABOUTME: Since #963 only the Agent's tier and the tutor are required; another tier without its agreement is a note.
 #
 # Why this exists. On 2026-11-05 a pod running as the tutor's ServiceAccount passed IAM for its own tutor profile on
 # both clusters, and Bedrock then refused nearly every call: "not authorized to perform the required AWS Marketplace
@@ -9,8 +10,15 @@
 # and fails any that is not AVAILABLE with the commands that accept it. It never runs them: accepting is a
 # subscription on the account owner's behalf.
 #
-# preflight.sh runs from a copy of the tree under a temp dir, with a cluster root this test writes, so the model list
-# is the test's own. One section reads the real cluster root, and checks its anchors first.
+# #963: Michael, 2026-11-11, "Why are we running opus in the first place I thought we were running nova". The opus
+# agreement stays unaccepted, and the Night Before preflight must not fail on a tier nothing calls. preflight.sh reads
+# the tier the workshop Agent is bound to (modelConfig: bedrock-<tier> in gitops/workshop-agent/agent.yaml): that
+# tier and the tutor are required, the other tiers print a note. An Agent file it cannot read holds every tier
+# required, so a broken read never turns a FAIL into a note.
+#
+# preflight.sh runs from a copy of the tree under a temp dir, with a cluster root and an Agent this test writes, so
+# the model list and the Agent's tier are the test's own. One section reads the real files, and checks their anchors
+# first.
 #
 # Usage: verify/test_preflight_model_agreements.sh      (no cloud access)
 set -uo pipefail
@@ -19,9 +27,11 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="${HERE}/../infra/terraform/fleet"
 REAL_TF="${HERE}/../infra/terraform/aws/cluster/main.tf"
 T="$(mktemp -d)"; trap 'rm -rf "${T}"' EXIT
+REAL_AGENT="${HERE}/../gitops/workshop-agent/agent.yaml"
 FLEET_DIR="${T}/infra/terraform/fleet"; NET="${T}/infra/terraform/aws/network"; CLUSTER="${T}/infra/terraform/aws/cluster"
+AGENT="${T}/gitops/workshop-agent/agent.yaml"
 SHIM="${T}/bin"; CALLS="${T}/calls"
-mkdir -p "${FLEET_DIR}" "${NET}/states" "${CLUSTER}" "${SHIM}"
+mkdir -p "${FLEET_DIR}" "${NET}/states" "${CLUSTER}" "${SHIM}" "$(dirname "${AGENT}")"
 cp "${SRC}/preflight.sh" "${SRC}/event.sh" "${FLEET_DIR}/"
 echo vpc >"${NET}/terraform.tfstate"; echo vpc >"${NET}/states/aws1-student31.tfstate"
 fail=0; pass=0
@@ -47,6 +57,21 @@ variable "tutor_model" {
 }
 EOF
 }
+
+# An Agent bound to the ModelConfig named by $1, written as the real one writes it, with a trailing comment.
+write_agent() {
+  cat >"${AGENT}" <<EOF
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: workshop-agent
+spec:
+  declarative:
+    runtime: go
+    modelConfig: ${1} # WORKSHOP DEFAULT
+EOF
+}
+write_agent bedrock-nova
 
 # aws: accounts resolve, quotas are ample, the boundary and VPC are there. get-foundation-model-availability answers
 # per AGREE_<profile>_<model>, with every character outside [A-Za-z0-9] as _: unset is AVAILABLE, "denied" is an
@@ -90,8 +115,8 @@ run() {
   rc=$?
 }
 has() { grep -qF -- "$1" "${OUT}"; }
-pass_line() { grep -F 'PASS' "${OUT}" | grep -F -- "$1"; }
-fail_line() { grep -F 'FAIL' "${OUT}" | grep -F -- "$1"; }
+pass_line() { grep -E '^  PASS  ' "${OUT}" | grep -F -- "$1"; }
+fail_line() { grep -E '^  FAIL  ' "${OUT}" | grep -F -- "$1"; }
 asked() { grep -F "bedrock get-foundation-model-availability" "${CALLS}"; }
 
 echo "== every bound model AVAILABLE: GREEN, one read per model per account, as that account in WIB_REGION =="
@@ -129,9 +154,9 @@ check "preflight called neither"                '! grep -qE "agreement-offers|cr
 check "the other four still PASS"               '[[ "$(grep -F PASS "${OUT}" | grep -cF "Bedrock agreement")" -eq 4 ]]'
 
 echo "== PENDING is a FAIL too: accepted, not yet usable =="
-run accen-dev AGREE_accen_dev_anthropic_claude_opus_4_8=PENDING
+run accen-dev AGREE_accen_dev_amazon_nova_pro_v1_0=PENDING
 check "exit 1"                                  '[[ "${rc}" -eq 1 ]]'
-check "FAIL says PENDING and to re-run"         'fail_line "anthropic.claude-opus-4-8 (tier:opus): PENDING" | grep -qF "re-run in 15 minutes"'
+check "FAIL says PENDING and to re-run"         'fail_line "amazon.nova-pro-v1:0 (tier:nova): PENDING" | grep -qF "re-run in 15 minutes"'
 
 echo "== an unreadable answer is a FAIL, not a pass =="
 run accen-dev AGREE_accen_dev_amazon_nova_pro_v1_0=denied
@@ -142,12 +167,69 @@ run accen-dev AGREE_accen_dev_amazon_nova_pro_v1_0=empty
 check "an empty answer is a FAIL too"           'fail_line "amazon.nova-pro-v1:0 (tier:nova) could not be read in accen-dev (empty answer)" >/dev/null'
 
 echo "== per account: the agreement is the account's, so only the account without it fails =="
-run accen-dev,aws1-student31 AGREE_aws1_student31_anthropic_claude_haiku_4_5_20251001_v1_0=NOT_AVAILABLE
+run accen-dev,aws1-student31 AGREE_aws1_student31_amazon_nova_pro_v1_0=NOT_AVAILABLE
 check "exit 1"                                  '[[ "${rc}" -eq 1 ]]'
-check "aws1-student31's haiku fails, naming that account" \
-      'fail_line "anthropic.claude-haiku-4-5-20251001-v1:0 (tier:haiku): NOT_AVAILABLE in aws1-student31" | grep -qF "AWS_PROFILE=aws1-student31 aws bedrock list-foundation-model-agreement-offers"'
-check "accen-dev's haiku passes"                'pass_line "anthropic.claude-haiku-4-5-20251001-v1:0 (tier:haiku): AVAILABLE" >/dev/null'
+check "aws1-student31's nova fails, naming that account" \
+      'fail_line "amazon.nova-pro-v1:0 (tier:nova): NOT_AVAILABLE in aws1-student31" | grep -qF "AWS_PROFILE=aws1-student31 aws bedrock list-foundation-model-agreement-offers"'
+check "accen-dev's nova passes"                 'pass_line "amazon.nova-pro-v1:0 (tier:nova): AVAILABLE" >/dev/null'
 check "ten reads, five per account"             '[[ "$(asked | wc -l)" -eq 10 && "$(asked | grep -cF "[AWS_PROFILE=aws1-student31]")" -eq 5 ]]'
+
+note_line() { grep -E '^  note  ' "${OUT}" | grep -F -- "$1"; }
+OPUS_NA=AGREE_accen_dev_anthropic_claude_opus_4_8=NOT_AVAILABLE
+
+echo "== #963: a tier the Agent does not run, without its agreement, is a note and the preflight stays GREEN =="
+write_tf "us.anthropic.claude-sonnet-5"; write_agent bedrock-nova
+run accen-dev "${OPUS_NA}"
+check "exit 0"                                  '[[ "${rc}" -eq 0 ]]'
+check "PREFLIGHT GREEN"                         'has "PREFLIGHT GREEN"'
+check "no FAIL line for opus"                   '! fail_line "anthropic.claude-opus-4-8" >/dev/null'
+check "a note names opus, its status and the account" \
+      'note_line "anthropic.claude-opus-4-8 (tier:opus): NOT_AVAILABLE in accen-dev; not required" >/dev/null'
+check "the note names the Agent's tier and where it was read" \
+      'note_line "the workshop Agent runs tier:nova (gitops/workshop-agent/agent.yaml)" >/dev/null'
+check "the note still prints the offers and accept commands" \
+      'note_line "aws bedrock list-foundation-model-agreement-offers --model-id anthropic.claude-opus-4-8" | grep -qF "create-foundation-model-agreement --model-id anthropic.claude-opus-4-8"'
+check "preflight called neither"                '! grep -qE "agreement-offers|create-foundation-model-agreement" "${CALLS}"'
+check "the other four PASS"                     '[[ "$(grep -F PASS "${OUT}" | grep -cF "Bedrock agreement")" -eq 4 ]]'
+for st in PENDING denied empty; do
+  run accen-dev "AGREE_accen_dev_anthropic_claude_opus_4_8=${st}"
+  check "an optional tier ${st} is a note too, GREEN" '[[ "${rc}" -eq 0 ]] && note_line "anthropic.claude-opus-4-8 (tier:opus)" >/dev/null && ! fail_line "opus" >/dev/null'
+done
+run accen-dev,aws1-student31 AGREE_aws1_student31_anthropic_claude_haiku_4_5_20251001_v1_0=NOT_AVAILABLE "${OPUS_NA}"
+check "two optional tiers in two accounts: GREEN, two notes" \
+      '[[ "${rc}" -eq 0 && "$(grep -cF "not required" "${OUT}")" -eq 2 ]] && note_line "(tier:haiku): NOT_AVAILABLE in aws1-student31" >/dev/null'
+
+echo "== the Agent's own tier is required: repointing the Agent at opus makes the same answer a FAIL =="
+write_agent bedrock-opus
+run accen-dev "${OPUS_NA}"
+check "exit 1"                                  '[[ "${rc}" -eq 1 ]]'
+check "opus FAILs with the accept commands"     'fail_line "anthropic.claude-opus-4-8 (tier:opus): NOT_AVAILABLE in accen-dev" | grep -qF "create-foundation-model-agreement"'
+run accen-dev AGREE_accen_dev_amazon_nova_pro_v1_0=NOT_AVAILABLE
+check "and nova, no longer the Agent's tier, is a note" '[[ "${rc}" -eq 0 ]] && note_line "amazon.nova-pro-v1:0 (tier:nova): NOT_AVAILABLE in accen-dev; not required, since the workshop Agent runs tier:opus" >/dev/null'
+write_agent bedrock-nova
+
+echo "== the tutor is required even on an optional tier's model =="
+write_tf "us.anthropic.claude-opus-4-8"
+run accen-dev "${OPUS_NA}"
+check "exit 1"                                  '[[ "${rc}" -eq 1 ]]'
+check "the line names tier:opus and tutor, as a FAIL" 'fail_line "anthropic.claude-opus-4-8 (tier:opus,tutor): NOT_AVAILABLE in accen-dev" >/dev/null'
+write_tf "us.anthropic.claude-sonnet-5"
+
+echo "== an Agent file it cannot read holds every tier required, and says why =="
+for bad_agent in missing gateway-bedrock-nova bedrock-llama two; do
+  case "${bad_agent}" in
+    missing) rm -f "${AGENT}" ;;
+    two) write_agent bedrock-nova; echo "    modelConfig: bedrock-opus" >>"${AGENT}" ;;
+    *) write_agent "${bad_agent}" ;;
+  esac
+  run accen-dev "${OPUS_NA}"
+  check "${bad_agent}: exit 1, opus a FAIL that says the Agent's tier could not be read" \
+        '[[ "${rc}" -eq 1 ]] && fail_line "anthropic.claude-opus-4-8 (tier:opus): NOT_AVAILABLE in accen-dev" | grep -qF "the Agent'"'"'s tier could not be read"'
+  check "${bad_agent}: no note"                 '! grep -qF "not required" "${OUT}"'
+done
+run accen-dev
+check "with every agreement AVAILABLE, a missing Agent file is never read: GREEN" '[[ "${rc}" -eq 0 ]] && has "PREFLIGHT GREEN"'
+write_agent bedrock-nova
 
 echo "== a cluster root it cannot read is a FAIL, never an empty pass =="
 rm -f "${CLUSTER}/main.tf"
@@ -160,14 +242,17 @@ run accen-dev
 check "a root with tiers and no tutor_model default fails too" \
       'fail_line "could not read bedrock_tiers and the tutor_model default" >/dev/null'
 
-echo "== the real cluster root: preflight asks about exactly the models it binds =="
-# Anchors this section reads the real file on; a reworded one names itself instead of failing further on.
+echo "== the real cluster root and Agent: preflight asks about exactly the models it binds =="
+# Anchors this section reads the real files on; a reworded one names itself instead of failing further on.
 for anchor in 'bedrock_tiers = {' 'variable "tutor_model"'; do
   if ! grep -qF -- "${anchor}" "${REAL_TF}"; then
     echo "  FAIL  anchor '${anchor}' is not in ${REAL_TF}: this test reads the model list on it"; exit 1
   fi
 done
-cp "${REAL_TF}" "${CLUSTER}/main.tf"
+if ! grep -qE '^[[:space:]]*modelConfig:[[:space:]]*bedrock-nova([[:space:]]|$)' "${REAL_AGENT}"; then
+  echo "  FAIL  anchor 'modelConfig: bedrock-nova' is not in ${REAL_AGENT}: the last check reads the live opus state on it"; exit 1
+fi
+cp "${REAL_TF}" "${CLUSTER}/main.tf"; cp "${REAL_AGENT}" "${AGENT}"
 want="$(python3 - "${REAL_TF}" <<'P'
 import re, sys
 tf = open(sys.argv[1]).read()
@@ -180,6 +265,10 @@ run accen-dev
 got="$(asked | sed -E 's/.*--model-id ([^ ]+) .*/\1/' | sort -u)"
 check "the models asked are bedrock_tiers plus the tutor_model default (${want//$'\n'/, })" '[[ -n "${want}" && "${got}" == "${want}" ]]'
 check "and all pass on the shim"                '[[ "${rc}" -eq 0 ]]'
+# accen-dev as it reads live since #882: every agreement but opus's, and the Agent on Nova (#963).
+run accen-dev "${OPUS_NA}"
+check "the real files with opus NOT_AVAILABLE: GREEN, opus a note" \
+      '[[ "${rc}" -eq 0 ]] && note_line "anthropic.claude-opus-4-8 (tier:opus): NOT_AVAILABLE in accen-dev; not required" >/dev/null'
 
 echo
 if [ "${fail}" -gt 0 ]; then echo "FAILED: ${fail} check(s), ${pass} passed"; exit 1; fi

@@ -7225,6 +7225,7 @@ reads:
     - infra/terraform/aws/network
     - infra/terraform/fleet
   test_preflight_model_agreements.sh:
+    - gitops/workshop-agent/agent.yaml
     - infra/terraform/aws/cluster
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
