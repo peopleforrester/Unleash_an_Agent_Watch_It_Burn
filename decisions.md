@@ -53092,3 +53092,77 @@ selected only for reading decisions.md) and the 9 tier tests `scope_tests.py sel
 **Not yet run.** On or after 2026-11-13: `remove --apply`, which must end `STAGE REMOVAL GREEN`, with its `DELETED`
 and `after:` lines recorded here. The expected `after:` line reads one view, `Every prompt`, and four retention
 filters, the four defaults above.
+
+## 2026-11-11 · #912 · run 20365 · Both KubeCon terminals take the presenter login from mrf-secrets, written by fleet.sh; the 11-07 and older logins are refused
+
+**What changed the issue.** From 2026-11-07 the presenter terminal login on watch-it-burn-private and
+watch-it-burn-community was set by hand (#1069), and #1074 had fleet.sh and every run leave it alone. On 2026-11-11
+about 12:55Z Michael wrote on #912 that the login is user `presenter` and a password he named, kept in mrf-secrets
+`projects/watch-it-burn-terminal.env`, and that this supersedes the 11-07 hold: put it on the clusters as
+`terminal-auth` by fleet.sh's path, roll the web terminal, and check without printing either value that the old login
+fails and the new one opens. An earlier comment named the mrf-secrets commit, 3e26df5 (mrf-secrets#14).
+
+**Where the login was read from.** This host cannot read Michael's `~/secrets` (no run's wrapper reaches it). Through
+`sources-elevated fleet tanjiro-wsl2`, a `git fetch` of tanjiro's mrf-secrets checkout showed one commit touching the
+file on any ref, 3e26df5 (2026-11-09 12:25Z), and nothing newer on origin/main. `git show 3e26df5:` of the file went
+to a mode-600 file in this run's scratch and was printed nowhere; only its key names, that the user is `presenter`,
+and the password's length were looked at. That matches Michael's comment. Whether netcup's own working copy holds an
+uncommitted later edit could not be read; if it does, `fleet.sh terminal-password` run there writes it the same way.
+Before the write, both clusters' Secrets held one login, the 11-07 one (user `presenter`, a different password), and it
+opened `/terminal/` on both private hostnames and on the community console load balancer's own name (200; no login
+401). It was kept in scratch for the check below, never printed, and both scratch copies were deleted after.
+
+**What changed in the repo (commit 8925e94b).** Michael's ruling lifts #1074, so its guard goes:
+`HAND_SET_TERMINAL_LOGINS` and `terminal_login_hand_set` are removed from `infra/terraform/fleet/fleet.sh`.
+`terminal-password` and a bring-up that finds no Secret now write the pair's login from mrf-secrets like every roster
+cluster's, and `instructors up` of the pair alone needs the login again. CLAUDE.md's Dispatched runs rule 6 now says
+the pair's login comes from mrf-secrets by fleet.sh alone, and that no run generates or puts back any other login
+there. `verify/test_terminal_login_hand_set.py` became `verify/test_terminal_login_from_mrf_secrets.py`, holding that
+rule, that no guard is left, and that `terminal_creds_for` hands both names the mrf-secrets login (it fails 3 checks
+against the old fleet.sh). `verify/test_admin_actions.sh` and `verify/test_fleet_terminal_harvest.sh` now hold that
+`terminal-password` and bring-up write the pair from mrf-secrets, on a file descriptor, never logged, and that an
+existing Secret is still left alone at bring-up. kubecon.html, brief.html and the run-of-show said the pair's login was
+set by hand and lives only in the cluster; they now name mrf-secrets for the pair and its standbys alike, and
+`verify/test_instructor_brief.py` holds the new sentences. docs/admin-console.md, docs/floor.md and the mrf-secrets
+request note say the same. #1085 (which login the standbys carry) asked because the pair's login differed from
+mrf-secrets'; now the two are the same login.
+
+**Live write, 2026-11-11 about 13:08Z.** From `infra/terraform/fleet/` at 8925e94b, with `WIB_TERMINAL_ENV` pointing at
+the scratch copy, `AWS_PROFILE` accen-dev and every fleet.sh output directory in scratch:
+`./fleet.sh terminal-password watch-it-burn-private watch-it-burn-community`. For each cluster fleet.sh wrote its own
+kubeconfig with `aws eks update-kubeconfig` and confirmed the context names the cluster, replaced `agent/terminal-auth`
+from a manifest fed on a file descriptor, deleted the web-terminal pod (private `web-terminal-558b49d9f6-c4gv8`,
+community `web-terminal-59d7b58f4-8hrxh`) and waited for a Ready replacement (`-xcpwc` started 13:08:26Z,
+`-qmhqd` 13:08:57Z, 0 restarts). Each ended `terminal-password <name>: FAILED` for one reason only: the local harvest
+copy that `ingest` publishes needs provisioning-agenticburn's `harvest_terminal_credential.sh`, which is not on this
+host. Nothing here ingests, so nothing is lost.
+
+**Live check after the write.** `bash verify/terminal-login-live.sh watch-it-burn-private
+https://burritobot-private.burritobot.co https://burritobot-private.agenticburn.com` printed `15 passed, 0 failed`, and
+the same on watch-it-burn-community with its console load balancer's own name (not written out here) printed
+`8 passed, 0 failed`. Each Secret holds the mrf-secrets login; `/terminal/` answers 401 with no login, 401 to the old
+login and 200 to the new; `/ide/login` refuses the old password and takes the new (302); `/jupyter/` answers 403 to the
+old token and 200 to the new. Its old login is the public one from git (`ce43342c^`). Run again with
+`WIB_OLD_FLEET_SH` and `WIB_OLD_LOGIN_SHA256` pointing at the scratch copy of the 11-07 login, it printed the same 15
+and 8 passes: the hand-set login is refused by all three tools on both clusters too. Both Secrets carry only
+`TTYD_CREDENTIAL`, with no labels and no annotations (so no last-applied copy), and no Argo CD Application on the
+private cluster lists `terminal-auth` among its resources, so a sync neither writes nor restores it. `git grep -F` and
+`git log --all -S` find neither the new password nor the 11-07 one anywhere in this repo, and `test_no_presenter_login.py`
+passes for the old one. `https://attackme.burritobot.co/terminal/` and its agenticburn.com twin still answer 404.
+
+**The community terminal.** It is the same web terminal the private cluster runs (ttyd, code-server and Jupyter),
+reachable from outside only on its console load balancer's own name; the public hostnames serve 404 on its paths. It
+now carries the mrf-secrets presenter login, which is in no file of this repo, and refuses both earlier logins.
+
+**#908.** A comment there (issuecomment-6796725494) says presenters find the login in mrf-secrets,
+`projects/watch-it-burn-terminal.env`, keys `WIB_TERMINAL_USER` and `WIB_TERMINAL_PASSWORD`, user `presenter`, that
+it is live on both clusters and both earlier logins are refused, and carries no password.
+
+**Tests run**, each once and passing: `test_terminal_login_from_mrf_secrets.py`, `test_admin_actions.sh` (72),
+`test_fleet_terminal_harvest.sh` (103), `test_instructor_brief.py`, `test_no_presenter_login.py`,
+`test_scope_tests.py` and `test_test_map.py`. The rest the change selects (fleet.sh is read widely) are left to
+validation.
+
+**Not yet run on a cluster.** The new login sentences in `gitops/ai-layer/web/kubecon.html` and `brief.html` reach the
+private cluster's `/kubecon` and `/brief` only after hecaton promotes this change and Argo CD syncs it; the next run on
+the issue reads both pages there and finds mrf-secrets named for the pair and no "set by hand" sentence.
