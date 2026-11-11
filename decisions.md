@@ -54450,3 +54450,70 @@ from both clusters at 1280px and check that the header bar keeps its labels on o
 
 **Ordering.** As above: the gate needs `51ec299b51b3558f-6970efce` on ghcr.io, which `build-e2e-tools-image.yml`
 pushes once this reaches staging.
+
+## 2026-11-11 · #1352 · run 20473 · The run-of-show, /kubecon and the fallback kit name the guardrails-<name>-on/off switches
+
+**What changed.** Every place the presenters read a stage switch now names it by #1350's name: `guardrails-on/off` is
+`guardrails-k8s-on/off`, `guards-on/off` is `guardrails-ai-on/off`, `guards-status` is `guardrails-status`, and each
+`guard-<name>-on/off` is `guardrails-<name>-on/off`. That covers `facilitation/kubecon-na-2026-run-of-show.md`
+(segments 3 to 6, the rehearsal steps, the reset and start-state steps, the Night Before switch, stage-switch, probe and
+seed steps, the failover notes and the fallback-script table), `gitops/ai-layer/web/kubecon.html` (the segments table,
+each beat's toggle card and copy text, the markers and notes, the header comment and the guard-toggles footer), and the
+fallback kit's `README.md` and `prompts.yaml`. The run-of-show gains a table of the switches, what each turns and where
+the stage uses it, and one paragraph saying the old names still answer as aliases through 2026-11-12 (#1363 removes
+them) and the alias `guards-off` now leaves the on-topic guard; the /kubecon footer says the same in one line.
+
+**Where the meaning moved, not just the name.** #1350 made `guardrails-ai-off` (the old `guards-off`) leave the
+on-topic guard alone. So the run-of-show's line that it turns every AI guard off "the on-topic guard included" now says
+`guardrails-topic-off` does that; the admin start-state step runs `guardrails-ai-off` then `guardrails-topic-off`;
+/kubecon's night-before reset is `guardrails-all-off` and `guardrails-topic-off`, as is the fallback README's "put the
+guards back". The reset after `fleet.sh reset-bot` stays `guardrails-ai-off`: the restart already puts guard-proxy's
+toggles, on-topic included, back off, and the command is there for the tool allow-list and gateway rule. The admin
+probe's last act is described as turning every AI guard off, on-topic included, as `guardrails-ai-off` then
+`guardrails-topic-off` do, since `verify/kubecon_probe.py` sends its own `/toggle` queries with `topic=off`.
+
+**Kept under the old name.** The run-of-show's Probe record section (every dated probe run), run 19175's 2026-11-09
+stage-switch result in the Night Before step, the 2026-11-08 line on the ticket LLM Guard scored clean with
+`guard-input-on` alone, and the fallback README's two shots planned for the first full rehearsal. The scripts the
+Night Before steps describe (`stage_switch_run.py`, `kubecon_probe.py`, `stage_traces.py`) still type the old names,
+which run their new ones as aliases; #1351 renames them, so the run-of-show describes them by the new names now.
+
+**Not changed here.** `facilitation/kubecon-na-2026/fallback/assets.yaml` (its `toggle:` fields and captions) and
+`screenshots/deck.html` (the captions built from it) still name `guard-input-on`, `guard-mcp-on`, `guard-topic-on`
+and `guard-rbac-on`. The issue names only the README and prompts.yaml of the kit; they are filed as a follow-up.
+
+**The deck's DO notes.** Read from rounds-agenticburn main `4627d95`, `attendee.html` (identical to what
+rounds.agenticburn.com serves, 127 slides), four DO notes name a switch: `#/27` (slide 28, line 516) `guardrails-on`
+to `guardrails-k8s-on`; `#/52` (line 753) `guard-agency-on` to `guardrails-agency-on` and `guard-input-on` to
+`guardrails-input-on`; `#/74` (line 950) `guard-mcp-on` to `guardrails-mcp-on`; `#/121` (line 3302) `guard-topic-on`
+to `guardrails-topic-on`. No note types `guards-on/off`, so `guardrails-ai` and `guardrails-all` replace nothing in the
+deck. The HTML comment above slides 112 and 113 (line 3223) names `guard-mcp-on`, and rounds' own
+`tests/test_kubecon_cut.py` pins the old names (its toggle set at lines 132 and 133, and lines 143, 259, 260 and 280).
+This run cannot write an issue comment, so the mapping for rounds-agenticburn#171 and the comment on #1346 that links
+it are in the run's report as escalated `gh issue comment` acts. `verify/test_ros_deck_live.py`, run once alone
+against the live deck, passes: it reads Say text and quoted slide text, not DO notes, so it holds before and after
+the deck's rename.
+
+**Tests.** Changed where they read the renamed words: `test_ros_seg3_switch_step`, `test_ros_seg4_flow`,
+`test_kubecon_seg4_flow`, `test_kubecon_c3_recipe_block`, `test_instructor_brief` (its checks that no rbac or admission
+switch is on the stage now refuse both the old and the new name), `test_ros_deployments_removed_row`,
+`test_public_images`, `test_trace_walkthrough_view`, and `test_kubecon_probe`'s run-of-show anchors (its probe-side
+names are #1351's). `test_stage_switch_night_before` maps each name it reads from the scripts through the terminal's
+ALIASES table before looking for it in the step, so it holds before and after #1351, and it now fails on an old name
+in the step outside run 19175's dated record (checked by putting `guard-mcp-off` back: it failed). New
+`verify/test_switch_names_presenter_docs.py`, with its scope-map entry from `scope_tests.py write`: the four files name
+no old switch, read from the terminal's ALIASES table, outside the listed dated spans, each span found by its literal
+first, and the run-of-show's table lists every switch. Each changed or new test and every other offline test that reads
+the changed files, 83 in all, passed once alone; `scope_tests.py check` reports 0 problems, and `prose_gate.py`
+against origin/staging passes. The full scoped `run-tests.sh` and `run-e2e-tools.sh` are left to validation.
+
+**Live, 2026-11-11**, read-only. The web-terminal image on both clusters is
+`web-terminal-ttyd-1.7.7-8@sha256:b81d336c...`, and each name the four files now give (`guardrails-k8s-on/off`,
+`-agency-`, `-input-`, `-mcp-`, `-topic-`, `-output-on`, `-budget-on`, `-admission-on`, `-ai-on/off`, `-all-on/off`
+and `guardrails-status`) is a command in the terminal's home on watch-it-burn-private and watch-it-burn-community:
+missing none on either. Nothing was switched. /kubecon on burritobot-private still serves the old page until Argo CD
+syncs this change.
+
+**Not yet run on a cluster.** /kubecon serving the new names: after promotion,
+`curl -fsS https://burritobot-private.burritobot.co/kubecon | grep -c guardrails-k8s-on` is non-zero and
+`python3 verify/test_ros_deck_live.py` passes.
