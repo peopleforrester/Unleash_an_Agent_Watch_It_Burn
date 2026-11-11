@@ -100,7 +100,21 @@
     <div class="beat">
       <h3>3. Find their attack in Datadog, live</h3>
       <div class="who">Both &middot; the moment the observability half earns its place</div>
-      <div class="expect">Open <a href="https://app.datadoghq.com/llm/traces" target="_blank" rel="noopener">Agent Observability</a> on the shared org, which is Whitney's Datadog sandbox org, the one both presenters sign in to (#629). Ask who got it to work and is happy to be named, then find their prompt on screen.</div>
+      <!-- Where every prompt is (#337). Michael's ruling of 2026-11-02, through the coordinator: the answer to "where do
+           I see every prompt" is the prompt wall, and Datadog is second. The wall is prompts-agenticburn's Railway app; it
+           polls each roster cluster's /prompts every 3 s (POLL_INTERVAL) and pushes new ones to its page, which puts up one
+           card per 1.5 s with a +N more count (prompts-agenticburn#20, #978). The Night Before's wall-check holds its two
+           clusters, attackme and burritobot-private. /api/prompts keeps the last 500, and Michael ruled the cap stays. -->
+      <div class="control"><b>Every prompt, first: the prompt wall.</b> Open
+      <a href="https://prompts.burritobot.co" target="_blank" rel="noopener"><code>prompts.burritobot.co</code></a>. It is
+      the answer to "where do I see every prompt": it reads the feeds of both bots, the Community cluster's
+      (<code>attackme</code>) and the presenters' private bot (<code>burritobot-private</code>), every 3 seconds, so a
+      prompt is on it a few seconds after it is sent, with no name on it. It is made for the projector. When the room
+      sends faster than anyone can read, it puts up one card every 1.5 seconds, the newest, and counts the rest as
+      <b>+N more</b>; every one of them, the last 500, is in
+      <a href="https://prompts.burritobot.co/api/prompts" target="_blank" rel="noopener"><code>/api/prompts</code></a>.
+      Datadog, below, is second: use it for the one prompt you want to open up, to show the trace behind it.</div>
+      <div class="expect">Then open <a href="https://app.datadoghq.com/llm/traces" target="_blank" rel="noopener">Agent Observability</a> on the shared org, which is Whitney's Datadog sandbox org, the one both presenters sign in to (#629). Ask who got it to work and is happy to be named, then find their prompt on screen.</div>
       <!-- The recipe (#337, #791). Every BurritoBot span lands in Whitney's sandbox org under ml_app burritobot, and
            k8s.cluster.name is Datadog's name for the cluster, written by infra/datadog-cluster-identity.sh, not the EKS
            name. The query is the room view verify/stage_traces.py prints (#648), so the stage and this beat find the
@@ -127,7 +141,7 @@
       <a href="https://prompts.burritobot.co" target="_blank" rel="noopener"><code>prompts.burritobot.co</code></a>.
       <b>Not durable:</b> the prompts are kept only as long as the org keeps them, and the Community cluster's are
       purged from Whitney's org after the session (#647), so copy out any prompt worth keeping on the day.</div>
-      <div class="note">Rehearse this. Searching a live list in front of a room is the part that goes wrong, and it is worth having found one prompt by name before the session starts. Before the session, signed in to Whitney's org, type the query above and save it as a view named <b>Every prompt</b>, so on stage it is one click rather than a query typed in front of the room.</div>
+      <div class="note">Rehearse this. Searching a live list in front of a room is the part that goes wrong, and it is worth having found one prompt by name before the session starts. The view <b>Every prompt</b> is already saved in Whitney's org (view 4805197, saved 2026-11-08, #792), with the query above over the past hour, so on stage it is one click rather than a query typed in front of the room. Before the session, signed in, open it once and check it lists the room's rows. Only if it is missing, type the query above and save it as a view named <b>Every prompt</b>.</div>
       <div class="warn">Before moving on, tell them to <b>close the Community BurritoBot tab</b>. From here they have their own, and acting on the shared one is the confusion that follows people all session.</div>
     </div>
   </section>

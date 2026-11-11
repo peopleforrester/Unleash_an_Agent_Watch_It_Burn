@@ -133,6 +133,38 @@ _burn = (REPO / "gitops/otel-collector/values-burn.yaml").read_text(encoding="ut
 check("the placeholders it promises are the ones the Community cluster's collector writes",
       all(f"<code>[{p}]</code>" in _shown and f"[{p}]" in _burn for p in ("EMAIL", "CARD", "SSN", "PHONE")))
 
+print("== the beat names the prompt wall first, and Datadog second (#337) ==")
+# Michael's ruling of 2026-11-02, through the coordinator: "where do I see every prompt" is answered by the wall. Its
+# clusters are the ones the run-of-show's Night Before wall-check reads off its /healthz, so the two cannot drift.
+_WALL_HEAD = "<b>Every prompt, first: the prompt wall.</b>"
+_RECIPE_HEAD = "<b>The recipe.</b>"
+_ROS_TEXT = (REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text(encoding="utf-8")
+_WALL_CHECK = re.search(r"prints `(\['[^`]+'\])`\. Keep the wall on this roster", " ".join(_ROS_TEXT.split()))
+for _what, _ok in ((f"{_WALL_HEAD!r} in gitops/ai-layer/web/brief.html", _WALL_HEAD in _shown),
+                   (f"{_RECIPE_HEAD!r} in gitops/ai-layer/web/brief.html", _RECIPE_HEAD in _shown),
+                   ("the wall-check's \"prints `[...]`. Keep the wall on this roster\" in "
+                    "facilitation/kubecon-na-2026-run-of-show.md", _WALL_CHECK is not None)):
+    if not _ok:
+        sys.exit(f"anchor {_what} is gone: reword the test with it")
+_wall = _shown.split(_WALL_HEAD, 1)[1].split("</div>", 1)[0]
+check("the wall comes before the Datadog recipe and before Agent Observability is opened",
+      ">Agent Observability</a>" in _shown
+      and _shown.index(_WALL_HEAD) < _shown.index(_RECIPE_HEAD)
+      and _shown.index(_WALL_HEAD) < _shown.index(">Agent Observability</a>"))
+check("it links the wall and its /api/prompts list",
+      'href="https://prompts.burritobot.co"' in _wall and 'href="https://prompts.burritobot.co/api/prompts"' in _wall)
+check("it says what the wall does with a fast room: one card every 1.5 seconds and +N more, the last 500 kept",
+      "one card every 1.5 seconds" in _wall and "<b>+N more</b>" in _wall and "the last 500" in _wall)
+check("it says the wall polls every 3 seconds and puts Datadog second",
+      "every 3 seconds" in _wall and "Datadog, below, is second" in _wall)
+_ros_clusters = re.findall(r"'([^']+)'", _WALL_CHECK.group(1)) if _WALL_CHECK else []
+_wall_clusters = re.findall(r"<code>([a-z-]+)</code>", _wall)
+check(f"the wall's clusters are the run-of-show wall-check's, {_ros_clusters}, and no other",
+      bool(_ros_clusters) and sorted(_wall_clusters) == sorted(_ros_clusters))
+check("the rehearsal note says Every prompt is already saved, as view 4805197, and to open it once",
+      "is already saved in Whitney's org (view 4805197" in _shown and "open it once" in _shown
+      and "Only if it is missing" in _shown)
+
 print("== Phase 2 says presenters claim like attendees ==")
 check("presenters claim from the same pool", "Presenters claim one the same way, from the same pool" in FLAT)
 check("the admin and Community clusters are not claimable", "not in the pool and cannot be claimed" in FLAT)

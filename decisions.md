@@ -52104,3 +52104,46 @@ public bot serves no presenter page. The live deck was read by `test_ros_deck_li
 **Not yet run on a cluster.** Once Argo CD syncs this change from staging, on watch-it-burn-private:
 `curl -s https://burritobot-private.burritobot.co/kubecon` matches `gitops/ai-layer/web/kubecon.html` here (row 5
 reads "Challenge 4, #/66 to #/115"), and `bash verify/run-e2e-tools.sh test_ros_deck_live.py` still passes.
+
+## 2026-11-11 · #337 · run 20260 · The brief names the prompt wall first for every prompt, Datadog second, and says Every prompt is already saved
+
+**Where the issue stood.** Both of #337's own asks were already on staging: the brief's Datadog recipe (#791, the
+2026-11-03 entry) and the saved view Every prompt (#792, view 4805197, run 18770's 2026-11-08 entry). What was left is
+Michael's ruling of 2026-11-02, through the coordinator: the answer to "where do I see every prompt" is the prompt
+wall, and Datadog is second while #265 cleans it up. He also ruled the wall's 500-entry cap stays, so nothing here
+touches retention. `verify/prior-drafts.sh 337` drafts 12222 and 12987 are the ones #791 rewrote, and the seven after
+them have no commits beyond staging, so nothing was ported. Run 20257, the attempt before this one, could read but not
+write (its permission mode refused edits, commits, tests and `gh`) and committed nothing; its plan is what this run did.
+
+**What changed.**
+- `gitops/ai-layer/web/brief.html`, beat 3 of Phase 1, now opens on a block headed "Every prompt, first: the prompt
+  wall". It links `https://prompts.burritobot.co`, says the wall reads both bots' feeds (`attackme` and
+  `burritobot-private`) every 3 seconds with no name on a prompt (prompts-agenticburn's `POLL_INTERVAL`, the 2026-11-05
+  load-test entry; measured at 3.4 s on 2026-11-06), that a fast room gets one card every 1.5 seconds and a +N more
+  count (#978), and that the last 500 are at `/api/prompts`. Datadog follows as the way to open one prompt's trace,
+  and the Agent Observability line now starts "Then open". The h3, the recipe and its link are unchanged, so
+  `infra/datadog-room/every_prompt_view.py`'s `brief_query()` still reads the same query.
+- The rehearsal note no longer tells the presenters to save the view. It says Every prompt is saved (view 4805197,
+  Past 1 Hour), to open it once, signed in, before the session, and to save it only if it is missing.
+- `verify/test_instructor_brief.py` gains six checks: the wall block comes before the recipe and before Agent
+  Observability is opened; it links the wall and `/api/prompts`; it names the 1.5-second card, +N more and the last
+  500; it names the 3-second poll and puts Datadog second; its clusters are exactly the list the run-of-show's Night
+  Before wall-check prints (`['attackme', 'burritobot-private']`), read from that file; and the note names view
+  4805197. Its three anchors are checked first and exit by name when reworded.
+- #337's body: run 20257 escalated a `gh issue edit` that puts a dated "the prompt wall is the primary answer" section
+  and the acceptance criteria above the original text, and the body this run was dispatched with carries it.
+
+**Tests run.** `python3 verify/test_instructor_brief.py` exit 0, the six new checks PASS, "All instructor-brief checks
+passed." `python3 verify/test_every_prompt_view.py` exit 0, "ALL EVERY PROMPT VIEW CHECKS GREEN". The prose gate on
+the changed files is clean.
+
+**Live check, read only, 2026-11-11 04:42Z.** The change is under `gitops/`, so it was read where it runs.
+- `https://prompts.burritobot.co/healthz`: ok true, entries 240, seq 240, clusters `attackme` ok and
+  `burritobot-private` ok, the two the brief now names. `/api/prompts` answered 240 prompts at seq 240.
+- `every_prompt_view.py --list` with the `write-app-key` field of `watch-it-burn/datadog` (passed per command, never
+  printed) listed view 4805197, Every prompt, `ml_app:burritobot k8s.cluster.name:burritobot-public`, and "--apply
+  would: present". Nothing was written.
+- `https://burritobot-private.burritobot.co/brief` answered 200 and serves staging's brief, without the wall block yet.
+
+**Not yet run on a cluster.** Once Argo CD syncs this change from staging:
+`curl -s https://burritobot-private.burritobot.co/brief | grep -c 'Every prompt, first: the prompt wall'` prints 1.
