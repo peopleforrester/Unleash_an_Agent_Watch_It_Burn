@@ -2461,6 +2461,25 @@ reads:
     - verify/e2e-tools.lock
     - verify/fetch-e2e-tools.sh
     - verify/pii_scrub_cases.py
+  test_collector_relay.py:
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/otel-collector
+    - gitops/otel-collector/coc-mask/configmap.yaml
+    - verify/collector_render.py
+  test_collector_relay_e2e.py:
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/otel-collector
+    - gitops/otel-collector/coc-mask/configmap.yaml
+    - verify/.tools/bin/otelcol-contrib
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/collector_render.py
+    - verify/e2e-tools.lock
+    - verify/fetch-e2e-tools.sh
   test_collector_startup_budget.py:
     - gitops/bootstrap/apps/otel-collector-attendee.yaml
     - gitops/bootstrap/apps/otel-collector-burn.yaml

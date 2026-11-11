@@ -24,6 +24,20 @@ config:
       protocols:
         http:
           endpoint: 0.0.0.0:4319
+    # The traces pipeline's second half (#1336). traces/intake takes the senders' spans on otlp, batches them and
+    # hands each batch to the otlp_grpc/relay exporter below, whose queue sends them back into this pod here, on
+    # num_consumers connections at once. Each request runs the traces pipeline's processors on a goroutine of its
+    # own, so the masks run on as many cores as there are consumers. Before this every processor after `batch` ran
+    # on the batch processor's one export goroutine: at the room's ceiling #1334's replay held the collector at one
+    # core for 70 s past the last reply, the receiver stopped taking spans, and the senders dropped theirs.
+    # localhost only: nothing outside the pod reaches it, and no containerPort or Service names it.
+    otlp/relay:
+      protocols:
+        grpc:
+          endpoint: localhost:4320
+          # A batch of the conversation's spans is larger than gRPC's default 4 MiB: the agent's model-call span
+          # carries the whole request twice over.
+          max_recv_msg_size_mib: 64
   processors:
     memory_limiter:
       check_interval: 1s
@@ -33,6 +47,19 @@ config:
       timeout: 5s
       send_batch_size: 1024
       send_batch_max_size: 2048
+    # traces/intake's pod lookup, in passthrough (#1336). The chart's k8s_attributes, which it prepends to the
+    # traces pipeline, finds a span's pod by the sender's connection when nothing else names it. Behind
+    # otlp/relay every connection comes from localhost, so this one runs at the intake, where the sender's
+    # address is still known, and only writes it as k8s.pod.ip. The chart's processor then finds the pod by
+    # that attribute, its first pod_association source, and adds the rest as before.
+    k8s_attributes/intake:
+      passthrough: true
+      pod_association:
+        - sources:
+            - from: resource_attribute
+              name: k8s.pod.ip
+        - sources:
+            - from: connection
     resource:
       attributes:
         - key: cluster.name
@@ -650,6 +677,33 @@ config:
       endpoint: tempo.monitoring.svc.cluster.local:4317
       tls:
         insecure: true
+    # traces/intake's one exporter (#1336): this pod's own otlp/relay receiver, which feeds the traces pipeline.
+    # The queue is what spreads the work. The batch processor's goroutine only puts each batch on it and goes
+    # back to the receiver, and two consumers each send one request of at most 256 spans at a time, so the
+    # processors run on two cores, the pod's CPU limit. About 20 ms of CPU a span (#1334) makes a 256-span
+    # request about 5 s of work, so the timeout is 60 s, and a failed request is not sent again: a retry of one
+    # cut off by the timeout would run the masks twice and export its spans twice. The queue holds 10,000 spans,
+    # about two and a half minutes of the room's ceiling; memory_limiter at the intake refuses new spans before
+    # that fills the pod's memory, and a span the full queue turns away counts in
+    # otelcol_exporter_enqueue_failed_spans.
+    otlp_grpc/relay:
+      endpoint: localhost:4320
+      tls:
+        insecure: true
+      compression: none
+      timeout: 60s
+      retry_on_failure:
+        enabled: false
+      sending_queue:
+        enabled: true
+        num_consumers: 2
+        sizer: items
+        queue_size: 10000
+        batch:
+          flush_timeout: 200ms
+          min_size: 1
+          max_size: 256
+          sizer: items
     # The PRIMARY sink, Datadog, is NOT defined here. It lives in the Datadog overlay below
     # (extraManifests, otel-collector-datadog), which the datadog-gate init container switches on only
     # when datadog-secret exists. This file on its own is the Datadog-free collector: Tempo + Prometheus.
@@ -731,14 +785,26 @@ config:
           - batch
         exporters:
           - debug
-      traces:
+      # The senders' spans come in here (#1336): the memory limit, the sender's pod address, and batches handed to
+      # otlp_grpc/relay's queue, which feeds them back to the traces pipeline below on two connections at once.
+      # Nothing heavy runs here, so the batch processor's one goroutine never holds the receiver up. The Datadog
+      # overlays restate traces' exporters and never this pipeline's.
+      traces/intake:
         receivers:
           - otlp
         processors:
           - memory_limiter
+          - k8s_attributes/intake
+          - batch
+        exporters:
+          - otlp_grpc/relay
+      # Every processor here runs on the goroutine of one otlp/relay request, so two batches are masked at once.
+      traces:
+        receivers:
+          - otlp/relay
+        processors:
           - transform/kagent_service_name # #634: before every rule that matches burritobot-agent
           - filter/drop_noise
-          - batch
           - resource
           - transform/set_peer_service # PRD #27 M3: peer.service fallback for the agentgateway->kagent edge
           - transform/set_llmobs_workflow # promote call_llm to invoke_agent so LLM Obs shows clean hierarchy

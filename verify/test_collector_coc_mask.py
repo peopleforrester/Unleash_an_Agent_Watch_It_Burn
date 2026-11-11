@@ -84,6 +84,14 @@ for profile, app_path in PROFILE_APP.items():
 check("the ConfigMap names no namespace, so it lands in the Applications' destination, monitoring",
       "namespace" not in yaml.safe_load(COC_MASK_MANIFEST.read_text(encoding="utf-8"))["metadata"])
 
+def feeds_masked(cfg: dict, exporter: str) -> bool:
+    """The exporter sends to this collector's own receiver of the traces pipeline, on localhost (#1336's relay)."""
+    endpoint = (cfg.get("exporters", {}).get(exporter) or {}).get("endpoint")
+    ours = {(cfg["receivers"].get(r, {}).get("protocols") or {}).get("grpc", {}).get("endpoint")
+            for r in cfg["service"]["pipelines"]["traces"].get("receivers", [])}
+    return bool(endpoint) and str(endpoint).startswith("localhost:") and endpoint in ours
+
+
 print("== every profile: the mask is in the traces pipeline, after the content copies, before every exporter ==")
 for profile, secret, admin in RENDERS:
     cfg = collector_config(profile, datadog_secret=secret, admin_secret=admin)
@@ -107,6 +115,11 @@ for profile, secret, admin in RENDERS:
         receivers = set(pipe.get("receivers", []))
         if receivers <= fed:
             check(f"{label}: {name} receives only from the masked pipeline ({sorted(receivers)})", True)
+            continue
+        # traces/intake (#1336) takes the senders' spans before the mask, and sends every one of them on to the masked
+        # pipeline: each exporter it names is a loopback to a receiver of the traces pipeline, and nothing else.
+        if pipe.get("exporters") and all(feeds_masked(cfg, e) for e in pipe["exporters"]):
+            check(f"{label}: {name} sends every span it takes into the masked pipeline ({pipe['exporters']})", True)
             continue
         kept = [s for g in cfg["processors"].get("transform/lab_contract", {}).get("trace_statements", [])
                 if g.get("context") == "span" for s in g["statements"] if s.startswith("keep_keys(attributes,")]
