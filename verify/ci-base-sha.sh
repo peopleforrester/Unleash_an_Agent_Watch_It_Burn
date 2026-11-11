@@ -20,7 +20,8 @@
 # scope_tests.py's to widen, as for any base.
 #
 # Nothing here falls back. No GITHUB_ENV, no origin, no staging there, or no common ancestor exits 1, naming which;
-# so does a commit in staging with no GH_TOKEN, no GITHUB_REPOSITORY, or an Actions API read that fails.
+# so does a commit in staging with no GH_TOKEN, no GITHUB_REPOSITORY, or an Actions API read that fails: at once on an
+# HTTP status GitHub answered, and after five tries when no answer came, or a 429 or 5xx (#1325).
 set -euo pipefail
 export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 
@@ -49,8 +50,37 @@ work="$(mktemp -d)"
 trap 'rm -rf "${work}"' EXIT
 
 endpoint="repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_FILE}/runs?branch=staging&event=push&status=success&per_page=100"
-gh api "${endpoint}" >"${work}/runs.json" \
-    || { printf 'ci-base-sha: gh api %s failed\n' "${endpoint}" >&2; exit 1; }
+# #1325: the e2e job failed here on "net/http: TLS handshake timeout" on staging 49387d36 and again 16 minutes later
+# on 92f5514c, before any suite ran, while the offline job's same read on the same runner went through. A read that
+# got no answer (gh names no HTTP status: a timeout, a refused or reset connection), a 429 or a 5xx is tried again
+# after each wait in GH_WAITS, five tries in all over about two minutes, so a dropout on Tanjiro's link to GitHub
+# shorter than that costs no red gate. Any other status is GitHub's answer and fails at once. Every try's error is
+# printed, and the last failure exits 1 naming the endpoint and the tries.
+GH_WAITS=(5 15 30 60)
+GH_TRIES=$(( ${#GH_WAITS[@]} + 1 ))
+try=1
+while :; do
+    if gh api "${endpoint}" >"${work}/runs.json" 2>"${work}/gh.err"; then
+        break
+    fi
+    sed 's/^/ci-base-sha: gh: /' "${work}/gh.err" >&2
+    status="$(grep -oE '\(HTTP [0-9]{3}\)' "${work}/gh.err" | tail -n 1 | tr -dc '0-9' || true)"
+    if [[ -n "${status}" && "${status}" != 429 && "${status}" != 5?? ]]; then
+        printf 'ci-base-sha: gh api %s failed: GitHub answered HTTP %s, which is not retried\n' "${endpoint}" "${status}" >&2
+        exit 1
+    fi
+    if (( try >= GH_TRIES )); then
+        printf 'ci-base-sha: gh api %s failed on %d tries, after waits of %s s\n' "${endpoint}" "${GH_TRIES}" \
+            "${GH_WAITS[*]}" >&2
+        exit 1
+    fi
+    got="no answer"
+    [[ -z "${status}" ]] || got="HTTP ${status}"
+    wait_s="${GH_WAITS[try - 1]}"
+    printf 'ci-base-sha: gh api try %d of %d got %s; trying again in %s s\n' "${try}" "${GH_TRIES}" "${got}" "${wait_s}" >&2
+    sleep "${wait_s}"
+    try=$((try + 1))
+done
 # The query filters already; the conclusion, branch and event are read again here, so a run the API let through that
 # did not go green on a staging push never becomes a base.
 python3 -I -c '

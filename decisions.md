@@ -51735,3 +51735,38 @@ passed". `image_cache.py` itself is unchanged; the code under test was right.
 **Tests.** `python3 verify/test_image_cache.py`, alone: "All image cache checks passed", exit 0. The test reads no new
 path, so the scope map is unchanged. The scoped offline suite and `bash verify/run-e2e-tools.sh` are left to the gate.
 This change touches only a test no cluster runs, so it needs no live check.
+
+## 2026-11-11 · #1325 · run 20233 · the CI base step tries the Actions API read again when no answer comes
+
+**What failed.** The `CI` check (`verify-suites`) went red on staging `49387d36` (run 42940370447), and again on
+`92f5514c` (run 42945264940), 16 minutes later. No test failed in either. The e2e job stopped in its first step of its
+own, "HECATON_BASE_SHA, the merge base with origin/staging, or the newest green staging ancestor", before
+`run-e2e-tools.sh` started. Both logs read the same: `gh api .../actions/workflows/verify-suites.yml/runs?...`
+printed `net/http: TLS handshake timeout` after 10 s, and `verify/ci-base-sha.sh` exited 1 on its one try. Both jobs
+ran on `tanjiro-Unleash_an_Agent_Watch_It_Burn-2`. In run 42940370447 the offline job's same read on that runner went
+through at 01:55:40Z, so the link to GitHub dropped out for a while and was not down for good. The same run's
+offline suite also logged TLS handshake timeouts from its own stubs, and gh_comments.py and image_cache.py already
+retry this error for the same reason.
+
+**Decision.** `ci-base-sha.sh` tries the Actions API read again when gh names no HTTP status (no answer: a timeout, a
+refused or reset connection), or names a 429 or a 5xx. It waits 5, 15, 30 and then 60 s, five tries in all, so a
+dropout shorter than about two minutes no longer turns the gate red. Any other status (401, 403, 404, 422) is
+GitHub's answer and fails at once, as before. Every try's stderr is printed. When the fifth try fails, the script exits 1
+naming the endpoint, "on 5 tries" and the waits, so a lasting outage still fails loudly. The script was not changed in
+any other way. I first wrote three tries 5 s apart, following #976's registry retry. The second failure, on the next
+push, showed the dropouts can last longer than that, so I lengthened the waits as `image_cache.py`'s `BLOB_BACKOFF`
+does.
+
+**Tests.** `verify/test_verify_suites_workflow.py` puts a stub `sleep` beside its stub `gh` on PATH, so the waits
+cost nothing. The stub `gh` now fails its first N calls with the stderr the test hands it. The new checks: after 1, 2
+or 4 failed reads with no answer (the exact TLS line from the CI log), an HTTP 502 or an HTTP 429, the base is found on
+the next try, with the waits given so far. Five failed reads fail with "on 5 tries" and the error. A 401, 403, 404 or
+422 fails on the first call with no wait. With staging's old script in place, those 14 new checks fail and the others
+pass. With the new script, `python3 verify/test_verify_suites_workflow.py` printed 83 PASS and "verify-suites.yml
+and ci-base-sha.sh hold", exit 0. `python3 verify/test_scope_tests.py` and `python3 verify/test_test_map.py` pass. The
+test reads no new path, so the scope map is unchanged.
+
+**Live check.** Not needed. The change touches only the CI workflow's helper script and its offline test, and no
+cluster runs either. Running the script against the real Actions API from this run stopped at "GH_TOKEN is not set",
+since the run's gh hands out no token. The read is checked by the next `verify-suites` run on staging once hecaton
+promotes this branch.

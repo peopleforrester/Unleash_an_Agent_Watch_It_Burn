@@ -40,6 +40,10 @@ diff from that base; a green run that is the commit itself, a second parent, ano
 force-pushed commit is never the base; no green ancestor leaves HECATON_BASE_SHA unset (so #1018's runners run
 whole); and a missing GITHUB_ENV, GH_TOKEN or GITHUB_REPOSITORY, a failed or malformed API answer, an unrelated
 history or an unreachable origin fails.
+
+#1325: the e2e job failed in the base step on a TLS handshake timeout reading the Actions API, on staging 49387d36 and
+again on 92f5514c. A read that gets no answer, a 429 or a 5xx is tried again after waits of 5, 15, 30 and 60 s, five
+tries in all (a stub sleep stands in for the waits); a read GitHub answered with any other status fails at once.
 """
 from __future__ import annotations
 
@@ -412,32 +416,48 @@ def commit(cwd: Path, name: str) -> str:
     return git(cwd, "rev-parse", "HEAD")
 
 
+# What gh prints on stderr when a read gets no answer, as staging 49387d36's e2e job printed it (#1325), and when
+# GitHub answers with an error status.
+NO_ANSWER = ('Get "https://api.github.com/repos/owner/repo/actions/workflows/verify-suites.yml/runs": '
+             'net/http: TLS handshake timeout')
+
+
+def http_error(status: int) -> str:
+    return f"gh: Error (HTTP {status})"
+
+
 def base_sha(cwd: Path, env_file: Path | None, runs: object | None = None, *, token: bool = True,
-             repo: bool = True, gh_fails: bool = False) -> tuple[int, str, str]:
+             repo: bool = True, gh_fails: int = 0, gh_err: str = NO_ANSWER) -> tuple[int, str, str]:
     """Runs ci-base-sha.sh in `cwd` with a stub gh first on PATH that logs its arguments to GH_LOG and prints `runs`
-    as JSON (or exits 1 when `gh_fails`). Returns the exit code, the output and what the script wrote to `env_file`."""
+    as JSON. Its first `gh_fails` calls instead print `gh_err` on stderr and exit 1. A stub sleep logs each wait to
+    SLEEP_LOG and returns at once. Returns the exit code, the output and what the script wrote to `env_file`; the gh
+    calls and the waits are left on base_sha.gh_calls and base_sha.sleeps."""
     stub = cwd.parent / "stub"
     stub.mkdir(exist_ok=True)
     (stub / "gh").write_text('#!/usr/bin/env bash\nprintf "%s\\n" "$*" >>"$GH_LOG"\n'
-                             '[[ -z "${GH_STUB_FAIL:-}" ]] || exit 1\ncat "$GH_STUB_RUNS"\n')
-    (stub / "gh").chmod(0o755)
+                             'if (( $(wc -l <"$GH_LOG") <= GH_STUB_FAIL )); then\n'
+                             '    printf "%s\\n" "$GH_STUB_ERR" >&2; exit 1\nfi\ncat "$GH_STUB_RUNS"\n')
+    (stub / "sleep").write_text('#!/usr/bin/env bash\nprintf "%s\\n" "$*" >>"$SLEEP_LOG"\n')
+    for name in ("gh", "sleep"):
+        (stub / name).chmod(0o755)
     (stub / "runs.json").write_text(runs if isinstance(runs, str) else json.dumps(runs or {"workflow_runs": []}))
-    log = stub / "gh.log"
+    log, sleeps = stub / "gh.log", stub / "sleep.log"
     log.write_text("")
-    drop = ("GITHUB_ENV", "PUSH_BEFORE", "GH_TOKEN", "GITHUB_TOKEN", "GITHUB_REPOSITORY", "GH_STUB_FAIL")
+    sleeps.write_text("")
+    drop = ("GITHUB_ENV", "PUSH_BEFORE", "GH_TOKEN", "GITHUB_TOKEN", "GITHUB_REPOSITORY", "GH_STUB_FAIL", "GH_STUB_ERR")
     env = {k: v for k, v in os.environ.items() if k not in drop}
     env.update({"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "PATH": f"{stub}:{env.get('PATH', '')}",
-                "GH_LOG": str(log), "GH_STUB_RUNS": str(stub / "runs.json")})
+                "GH_LOG": str(log), "GH_STUB_RUNS": str(stub / "runs.json"), "SLEEP_LOG": str(sleeps),
+                "GH_STUB_FAIL": str(gh_fails), "GH_STUB_ERR": gh_err})
     if token:
         env["GH_TOKEN"] = "stub-token"
     if repo:
         env["GITHUB_REPOSITORY"] = "owner/repo"
-    if gh_fails:
-        env["GH_STUB_FAIL"] = "1"
     if env_file is not None:
         env["GITHUB_ENV"] = str(env_file)
     r = subprocess.run(["bash", str(BASE_SCRIPT)], cwd=cwd, env=env, capture_output=True, text=True)
     base_sha.gh_calls = log.read_text().splitlines()
+    base_sha.sleeps = sleeps.read_text().splitlines()
     return r.returncode, r.stdout + r.stderr, env_file.read_text() if env_file and env_file.exists() else ""
 
 
@@ -510,11 +530,35 @@ with tempfile.TemporaryDirectory() as tmp:
               rc == 0 and env == "" and "left unset" in out, f"exit {rc}, wrote {env!r}: {out}")
     for label, kw, word in (("no GH_TOKEN", {"token": False}, "GH_TOKEN"),
                             ("no GITHUB_REPOSITORY", {"repo": False}, "GITHUB_REPOSITORY"),
-                            ("a gh api call that fails", {"gh_fails": True}, "gh api"),
+                            ("a gh api call that fails on every try", {"gh_fails": 99}, "on 5 tries"),
                             ("an API answer with no workflow_runs", {"runs": "{}"}, "workflow_runs")):
         rc, out, env = base_sha(work, t / f"env-{word[:6]}", **{"runs": {"workflow_runs": [run(fork)]}, **kw})
         check(f"a staging tip with {label} fails, naming it", rc == 1 and env == "" and word in out,
               f"exit {rc}, wrote {env!r}: {out}")
+
+    # #1325: a read that gets no answer, a 429 or a 5xx is tried again after each of these waits, five tries in all;
+    # any other status GitHub answered fails at once.
+    waits = ["5", "15", "30", "60"]
+    green = {"workflow_runs": [run(s3)] + noise + [run(fork)]}
+    for case, (label, err) in enumerate((("no answer (a TLS handshake timeout)", NO_ANSWER),
+                                         ("an HTTP 502", http_error(502)), ("an HTTP 429", http_error(429)))):
+        for fails in (1, 2, 4):
+            rc, out, env = base_sha(work, t / f"env-retry-{case}-{fails}", green, gh_fails=fails, gh_err=err)
+            check(f"a staging tip whose first {fails} gh api read(s) got {label} gets its base on try {fails + 1}",
+                  rc == 0 and env == f"HECATON_BASE_SHA={s3}\n" and len(base_sha.gh_calls) == fails + 1
+                  and base_sha.sleeps == waits[:fails] and "try 1 of 5 got" in out,
+                  f"exit {rc}, wrote {env!r}, gh got {len(base_sha.gh_calls)} call(s), slept {base_sha.sleeps}: {out}")
+        rc, out, env = base_sha(work, t / f"env-retry-{case}-all", green, gh_fails=5, gh_err=err)
+        check(f"a staging tip whose five gh api reads all got {label} fails after the fifth, naming the tries",
+              rc == 1 and env == "" and len(base_sha.gh_calls) == 5 and base_sha.sleeps == waits
+              and "on 5 tries" in out and err in out,
+              f"exit {rc}, wrote {env!r}, gh got {len(base_sha.gh_calls)} call(s), slept {base_sha.sleeps}: {out}")
+    for status in (401, 403, 404, 422):
+        rc, out, env = base_sha(work, t / f"env-http-{status}", green, gh_fails=1, gh_err=http_error(status))
+        check(f"a gh api read GitHub answered with HTTP {status} fails at once, with no second try",
+              rc == 1 and env == "" and len(base_sha.gh_calls) == 1 and base_sha.sleeps == []
+              and f"HTTP {status}, which is not retried" in out,
+              f"exit {rc}, wrote {env!r}, gh got {len(base_sha.gh_calls)} call(s), slept {base_sha.sleeps}: {out}")
 
     git(work, "checkout", "-q", "agent/1020-2")
     rc, out, _ = base_sha(work, None)
