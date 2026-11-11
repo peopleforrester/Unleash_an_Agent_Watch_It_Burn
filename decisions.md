@@ -54586,3 +54586,105 @@ they are in the map test: they are the slides #171's table is keyed on.
 **Checked.** `test_deck_shift_slide_citations.py`, `test_scope_tests.py` and `test_deck_do_note_switch_map_comment.py`
 each pass once alone; `scope_tests.py write` changes nothing, since the citation test already runs on every change.
 The scoped `run-tests.sh` is left to validation. Live check skipped: only `verify/` files no cluster runs changed.
+## 2026-11-11 · #1351 · run 20471 · The stage-switch check and the KubeCon probe drive the guardrails-<name>-on/off switches, run live on both clusters
+
+**What changed.** `verify/stage_switch_check.py`'s SWITCHES table now keys `guardrails-k8s-on`,
+`guardrails-agency-on`, `guardrails-input-on` and `guardrails-mcp-on`, in talk order, with `OFF` naming each one's
+`-off` pair. The issue's text says `guardrails-kates-on`; Michael's ruling on #1350 stands over it (the Kubernetes switch
+is `guardrails-k8s-*`, "kates" was a speech-to-text error), so the code says k8s. `verify/stage_switch_run.py` runs the
+four in talk order and now closes with the four `-off` switches, the last switch first (`guardrails-mcp-off`,
+`guardrails-input-off`, `guardrails-agency-off`, `guardrails-k8s-off`), where it used to close with `guards-off` and
+`guardrails-off`. Agency comes off before k8s, as `guardrails-all-off` orders them, so each cluster's Role goes back
+through c5 to the shipped c8. The run still starts only when output, budget and topic read off too (renamed
+`START_ALSO`; they were `CLOSE_ALSO`, what `guards-off` turned off): no switch here turns them on and the closing four
+do not turn them off, so the start-state and as-found checks hold them off and unchanged.
+
+**The read each switch prints.** Every switch ends on `_controls` since #1349, both clusters' `/controls` printed by
+name. `stage_switch_check.printed_controls` reads the last such block back (cluster by the host on its line, field by
+the label `_ctlfmt` prints, `PRINTED_LABELS`), and `judge_printed` judges it: each field the switch owns shows ON, or
+off for an `-off`, on that cluster. `stage_switch_run.py` prints one `private/printed` and one `community/printed` line
+per command, the four switches and the four `-off`s, beside the `/controls` reads it makes itself. A cluster the switch
+could not read is a FAIL quoting the terminal's warning. The probe's own terminal judges were not given this read: its
+beats already read each cluster back (`_agency_here`, `_input_here`, `_mcp_here`, the final read at the start state),
+and `judge_guardrails_switched` now quotes the "all four Kubernetes guardrails are" line, not the last line, which is
+now a `/controls` line.
+
+**`verify/kubecon_probe.py`.** Its switch beats, constants (`GUARDRAILS_ON`, `GUARDRAILS_OFF`, `TERMINAL_GUARDS`),
+STAGE_ORDER, the community run's final beat (`guardrails-input-off`, `guardrails-mcp-off`, then
+`guardrails-k8s-off`, the same three steps as before under their new names) and the docstrings name the new switches.
+The admin run's reset beat, which sends its own `/toggle` queries (what `guardrails-ai-off` and
+`guardrails-topic-off` send), opens the C7 rule, puts the shipped Role back and then runs the terminal's
+`guardrails-k8s-off`, is now keyed `guardrails-all-off`, and `switched_after` reads that name as every switch off.
+`verify/run-e2e.sh`'s note on the recipe block names `guardrails-k8s-on` and `guardrails-k8s-off`. The old names are
+left only in lines that say they are history.
+
+**The run-of-show.** `verify/test_stage_switch_night_before.py` holds the Night Before step "Every stage switch
+reaches both clusters" to the script, so that step now names the new switches, the closing four in order, the four
+Kubernetes guardrail fields, and the `private/printed` and `community/printed` lines. Its record of run 19175 is history
+and keeps the names that run typed. The rest of the run-of-show still types the old names (aliases since #1350), so the
+anchors `test_kubecon_probe.py` reads off its segments table and its Night Before probe step stay the run-of-show's
+words; the docs child of #1346 renames them there and in that test together.
+
+**Tests.** Each run once and passing: `test_stage_switch_check.py` (120 checks; new: the `-off` pairs, each switch and
+pair a heredoc of its own in the terminal, `PRINTED_LABELS` equal to `_ctlfmt`'s, and `printed_controls` and
+`judge_printed` on output made by running the entrypoint's own `_ctlfmt` code), `test_stage_switch_run.py` (its fake
+terminal now ends each command on `_ctlfmt`'s read of the fake clusters; new cases: a printed read that could not read
+the community cluster, a raising `guardrails-mcp-off` with the other three still run, a ^C held through all four),
+`test_stage_switch_night_before.py`, `test_kubecon_probe.py`, `test_scope_tests.py` and `test_test_map.py`. The scope
+map was rewritten with `python3 verify/scope_tests.py write`. The full scoped `run-tests.sh` is left to validation.
+
+**Live check, 2026-11-11.** Argo CD had synced staging d0a52203, #1350's rename, on both clusters (ai-layer Synced at
+19:21 and 19:19 UTC), and the private terminal held the eight new scripts. Both guard locks were free and both
+`/controls` read every stage field off. From the repo root, `python3 verify/stage_switch_run.py --context
+watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile accen-dev --lock-wait 600` ran in about two minutes and
+printed:
+
+```
+stage-switch check: the switches run in watch-it-burn-private's terminal, judged on burritobot-private.burritobot.co and attackme.burritobot.co
+  PASS  identity              private           kube-context and https://burritobot-private.burritobot.co are the same cluster
+  PASS  start                 private           every start-state field reads off
+  PASS  start                 community         every start-state field reads off
+  PASS  guardrails-k8s-on     private/printed   guardrails-k8s-on printed RBAC scope, Kyverno, KubeArmor, NetworkPolicy ON for burritobot-private.burritobot.co
+  PASS  guardrails-k8s-on     community/printed guardrails-k8s-on printed RBAC scope, Kyverno, KubeArmor, NetworkPolicy ON for attackme.burritobot.co
+  PASS  guardrails-k8s-on     private           guardrails-k8s-on turned on infra.rbac_scoped, infra.kyverno, infra.kubearmor, infra.networkpolicy
+  PASS  guardrails-k8s-on     community         guardrails-k8s-on turned on infra.rbac_scoped, infra.kyverno, infra.kubearmor, infra.networkpolicy
+  PASS  guardrails-agency-on  private/printed   guardrails-agency-on printed least privilege ON for burritobot-private.burritobot.co
+  PASS  guardrails-agency-on  community/printed guardrails-agency-on printed least privilege ON for attackme.burritobot.co
+  PASS  guardrails-agency-on  private           guardrails-agency-on turned on infra.agency_scoped
+  PASS  guardrails-agency-on  community         guardrails-agency-on turned on infra.agency_scoped
+  PASS  guardrails-input-on   private/printed   guardrails-input-on printed input block-list, injection classifier ON for burritobot-private.burritobot.co
+  PASS  guardrails-input-on   community/printed guardrails-input-on printed input block-list, injection classifier ON for attackme.burritobot.co
+  PASS  guardrails-input-on   private           guardrails-input-on turned on ai.input_blocklist, ai.input_classifier
+  PASS  guardrails-input-on   community         guardrails-input-on turned on ai.input_blocklist, ai.input_classifier
+  PASS  guardrails-mcp-on     private/printed   guardrails-mcp-on printed tool allow-list ON for burritobot-private.burritobot.co
+  PASS  guardrails-mcp-on     community/printed guardrails-mcp-on printed tool allow-list ON for attackme.burritobot.co
+  PASS  guardrails-mcp-on     private           guardrails-mcp-on turned on infra.tool_allowlist
+  PASS  guardrails-mcp-on     community         guardrails-mcp-on turned on infra.tool_allowlist
+  PASS  guardrails-mcp-off    private/printed   guardrails-mcp-off printed tool allow-list off for burritobot-private.burritobot.co
+  PASS  guardrails-mcp-off    community/printed guardrails-mcp-off printed tool allow-list off for attackme.burritobot.co
+  PASS  guardrails-input-off  private/printed   guardrails-input-off printed input block-list, injection classifier off for burritobot-private.burritobot.co
+  PASS  guardrails-input-off  community/printed guardrails-input-off printed input block-list, injection classifier off for attackme.burritobot.co
+  PASS  guardrails-agency-off private/printed   guardrails-agency-off printed least privilege off for burritobot-private.burritobot.co
+  PASS  guardrails-agency-off community/printed guardrails-agency-off printed least privilege off for attackme.burritobot.co
+  PASS  guardrails-k8s-off    private/printed   guardrails-k8s-off printed RBAC scope, Kyverno, KubeArmor, NetworkPolicy off for burritobot-private.burritobot.co
+  PASS  guardrails-k8s-off    community/printed guardrails-k8s-off printed RBAC scope, Kyverno, KubeArmor, NetworkPolicy off for attackme.burritobot.co
+  PASS  start-state           private           every stage switch's field reads off (Falco not judged)
+  PASS  start-state           community         every stage switch's field reads off (Falco not judged)
+  PASS  as-found              private           every start-state field reads as it did at the start
+  PASS  as-found              community         every start-state field reads as it did at the start
+31 lines: 31 PASS, 0 FAIL
+STAGE SWITCH CHECK GREEN
+exit=0
+```
+
+The closing `guardrails-k8s-off` printed both clusters back with every AI guard off and every Kubernetes control off
+(Falco on, on the private cluster only, as before). A read after the run: both `/controls` as at the start (every AI
+guard and every stage field false, Falco true on the private cluster alone), and both guard locks released.
+
+**What else Michael's start state names.** His comment on the issue asks for counters at zero and the wall empty too.
+This run sent no model call and touched neither. The private bot's `/cost` reads 0 requests. The community bot's read 76
+requests ($0.87) after the check, 78 a few minutes later and 85 at 19:34 UTC: someone was using it during this run, and its `/prompts`
+feed held their prompts (the wall reads 78 entries). `./fleet.sh reset-bot attackme` scales guard-proxy to 0 and clears
+the bot's workloads, which would cut that session off mid-use, and `./fleet.sh wall-reset` needs a Railway login this
+run does not have. So both are left for whoever runs the room's reset once that use ends, in that order: `reset-bot` on
+every roster cluster, then `wall-reset`, then `wall-check --empty`.
