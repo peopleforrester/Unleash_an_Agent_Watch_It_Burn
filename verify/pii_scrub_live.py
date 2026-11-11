@@ -21,12 +21,19 @@ Three questions, each answered on the live system:
    Why not a chat? Since #648 the public bot's input guard refuses a prompt with any of the four kinds before the
    root span is given it, so a chat carrying PII puts none of it in a trace, and so tests nothing here.
 
-3. Has anything raw reached Datadog? Every APM span stored for kube_cluster_name:burritobot-public in the window,
-   and every ml_app:burritobot Agent Observability span on that cluster, is read, and the scrub's own patterns are
-   run over the conversation: the keys the scrub rewrites (read from values-burn.yaml's keep_keys, so a key added
-   there is scanned too) and every span event's attributes on APM, the input and output on Agent Observability.
-   A match is raw PII stored in Whitney's org, and fails. Ids (session.id, gen_ai.conversation.id, kagent.user_id)
-   are not conversation, and the scrub leaves them whole on purpose, so they are not scanned.
+3. Has anything raw reached Datadog? Every APM span stored for kube_cluster_name:burritobot-public in the window
+   that carries conversation, and every ml_app:burritobot Agent Observability span on that cluster, is read, and the
+   scrub's own patterns are run over the conversation: the keys the scrub rewrites (read from values-burn.yaml's
+   keep_keys, so a key added there is scanned too) and every span event's attributes on APM, the input and output on
+   Agent Observability. A match is raw PII stored in Whitney's org, and fails. Ids (session.id,
+   gen_ai.conversation.id, kagent.user_id) are not conversation, and the scrub leaves them whole on purpose, so they
+   are not scanned.
+
+   The APM search asks only for spans holding one of those keys or a span event (scan_query), since a span with
+   neither gives the scan nothing to read. On 2026-11-11 (#1338) Datadog counted 20,189 such spans of the 99,449
+   stored for burritobot-public over 168 hours, so the default window reads about a fifth of the 100,000-span cap,
+   not 99%. A 168-hour read of every span found no span with a conversation key or an event that the narrowed query
+   missed.
 
 What it leaves behind: the one span, in Whitney's org under burritobot-public, which the post-talk purge (#647's
 teardown step in facilitation/kubecon-na-2026-run-of-show.md) deletes with the rest, and a wib-pii-scrub-check
@@ -59,7 +66,9 @@ COLLECTOR_SVC = "svc/otel-collector-opentelemetry-collector"
 OTLP_HTTP = 4318
 APM_SEARCH = "/api/v2/spans/events/search"
 LLMOBS_SPANS = "/api/v2/llm-obs/v1/spans/events"
-# A page of the stored-span scan, and how many spans it reads before it stops and fails as incomplete.
+# A page of the stored-span scan, and how many spans it reads before it stops and fails as incomplete. The APM scan
+# asks only for spans that carry conversation (scan_query): over 168h on 2026-11-11 it read 20,968 of the cap, where
+# asking for every span of the cluster read 99,433 (#1338).
 PAGE = 1000
 CAP = 100_000
 # Datadog's span search allows the org 50 requests in each 60 s (x-ratelimit-name spans_public_api, limit 50,
@@ -308,12 +317,19 @@ def llmobs_hits(attrs: dict, rxs: list[tuple[str, re.Pattern]]) -> list[tuple[st
     return [(k, label, m.group(0)) for k, v in texts for label, rx in rxs for m in [rx.search(v)] if m]
 
 
+def scan_query(keys: list[str]) -> str:
+    """The stored-span scan's APM search: burritobot-public's spans that hold one of the conversation keys or a span
+    event, the only places conversation_hits reads. A span with neither cannot hold a hit, and is most of what the
+    cluster stores, so leaving it out keeps the scan far under CAP (#1338)."""
+    return f"kube_cluster_name:{CLUSTER} (" + " OR ".join([f"@{k}:*" for k in keys] + ["@events:*"]) + ")"
+
+
 def scan_apm(dd, hours: int, cap: int = CAP) -> tuple[int, list[tuple[str, str, str, str]], bool]:
-    """(spans read, (trace id, key, label, match) hits, complete) over kube_cluster_name:burritobot-public."""
+    """(spans read, (trace id, key, label, match) hits, complete) over burritobot-public's spans with conversation."""
     keys, rxs = conversation_keys(), compiled()
     n, hits, cursor = 0, [], None
     while True:
-        r = apm_search(dd, f"kube_cluster_name:{CLUSTER}", f"now-{hours}h", PAGE, cursor)
+        r = apm_search(dd, scan_query(keys), f"now-{hours}h", PAGE, cursor)
         for s in r.get("data") or []:
             n += 1
             a = s.get("attributes") or {}
@@ -347,7 +363,7 @@ def scan_llmobs(dd, hours: int, cap: int = CAP) -> tuple[int, list[tuple[str, st
 
 def scan_checks(where: str, n: int, hits: list, complete: bool, hours: int) -> list[Check]:
     shown = "; ".join(f"trace {t} {k} {lab} {m!r}" for t, k, lab, m in hits[:5])
-    return [(f"{where}: the scan read every span of the last {hours}h ({n} read)", complete,
+    return [(f"{where}: the scan read every span of the last {hours}h ({n:,} read of its {CAP:,} cap)", complete,
              f"stopped at the {CAP}-span cap; set WIB_PII_SCAN_HOURS lower"),
             (f"{where}: no raw e-mail, card, SSN or phone number in the stored conversation", not hits,
              f"{len(hits)} match(es): {shown}")]

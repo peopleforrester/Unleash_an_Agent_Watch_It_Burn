@@ -52646,3 +52646,34 @@ changed.
 
 **Tests run**, each once and passing: `test_collector_coc_mask_live_checks.py`, `test_collector_coc_mask_live.py` live
 on both clusters, `test_scope_tests.py` and `test_test_map.py`. The rest the change selects are left to validation.
+## 2026-11-11 · #1338 · run 20300 · the live scrub check's APM scan asks only for spans that carry conversation, 20,968 of its 100,000 cap
+
+**What was wrong.** Run 20290 on #1335 saw the 168-hour stored-span scan read 99,433 APM spans for
+`kube_cluster_name:burritobot-public`, within 1% of `CAP` in `verify/pii_scrub_live.py`. Past the cap the check fails
+as incomplete, so a little more room traffic would have turned it red on every run.
+
+**The choice.** Of the issue's three options, the query was narrowed. The scan only ever reads the eight keys the
+scrub rewrites (values-burn.yaml's `keep_keys`) and the span events, so a span holding none of them cannot be a hit.
+`scan_query` asks Datadog for `kube_cluster_name:burritobot-public (@<key>:* OR ... OR @events:*)`, built from
+`conversation_keys()`, so a key added to the scrub is asked for too. Raising `CAP` would have made the scan slower
+under Datadog's 50 searches a minute and only moved the wall. A window since the last purge would need the purge's
+time stored somewhere the check can read, and would still grow with the room's traffic after the talk. The cap stays
+at 100,000, and each scan's check name now prints what it read against it.
+
+**Counted live first**, with `/api/v2/spans/analytics/aggregate` on Whitney's org: over 168 hours, 99,449 spans in
+all, 20,189 with a conversation key or an event (20,183 with a key, 785 with an event). Over 24 hours, 3,440 and
+1,392. Then a 168-hour read of every span, deduplicated by span id (Datadog's search returns a span once per
+retention filter that kept it): 14,245 held a key or an event, and every one of them was in the narrowed query's
+results. A second read of the narrowed query found no result without a key or an event.
+
+**Live check, 07:12Z to 07:22Z.** `COMMUNITY_CONTEXT=watch-it-burn-community python3
+verify/test_collector_pii_scrub_live.py` passed 22 of 22 with the default 168-hour window: the span came back scrubbed
+from APM and Agent Observability, the APM scan read 20,968 spans of its 100,000 cap (headroom 4.8 times what it
+read) and the Agent Observability scan 23,813, with no raw match and no 429. It left one more `wib-pii-scrub-check`
+span in Whitney's org under burritobot-public, which the post-talk purge deletes. Nothing on the cluster changed.
+
+**Tests.** `verify/test_pii_scrub_live_logic.py` holds the query: it names the cluster, each conversation key and
+`@events:*`; a raw e-mail under each key alone, and in an event alone, is a hit the query reaches; a span with
+neither is no hit; the fake org answers only the narrowed query; and the cap check names how many spans were read.
+With the old cluster-only query put back, the test fails, and with `@events:*` taken out of the query, it fails on
+two checks. The Agent Observability scan is unchanged: it read 23,813, also under half the cap.

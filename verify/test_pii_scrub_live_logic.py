@@ -101,7 +101,7 @@ class FakeDD:
             q, cursor = f["filter"]["query"], f["page"].get("cursor")
             if q == f"trace_id:{TRACE}":
                 return {"data": [self.sent] if self.sent else []}
-            assert q == f"kube_cluster_name:{live.CLUSTER}", q
+            assert q == live.scan_query(live.conversation_keys()), q
             if self.endless:
                 return {"data": [apm_span()] * live.PAGE, "meta": {"page": {"after": "more"}}}
             # Two pages: the stored spans, then the sent one, so pagination is followed.
@@ -156,6 +156,30 @@ check("the span name carries the run's stamp", live.span_name(STAMP).endswith(ST
 check("the scan reads the eight keys values-burn.yaml's scrub rewrites", len(live.conversation_keys()) == 8
       and "gen_ai.input.messages" in live.conversation_keys(), str(live.conversation_keys()))
 check("the scan's patterns are the scrub's four", [lab for lab, _ in live.compiled()] == ["EMAIL", "CARD", "SSN", "PHONE"])
+QUERY = live.scan_query(live.conversation_keys())
+ASKED = QUERY.split("(", 1)[-1].removesuffix(")").split(" OR ")
+check("the stored-span scan asks for burritobot-public's spans with a conversation key or a span event (#1338)",
+      QUERY == f"kube_cluster_name:{live.CLUSTER} (" + " OR ".join(
+          [f"@{k}:*" for k in live.conversation_keys()] + ["@events:*"]) + ")", QUERY)
+# The query must reach every place conversation_hits reads: a raw e-mail under each key alone, and in a span event
+# alone, is a hit, and the query asks for spans holding that key or an event, so none of them is left unread.
+for k in live.conversation_keys():
+    custom: dict = {}
+    d = custom
+    *head, tail = k.split(".")
+    for h in head:
+        d = d.setdefault(h, {})
+    d[tail] = "mail jo@corp.example.com"
+    reached = bool(live.conversation_hits(custom, live.conversation_keys(), live.compiled()))
+    check(f"a raw e-mail under {k} alone is a hit, and the scan's query asks for spans holding {k}",
+          reached and f"@{k}:*" in ASKED, QUERY)
+ev = {"events": json.dumps([{"attributes": {"content": "mail jo@corp.example.com"}}])}
+check("a raw e-mail in a span event alone is a hit, and the scan's query asks for spans holding an event",
+      bool(live.conversation_hits(ev, live.conversation_keys(), live.compiled())) and "@events:*" in ASKED,
+      QUERY)
+check("a span with no conversation key and no event, which the query leaves out, cannot be a hit",
+      not live.conversation_hits({"http": {"url": "/?mail=jo@corp.example.com"}, "session": {"id": "jo@corp.example.com"}},
+                                 live.conversation_keys(), live.compiled()))
 check("the Agent Observability trace id is traces/llmobs's rewrite (SHA-256, first 32 hex digits)",
       len(LO_TRACE) == 32 and LO_TRACE != TRACE)
 
@@ -198,6 +222,10 @@ red("a stored APM span with a raw SSN in a span event", run(dd=FakeDD(stored=[ra
 red("a stored Agent Observability span with a raw card",
     run(dd=FakeDD(stored_lo=[llmobs_span("card 4111111111111111")])), "Agent Observability (ml_app:burritobot): no raw")
 red("a scan that cannot finish", run(dd=FakeDD(endless=True)), "the scan read every span")
+endless = [n for n, _, _ in run(dd=FakeDD(endless=True)) if n.startswith("APM: the scan read every span")]
+check(f"the scan names how many spans it read against its {live.CAP:,} cap",
+      endless == [f"APM: the scan read every span of the last 168h ({live.CAP:,} read of its {live.CAP:,} cap)"],
+      str(endless))
 
 print("== Datadog's rate limit (#1335) ==")
 
