@@ -18,6 +18,7 @@ rules:
       - verify/python.lock
       - verify/playwright_browsers.py
       - verify/bootstrap_chart.py
+      - verify/collector_render.py
       - .gitmodules
     full: true
   - name: always
