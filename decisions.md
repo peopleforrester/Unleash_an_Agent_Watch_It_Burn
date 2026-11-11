@@ -53519,3 +53519,45 @@ runner switch, CI and the gate using the image, and the host-side refusal test s
 after these commits reach staging, and on the package being pullable without a login.
 
 **Live check.** None: this change touches `verify/`, `.github/workflows/` and prose, and no cluster runs any of it.
+## 2026-11-11 · #1345 · run 20398 · Every curl BurritoBot's run_shell runs carries the chat's witch name
+
+Michael, 2026-11-11: "I need the witchy name to show up in the Beacon posting so we know what sessions are in it." In
+Challenge 2C the model writes the curl that sends the customer demographics to the beacon, body and all, so the name
+cannot ride in the body. The chat's witch name already reaches workshop-mcp on every tools/call as the `X-Witch-Name`
+header guard-proxy sets and kagent forwards (#995), the one deploy_app reads.
+
+**What changed.** `run_shell` reads that header on the event loop, beside the pantry header, and runs the command with
+`CURL_HOME` set to a directory of its own whose `.curlrc` holds `header = "X-Witch-Name: <name>"`. curl reads that file
+before its command line, so every curl in the command sends the header whatever the model wrote: `-d`, `-d @file`,
+`--data-binary`, `--json`, `/usr/bin/curl`, or a `-H` of its own beside it. Only a curl started with `-q` or
+`--disable` skips it, and no prompt or command under `challenges/`, `gitops/` or `facilitation/` writes either. The directory is removed when
+the command ends. A name not shaped as words of letters (the chat page's `<First> the <Creature>` is) writes no file,
+so a quote, backslash, colon or newline in a request header can never add a line to the config; a call with no name
+runs exactly as before.
+
+**Why a curl config and not something else.** The beacon is HTTPS, so nothing between the pod and the collector can add
+a header. A `curl` wrapper on PATH misses `/usr/bin/curl`. An environment variable the model never reads does nothing.
+A query parameter through `url-query` would break the S3 presigned URL in Challenge 1's other send. The header goes to
+every host a curl in the command reaches, not only the beacon; the name is the anonymous one the chat page made up, and
+an extra unsigned header does not break a presigned S3 PUT. The image has no wget, and a send the model writes in
+Python is not covered; in the room's sends so far the model has written curl.
+
+**The form the beacon reads.** The header is `X-Witch-Name`, the same name the platform already carries it under.
+provisioning-agenticburn#48, the beacon view's side, is open and was not yet changed when this ran, so the collector does
+not yet store or show it; the report files a follow-up there naming the header, in case #48's change reads another form.
+
+**Live, read-only, watch-it-burn-community, 2026-11-11.** The workshop-mcp pod's curl is 8.14.1, as on the test host.
+In the running pod, a curl with `CURL_HOME` set to a scratch directory holding that `.curlrc` sent `> X-Witch-Name:
+Agatha the Banshee` on a GET to `https://kubernetes.default.svc/version` (401, no token sent), and the same curl without
+it sent no such header; the scratch directory was removed after. The beacon itself could not be reached, `exit=000`
+after six seconds: the agent namespace's egress allowlist is in place, so the room's guards are on. The cluster was left
+as found.
+
+**Not yet run on a cluster.** The Challenge 2C send with every guard off on watch-it-burn-community, whose witch name
+then shows on `https://beacon.burritobot.co/beacon/view`. It needs this change promoted and synced by Argo CD, and
+provisioning-agenticburn#48 deployed so the view stores and shows the header. The attack landing with every guard off
+is unchanged by this change, which adds a header and blocks nothing, but it is checked in the same send.
+
+**Tests.** `python3 verify/test_run_shell_witch_header.py` (new) exits 0 alone: six curl shapes the model writes,
+two concurrent chats, eight names that send nothing, all 768 names the chat page assigns, and a failed curl that still
+raises `command FAILED`. The scoped suites are left to the gate.

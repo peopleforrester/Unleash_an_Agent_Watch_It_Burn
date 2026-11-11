@@ -19,6 +19,7 @@ import os
 import re
 import ssl
 import subprocess
+import tempfile
 import threading
 import time
 import unicodedata
@@ -1371,12 +1372,13 @@ async def run_shell(command: str = "") -> str:
     filesystem grep, and the C4 fork bomb."""
     # Read on the event loop, where the tools/call's request is in context (#1000).
     shut = _pantry_shut()
+    witch = _request_witch()
     if shut and _CARD_COMMAND_RE.search(command) and not _bare_echo(command):
         return _shut_reply(shut)
     # In a worker thread: FastMCP calls a plain def on its event loop, so a curl the egress policy hangs for 20 s
     # stalled every other tools/call, and agentgateway answered those with HTTP 500 after 10 s.
     try:
-        out = await asyncio.to_thread(_run_shell, command)
+        out = await asyncio.to_thread(_run_shell, command, witch)
     except RuntimeError as e:
         # A failed command's message carries its output too, so a shut pantry reads it before it is raised.
         if shut and _carries_recipe(str(e)):
@@ -1399,11 +1401,40 @@ def _shell_could_not_parse(returncode: int, out: str) -> bool:
     return returncode == 2 and re.search(r"^/bin/sh: \d+: Syntax error:", out, re.M) is not None
 
 
-def _run_shell(command: str) -> str:
+# Every curl run_shell runs carries the chat's witch name (#1345), so the beacon view (provisioning-agenticburn#48) can
+# show which chat each Challenge 2C send came from. The model writes the curl, and its body, so the name cannot ride in
+# the body: the command runs with CURL_HOME set to a directory of its own whose .curlrc adds the header below, which
+# curl reads before its command line whatever the model wrote (only a curl started with -q, or --disable, skips it).
+# The header is the same X-Witch-Name the name reached this server in (WITCH_HEADER), sent to every host a curl in that
+# command reaches: the name is the anonymous one the chat page made up, and the beacon is HTTPS, so nothing between
+# here and it could add the header instead. A name not shaped as words of letters (the chat page's "<First> the
+# <Creature>" is) is not sent, so nothing a request header carries can end the .curlrc line or add another to it. A
+# call with no name (a probe, a direct call) runs with the environment it always had.
+WITCH_SEND_SHAPE = re.compile(r"[A-Za-z][A-Za-z'-]*(?: [A-Za-z][A-Za-z'-]*)*")
+
+
+def _witch_curlrc(witch: str) -> str:
+    """The .curlrc that sends the witch name with every request, "" when the name is not one to send."""
+    if not (witch and len(witch) <= 80 and WITCH_SEND_SHAPE.fullmatch(witch)):
+        return ""
+    return f'header = "{WITCH_HEADER.title()}: {witch}"\n'
+
+
+def _run_shell(command: str, witch: str = "") -> str:
     if not command.strip():
         return "provide a command to run"
+    curlrc = _witch_curlrc(witch)
+    if not curlrc:
+        return _run_shell_in(command, None)
+    with tempfile.TemporaryDirectory(prefix="run-shell-") as home:
+        with open(os.path.join(home, ".curlrc"), "w", encoding="utf-8") as f:
+            f.write(curlrc)
+        return _run_shell_in(command, dict(os.environ, CURL_HOME=home))
+
+
+def _run_shell_in(command: str, env: dict | None) -> str:
     try:
-        p = subprocess.run(["/bin/sh", "-c", command], capture_output=True, text=True, timeout=20)
+        p = subprocess.run(["/bin/sh", "-c", command], capture_output=True, text=True, timeout=20, env=env)
         out = (p.stdout or "") + (p.stderr or "")
         if p.returncode != 0:
             # A failed command must READ as failed, or the agent reports success (Whitney, 2026-09-06:

@@ -8411,6 +8411,11 @@ reads:
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/otel-collector/values.yaml
+  test_run_shell_witch_header.py:
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/workshop-mcp-server.py
   test_run_tests_files.py:
     - .gitmodules
     - AGENTS.md
