@@ -6,8 +6,8 @@
     python3 verify/scope_audit.py offline|tools [test ...]
 
 scope_tests.py check holds the map to what each test's source names. This holds it to what the test does: each
-offline test (or, with tools, each tier test, with the pinned tools fetched and the environment run-e2e-tools.sh gives
-it) runs as its runner runs it, the no-cloud stubs first on PATH, while inotify reports every file opened under the
+offline test (or, with tools, each tier test, with the pinned tools copied out of the wib-e2e-tools image by
+`e2e-image.sh tools`, #1360, and the environment run-e2e-tools.sh gives it) runs as its runner runs it, the no-cloud stubs first on PATH, while inotify reports every file opened under the
 checkout, by the test and by every process it starts. A tracked file it opened that its entry does not cover is a read
 the map misses; scope_tests.py's extractor needs to see it, or the entry needs it by hand. A test in always reads
 everything already and is run only when named. A directory it listed counts only when no entry is inside it.
@@ -125,7 +125,7 @@ def main(argv: list[str]) -> int:
         return 2
     subprocess.run(["bash", str(VERIFY / "ensure-submodules.sh")], check=True)
     if suite == "tools":
-        subprocess.run(["bash", str(VERIFY / "fetch-e2e-tools.sh")], check=True)
+        subprocess.run(["bash", str(VERIFY / "e2e-image.sh"), "tools", str(VERIFY / ".tools")], check=True)
     watch = Watch(watched_dirs(tree))
     misses: dict[str, list[str]] = {}
     tmp = pathlib.Path(tempfile.mkdtemp(prefix="scope-audit-"))

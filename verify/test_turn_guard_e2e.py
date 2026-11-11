@@ -80,7 +80,7 @@ want = pin.group(1) if pin else "?"
 if os.environ.get("WIB_TURN_GUARD_UV") != want:
     check("AGENTGATEWAY names an executable agentgateway (run-e2e-tools.sh points it at verify/.tools/bin/agentgateway)",
           bool(binary) and os.access(binary, os.X_OK),
-          f"AGENTGATEWAY={binary!r}: run bash verify/fetch-e2e-tools.sh, then AGENTGATEWAY=verify/.tools/bin/agentgateway")
+          f"AGENTGATEWAY={binary!r}: run it through bash verify/run-e2e-tools.sh, or copy the image's tools out (the e2e-image tools verb), then AGENTGATEWAY=verify/.tools/bin/agentgateway")
     check("uv is on PATH; it builds the pinned mcp environment without a global install", shutil.which("uv") is not None)
     check("images/workshop-mcp/Dockerfile pins mcp==<version>", pin is not None)
     if failures:

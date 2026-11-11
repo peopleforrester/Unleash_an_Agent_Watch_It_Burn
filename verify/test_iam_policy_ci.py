@@ -4,7 +4,7 @@
 # Why. The pipeline's checks only stop a change if something runs them on the PR. This holds the workflow that does:
 # its paths cover every root in pipeline.ROOTS and the pipeline's own files, so a PR that adds an unconditioned
 # Allow cannot skip the job by where it puts it; it runs the offline, coverage and structural tests, with conftest and
-# terraform from verify/e2e-tools.lock; and it stays credential-free on a GitHub-hosted runner (question 592), so a
+# terraform from verify/e2e-tools.lock, copied out of the wib-e2e-tools image built from that lock (#1360); and it stays credential-free on a GitHub-hosted runner (question 592), so a
 # fork PR is safe to check.
 import pathlib, re, sys
 
@@ -56,7 +56,7 @@ check("a change to any Terraform root triggers it, so a root new to pipeline.ROO
       "infra/terraform/**" in pr_paths, pr_paths)
 watched = ["infra/org/pipeline.py", "infra/org/policy/iam.rego", "infra/org/exceptions.md",
            "infra/org/permissions-boundary.json.tftpl", "infra/org/effect-tests.yaml",
-           "verify/iam_plan_render.py", "verify/e2e-tools.lock", "verify/fetch-e2e-tools.sh",
+           "verify/iam_plan_render.py", "verify/e2e-tools.lock", "verify/e2e-image.sh", "verify/e2e_image.py",
            ".github/workflows/iam-policy.yml"]
 watched += [t.relative_to(REPO).as_posix() for t in sorted((REPO / "verify").glob("test_iam_policy_*.py"))]
 for path in watched:
@@ -81,8 +81,13 @@ for u in uses:
 
 print("what it runs")
 runs = "\n".join(s.get("run", "") for s in steps)
-check("it fetches the pinned tools with verify/fetch-e2e-tools.sh", "bash verify/fetch-e2e-tools.sh" in runs, runs)
-check("it puts the fetched tools on PATH", '"$GITHUB_WORKSPACE/verify/.tools/bin" >> "$GITHUB_PATH"' in runs, runs)
+check("it copies the pinned tools out of the wib-e2e-tools image (#1360)",
+      "bash verify/e2e-image.sh tools verify/.tools" in runs, runs)
+check("it runs no verify/fetch-e2e-tools.sh, which #1360 removed", "fetch-e2e-tools" not in text)
+tool_step = next((s for s in steps if "e2e-image.sh tools" in s.get("run", "")), {})
+check("that step names docker, as build-e2e-tools-image.yml does, since the runner has podman too (#1355)",
+      (tool_step.get("env") or {}).get("WIB_CONTAINER_RUNTIME") == "docker", tool_step)
+check("it puts the image's tools on PATH", '"$GITHUB_WORKSPACE/verify/.tools/bin" >> "$GITHUB_PATH"' in runs, runs)
 for t in ("test_iam_policy_pipeline.py", "test_iam_policy_coverage.py", "test_iam_policy_structural.py"):
     check(f"it runs verify/{t}", f"python verify/{t}" in runs and (REPO / "verify" / t).is_file(), runs)
 check("it does not run test_iam_policy_aws.py, which needs an AWS profile", "test_iam_policy_aws" not in runs)
@@ -92,9 +97,9 @@ check("it installs PyYAML from verify/python.lock, hash-checked, with pip (#1121
 lock = (REPO / "verify/e2e-tools.lock").read_text(encoding="utf-8")
 structural = (REPO / "verify/test_iam_policy_structural.py").read_text(encoding="utf-8")
 want = re.search(r'WANT_CONFTEST = "([\d.]+)"', structural)
-check("the lock fetches the conftest the structural test requires",
+check("the lock pins the conftest the structural test requires",
       want is not None and re.search(rf"^conftest\s+v{re.escape(want.group(1))}\s", lock, re.M) is not None)
-check("the lock fetches terraform", re.search(r"^terraform\s+v\d", lock, re.M) is not None)
+check("the lock pins terraform", re.search(r"^terraform\s+v\d", lock, re.M) is not None)
 
 print(f"\n{len(failures)} failure(s)")
 sys.exit(1 if failures else 0)

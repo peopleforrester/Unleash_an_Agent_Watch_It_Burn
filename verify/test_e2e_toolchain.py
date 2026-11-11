@@ -16,10 +16,11 @@ PATH it exits 1 and lists node, corepack and CONTEXT as missing. With a Node 22 
 it found. With Node 24 or Node 26 and corepack on PATH neither is listed, and it still exits 1 on what remains. Every
 case stops in the prerequisite check, before anything runs: CONTEXT is unset, so no kubectl is ever called.
 
-Since #585 run-e2e.sh fetches kyverno, conftest, terraform, kubectl and helm itself, since #654 otelcol-contrib
-too and since #770 ttyd, so none of the seven is ever listed as missing from PATH. With no curl, tar, python3 or sha256sum it cannot fetch them, and it says so instead.
-Since #1047 the fetch reads zip archives with python3's zipfile, so unzip is no longer asked for.
-What a fetch does inside run-e2e.sh is held in test_e2e_tools_tier.py, next to the fetch's own fixtures.
+Since #585 run-e2e.sh brings kyverno, conftest, terraform, kubectl and helm itself, since #654 otelcol-contrib
+too and since #770 ttyd, so none of the seven is ever listed as missing from PATH. Since #1360 it copies them out of
+the wib-e2e-tools image (e2e-image.sh tools); with no python3 and no podman or docker it cannot, and it says so
+instead. Nothing is downloaded file by file, so neither unzip (#1047) nor sha256sum, tar or xz is asked for.
+What the copy does inside run-e2e.sh is held in test_e2e_tools_tier.py, with a podman stand-in.
 """
 from __future__ import annotations
 
@@ -110,12 +111,16 @@ bare = run_e2e({})
 check(f"with no toolchain it exits 1 (exit {bare.returncode})", bare.returncode == 1)
 check("it says it cannot run, as a failure and not a skip", CANNOT_RUN in bare.stderr)
 for item in ("node is not on PATH", "corepack is not on PATH", "CONTEXT is not set", "curl is not on PATH",
-             "python3 is not on PATH", "sha256sum is not on PATH", "uv is not on PATH",
-             "the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane, weaver and agentgateway were not fetched: "
-             "fetch-e2e-tools.sh needs curl, tar, python3 and sha256sum"):
+             "python3 is not on PATH", "uv is not on PATH",
+             "the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane, weaver and agentgateway were not "
+             "copied from the wib-e2e-tools image: e2e-image.sh tools needs python3 and podman or docker"):
     check(f"it lists what is missing: {item}", f"  - {item}" in bare.stderr)
-# The pinned tools come from fetch-e2e-tools.sh (#585, #654, #770, #775, #782), never from PATH, so PATH is never asked
-# for them.
+# Since #1360 nothing is downloaded file by file, so the downloaders are not asked for.
+for tool in ("sha256sum", "tar", "xz"):
+    check(f"it never asks for {tool}, which only the removed fetch-e2e-tools.sh used",
+          f"  - {tool} is not on PATH" not in bare.stderr)
+# The pinned tools come from the wib-e2e-tools image (#585, #654, #770, #775, #782, #1360), never from PATH, so PATH is
+# never asked for them.
 for tool in ("kubectl", "helm", "kyverno", "conftest", "terraform", "otelcol-contrib", "ttyd", "crane", "weaver",
              "agentgateway"):
     check(f"it never asks for {tool} on PATH",

@@ -85,10 +85,11 @@
 # not exit 0. Every prerequisite is checked before anything runs, so one run lists everything that is missing.
 #
 # kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane, weaver and agentgateway are not taken from the host
-# (#585, #654, #770, #775, #782). The prerequisite check runs verify/fetch-e2e-tools.sh, which puts the pinned,
-# checksum-verified binaries of e2e-tools.lock in the gitignored verify/.tools/bin, and that directory goes first on
-# PATH for everything after it, so a cluster build runs the same binaries as the gate's E2E command
-# (run-e2e-tools.sh). A failed fetch is one of the missing prerequisites.
+# (#585, #654, #770, #775, #782). The prerequisite check runs `verify/e2e-image.sh tools verify/.tools` (#1360), which
+# copies e2e-tools.lock's binaries out of the wib-e2e-tools image (using it when the host holds it, pulling it once when
+# not) into the gitignored verify/.tools/bin, and that directory goes first on PATH for everything after it, so a
+# cluster build runs the very binaries the gate's E2E command (run-e2e-tools.sh) runs inside the image. Nothing is
+# downloaded file by file. A failed copy is one of the missing prerequisites.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKSTAGE_DIR="${SCRIPT_DIR}/../images/watch-it-burn-backstage"
@@ -96,10 +97,10 @@ TOOLS_BIN="${SCRIPT_DIR}/.tools/bin"
 NAMESPACE="${NAMESPACE:-agent}"
 
 missing=()
-# jq: test_kyverno_cel_live.py runs the lab's own policyreport jq filter. curl, tar, python3 (whose zipfile reads
-# the zip archives, #1047) and sha256sum fetch and verify the pinned tools, and xz unpacks weaver's archive. uv brings the Python pins the checks run on
-# (playwright, llm-guard, segno, mcp), as in run-e2e-tools.sh, so nothing is installed globally (#441).
-for tool in python3 node corepack jq curl tar sha256sum xz uv; do
+# jq: test_kyverno_cel_live.py runs the lab's own policyreport jq filter. curl: backstage-footprint.sh reads the
+# Backstage API with it. python3 runs the checks and names the image (e2e_image.py). uv brings the Python pins the
+# checks run on (playwright, llm-guard, segno, mcp), as in run-e2e-tools.sh, so nothing is installed globally (#441).
+for tool in python3 node corepack jq curl uv; do
     if command -v "${tool}" >/dev/null 2>&1; then
         continue
     elif [[ "${tool}" == node ]]; then
@@ -125,21 +126,21 @@ fi
 # live check runs, the otelcol-contrib the collector tests run (test_lab_pipeline_collector.py, the chart's
 # version), the ttyd the terminal image ships (test_ttyd_ws_auth.py, #770), and the weaver
 # test_weaver_registry_check.py checks weaver/registry with (#782), and the agentgateway release binary of the deployed
-# gateway version test_agentgateway_tracing_e2e.py runs the gateway ConfigMaps on (#864). The fetch needs the four
-# tools above, so it is only tried once they are there.
+# gateway version test_agentgateway_tracing_e2e.py runs the gateway ConfigMaps on (#864). The copy needs python3 and
+# a container runtime, so it is only tried once they are there.
 tools_ready=0
-if command -v curl >/dev/null 2>&1 && command -v tar >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1 \
-    && command -v sha256sum >/dev/null 2>&1; then
-    if bash "${SCRIPT_DIR}/fetch-e2e-tools.sh"; then
+if command -v python3 >/dev/null 2>&1 \
+    && { command -v podman >/dev/null 2>&1 || command -v docker >/dev/null 2>&1; }; then
+    if bash "${SCRIPT_DIR}/e2e-image.sh" tools "${SCRIPT_DIR}/.tools"; then
         tools_ready=1
     else
-        missing+=("the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane, weaver and agentgateway could not be fetched (fetch-e2e-tools.sh, reasons above)")
+        missing+=("the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane, weaver and agentgateway could not be copied from the wib-e2e-tools image (e2e-image.sh tools, reasons above)")
     fi
 else
-    missing+=("the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane, weaver and agentgateway were not fetched: fetch-e2e-tools.sh needs curl, tar, python3 and sha256sum")
+    missing+=("the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane, weaver and agentgateway were not copied from the wib-e2e-tools image: e2e-image.sh tools needs python3 and podman or docker")
 fi
 if [[ "${tools_ready}" -eq 1 ]]; then
-    # The six tests that take a path get the fetched one, so a tool already on the host is never what runs.
+    # The six tests that take a path get the image's, so a tool already on the host is never what runs.
     export PATH="${TOOLS_BIN}:${PATH}"
     export KYVERNO_CLI="${TOOLS_BIN}/kyverno" CONFTEST="${TOOLS_BIN}/conftest" TERRAFORM="${TOOLS_BIN}/terraform" \
         OTELCOL_CONTRIB="${TOOLS_BIN}/otelcol-contrib" TTYD="${TOOLS_BIN}/ttyd" CRANE="${TOOLS_BIN}/crane" \

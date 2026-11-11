@@ -16,7 +16,7 @@ loaded host does not add to the way it adds to the wall clock). Each must succee
 The same profile's config with one string of #1316's statement's length added must use more than BUILD_LIMIT_S, so
 the measurement tells the two forms apart.
 
-Fails when the binary is missing: run verify/fetch-e2e-tools.sh (verify/run-e2e-tools.sh does).
+Fails when the binary is missing: run it through verify/run-e2e-tools.sh, which runs it in the wib-e2e-tools image.
 """
 from __future__ import annotations
 
@@ -34,8 +34,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from collector_render import (GATE_VOLUME, PROFILE_APP, REPO, collector_config, config_paths,  # noqa: E402
                               datadog_overlay, feature_gate_args, helm_values, mounted_file)
 
-# run-e2e-tools.sh names the pinned collector in OTELCOL_CONTRIB, the image's inside wib-e2e-tools (#1188, #1361);
-# by hand, the fetched one.
+# run-e2e-tools.sh and run-e2e.sh name the pinned binary in OTELCOL_CONTRIB; inside the image it is not under verify/.
 OTELCOL = pathlib.Path(os.environ.get("OTELCOL_CONTRIB") or REPO / "verify/.tools/bin/otelcol-contrib")
 LOCK = REPO / "verify/e2e-tools.lock"
 BUILD_LIMIT_S = 10.0  # #1328's criterion
@@ -55,7 +54,7 @@ def check(name: str, cond: bool, detail: str = "") -> None:
 
 
 if not os.access(OTELCOL, os.X_OK):
-    print(f"FAIL: {OTELCOL} is missing; run bash verify/fetch-e2e-tools.sh (this is a failure, not a skip)")
+    print(f"FAIL: {OTELCOL} is missing; run it through bash verify/run-e2e-tools.sh, in the wib-e2e-tools image (this is a failure, not a skip)")
     sys.exit(1)
 pinned = next(line.split()[1] for line in LOCK.read_text().splitlines() if line.startswith("otelcol-contrib "))
 version = subprocess.run([str(OTELCOL), "--version"], capture_output=True, text=True, check=True).stdout.strip()

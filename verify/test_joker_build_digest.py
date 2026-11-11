@@ -29,8 +29,8 @@ The base (#1122). build.sh's JOKER_BASE comes from the host artifact cache as an
 filled here, and then runs the build with every proxy variable naming a closed port on loopback: a build that reached
 ghcr.io, or any registry but its own on loopback, would fail, so a green build shows the warm path reads none.
 
-Install: none. verify/fetch-e2e-tools.sh fetches crane from e2e-tools.lock, and run-e2e.sh and run-e2e-tools.sh point
-$CRANE at it. Run by hand: CRANE=verify/.tools/bin/crane python3 verify/test_joker_build_digest.py
+Install: none. crane is e2e-tools.lock's, in the wib-e2e-tools image; run-e2e.sh copies it out (the e2e-image tools verb),
+and it and run-e2e-tools.sh point $CRANE at it. Run by hand: CRANE=verify/.tools/bin/crane python3 verify/test_joker_build_digest.py
 """
 from __future__ import annotations
 
@@ -91,7 +91,7 @@ spec.loader.exec_module(gvt)
 
 crane = os.environ.get("CRANE", "")
 if not crane or not os.access(crane, os.X_OK):
-    print(f"CRANE must name the pinned crane (verify/fetch-e2e-tools.sh puts it at verify/.tools/bin/crane); got {crane!r}")
+    print(f"CRANE must name the pinned crane (run-e2e.sh copies it out of the wib-e2e-tools image to verify/.tools/bin/crane); got {crane!r}")
     raise SystemExit(1)
 
 print("== build.sh names both Jokers ==")

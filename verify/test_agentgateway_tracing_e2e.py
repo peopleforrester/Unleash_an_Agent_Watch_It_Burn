@@ -272,7 +272,7 @@ binary = os.environ.get("AGENTGATEWAY", "")
 print("== the agentgateway under test is the deployed version ==")
 if not binary or not os.access(binary, os.X_OK):
     check("AGENTGATEWAY names an executable agentgateway (run-e2e-tools.sh points it at verify/.tools/bin/agentgateway)",
-          False, f"AGENTGATEWAY={binary!r}: run bash verify/fetch-e2e-tools.sh, then AGENTGATEWAY=verify/.tools/bin/agentgateway")
+          False, f"AGENTGATEWAY={binary!r}: run it through bash verify/run-e2e-tools.sh, or copy the image's tools out (the e2e-image tools verb), then AGENTGATEWAY=verify/.tools/bin/agentgateway")
     finish()
 docs = [d for d in yaml.safe_load_all(GATEWAY.read_text(encoding="utf-8")) if d]
 deployment = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "agentgateway")

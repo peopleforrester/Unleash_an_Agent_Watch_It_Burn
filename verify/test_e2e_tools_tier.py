@@ -6,35 +6,28 @@
 #572 declared the part of the E2E suite that host can run: tests marked `# E2E TIER: tools`, run with the
 binaries in verify/e2e-tools.lock. Since #1188 those come from the wib-e2e-tools image, built from the lock, and
 run-e2e-tools.sh on a host hands the tier to `verify/e2e-image.sh run` (verify/test_e2e_image.py holds that hand-off
-and that it never downloads). verify/fetch-e2e-tools.sh, which downloads the lock's binaries into verify/.tools and
-checks each against its SHA-256, stays for run-e2e.sh, the by-hand live suite.
-
-The fetch is run here for real, in a scratch copy of the scripts, against a file server on 127.0.0.1 that serves
-fixture archives and counts each request, with `uname` stubbed so the run does not depend on the host. Since #1118 the
-fetch takes every download from the host artifact cache (artifact-cache.sh) by its SHA-256, so each run here names a
-cache root of its own, outside every worktree, and the cache's fetch log is read back. Zip members are read with
-python3's zipfile since #1047, and `unzip` is a stub that logs any call and fails, so a fetch that reaches for it again
-is caught on a host that has one; `curl` is a stub that logs any call and fails, so a fetch that bypasses the cache is
-caught too. A good lock installs every binary, a second run downloads nothing, and so does a run from a fresh worktree
-on the same cache (#1004); a cached file that no longer matches fails by name and is not fetched again, and a missing
-artifact or a checksum mismatch exits 1 naming each failure and leaves no binary behind.
+and that it never downloads). Since #1360 nothing fetches the lock's binaries file by file: verify/fetch-e2e-tools.sh
+is gone, and what runs them on the host copies them out of the image with `verify/e2e-image.sh tools`
+(test_e2e_image.py holds that verb on its own).
 
 The runner's own checks run as inside the image: WIB_E2E_TOOLS names a scratch directory holding the fixture lock's
 tools.txt and binaries, as verify/e2e-image/install.sh writes them. run-e2e-tools.sh stops on an image of another lock
 or a missing prerequisite before any test runs, and that includes Playwright browsers that are missing from a
-directory `playwright install` cannot write (#658), with `uv` stubbed to list them.
+directory `playwright install` cannot write (#658), with `uv` stubbed to list them. `curl` is a stub that logs any
+call and fails, and the artifact cache's fetch log is read back, so a run that reached for a download is caught.
 
-run-e2e.sh, the by-hand live suite, runs the same fetch in its prerequisite check (#585), so a cluster build runs
-the gate's binaries, otelcol-contrib included since #654 and ttyd since #770. Its scratch copy is run with a fixture lock of the seven tools: the fetched kubectl, not one
-already on PATH, is what checks the cluster, and a failed fetch is listed as missing with no kubectl run at all.
-Some prerequisite is always left missing there, so the run stops before any check or cluster call.
+run-e2e.sh, the by-hand live suite, takes the same binaries in its prerequisite check (#585): it runs
+`e2e-image.sh tools verify/.tools`, real, in a scratch copy with a podman stand-in whose image is the scratch tool
+directory, so a cluster build runs the gate's binaries, otelcol-contrib included since #654 and ttyd since #770. Its
+fixture lock is the seven tools: the image's kubectl, not one already on PATH, is what checks the cluster, and an
+image of another lock, or one the host lacks and cannot pull, is listed as missing with no kubectl run at all. Some
+prerequisite is always left missing there, so the run stops before any check or cluster call.
 """
 from __future__ import annotations
 
 import contextlib
 import fcntl
 import hashlib
-import http.server
 import io
 import json
 import os
@@ -55,7 +48,7 @@ import artifact_cache  # noqa: E402
 import tf_plugin_cache  # noqa: E402
 
 LOCK = VERIFY / "e2e-tools.lock"
-FETCH = VERIFY / "fetch-e2e-tools.sh"
+IMAGE_SH = VERIFY / "e2e-image.sh"
 RUNNER = VERIFY / "run-e2e-tools.sh"
 BROWSERS = VERIFY / "playwright_browsers.py"
 BASH = shutil.which("bash")
@@ -167,13 +160,11 @@ check("conftest is the version test_iam_policy_structural.py demands",
       bool(want) and "conftest" in tools and tools["conftest"][1] == f"v{want.group(1)}")
 
 print("== the tools land in a directory git ignores ==")
-fetch_text = FETCH.read_text()
-check("fetch-e2e-tools.sh installs into verify/.tools", 'TOOLS_DIR="${SCRIPT_DIR}/.tools"' in fetch_text)
-fetch_code = "\n".join(ln for ln in fetch_text.splitlines() if not ln.lstrip().startswith("#"))
-check("fetch-e2e-tools.sh takes each download from the artifact cache by its sum, and downloads nothing itself (#1118)",
-      'bash "${CACHE}" get "${want}" "${url}"' in fetch_code
-      and not re.search(r"\b(curl|wget|urlopen)\b", fetch_code), fetch_code)
-for path in ("verify/.tools/bin/kyverno", "verify/.tools/.fetch-err.abc123"):
+check("verify/fetch-e2e-tools.sh is gone: nothing fetches the lock's binaries file by file (#1360)",
+      not (VERIFY / "fetch-e2e-tools.sh").exists())
+# run-e2e.sh and iam-policy.yml copy the image's binaries to verify/.tools/bin, its tools.txt beside them, and the copy
+# is staged in verify/.tools/.from-image.* first (e2e-image.sh tools).
+for path in ("verify/.tools/bin/kyverno", "verify/.tools/tools.txt", "verify/.tools/.from-image.abc123/bin/kyverno"):
     ignored = subprocess.run(["git", "-C", str(REPO), "check-ignore", "-q", path], capture_output=True)
     check(f"git ignores {path}", ignored.returncode == 0)
 tracked = subprocess.run(["git", "-C", str(REPO), "ls-files", "verify/.tools"], capture_output=True, text=True).stdout
@@ -231,30 +222,20 @@ check("run-e2e-tools.sh stubs aws and eksctl, and only those two, with no-cloud.
 check("run-e2e-tools.sh runs each tier test through no_cloud_run",
       code.count('no_cloud_run "${tier_env[@]}"') == 2 and code.count('"${tier_env[@]}"') == 2)
 
-print("== a fetch is checked against the lock, and fails loudly ==")
-
-# A tripwire: since #1118 every download goes through the artifact cache, so the fetch must never call curl itself.
+# A tripwire: nothing here downloads a tool (#1188, #1360), so curl must never be called.
 STUB_CURL = f"""#!{PY}
 import os, sys
 with open(os.path.join(os.environ["HOME"], "curl.log"), "a") as f:
     f.write(" ".join(sys.argv[1:]) + "\\n")
-sys.stderr.write("curl: the fetch reached for curl and not the artifact cache (#1118)\\n")
+sys.stderr.write("curl: a tool was downloaded, and nothing here downloads one (#1360)\\n")
 sys.exit(22)
-"""
-# A tripwire, not a stand-in: Tanjiro's CI runner has no unzip (#1047), so the fetch must never call one.
-STUB_UNZIP = f"""#!{PY}
-import os, sys
-with open(os.path.join(os.environ["HOME"], "unzip.log"), "a") as f:
-    f.write(" ".join(sys.argv[1:]) + "\\n")
-sys.stderr.write("unzip: not on Tanjiro's runner (#1047)\\n")
-sys.exit(127)
 """
 STUB_UNAME = '#!/bin/sh\ncase "$1" in -s) echo Linux ;; -m) echo x86_64 ;; esac\n'
 
 
 def make_stubs(bindir: pathlib.Path, extra: dict[str, str] | None = None) -> None:
     bindir.mkdir(parents=True, exist_ok=True)
-    stubs = {"curl": STUB_CURL, "unzip": STUB_UNZIP, "uname": STUB_UNAME, **(extra or {})}
+    stubs = {"curl": STUB_CURL, "uname": STUB_UNAME, **(extra or {})}
     for name, body in stubs.items():
         p = bindir / name
         p.write_text(body)
@@ -299,47 +280,13 @@ FIXTURES = {
 }
 
 
-class FixtureServer:
-    """Serves FIXTURES at /<name> on 127.0.0.1 and logs each request's path; anything else is a 404."""
-
-    def __init__(self):
-        self.paths: list[str] = []
-        self.lock = threading.Lock()
-        srv = self
-
-        class Handler(http.server.BaseHTTPRequestHandler):
-            def do_GET(self):
-                with srv.lock:
-                    srv.paths.append(self.path)
-                body = FIXTURES.get(self.path.lstrip("/"))
-                if body is None:
-                    self.send_error(404)
-                    return
-                self.send_response(200)
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-
-            def log_message(self, *_):
-                pass
-
-        self.httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        self.httpd.daemon_threads = True
-        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
-        self.base = f"http://127.0.0.1:{self.httpd.server_address[1]}"
-
-    def requests(self) -> int:
-        with self.lock:
-            return len(self.paths)
-
-
-SERVER = FixtureServer()
-URL = SERVER.base
-# run-e2e.sh's seven tools. The fetched kubectl logs each call and fails, as an unreachable cluster would.
+# The lock rows' URLs are never fetched: the image stand-in holds the binaries, and curl is a tripwire.
+URL = "https://fixture.invalid"
+# run-e2e.sh's seven tools. The image's kubectl logs each call and fails, as an unreachable cluster would.
 SEVEN = ("kyverno", "conftest", "terraform", "kubectl", "helm", "otelcol-contrib", "ttyd")
 for _tool in SEVEN:
     FIXTURES[f"{_tool}-linux-amd64"] = (
-        b'#!/bin/sh\necho "fetched $*" >>"$KUBECTL_LOG"\nexit 1\n' if _tool == "kubectl" else b"#!/bin/sh\nexit 0\n")
+        b'#!/bin/sh\necho "image $*" >>"$KUBECTL_LOG"\nexit 1\n' if _tool == "kubectl" else b"#!/bin/sh\nexit 0\n")
 SEVEN_LOCK = "".join(f"{t} v9 {sha(FIXTURES[f'{t}-linux-amd64'])} {URL}/{t}-linux-amd64 -\n"
                      for t in SEVEN)
 GOOD_LOCK = (
@@ -363,10 +310,10 @@ BAD_LOCK = (
 TF_CACHE_HOME = tf_plugin_cache.scratch("tier-tf-cache-")
 TF_CACHE_ENV = {"WIB_ARTIFACT_CACHE": str(pathlib.Path(TF_CACHE_HOME.name) / "artifacts")}
 TF_PLUGIN_CACHE = str((pathlib.Path(TF_CACHE_HOME.name) / "artifacts" / tf_plugin_cache.PLUGIN_SUBDIR).resolve())
-# The fetch takes its downloads from the host artifact cache too (#1118). The fetch-only cases below give each scratch
-# checkout a cache root of its own under one directory outside every worktree, removed when this test ends, so each
-# can count what its runs cached; the runner cases keep TF_CACHE_ENV's root, which the plugin-cache checks read, and
-# take only a fetch log of their own. The fetch log sits in the checkout either way.
+# A download through the host artifact cache would be logged (#1118), so each scratch checkout's runs name a fetch log
+# of their own, read back to hold that nothing was fetched. run-e2e.sh's cases also get a cache root of their own under
+# one directory outside every worktree, removed when this test ends; the runner cases keep TF_CACHE_ENV's root, which
+# the plugin-cache checks read.
 CACHE_BASE = artifact_cache.scratch_dir("tier-artifact-cache-")
 
 
@@ -380,13 +327,13 @@ def fetch_env(tmp: pathlib.Path, cache: pathlib.Path | None = None) -> dict[str,
 
 def scratch(tmp: pathlib.Path, lock: str, scripts: tuple[pathlib.Path, ...]) -> pathlib.Path:
     """A scratch verify/ holding copies of the scripts and the given lock. The runner names its provider cache through
-    tf_plugin_cache.py, which reads the root through artifact_cache.py, and the fetch takes its downloads through
-    artifact-cache.sh, so those come with them."""
+    tf_plugin_cache.py, which reads the root through artifact_cache.py, so those come with it, and the runner and
+    e2e-image.sh both name the image through e2e_image.py, which hashes the build inputs."""
     vdir = tmp / "verify"
     vdir.mkdir(parents=True, exist_ok=True)
     helpers = ((VERIFY / "tf_plugin_cache.py", VERIFY / "artifact_cache.py", VERIFY / "e2e_image.py")
                if RUNNER in scripts else ()) + \
-        ((VERIFY / "artifact-cache.sh", VERIFY / "artifact_cache.py") if FETCH in scripts else ())
+        ((VERIFY / "e2e_image.py",) if IMAGE_SH in scripts else ())
     for s in scripts + tuple(dict.fromkeys(h for h in helpers if h not in scripts)):
         shutil.copy2(s, vdir / s.name)
     if BROWSERS in scripts:
@@ -394,10 +341,10 @@ def scratch(tmp: pathlib.Path, lock: str, scripts: tuple[pathlib.Path, ...]) -> 
         # stand-in makes that prefix the stubbed `uv` alone, which answers the dry run, so no environment is built.
         (vdir / "package_cache.py").write_text(STUB_PACKAGE_CACHE)
     (vdir / "e2e-tools.lock").write_text(lock)
-    if RUNNER in scripts:
+    if RUNNER in scripts or IMAGE_SH in scripts:
         # e2e_image.py names the image it wants from the lock and the build inputs, so those come too.
         shutil.copytree(VERIFY / "e2e-image", vdir / "e2e-image", dirs_exist_ok=True)
-        for name in ("python.lock", "package_cache.py", ".dockerignore"):
+        for name in ("python.lock", "package_cache.py", "artifact_cache.py", ".dockerignore"):
             if not (vdir / name).exists():
                 shutil.copy2(VERIFY / name, vdir / name)
         image_tools(tmp, lock)
@@ -453,123 +400,13 @@ def block(out: str, label: str) -> str:
 
 def curl_calls(tmp: pathlib.Path) -> list[str]:
     """Every network fetch the scratch checkout's runs made: the artifact cache's fetch-log lines, then any call to the
-    curl tripwire, which a fetch that bypassed the cache would make."""
+    curl tripwire. Nothing here downloads a tool, so both stay empty."""
     out = []
     for name in ("fetch.log", "curl.log"):
         log = tmp / name
         out += log.read_text().splitlines() if log.exists() else []
     return out
 
-
-def cached(tmp: pathlib.Path) -> list[str]:
-    """The files in the scratch checkout's cache root, but the per-sum lock files: no temp or unverified file."""
-    d = CACHE_BASE / tmp.name / "sha256"
-    return sorted(p.name for p in d.iterdir() if not p.name.endswith(".lock")) if d.is_dir() else []
-
-
-GOOD_FILES = ("alpha-linux_x86_64.tar.gz", "beta_linux_amd64.zip", "gamma-linux-amd64",
-              "epsilon-x86_64-unknown-linux-gnu.tar.xz")
-with tempfile.TemporaryDirectory() as t, tempfile.TemporaryDirectory() as t2:
-    tmp = pathlib.Path(t)
-    vdir = scratch(tmp, GOOD_LOCK, (FETCH,))
-    make_stubs(tmp / "bin")
-    # A worktree that ran the fetch before #1118 holds its own copy of every download here; the fetch removes it.
-    (vdir / ".tools" / "dl").mkdir(parents=True)
-    (vdir / ".tools" / "dl" / "terraform_1.15.6_linux_amd64.zip").write_bytes(b"an old per-worktree copy")
-    served = SERVER.requests()
-    r = run(vdir / FETCH.name, tmp, tmp / "bin")
-    check(f"a lock whose artifacts match installs every tool (exit {r.returncode})", r.returncode == 0,
-          r.stdout + r.stderr)
-    for name, body in (("alpha", b"echo alpha"), ("beta", b"echo beta"), ("gamma", b"echo gamma"),
-                       ("epsilon", b"echo epsilon")):
-        b = vdir / ".tools" / "bin" / name
-        check(f"{name} is in .tools/bin, executable, holding the archive's member",
-              b.is_file() and os.access(b, os.X_OK) and body in b.read_bytes())
-    check("each artifact was downloaded once, through the cache", len(curl_calls(tmp)) == 4
-          and SERVER.requests() - served == 4 and all(ln.endswith("\tok") for ln in curl_calls(tmp)),
-          str(curl_calls(tmp)))
-    check("the cache holds each download once, under its sum, and nothing unverified",
-          cached(tmp) == sorted(sha(FIXTURES[f]) for f in GOOD_FILES), str(cached(tmp)))
-    check("the worktree keeps no copy of any download: the old .tools/dl is gone (#1004)",
-          not (vdir / ".tools" / "dl").exists() and sorted(p.name for p in (vdir / ".tools").iterdir()) == ["bin"],
-          str(list((vdir / ".tools").iterdir())))
-    check("the zip artifact was read without unzip, which Tanjiro's runner lacks (#1047)",
-          not (tmp / "unzip.log").exists(), (tmp / "unzip.log").read_text() if (tmp / "unzip.log").exists() else "")
-    first, served = len(curl_calls(tmp)), SERVER.requests()
-    r = run(vdir / FETCH.name, tmp, tmp / "bin")
-    check(f"a second run takes every download from the cache and fetches nothing (exit {r.returncode})",
-          r.returncode == 0 and len(curl_calls(tmp)) == first and SERVER.requests() == served,
-          str(curl_calls(tmp)[first:]))
-
-    # A fresh worktree on the same host: a scratch checkout of its own, with no .tools, on the same cache root.
-    tmp2 = pathlib.Path(t2)
-    vdir2 = scratch(tmp2, GOOD_LOCK, (FETCH,))
-    make_stubs(tmp2 / "bin")
-    r = run(vdir2 / FETCH.name, tmp2, tmp2 / "bin", cache=CACHE_BASE / tmp.name)
-    check(f"a run from a fresh worktree on the same cache installs every tool (exit {r.returncode})",
-          r.returncode == 0 and all(os.access(vdir2 / ".tools" / "bin" / n, os.X_OK)
-                                    for n in ("alpha", "beta", "gamma", "epsilon")), r.stdout + r.stderr)
-    check("and makes no network fetch for any lock entry (#1004, #1118)",
-          SERVER.requests() == served and curl_calls(tmp2) == [], str(curl_calls(tmp2)))
-
-    gamma = artifact_cache.path_for(sha(FIXTURES["gamma-linux-amd64"]), CACHE_BASE / tmp.name)
-    gamma.write_bytes(b"tampered")
-    r = run(vdir / FETCH.name, tmp, tmp / "bin")
-    check(f"a cached download that no longer matches fails the fetch (exit {r.returncode})",
-          r.returncode == 1 and "E2E TOOLS FETCH FAILED; this is a failure, not a skip" in r.stderr, r.stderr)
-    check("naming the tool, the cached file and both sums",
-          f"gamma v3: cache hit {gamma} does not match its pin: expected SHA-256 {sha(FIXTURES['gamma-linux-amd64'])}, "
-          f"got {sha(b'tampered')}" in r.stderr, r.stderr)
-    check("and it is never used, nor fetched again over: no request, and the file is left for a person to look at",
-          SERVER.requests() == served and len(curl_calls(tmp)) == first and gamma.read_bytes() == b"tampered",
-          str(curl_calls(tmp)[first:]))
-    check("the tool's old binary is removed, and the others are still installed",
-          not (vdir / ".tools" / "bin" / "gamma").exists()
-          and all((vdir / ".tools" / "bin" / n).is_file() for n in ("alpha", "beta", "epsilon")))
-
-with tempfile.TemporaryDirectory() as t:
-    tmp = pathlib.Path(t)
-    vdir = scratch(tmp, BAD_LOCK, (FETCH,))
-    make_stubs(tmp / "bin")
-    r = run(vdir / FETCH.name, tmp, tmp / "bin")
-    check(f"a mismatched checksum and a missing artifact exit 1 (exit {r.returncode})", r.returncode == 1)
-    check("it says the fetch failed, as a failure and not a skip",
-          "E2E TOOLS FETCH FAILED; this is a failure, not a skip" in r.stderr, r.stderr)
-    check("it names the mismatch with the expected and the downloaded SHA-256",
-          f"alpha v1: download of {URL}/alpha-linux_x86_64.tar.gz does not match its pin: expected SHA-256 {'0' * 64}, "
-          f"got {sha(FIXTURES['alpha-linux_x86_64.tar.gz'])}" in r.stderr, r.stderr)
-    check("it names the artifact it could not download",
-          f"delta v4: fetch of {URL}/delta-linux-amd64 for SHA-256 {'1' * 64} failed: HTTP Error 404" in r.stderr,
-          r.stderr)
-    check("a 404 is asked once, not retried", sum(ln.count("\terror ") for ln in curl_calls(tmp)) == 1,
-          str(curl_calls(tmp)))
-    check("no binary is installed from a failed fetch",
-          not (vdir / ".tools" / "bin" / "alpha").exists() and not (vdir / ".tools" / "bin" / "delta").exists())
-    check("no unverified download is kept, in the cache or the worktree",
-          cached(tmp) == [] and not (vdir / ".tools" / "dl").exists(), str(cached(tmp)))
-
-with tempfile.TemporaryDirectory() as t:
-    # Resolved, as the fetch's error names the root and the worktree resolved: under a TMPDIR that is a link, as on
-    # Tanjiro's runners since hecaton#475, the unresolved path is not the one it prints (#1314).
-    tmp = pathlib.Path(t).resolve()
-    vdir = scratch(tmp, GOOD_LOCK, (FETCH,))
-    make_stubs(tmp / "bin")
-    inside = tmp / "repo" / "cache"
-    (tmp / "repo" / ".git").mkdir(parents=True)
-    r = run(vdir / FETCH.name, tmp, tmp / "bin", cache=inside)
-    check(f"a cache root inside a git worktree fails the fetch before any download, naming it (exit {r.returncode})",
-          r.returncode == 1 and "E2E TOOLS FETCH FAILED: no usable artifact cache: " in r.stderr
-          and f"{inside} (from WIB_ARTIFACT_CACHE) is inside the git worktree {tmp / 'repo'}" in r.stderr
-          and not curl_calls(tmp), r.stderr)
-
-with tempfile.TemporaryDirectory() as t:
-    tmp = pathlib.Path(t)
-    vdir = scratch(tmp, GOOD_LOCK, (FETCH,))
-    make_stubs(tmp / "bin", {"uname": '#!/bin/sh\ncase "$1" in -s) echo Darwin ;; -m) echo arm64 ;; esac\n'})
-    r = run(vdir / FETCH.name, tmp, tmp / "bin")
-    check(f"on a host the lock has no binaries for, it exits 1 and says why (exit {r.returncode})",
-          r.returncode == 1 and "pins Linux x86_64 binaries; this host is Darwin arm64" in r.stderr
-          and not curl_calls(tmp), r.stderr)
 
 print("== run-e2e-tools.sh, inside the image, stops before any test when it cannot have its tools ==")
 NODE24 = '#!/bin/sh\ncase "$1" in -p) echo 24 ;; --version) echo v24.22.0 ;; esac\n'
@@ -715,7 +552,7 @@ with tempfile.TemporaryDirectory() as t:
     host = (tmp / "host.log").read_text() if (tmp / "host.log").exists() else ""
     check("nothing reached the host's aws or eksctl", host == "", host)
     kube = (tmp / "kubectl.log").read_text().splitlines() if (tmp / "kubectl.log").exists() else []
-    check("the image's kubectl is what the kubectl test ran, unstubbed", kube == ["fetched version --client"], str(kube))
+    check("the image's kubectl is what the kubectl test ran, unstubbed", kube == ["image version --client"], str(kube))
 
 print("== a tier test gets an empty Helm home of its own, never the host's (#921's run) ==")
 # Run 17641's tier failed six tests on the host's Helm home, which listed a `cilium` repository with no cached
@@ -930,26 +767,44 @@ with tempfile.TemporaryDirectory() as t:
     with contextlib.suppress(ProcessLookupError):
         os.killpg(proc.pid, 9)
 
-print("== run-e2e.sh fetches the same tools and runs them first on PATH (#585) ==")
+print("== run-e2e.sh copies the same tools out of the image and runs them first on PATH (#585, #1360) ==")
 RUN_E2E = VERIFY / "run-e2e.sh"
 live = "\n".join(line for line in RUN_E2E.read_text().splitlines() if not line.lstrip().startswith("#"))
-check("run-e2e.sh runs fetch-e2e-tools.sh", 'bash "${SCRIPT_DIR}/fetch-e2e-tools.sh"' in live)
-check("run-e2e.sh fetches into the directory the tier runs from", 'TOOLS_BIN="${SCRIPT_DIR}/.tools/bin"' in live)
-check("run-e2e.sh puts the fetched tools first on PATH", 'export PATH="${TOOLS_BIN}:${PATH}"' in live)
+check("run-e2e.sh copies the tools out of the wib-e2e-tools image into verify/.tools (#1360)",
+      'bash "${SCRIPT_DIR}/e2e-image.sh" tools "${SCRIPT_DIR}/.tools"' in live)
+check("run-e2e.sh runs no fetch-e2e-tools.sh and asks for none of its downloaders",
+      "fetch-e2e-tools" not in live and not re.search(r"\b(sha256sum|xz|tar)\b", live), live[:400])
+check("run-e2e.sh runs the tools from the directory the copy fills", 'TOOLS_BIN="${SCRIPT_DIR}/.tools/bin"' in live)
+check("run-e2e.sh puts the image's tools first on PATH", 'export PATH="${TOOLS_BIN}:${PATH}"' in live)
 for var, tool in (("KYVERNO_CLI", "kyverno"), ("CONFTEST", "conftest"), ("TERRAFORM", "terraform"),
                   ("OTELCOL_CONTRIB", "otelcol-contrib"), ("TTYD", "ttyd"), ("CRANE", "crane"),
                   ("AGENTGATEWAY", "agentgateway")):
-    check(f"run-e2e.sh points {var} at the fetched {tool}", f'{var}="${{TOOLS_BIN}}/{tool}"' in live)
+    check(f"run-e2e.sh points {var} at the image's {tool}", f'{var}="${{TOOLS_BIN}}/{tool}"' in live)
 check("run-e2e.sh never looks for otelcol-contrib on PATH (#654)",
       "command -v" not in "\n".join(line for line in live.splitlines() if "otelcol" in line.lower()))
-# The host's kubectl logs as "host": if it is ever what runs, the fetched one was not first on PATH.
+# The host's kubectl logs as "host": if it is ever what runs, the image's one was not first on PATH.
 HOST_KUBECTL = '#!/bin/sh\necho "host $*" >>"$KUBECTL_LOG"\nexit 1\n'
+# A podman stand-in for e2e-image.sh tools: the image is the scratch tool directory image_tools() writes. It is on the
+# host when PODMAN_STATE is present and cannot be pulled otherwise; create names one container, cp copies a path of
+# /opt/wib-e2e-tools out of the tool directory, and every call is logged.
+PODMAN = r"""#!/bin/sh
+echo "podman $*" >>"$PODMAN_LOG"
+case "$1" in
+  image) [ "$PODMAN_STATE" = present ] ;;
+  pull) echo "Error: manifest unknown" >&2; exit 125 ;;
+  create) echo cid-fixture ;;
+  cp) exec cp -a "$PODMAN_IMAGE/${2#cid-fixture:/opt/wib-e2e-tools/}" "$3" ;;
+  rm) exit 0 ;;
+  *) exit 3 ;;
+esac
+"""
 
 
-def run_live(tmp: pathlib.Path, vdir: pathlib.Path) -> subprocess.CompletedProcess:
+def run_live(tmp: pathlib.Path, vdir: pathlib.Path, state: str = "present") -> subprocess.CompletedProcess:
     env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp), **TF_CACHE_ENV,
            "KUBECONFIG": "/dev/null", "CONTEXT": "wib-fixture", **fetch_env(tmp),
-           "KUBECTL_LOG": str(tmp / "kubectl.log")}
+           "KUBECTL_LOG": str(tmp / "kubectl.log"), "PODMAN_LOG": str(tmp / "podman.log"),
+           "PODMAN_STATE": state, "PODMAN_IMAGE": str(tmp / "image-tools")}
     return subprocess.run([BASH, str(vdir / RUN_E2E.name)], capture_output=True, text=True, timeout=120, env=env)
 
 
@@ -958,40 +813,59 @@ def kubectl_calls(tmp: pathlib.Path) -> list[str]:
     return log.read_text().splitlines() if log.exists() else []
 
 
+def podman_calls(tmp: pathlib.Path) -> list[str]:
+    log = tmp / "podman.log"
+    return log.read_text().splitlines() if log.exists() else []
+
+
 LIVE_CANNOT_RUN = "E2E SUITE CANNOT RUN; this is a failure, not a skip"
+LIVE_SCRIPTS = (RUN_E2E, IMAGE_SH)
 with tempfile.TemporaryDirectory() as t:
     tmp = pathlib.Path(t)
-    vdir = scratch(tmp, SEVEN_LOCK, (FETCH, RUN_E2E))
-    make_stubs(tmp / "bin", {"kubectl": HOST_KUBECTL})
+    vdir = scratch(tmp, SEVEN_LOCK, LIVE_SCRIPTS)
+    make_stubs(tmp / "bin", {"kubectl": HOST_KUBECTL, "podman": PODMAN})
     r = run_live(tmp, vdir)
     check(f"run-e2e.sh stops in its prerequisite check (exit {r.returncode})",
           r.returncode == 1 and LIVE_CANNOT_RUN in r.stderr and "E2E checks ran" not in r.stdout + r.stderr,
           r.stdout + r.stderr)
-    check("it fetched all seven tools into its .tools/bin",
-          all(os.access(vdir / ".tools" / "bin" / tool, os.X_OK) for tool in SEVEN), r.stdout + r.stderr)
+    check("it copied all seven tools out of the image into its .tools/bin, with the image's tools.txt",
+          all(os.access(vdir / ".tools" / "bin" / tool, os.X_OK) for tool in SEVEN)
+          and (vdir / ".tools" / "tools.txt").read_text() == (tmp / "image-tools" / "tools.txt").read_text(),
+          r.stdout + r.stderr)
+    calls = podman_calls(tmp)
+    check("from the image on the host, pulling nothing and leaving no container",
+          not any(c.startswith("podman pull") for c in calls) and "podman create --pull=never" in "\n".join(calls)
+          and calls[-1] == "podman rm -f cid-fixture", "\n".join(calls))
+    check("and downloaded nothing", curl_calls(tmp) == [], str(curl_calls(tmp)))
     check("otelcol-contrib is not listed as missing", "otelcol" not in r.stderr, r.stderr)
-    check("a good fetch is not listed as missing", "could not be fetched" not in r.stderr
-          and "were not fetched" not in r.stderr, r.stderr)
-    check("the fetched kubectl checks the cluster, with the explicit context",
-          kubectl_calls(tmp) == ["fetched --context wib-fixture --request-timeout=15s get --raw /readyz"],
+    check("a good copy is not listed as missing", "could not be copied" not in r.stderr
+          and "were not copied" not in r.stderr, r.stderr)
+    check("the image's kubectl checks the cluster, with the explicit context",
+          kubectl_calls(tmp) == ["image --context wib-fixture --request-timeout=15s get --raw /readyz"],
           str(kubectl_calls(tmp)))
     check("the unreachable cluster is listed as missing",
           "cluster for context 'wib-fixture' is not reachable" in r.stderr, r.stderr)
 
-with tempfile.TemporaryDirectory() as t:
-    tmp = pathlib.Path(t)
-    vdir = scratch(tmp, BAD_LOCK, (FETCH, RUN_E2E))
-    make_stubs(tmp / "bin", {"kubectl": HOST_KUBECTL})
-    r = run_live(tmp, vdir)
-    check(f"a failed fetch fails run-e2e.sh in its prerequisite check (exit {r.returncode})",
-          r.returncode == 1 and LIVE_CANNOT_RUN in r.stderr and "E2E checks ran" not in r.stdout + r.stderr,
-          r.stdout + r.stderr)
-    check("it lists the failed fetch as missing",
-          "  - the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane, weaver and agentgateway could not "
-          "be fetched" in r.stderr,
-          r.stderr)
-    check("the fetch's own reasons are shown", "delta v4: fetch of " in r.stderr, r.stderr)
-    check("no kubectl runs, not even the host's", kubectl_calls(tmp) == [], str(kubectl_calls(tmp)))
+for label, state, other_lock, why in (
+        ("an image of another lock", "present", True, "is not e2e-tools.lock's"),
+        ("an image the host lacks and cannot pull", "absent", False, "could not be pulled")):
+    with tempfile.TemporaryDirectory() as t:
+        tmp = pathlib.Path(t)
+        vdir = scratch(tmp, SEVEN_LOCK, LIVE_SCRIPTS)
+        if other_lock:
+            image_tools(tmp, BAD_LOCK)
+        make_stubs(tmp / "bin", {"kubectl": HOST_KUBECTL, "podman": PODMAN})
+        r = run_live(tmp, vdir, state)
+        check(f"{label} fails run-e2e.sh in its prerequisite check (exit {r.returncode})",
+              r.returncode == 1 and LIVE_CANNOT_RUN in r.stderr and "E2E checks ran" not in r.stdout + r.stderr,
+              r.stdout + r.stderr)
+        check(f"{label}: it lists the failed copy as missing",
+              "  - the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane, weaver and "
+              "agentgateway could not be copied from the wib-e2e-tools image" in r.stderr, r.stderr)
+        check(f"{label}: e2e-image.sh's own reason is shown", why in r.stderr, r.stderr)
+        check(f"{label}: no tool is put in .tools/bin and nothing is downloaded",
+              not (vdir / ".tools" / "bin").exists() and curl_calls(tmp) == [], str(curl_calls(tmp)))
+        check(f"{label}: no kubectl runs, not even the host's", kubectl_calls(tmp) == [], str(kubectl_calls(tmp)))
 
 if failures:
     shutil.rmtree(CACHE_BASE, ignore_errors=True)

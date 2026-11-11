@@ -411,13 +411,12 @@ rules:
       - infra/terraform/fleet/providers/**/*.sh/**
       - scripts
       - scripts/**
-      - verify/.tools/bin/caddy
-      - verify/.tools/bin/caddy/**
+      - verify/.tools
+      - verify/.tools/**
       - verify/artifact-cache.sh
       - verify/artifact_cache.py
       - verify/e2e-tools.lock
       - verify/failover_drill.py
-      - verify/fetch-e2e-tools.sh
       - verify/package_cache.py
       - verify/playwright_browsers.py
       - verify/python.lock
@@ -2001,8 +2000,8 @@ rules:
       - verify/collector_render.py
       - verify/e2e-tools.lock
       - verify/ensure-submodules.sh
-      - verify/fetch-e2e-tools.sh
       - verify/git_mirror.py
+      - verify/run-e2e-tools.sh
       - verify/test_collector_coc_mask_e2e.py
       - verify/topic_cases.py
     tests:
@@ -3049,6 +3048,7 @@ rules:
   - name: test_e2e_image.py
     paths:
       - .github/workflows/build-e2e-tools-image.yml
+      - .github/workflows/iam-policy.yml
       - agent
       - agent/**
       - agent/**/*
@@ -6119,8 +6119,8 @@ rules:
       - verify/artifact_cache.py
       - verify/collector_render.py
       - verify/e2e-tools.lock
-      - verify/fetch-e2e-tools.sh
       - verify/otelcol_local.py
+      - verify/run-e2e-tools.sh
       - verify/test_collector_act2_redaction_e2e.py
       - verify/test_trace_shape_e2e.py
     tests:
@@ -6671,8 +6671,8 @@ rules:
       - scripts/**
       - security
       - security/**
-      - verify/.tools/bin/caddy
-      - verify/.tools/bin/caddy/**
+      - verify/.tools
+      - verify/.tools/**
       - verify/agent_probe.py
       - verify/artifact-cache.sh
       - verify/artifact_cache.py
@@ -6683,7 +6683,6 @@ rules:
       - verify/e2e-tools.lock
       - verify/ensure-submodules.sh
       - verify/failover_drill.py
-      - verify/fetch-e2e-tools.sh
       - verify/git_mirror.py
       - verify/guard_lease.py
       - verify/kubecon_probe.py

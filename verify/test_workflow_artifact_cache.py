@@ -56,7 +56,8 @@ JOBS = {
     ("build-e2e-tools-image.yml", "build"): False,    # docker builds verify/e2e-image on GitHub's runner (#1188); the
                                                       # lock's binaries are fetched and checked inside the build
     ("build-web-terminal.yml", "build"): False,       # docker builds images/web-terminal; its base images are #1122's
-    ("iam-policy.yml", "check"): True,                # PyYAML, e2e-tools.lock, the Terraform provider mirror
+    ("iam-policy.yml", "check"): True,                # PyYAML, the Terraform provider mirror, and e2e-tools.lock's
+                                                      # binaries copied out of the wib-e2e-tools image (#1360)
     ("keep-sample-app-tag.yml", "tag"): False,        # puts a pinned manifest on a ghcr.io tag; it fetches nothing to use
     ("plan-policy.yml", "check"): True,               # PyYAML, tools.yaml's binaries, the Terraform provider mirror
     ("push-jokers.yml", "jokers"): True,              # crane from e2e-tools.lock
@@ -65,7 +66,7 @@ JOBS = {
     ("weaver-registry-check.yml", "check"): True,     # weaver, pinned by WEAVER_SHA256
 }
 # A step that fetches a pinned artifact, or runs a suite or script that does.
-FETCH = re.compile(r"fetch-e2e-tools\.sh|artifact-cache\.sh|artifact_cache|package_cache\.py|ci-uv\.sh|tf_plugin_cache\.py|"
+FETCH = re.compile(r"e2e-image\.sh (run|tools)|artifact-cache\.sh|artifact_cache|package_cache\.py|ci-uv\.sh|tf_plugin_cache\.py|"
                    r"install-tools\.py|run-e2e-tools\.sh|run-tests\.sh|e2e-tools\.lock|\bcurl\b|\bwget\b|"
                    r"pip3?[ ]install|uv[ ]pip|helm (pull|repo)|terraform init")
 CACHE_VARS = ("WIB_ARTIFACT_CACHE", "HECATON_TOOLS_CACHE", "TF_PLUGIN_CACHE_DIR", "PLAYWRIGHT_BROWSERS_PATH",
@@ -232,20 +233,20 @@ cases = {
         d, "weaver-registry-check.yml", "check", 'tar -xJf "${archive}" -C "${RUNNER_TEMP}/weaver"',
         'tar -xJf "${archive}"'),
     "the per-workspace download cache named": lambda d: edit_run(
-        d, "iam-policy.yml", "check", "bash verify/fetch-e2e-tools.sh",
-        "mkdir -p verify/.tools/dl\n          bash verify/fetch-e2e-tools.sh"),
+        d, "iam-policy.yml", "check", "bash verify/e2e-image.sh tools verify/.tools",
+        "mkdir -p verify/.tools/dl\n          bash verify/e2e-image.sh tools verify/.tools"),
     "a fetching job not in JOBS": lambda d: d["push-jokers.yml"]["jobs"].update(
         {"more": copy.deepcopy(d["push-jokers.yml"]["jobs"]["jokers"])}),
     "a job listed as not fetching that fetches": lambda d: steps_of(d, "build-web-terminal.yml", "build").append(
-        {"run": "bash verify/fetch-e2e-tools.sh"}),
+        {"run": "bash verify/e2e-image.sh tools verify/.tools"}),
     "a listed job removed": lambda d: d["keep-sample-app-tag.yml"]["jobs"].pop("tag"),
 }
 for what, edit in cases.items():
     got = problems(broken(edit))
     check(f"the checker fails workflows with {what}", bool(got))
 check("the checker passes a comment that names curl",
-      not problems(broken(lambda d: edit_run(d, "iam-policy.yml", "check", "bash verify/fetch-e2e-tools.sh",
-                                             "# curl is not used here\n          bash verify/fetch-e2e-tools.sh"))))
+      not problems(broken(lambda d: edit_run(d, "iam-policy.yml", "check", "bash verify/e2e-image.sh tools verify/.tools",
+                                             "# curl is not used here\n          bash verify/e2e-image.sh tools verify/.tools"))))
 
 got = problems(docs)
 check("every workflow job that fetches a pinned artifact uses the runner's cache outside the workspace (#1123)",
