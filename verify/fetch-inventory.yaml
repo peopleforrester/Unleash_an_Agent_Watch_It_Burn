@@ -577,6 +577,47 @@ sites:
     class: live
     kind: lab-endpoint
     target: the support desk's public host on a workshop cluster (/submit)
+  verify/e2e-image/Containerfile:
+  - match: ^FROM
+    lines: 1
+    class: pinned
+    kind: container-image
+    pin: verify/e2e-image/Containerfile (FROM, lab-platform's ghcr.io copy of node:24.22.2-trixie-slim, by digest)
+    cached: false
+  - match: apt-get (update|install)
+    lines: 2
+    class: live
+    kind: upstream-index
+    target: Debian's apt archive for the base image's trixie release as it stands at build time (curl, git, jq, openssl and the rest, each at whatever version the archive serves)
+  - match: uv python install
+    lines: 1
+    class: pinned
+    kind: tool
+    pin: verify/e2e-image/Containerfile (Python 3.12.16 and 3.13.18, which uv 0.13.7 checks against the sums it ships with)
+    cached: false
+  - match: install\.sh tool crane
+    lines: 1
+    class: pinned
+    kind: tool
+    pin: verify/e2e-tools.lock (crane's row, its SHA-256 checked by install.sh at build)
+    cached: false
+  - match: playwright install
+    lines: 1
+    class: pinned
+    kind: browser
+    pin: verify/python.lock (the playwright release, which names its Chromium build; --with-deps installs its libraries from the apt archive)
+    cached: false
+  - match: .
+    lines: 2
+    class: none
+    why: a comment naming curl, and uv venv, which makes an environment from the Python installed above and fetches nothing
+  verify/e2e-image/install.sh:
+  - match: curl -fsSL
+    lines: 1
+    class: pinned
+    kind: tool
+    pin: verify/e2e-tools.lock (each row's SHA-256) and the Containerfile's uv row; install.sh fails the build on a SHA-256 that is not the pin
+    cached: false
   verify/e2e-tools.lock:
   - match: .
     lines: 2
@@ -1309,6 +1350,11 @@ sites:
     lines: 2
     class: none
     why: the command text fleet.sh prints, held as text
+  verify/test_e2e_image.py:
+  - match: .
+    lines: 9
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   verify/test_e2e_toolchain.py:
   - match: .
     lines: 7
