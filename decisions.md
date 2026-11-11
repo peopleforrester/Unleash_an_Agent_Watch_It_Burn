@@ -52147,3 +52147,28 @@ the changed files is clean.
 
 **Not yet run on a cluster.** Once Argo CD syncs this change from staging:
 `curl -s https://burritobot-private.burritobot.co/brief | grep -c 'Every prompt, first: the prompt wall'` prints 1.
+## 2026-11-11 · #1329 · run 20262 · two collector tier tests wait for the collector's ready line through otelcol_local
+
+**What failed.** The heavy gate on staging `c3700097` (range `cbb03a48..c3700097`, which edits
+`gitops/otel-collector/values.yaml`) failed `test_adk_model_content_e2e.py` and `test_collector_llmobs_model_e2e.py`.
+The gate's logs sit in a directory this run cannot read, so the cause was read from the tests. Both run each profile's
+traces processors, which since #1316 carry the four 108,437-character name-policy statements that #1326 measured at
+about 46 s of CPU to parse. The ADK test gave the collector 30 s of wall time from its Popen to take the POST; the
+llmobs test gave it 100 polls of 0.3 s (30 s) to log "Everything is ready". So the collector came up after each
+test had stopped waiting, and every later check in the profile failed with it. The tests that passed in the same
+gate wait longer: `test_trace_shape_e2e.py` waits 100 polls to start and 100 more to send, and
+`test_collector_act2_redaction_e2e.py` starts through `verify/otelcol_local.py`, which waits `READY_POLLS` (600 polls,
+180 s at least) for the ready line.
+
+**The fix.** Both tests now start the collector with `otelcol_local.start()`, as the redaction test has since #969:
+it waits for the ready line in polls, not wall seconds, retries a port another process took first, and the send
+clock starts only once the collector is ready. A failed send now prints `collector.detail()` (the exit code, how long
+the wait ran, the host's pressure stall and the log). The checks themselves are unchanged. `verify/scope-map.yaml`
+was rewritten with `python3 verify/scope_tests.py write`: both tests now read `verify/otelcol_local.py`.
+
+**Tests run.** `bash verify/run-e2e-tools.sh test_adk_model_content_e2e.py test_collector_llmobs_model_e2e.py`, the
+two tests alone with the pinned tools: `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`, 203 PASS lines, 146 s and 407 s.
+`python3 verify/test_scope_tests.py` and `python3 verify/test_test_map.py` pass. The rest of the scoped selection (the
+offline suite and the four tier tests that read `verify/scope-map.yaml`) is left to validation.
+
+**Live check.** Skipped: the change touches only tests under `verify/` that no cluster runs.
