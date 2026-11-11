@@ -14,8 +14,9 @@
 # everything. The step reads those runs with gh and the job's own token, which is why every job has actions: read.
 #
 # The workspace persists between jobs on a self-hosted runner, so checkout does not clean it; the step after it
-# removes every untracked and ignored file, verify/.tools included, whose binaries fetch-e2e-tools.sh extracts again
-# each run from the runner's artifact cache (#1123). That cache, WIB_ARTIFACT_CACHE, is set by
+# removes every untracked and ignored file (#1123). The tools tier's pinned binaries are in no workspace: since #1188
+# run-e2e-tools.sh runs the tier inside ghcr.io/peopleforrester/wib-e2e-tools, through the runner's rootless podman,
+# which keeps the image between jobs, so the first job on a runner host pulls it and every later one pulls nothing. That cache, WIB_ARTIFACT_CACHE, is set by
 # verify/ci-artifact-cache.sh to $RUNNER_TOOL_CACHE/wib-artifacts, outside the workspace and every checkout, and is
 # the same step on the tanjiro and megumi runners. It holds the pinned tools and charts (#1118), checked against
 # e2e-tools.lock and verify/charts.lock on every hit, uv's release archive (#1331), the PyYAML wheel (#1121), and the
@@ -178,5 +179,10 @@ jobs:
       - name: TMPDIR, the job's temp directory, short enough for a provider's socket
         run: echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
 
+      # When the push touches what a tier test reads, run-e2e-tools.sh runs the offline suite and the tier inside the
+      # wib-e2e-tools image (#1188), through verify/e2e-image.sh and the runner user's podman, and fetches no binary;
+      # with no image on the host and none pullable, it fails naming the image. A push no tier test reads runs the
+      # offline suite here alone and pulls nothing. The Node and Chromium steps above serve no tier test now, since
+      # the image holds both.
       - name: bash verify/run-e2e-tools.sh
         run: bash verify/run-e2e-tools.sh

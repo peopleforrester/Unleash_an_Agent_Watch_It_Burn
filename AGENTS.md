@@ -99,21 +99,22 @@ the files under it, and `verify/test_test_map.py` holds the two equal. Without t
 itself as the next paragraph says.
 
 The E2E command is the cluster-free tier (#572): the offline suite, then every `# E2E TIER: tools` check, run
-with the pinned, checksum-verified binaries in `verify/e2e-tools.lock`, which `verify/fetch-e2e-tools.sh`
-downloads into the gitignored `verify/.tools`. It needs network but no cluster, no AWS and no CONTEXT, and it
-fails when a fetch fails.
+with the pinned, checksum-verified binaries in `verify/e2e-tools.lock`. It needs no cluster, no AWS and no CONTEXT.
 
-The same binaries also come in one image, `ghcr.io/peopleforrester/wib-e2e-tools` (#1188), built from
+Those binaries come in one image, `ghcr.io/peopleforrester/wib-e2e-tools` (#1188), built from
 `verify/e2e-image/Containerfile`, which pins exactly the lock's rows (`verify/test_e2e_image.py` holds that). Each
 binary is fetched once, at build, and checked against the lock's SHA-256. The tag is the lock's SHA-256 and the other
 build files' (`python3 verify/e2e_image.py ref`), and `.github/workflows/build-e2e-tools-image.yml` pushes it from
-staging only when that tag is new. `bash verify/e2e-image.sh run` runs the tier inside it with podman or docker: it
-uses the image when the host has the tag and pulls it once when not, so a second run pulls nothing, and with neither
-it fails naming the image and `bash verify/e2e-image.sh build`, never downloading a binary itself. Tier tests named
+staging only when that tag is new. `run-e2e-tools.sh` on a host hands every run that needs the tools to
+`bash verify/e2e-image.sh run`, which runs it inside the image with podman or docker: it uses the image when the host
+has the tag and pulls it once when not, so a second run pulls nothing, and with neither it fails naming the image and
+`bash verify/e2e-image.sh build`. Neither script downloads a binary, and there is no fallback to downloads. A scoped
+run that selects no tier test runs the offline suite on the host and pulls nothing. Rootless podman keeps images per
+user, so on netcup each run user pulls the image once; the CI runners on Tanjiro share one podman user. Tier tests named
 after `run` (`bash verify/e2e-image.sh run test_ttyd_ws_auth.py`) run alone inside it, as with the runner. Inside, gh answers
 `gh issue view` through the host's own gh (`verify/gh_relay.py`), and the host's artifact cache is mounted for the
-Terraform providers, charts and wheels. Once the image is on ghcr.io and pullable, `run-e2e-tools.sh` itself runs
-through it and `fetch-e2e-tools.sh` goes (the rest of #1188).
+Terraform providers, charts and wheels. `verify/fetch-e2e-tools.sh`, which downloads the lock's binaries into the
+gitignored `verify/.tools`, is left only for `run-e2e.sh`, the by-hand live suite, and `iam-policy.yml`.
 
 Both runners scope themselves to the change when `HECATON_BASE_SHA` is set, as hecaton's gate and the CI workflow set
 it (#1018): `verify/scope_tests.py` runs only the tests whose entry in `verify/scope-map.yaml` reads a path the change
@@ -202,7 +203,7 @@ failure (#1190).
 4. **A long command is polled in the foreground.** `bash verify/run-e2e-tools.sh` runs the offline suite and the
    tools tier side by side, four checks at a time (`E2E_TOOLS_JOBS`), and prints each check whole when it ends. One
    after another they took more than the gate's hour on staging 629c53ea (#1005). On the shared host it still takes
-   20 minutes or more, longer on a cold fetch of the pinned tools.
+   20 minutes or more, longer when the host first pulls the wib-e2e-tools image.
    Hecaton stops a run that prints nothing for 15 minutes as stalled, and nothing the run had not committed
    survives it: the attempt before run 15763 on #205 and two attempts on #520 ended that way. Commit the change
    first. Then start the command in the background with its output in a log, and keep reading the log in the
@@ -260,7 +261,7 @@ failure (#1190).
      Michael's ruling of 2026-11-08: "Not before every main promotion." A tier
      failure is reported with the failing test, never answered by running the whole suite again (#1190).
    - To run one tier test alone, change it and run the scoped `run-e2e-tools.sh`: a changed test selects itself,
-     and the tier then fetches only for the tests it selected.
+     and the tier then runs only the tests it selected, in the image.
 7. **A failed test is fixed and rerun alone, never the whole script.** When `run-e2e-tools.sh` fails, it prints
    first, ahead of its timings, each failed check with its log, kept under `verify/.e2e-logs/`, and the command that
    reruns that one test alone: `bash verify/run-e2e-tools.sh <test>` for a tier test, which runs it with the

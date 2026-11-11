@@ -53881,3 +53881,45 @@ annotation behind on every run, which is harmless: Argo CD ignores the Role's ru
 
 **Tests.** None changed, so none run; this entry is the only change, and the prose gate was run on it. The scoped
 offline tests that read decisions.md are left to validation.
+## 2026-11-11 · #1188 · run 20434 · run-e2e-tools.sh runs the tier in the wib-e2e-tools image and fetches no tool
+
+**What unblocked it.** Runs 18630 to 20420 left the runner switch waiting on the image being on ghcr.io. It is now:
+Actions run 43052897996 (`build-e2e-tools-image`, staging, after #1355's one-runtime fix) ended success, and an
+anonymous token read for `peopleforrester/wib-e2e-tools` answered 200, with `tags/list` returning
+`["51ec299b51b3558f-65501e27"]`, the tag `python3 verify/e2e_image.py ref` names at this commit's base. So the image
+pulls without a login, and no visibility change was needed.
+
+**Change.** `verify/run-e2e-tools.sh` no longer calls `fetch-e2e-tools.sh` and no longer asks for curl, tar,
+sha256sum or xz. After it reads its scope, a run on a host that needs the tools (any tier test selected, or named on
+the command line) prints that the tier runs inside the image and `exec`s `bash verify/e2e-image.sh run` with the same
+arguments. `e2e-image.sh` uses the image when the host holds the tag, pulls it once when not, and with neither exits 1
+naming the image and `bash verify/e2e-image.sh build`. Inside the image, `WIB_E2E_TOOLS` is set and the runner runs
+every check as before, on the image's binaries. A scoped run that selects no tier test needs no tool, so it runs the
+offline suite on the host and pulls nothing, which keeps #1190's doc-only rule. `e2e-image.sh` now also passes
+`HECATON_TEST_FILES` into the container, so the gate's own pick of offline tests (#1319) reaches `run-tests.sh` inside.
+
+**Where the image comes from on each host.** CI's e2e job runs on the three `tanjiro-Unleash_an_Agent_Watch_It_Burn`
+runners (the repo's runner list on 2026-11-11 holds no Megumi runner). They run as `gha-agent`, which has rootless
+podman on Tanjiro (hecaton `deploy/tanjiro/runners.sh`), so the three share one image store and the host pulls once.
+The gate runs as `hecaton-gate`, which hecaton's `gate-podman` setup gives rootless podman. Each run pool user on
+netcup has its own podman too. Rootless podman keeps images per user, so on netcup the image is pulled once per user
+that runs the tier, not once per host. The workflow's Node and Chromium steps stay for now; no tier test uses them,
+since the image holds both, and their removal is filed as a follow-up.
+
+**What stays.** `fetch-e2e-tools.sh` is still run by `run-e2e.sh`, the by-hand live suite, and by `iam-policy.yml`,
+so it is not removed. It leaves the scope map's full list, and `e2e-image.sh` and `e2e_image.py` join it, since every
+tier run now goes through them.
+
+**Tests.** `verify/test_e2e_image.py` gains section 4b: the runner's code names no `fetch-e2e-tools`, curl, wget or
+`verify/.tools`, and run for real on a host with a podman stand-in, curl and wget tripwires and every proxy pointed at
+a closed port, an image it cannot pull fails it with exit 1, naming the image and the build command, after one pull
+and with no container, no curl, no wget and no `verify/.tools`; with the image present, a named tier test runs inside
+it and nothing is pulled. Run against the base's runner, 4b's code checks failed and its host run hung on real
+downloads, so it catches the old behaviour. `test_e2e_tools_tier.py` runs its runner cases as inside the image, with a
+scratch `WIB_E2E_TOOLS`, and its failed-fetch case is now an image of another lock. `test_e2e_tools_gate_scope.py` and
+`test_scope_tests.py` give their fixture repos an `e2e-image.sh` stand-in that logs and runs the runner as the
+container does, so both the hand-off and the run inside are driven. Each passed alone, as did
+`test_verify_suites_workflow.py`, `test_workflow_artifact_cache.py`, `test_fetch_inventory.py` (two counts updated),
+`test_no_system_temp_paths.py`, `scope_tests.py check` and the prose gate.
+
+**Live check.** None on a cluster: this change touches `verify/`, `.github/workflows/` and docs, which no cluster runs.
