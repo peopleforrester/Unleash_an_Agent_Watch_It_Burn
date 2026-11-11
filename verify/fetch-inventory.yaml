@@ -1345,7 +1345,7 @@ sites:
     why: the command text fleet.sh prints, held as text
   verify/test_e2e_image.py:
   - match: .
-    lines: 26
+    lines: 33
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   verify/test_e2e_toolchain.py:

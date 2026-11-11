@@ -53971,6 +53971,38 @@ provisioning-agenticburn's and not in either cluster, and `fleet.sh beacon-reset
 
 **Tests.** None run: this run changed only this file. `verify/test_run_shell_witch_header.py` passed in runs 20398 and
 20424 and in the gate that merged `530463401b52`. The tests that read decisions.md are left to validation.
+## 2026-11-11 · #1354 · run 20451 · run-e2e-tools.sh's image hand-off held for a pullable image, a docker-only host and a host with neither
+
+Run 20428 found the runner still fetched on a host and stopped blocked on #1188. #1188's run 20434 then made the switch
+and added `test_e2e_image.py` section 4b, which drives `run-e2e-tools.sh` on a host with a podman stand-in for two
+states, image present and image neither present nor pullable. Two parts of this criterion were still held only for
+the launcher, `e2e-image.sh run`, or not at all: an image the host lacks but can pull, and "podman or docker, whichever
+the host has".
+
+**Change.** Section 4b's `host_runner` now takes the runtime: the stand-in is podman, docker or neither, and the other
+runtime is taken off PATH (`path_without` swaps each PATH directory that holds it for a directory of links to all its
+other entries), so the run sees a docker-only host even though this host has both. New checks, each through
+`run-e2e-tools.sh` itself: with podman alone and with docker alone, a pullable image is pulled once, before the one
+container run, which carries the lock's tag and ends with the named tier test, with no curl, wget, host check or
+`verify/.tools`; with docker alone, a present image runs with `--pull=never` and no pull, and the run says `(docker)`;
+with docker alone and no pullable image, exit 1 naming the image and `bash verify/e2e-image.sh build`, one pull and
+nothing run or downloaded; with neither runtime, exit 1 naming the image and nothing downloaded.
+
+**Tests.** `python3 verify/test_e2e_image.py` passes. Three mutations, each reverted: `e2e-image.sh` never choosing
+docker failed the five docker checks; its pull skipped, so a host without the image fails at once, failed the pullable checks and the
+absent checks' one-pull count; the runner falling back to a curl after a failed image run failed 4b's code checks and
+the no-download checks of both absent cases and the neither case. `python3 verify/scope_tests.py write` changed
+nothing, and `verify/test_scope_tests.py` passes.
+
+**Live check.** None: the change is a test under `verify/` that no cluster runs.
+
+**Run 20467, the tests gate.** Run 20451 failed validation on `test_fetch_inventory.py`: `verify/fetch-inventory.yaml`
+counts the lines in each file that name a fetch command, and the new checks and stand-ins added seven lines naming
+curl, wget or a pull to `test_e2e_image.py` (20 to 27). Each is a stand-in or a check on a stand-in's calls, so the
+entry's class stays `none` and only its count moves. `test_fetch_inventory.py`, `test_e2e_image.py`,
+`test_package_cache.py` and `test_scope_tests.py` pass. `test_fleet_contract.py`, which also reads the inventory,
+could not run here: this workspace has the guard-proxy submodule uninitialised, and the test stops on its missing
+`proxy.py` before any check. The gate's run of it passed.
 
 ## 2026-11-11 · #1358 · run 20447 · The scoped Role came from guard-agency-off, not Argo CD; guard-agency-off now keeps each cluster's Secret rule
 
@@ -54206,27 +54238,3 @@ tier on 6840b2f0. None of the six comes from the removed steps: `verify/e2e-imag
 and the `LD_LIBRARY_PATH` and `FONTCONFIG_FILE` that `ci_chromium_libs.py` wrote to `GITHUB_ENV` never reached a tier
 test, and the image brings its own Node 24.22.2 and Chromium. With no fallback to the host's tools, keeping the steps
 would not make the job pass. The six failures are #1361's to fix.
-## 2026-11-11 · #1354 · run 20451 · run-e2e-tools.sh's image hand-off held for a pullable image, a docker-only host and a host with neither
-
-Run 20428 found the runner still fetched on a host and stopped blocked on #1188. #1188's run 20434 then made the switch
-and added `test_e2e_image.py` section 4b, which drives `run-e2e-tools.sh` on a host with a podman stand-in for two
-states, image present and image neither present nor pullable. Two parts of this criterion were still held only for
-the launcher, `e2e-image.sh run`, or not at all: an image the host lacks but can pull, and "podman or docker, whichever
-the host has".
-
-**Change.** Section 4b's `host_runner` now takes the runtime: the stand-in is podman, docker or neither, and the other
-runtime is taken off PATH (`path_without` swaps each PATH directory that holds it for a directory of links to all its
-other entries), so the run sees a docker-only host even though this host has both. New checks, each through
-`run-e2e-tools.sh` itself: with podman alone and with docker alone, a pullable image is pulled once, before the one
-container run, which carries the lock's tag and ends with the named tier test, with no curl, wget, host check or
-`verify/.tools`; with docker alone, a present image runs with `--pull=never` and no pull, and the run says `(docker)`;
-with docker alone and no pullable image, exit 1 naming the image and `bash verify/e2e-image.sh build`, one pull and
-nothing run or downloaded; with neither runtime, exit 1 naming the image and nothing downloaded.
-
-**Tests.** `python3 verify/test_e2e_image.py` passes. Three mutations, each reverted: `e2e-image.sh` never choosing
-docker failed the five docker checks; its pull skipped, so a host without the image fails at once, failed the pullable checks and the
-absent checks' one-pull count; the runner falling back to a curl after a failed image run failed 4b's code checks and
-the no-download checks of both absent cases and the neither case. `python3 verify/scope_tests.py write` changed
-nothing, and `verify/test_scope_tests.py` passes.
-
-**Live check.** None: the change is a test under `verify/` that no cluster runs.
