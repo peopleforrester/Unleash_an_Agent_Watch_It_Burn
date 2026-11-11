@@ -470,10 +470,10 @@ def base_sha(cwd: Path, env_file: Path | None, runs: object | None = None, *, to
         f'        [[ -z "$FETCH_STUB_HANG" ]] || exec "{REAL["sleep"]}" 600\n'
         '        printf "%s\\n" "$FETCH_STUB_ERR" >&2; exit 128\n    fi\nfi\n'
         f'exec "{REAL["git"]}" "$@"\n')
-    # The script calls `timeout -k <s> <limit> <command...>`; the stub keeps the kill-after and swaps the limit.
+    # The script calls `timeout -k <s> <limit> <command...>`; the stub keeps the kill-after and swaps the limit. The
+    # checks below hold every logged call to FETCH_CALL, so a call in another shape fails there by name.
     (stub / "timeout").write_text(
         '#!/usr/bin/env bash\nprintf "%s\\n" "$*" >>"$TIMEOUT_LOG"\n'
-        '[[ "$1" == -k ]] || { echo "stub timeout: expected -k first, got: $*" >&2; exit 2; }\n'
         'kill_after="$2" limit="$3"; shift 3\n'
         'if [[ -n "$FETCH_STUB_HANG" ]] && (( $(wc -l <"$TIMEOUT_LOG") <= FETCH_STUB_FAIL )); then\n'
         '    limit="$HANG_LIMIT_S"\nfi\n'
