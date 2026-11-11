@@ -52351,6 +52351,17 @@ processor from the ConfigMap. `test_scope_tests.py` pins `collector_render.py`'s
 The copies registry's Site for the collector moves to the ConfigMap, at 14 spaces' indentation. The two tier tests now
 hand the pinned collector `coc-mask.yaml` as written, as a second `--config`.
 
+**Tests run**, each once and passing: `test_collector_startup_budget.py`, `test_collector_coc_mask.py`,
+`test_collector_no_datadog.py`, `test_collector_config.py`, `test_coc_pattern_copies.py`, `test_collector_coc_split.py`,
+`test_collector_backends.py`, `test_collector_one_root.py`, `test_collector_pii_scrub.py`,
+`test_collector_act2_redaction.py`, `test_collector_llmobs_model.py`, `test_bootstrap_chart.py`,
+`test_manifest_contract.py`, `test_image_registry.py`, `test_coc_floor_probes_live_checks.py`, `test_deploy_coc.py`,
+`test_scope_tests.py` and `test_test_map.py`. The two tier tests ran alone with the pinned binaries,
+`bash verify/run-e2e-tools.sh test_collector_coc_mask_e2e.py test_collector_coc_parse_cpu_e2e.py`: 2 checks in 2m02s,
+`ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. `validate` on the three files each profile loads used 4.69 to 5.98 s of
+CPU, and every span came out masked as Python masks it, the corpora included. The other tests the change selects are
+left to validation.
+
 **Live check, 2026-11-11.** Neither cluster runs this change yet, so the check is what each would make of it. A
 server-side dry run of the new ConfigMap into `monitoring` (`kubectl apply --server-side --dry-run=server`) was
 admitted on both, `serverside-applied (server dry run)` on watch-it-burn-private. That dry run changes nothing. The
