@@ -844,9 +844,9 @@ sites:
     why: the lock's header comment
   verify/run-e2e-tools.sh:
   - match: .
-    lines: 6
+    lines: 4
     class: none
-    why: comments and the list of host tools it checks for
+    why: comments; since #1188 it fetches no tool, and a run that needs one goes to e2e-image.sh's image
   verify/run-e2e.sh:
   - match: yarn\sinstall\s--immutable
     lines: 1
@@ -1358,7 +1358,7 @@ sites:
     why: the command text fleet.sh prints, held as text
   verify/test_e2e_image.py:
   - match: .
-    lines: 9
+    lines: 20
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   verify/test_e2e_toolchain.py:

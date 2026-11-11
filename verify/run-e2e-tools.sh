@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# ABOUTME: The gate's E2E command (#572): the offline suite and every `# E2E TIER: tools` check, run with pinned,
-# ABOUTME: checksum-verified binaries fetched into verify/.tools. Needs network; never a cluster, CONTEXT or AWS.
+# ABOUTME: The gate's E2E command (#572): the offline suite and every `# E2E TIER: tools` check, run inside the
+# ABOUTME: wib-e2e-tools image with its pinned, checksum-verified binaries (#1188). It fetches no binary; never a cluster.
 #
 # Usage: bash verify/run-e2e-tools.sh                      the offline suite and the tier, scoped by HECATON_BASE_SHA
 #        bash verify/run-e2e-tools.sh test_a.py [test_b.sh]  only the tier tests named, with the tools; no offline suite
@@ -29,7 +29,13 @@
 # after it and the ten slowest at the end. Stopped by a signal, the runner names each check still running, with its
 # last lines, and stops it.
 #
-# Nothing here skips. A missing prerequisite or a failed fetch exits 1 before any test runs, with every reason.
+# The pinned binaries come from one image, ghcr.io/peopleforrester/wib-e2e-tools, built from e2e-tools.lock (#1188).
+# On a host this script hands every run that needs them to `bash verify/e2e-image.sh run`, which uses the image when
+# the host holds its tag, pulls it once when not, and fails naming it when it can do neither; inside, WIB_E2E_TOOLS is
+# set and this script runs the checks. It never fetches a binary and never falls back to a download. A scoped run that
+# selects no tier test needs no tool, so it runs the offline suite on the host and pulls nothing.
+#
+# Nothing here skips. A missing prerequisite or a missing image exits 1 before any test runs, with every reason.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Scratch goes under TMPDIR, else the checkout's ignored tmp/, never the system's temp directory, which on netcup
@@ -49,7 +55,8 @@ if (( ${#TMPDIR} > TMPDIR_MAX )); then
         "${#TMPDIR}" "${TMPDIR_MAX}" "${TMPDIR}" >&2
     exit 1
 fi
-TOOLS_BIN="${SCRIPT_DIR}/.tools/bin"
+# The pinned binaries' directory: the image's own, set below when WIB_E2E_TOOLS says this runs inside it.
+TOOLS_BIN=""
 LOG_DIR="${E2E_TOOLS_LOG_DIR:-${SCRIPT_DIR}/.e2e-logs}"
 
 # Tier tests named on the command line run alone (#1190): the way to rerun the one that failed, with the same tools
@@ -112,13 +119,22 @@ if [[ "${scoped}" -eq 1 && "${#selected[@]}" -eq 0 ]]; then
     printf 'scope: no tier test reads what the change touched, so the tools are neither checked for nor fetched\n'
 fi
 
+# On a host, a run that needs the tools runs inside the wib-e2e-tools image (#1188), the tier tests named, if any,
+# passed on. e2e-image.sh uses the image this lock names when the host holds it, pulls it once when not, and with
+# neither exits 1 naming it and `bash verify/e2e-image.sh build`. Nothing is fetched here, and there is no fallback
+# to a download: the image's binaries were fetched and checked against the lock once, when it was built. exec, so a
+# stop (the gate's timeout) reaches e2e-image.sh, which passes it to the runner inside.
+if [[ "${need_tools}" -eq 1 && "${in_image}" -eq 0 ]]; then
+    printf 'the tools tier runs inside the wib-e2e-tools image: bash verify/e2e-image.sh run%s\n' "${*:+ $*}"
+    exec bash "${SCRIPT_DIR}/e2e-image.sh" run "$@"
+fi
+
 missing=()
-# curl, tar, python3 (zipfile, #1047) and sha256sum fetch and verify the tools, and xz unpacks weaver's archive; uv brings the Python
+# Past this point a run that needs the tools is inside the image, which holds every one of these. uv brings the Python
 # pins; openssl mints the Kyverno test's wrong key; jq runs test_ai_layer_rollout.py's filters; node runs the harnesses.
 # flock holds the shared Terraform provider cache for one terraform test at a time (#1114).
 tools=(python3 git)
 [[ "${need_tools}" -eq 0 ]] || tools+=(uv node jq openssl flock)
-[[ "${need_tools}" -eq 0 || "${in_image}" -eq 1 ]] || tools+=(curl tar sha256sum xz)
 for tool in "${tools[@]}"; do
     if command -v "${tool}" >/dev/null 2>&1; then
         continue
@@ -156,11 +172,6 @@ if [[ "${#missing[@]}" -gt 0 ]]; then
     printf '  - %s\n' "${missing[@]}" >&2
     exit 1
 fi
-if [[ "${need_tools}" -eq 1 && "${in_image}" -eq 0 ]] && ! bash "${SCRIPT_DIR}/fetch-e2e-tools.sh"; then
-    printf 'E2E TOOLS TIER CANNOT RUN; this is a failure, not a skip: the pinned tools could not be fetched\n' >&2
-    exit 1
-fi
-
 bash "${SCRIPT_DIR}/ensure-submodules.sh"
 
 fail=0
@@ -168,8 +179,8 @@ ran=0
 failed_names=()
 timings=()
 
-# The pinned tools come first on PATH, and the six tests that take a path get it, so a tool already on the
-# host is never what a check runs. Ahead of them stand only the aws and eksctl stubs (#865), which shadow no pinned tool.
+# The image's pinned tools come first on PATH, and the tests that take a path get it, so another copy of a tool is
+# never what a check runs. Ahead of them stand only the aws and eksctl stubs (#865), which shadow no pinned tool.
 # shellcheck source=SCRIPTDIR/no-cloud.sh
 . "${SCRIPT_DIR}/no-cloud.sh"
 WORK_DIR="$(mktemp -d)"
@@ -177,9 +188,9 @@ trap 'rm -rf "${WORK_DIR}"' EXIT
 # Terraform's providers come from the host artifact cache, outside every worktree (#1114, #1119). Each terraform test
 # gets them through tf_plugin_cache.terraform_env: a filesystem mirror filled through artifact_cache.get() by each
 # lock's zh: SHA-256, which terraform installs from and never downloads past, and the plugin cache beside it in the
-# same root, <root>/terraform-plugin-cache, which tf_plugin_cache.py names here and fails on when it is unusable. In
-# verify/.tools it started cold in every new checkout, and the lock-init test spent 326 s downloading the same
-# providers again. Terraform does not promise a cache is safe to write from two processes at once, so the tests marked
+# same root, <root>/terraform-plugin-cache, which tf_plugin_cache.py names here and fails on when it is unusable;
+# e2e-image.sh mounts that root into the image at its own path. In verify/.tools it started cold in every new
+# checkout, and the lock-init test spent 326 s downloading the same providers again. Terraform does not promise a cache is safe to write from two processes at once, so the tests marked
 # `# E2E SERIAL: terraform` run one at a time here (#572, #1005), and each holds TF_CACHE_LOCK while it runs, so a run
 # in another checkout that shares the cache waits its turn. A wait past TF_CACHE_LOCK_WAIT seconds fails the check,
 # naming the lock.
