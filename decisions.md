@@ -52147,3 +52147,40 @@ the changed files is clean.
 
 **Not yet run on a cluster.** Once Argo CD syncs this change from staging:
 `curl -s https://burritobot-private.burritobot.co/brief | grep -c 'Every prompt, first: the prompt wall'` prints 1.
+
+## 2026-11-11 · #1330 · run 20263 · ci-base-sha.sh cuts each fetch of staging off at 120 s and tries it five times
+
+**What failed.** The heavy gate on staging 3da68e84 (verify-suites run 42960503134) failed in the e2e job's base
+step, before any suite ran. `verify/ci-base-sha.sh` ran `git fetch` of staging, which printed "fatal: unable to
+access 'https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/': Connection timed out after 300028
+milliseconds" and the step exited 1 with "could not fetch staging from origin". The same job's setup-uv download had
+timed out at 100 s minutes earlier and the runner retried it. This is the same dropout on Tanjiro's link to GitHub as
+#1325, which added retries to the step's Actions API read but left the fetch with one try and curl's 300 s connect
+timeout. The offline job of the same run passed. No test failed and no code in 3da68e84 was at fault.
+
+**Staging is green already.** The next push, c53df166 (run 42962301491), passed both jobs. Its base step scoped it
+from e62cc05a, the newest green first-parent ancestor (#1195), so 3da68e84's 22 changed paths were in its scope: the
+offline job ran 304 of 458 tests, the e2e job 5 of 96 tier tests, and both ended green.
+
+**The change.**
+- `verify/ci-base-sha.sh` runs the fetch as `timeout -k 10 120 git fetch ...`, so a fetch that gets no answer ends at
+  120 s rather than 300 s (timeout signals the process group, git-remote-https included). A failed or cut-off fetch
+  is tried again after 5, 15, 30 and 60 s, five tries in all, and each retry prints its try, what it got ("exit 128"
+  or "no answer in 120 s") and the wait. The last failure exits 1 naming the five tries. Every fetch failure is
+  retried, a missing origin included, since git names no reliable status to tell a dropout from a refusal; such a
+  fetch still fails, after five tries. The waits are one list, `RETRY_WAITS`, shared with #1325's API read.
+- `verify/test_verify_suites_workflow.py` puts a stub git and a stub timeout on PATH beside the stub gh and sleep.
+  The stub git passes every call to git, but fails the first N fetches with the message 3da68e84's job printed, or
+  makes them hang. The stub timeout logs its call and runs the real timeout, with the limit cut to 3 s for a fetch
+  made to hang alone. Six new checks: the fetch runs under timeout with the 120 s limit, once when it works; a fetch
+  failed 1, 2 or 4 times gets the merge base on the next try after the right waits; five failures exit 1 naming the
+  tries; a hung fetch is killed by the real timeout and tried again. The unreachable-origin check now holds the
+  five tries.
+
+**Tests run.** `python3 verify/test_verify_suites_workflow.py` exit 0, every check PASS including the six new ones,
+"verify-suites.yml and ci-base-sha.sh hold", 6.6 s. Against the old script (staging's `ci-base-sha.sh` put back
+in the worktree), the hung-fetch case hung, since no timeout was around the fetch, and was stopped after 120 s; the
+new script was restored. `python3 verify/scope_tests.py write` changed nothing. The prose gate on this entry is clean.
+
+**Live check.** None: the change is to a CI script under `verify/` that no cluster runs. The CI job runs it on the
+next push.

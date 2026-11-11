@@ -19,7 +19,8 @@
 # runners run whole, as they do when a person runs them by hand. A change to verify/scope-map.yaml is
 # scope_tests.py's to widen, as for any base.
 #
-# Nothing here falls back. No GITHUB_ENV, no origin, no staging there, or no common ancestor exits 1, naming which;
+# Nothing here falls back. No GITHUB_ENV, a fetch of staging that fails on five tries (no origin, no staging there,
+# or no answer, #1330), or no common ancestor exits 1, naming which;
 # so does a commit in staging with no GH_TOKEN, no GITHUB_REPOSITORY, or an Actions API read that fails: at once on an
 # HTTP status GitHub answered, and after five tries when no answer came, or a 429 or 5xx (#1325).
 set -euo pipefail
@@ -29,8 +30,36 @@ export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}";
 
 WORKFLOW_FILE="verify-suites.yml"
 
-git fetch --no-tags --prune origin '+refs/heads/staging:refs/remotes/origin/staging' \
-    || { printf 'ci-base-sha: could not fetch staging from origin\n' >&2; exit 1; }
+# Both network reads below, the fetch and the Actions API read, are tried again after each of these waits, five tries
+# in all over about two minutes of waiting, so a dropout on Tanjiro's link to GitHub shorter than that costs no red gate.
+RETRY_WAITS=(5 15 30 60)
+RETRY_TRIES=$(( ${#RETRY_WAITS[@]} + 1 ))
+
+# #1330: on staging 3da68e84 the e2e job's fetch got no answer and git waited out curl's 300 s connect timeout, then the
+# step failed before any suite ran, while the same runner's setup-uv download timed out and was retried by the runner.
+# Each try is cut off after FETCH_LIMIT_S (timeout signals the whole process group, git-remote-https included, and
+# kills it 10 s later if it is still there), and any failed try is tried again: a fetch that cannot work (no origin,
+# no staging there) fails the same way five times and exits 1 naming the tries.
+FETCH_LIMIT_S=120
+try=1
+while :; do
+    rc=0
+    timeout -k 10 "${FETCH_LIMIT_S}" git fetch --no-tags --prune origin '+refs/heads/staging:refs/remotes/origin/staging' \
+        || rc=$?
+    (( rc != 0 )) || break
+    got="exit ${rc}"
+    (( rc != 124 && rc != 137 )) || got="no answer in ${FETCH_LIMIT_S} s"
+    if (( try >= RETRY_TRIES )); then
+        printf 'ci-base-sha: could not fetch staging from origin on %d tries, after waits of %s s; the last got %s\n' \
+            "${RETRY_TRIES}" "${RETRY_WAITS[*]}" "${got}" >&2
+        exit 1
+    fi
+    wait_s="${RETRY_WAITS[try - 1]}"
+    printf 'ci-base-sha: git fetch try %d of %d got %s; trying again in %s s\n' "${try}" "${RETRY_TRIES}" "${got}" \
+        "${wait_s}" >&2
+    sleep "${wait_s}"
+    try=$((try + 1))
+done
 head="$(git rev-parse HEAD)"
 base="$(git merge-base "${head}" refs/remotes/origin/staging)" \
     || { printf 'ci-base-sha: %s and origin/staging have no common ancestor\n' "${head}" >&2; exit 1; }
@@ -53,11 +82,10 @@ endpoint="repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_FILE}/runs?bra
 # #1325: the e2e job failed here on "net/http: TLS handshake timeout" on staging 49387d36 and again 16 minutes later
 # on 92f5514c, before any suite ran, while the offline job's same read on the same runner went through. A read that
 # got no answer (gh names no HTTP status: a timeout, a refused or reset connection), a 429 or a 5xx is tried again
-# after each wait in GH_WAITS, five tries in all over about two minutes, so a dropout on Tanjiro's link to GitHub
-# shorter than that costs no red gate. Any other status is GitHub's answer and fails at once. Every try's error is
+# after each wait in RETRY_WAITS. Any other status is GitHub's answer and fails at once. Every try's error is
 # printed, and the last failure exits 1 naming the endpoint and the tries.
-GH_WAITS=(5 15 30 60)
-GH_TRIES=$(( ${#GH_WAITS[@]} + 1 ))
+GH_WAITS=("${RETRY_WAITS[@]}")
+GH_TRIES="${RETRY_TRIES}"
 try=1
 while :; do
     if gh api "${endpoint}" >"${work}/runs.json" 2>"${work}/gh.err"; then
