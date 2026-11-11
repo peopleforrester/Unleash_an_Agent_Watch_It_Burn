@@ -451,6 +451,16 @@ check("a ConfigMap delete that fails is a FAIL, and the desk's rows and ticket a
 check("and the check says the ConfigMap may be left", any(r["step"] == "gone" and r["verdict"] == odl.FAIL
                                                           and "community" in r["note"] for r in dc.results),
       str(dc.results))
+check("one_desk_live's server table is ticket_site's, so its page step reads the names the page shows (#1353)",
+      odl.SERVERS == ts.SERVER_NAMES, f"{odl.SERVERS} != {ts.SERVER_NAMES}")
+_names = {"community": "cm-c", "private": "cm-p"}
+_ok = [{"name": "cm-c", "cluster": "community", "server": "attackme"},
+       {"name": "cm-p", "cluster": "private", "server": "presenters"}]
+check("the page step passes rows under their cluster and server, and fails a row with no server or another one",
+      odl.judge_rows(_ok, _names)[0]
+      and not odl.judge_rows([_ok[0], {"name": "cm-p", "cluster": "private"}], _names)[0]
+      and not odl.judge_rows([_ok[0], {"name": "cm-p", "cluster": "private", "server": "attackme"}], _names)[0],
+      str(odl.judge_rows(_ok, _names)))
 check("one_desk_live refuses one context for both clusters, and a stamp that is not a name",
       odl.main(["--community-context", "a", "--private-context", "a"]) == 2
       and odl.main(["--community-context", "a", "--private-context", "b", "--stamp", "Bad_Stamp"]) == 2)
