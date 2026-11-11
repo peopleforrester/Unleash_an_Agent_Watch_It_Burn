@@ -77,8 +77,10 @@ proposed = corpus.terms("proposed")
 check(f"COC_TERMS decodes to corpus.terms('proposed'), all {len(proposed)} entries in order", terms == proposed,
       f"page only (ROT13): {sorted(codecs.encode(t, 'rot13') for t in set(terms) - set(proposed))}; "
       f"spike only (ROT13): {sorted(codecs.encode(t, 'rot13') for t in set(proposed) - set(terms))}")
+# ROT13 turns ASCII letters alone, so an entry with none (a coded number such as 1488, the finger emoji, the runic
+# and swastika symbols #1316 added) reads the same encoded; every entry with an ASCII letter must not.
 check("the literal is ROT13, so the page source does not display the terms",
-      not set(rot.split(",")) & set(proposed))
+      not {t for t in set(rot.split(",")) & set(proposed) if any(c.isascii() and c.isalpha() for c in t)})
 check("COC_TERMS is decoded by rotating ASCII letters by 13 and nothing else",
       ".map(function(w){return w.replace(/[a-z]/gi,function(c){var b=c<='Z'?65:97;"
       "return String.fromCharCode((c.charCodeAt(0)-b+13)%26+b);});});" in page)
@@ -130,7 +132,10 @@ check("the Go build still names const defaultProfanityROT13, decoded by rot13 in
       m is not None and "var DefaultProfanity = rot13(defaultProfanityROT13)" in go)
 if m:
     lines = [ln for ln in m.group(1).splitlines() if not ln.strip().startswith("//")]
-    go_terms = [codecs.decode(t, "rot13") for t in "".join(re.findall(r'"([^"]*)"', "\n".join(lines))).split(",")]
+    # Go writes a letter outside ASCII as a \\u or \\U escape (the finger emoji, the runic and swastika symbols).
+    go_text = re.sub(r"\\u([0-9a-fA-F]{4})|\\U([0-9a-fA-F]{8})", lambda e: chr(int(e.group(1) or e.group(2), 16)),
+                     "".join(re.findall(r'"([^"]*)"', "\n".join(lines))))
+    go_terms = [codecs.decode(t, "rot13") for t in go_text.split(",")]
     check("the Go build's DefaultProfanity is the page's list, entry for entry and in order", go_terms == terms,
           f"Go only (ROT13): {sorted(codecs.encode(t, 'rot13') for t in set(go_terms) - set(terms))}; "
           f"page only (ROT13): {sorted(codecs.encode(t, 'rot13') for t in set(terms) - set(go_terms))}")

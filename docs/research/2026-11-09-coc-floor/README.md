@@ -287,7 +287,7 @@ config is written `$$`. https://github.com/open-telemetry/opentelemetry-collecto
   guard-proxy's order. The figures on this page are the 2026-11-09 measurement of the 144. On the abuse set the longer
   list catches 112 of 155, one more Portuguese text, and it still flags no stage text. `proposed_pattern()` groups
   the alternatives by their first character, as guard-proxy does, so a 4,000-character run of `$` costs 0.02 s of
-  CPU, not 0.17 s. `portable_pattern()` is factored on shared leading pieces, 95,245 characters in place of 212,409,
+  CPU, not 0.17 s. `portable_pattern()` is factored on shared leading pieces, 95,297 characters in place of 212,409,
   and `name_pattern()` is that form cut to what a name or a label can hold, 52,863 characters, for the admission
   policy, whose CEL cost grows with the pattern's length.
 - A refusal says what happened in plain words ("Keep it kind: that message has words the code of conduct rules out,

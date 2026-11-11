@@ -235,7 +235,20 @@ def portable_pattern(terms: list[str] | None = None) -> str:
         classes = re.compile(r"\[[^\]]*" + re.escape(latin) + r"[^\]]*\]")
         alts = classes.sub(lambda m: f"(?:{m.group(0)}|{other}|\\\\u{ord(other):04x})", alts)
     hexd = "[0-9a-f]" * 4  # not {4}: no brace reaches the collector's Helm-templated config
-    return r"(?i)(^|[^a-z0-9]|\\[nrt]|\\u" + hexd + r")((?:" + _compact(alts) + r")s?)($|[^a-z0-9])"
+    return r"(?i)(^|[^a-z0-9]|\\[nrt]|\\u" + hexd + r")((?:" + _compact(alts) + r")s?)" + _trailing_edge()
+
+
+def _trailing_edge() -> str:
+    """Group 3, what ends a word: the text's end or a character that is not a letter or a digit, less each letter of
+    _RE2_UNFOLDED and its JSON escape, which the folded floor reads as a letter (the dotless i is an i). Without that a
+    shorter term ending before a dotless i would match where the floor reads on into a longer one ("shitt" before
+    "\u0131est"). RE2 has no lookahead, so a backslash ends a word only when what follows it is not that escape."""
+    if len(_RE2_UNFOLDED) != 1:
+        raise ValueError("the trailing edge spells out one escape it is not; more letters need more of them")
+    (other,) = _RE2_UNFOLDED.values()
+    esc = f"u{ord(other):04x}"
+    not_esc = ["\\\\$", "\\\\[^u]"] + [f"\\\\{esc[:i]}[^{esc[i]}]" for i in range(1, len(esc))]
+    return "($|[^a-z0-9" + other + "\\\\]|" + "|".join(not_esc) + ")"
 
 
 # What an object's name or label can hold: a DNS name or label is letters, digits, ".", "-" and "_" (a label key also

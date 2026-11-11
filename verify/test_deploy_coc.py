@@ -211,7 +211,10 @@ def json_escaped_name(term: str) -> str:
     only the parsed string does."""
     raw = json.dumps(deployment("joker-placeholder", GOOD_IMAGE))
     first = word(term)[0]
-    return raw.replace('"name": "joker-placeholder"', '"name": "joker-\\u%04x%s"' % (ord(first), word(term)[1:]), 1)
+    # A character past U+FFFF (the finger emoji, #1316) is two escapes in JSON, its UTF-16 surrogate pair.
+    units = first.encode("utf-16-be")
+    escaped = "".join("\\u%04x" % int.from_bytes(units[i:i + 2], "big") for i in range(0, len(units), 2))
+    return raw.replace('"name": "joker-placeholder"', '"name": "joker-%s%s"' % (escaped, word(term)[1:]), 1)
 
 
 FIELDS = {

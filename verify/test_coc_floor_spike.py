@@ -50,6 +50,10 @@ LITERAL_FILES = ("verify/agent_probe.py", "verify/topic_cases.py",
 MIN_PER_SOURCE = {"kubecon-prompt": 10, "page-text": 300, "replay-prompt": 10, "catalog-prompt": 5, "probe-prompt": 10,
                   "desk-ticket": 5, "witch-name": 1000, "tool-data": 20, "agent-prompt": 100, "cluster-data": 50}
 
+# The ports' markers, as verify/coc_pattern_copies.py names them.
+PORT_START = "# --- the code-of-conduct floor (#1269, part of #1267) "
+PORT_END = "# --- end of the code-of-conduct floor "
+
 failures: list[str] = []
 
 
@@ -79,9 +83,20 @@ def main() -> int:
         check(not hits, f"the {name} term floor flags none of the {len(stage)} stage texts ({len(hits)} flagged)")
 
     f = floor.Floor("proposed")
+    # The two ports of floor.py (#1269) carry the term list itself, ROT13-encoded; ROT13 leaves an entry with no ASCII
+    # letter as it is (1488, the finger emoji, #1316), so the list's own literal is not stage text and is left out.
+    port_lines = {}
+    for path in LITERAL_FILES:
+        text = (REPO / path).read_text(encoding="utf-8")
+        if PORT_START in text:
+            port_lines[path] = (text[:text.index(PORT_START)].count("\n") + 1,
+                                text[:text.index(PORT_END)].count("\n") + 1)
     literals = [(path, node.lineno, node.value) for path in LITERAL_FILES
                 for node in ast.walk(ast.parse((REPO / path).read_text(encoding="utf-8")))
-                if isinstance(node, ast.Constant) and isinstance(node.value, str)]
+                if isinstance(node, ast.Constant) and isinstance(node.value, str)
+                and not port_lines.get(path, (0, -1))[0] <= node.lineno <= port_lines.get(path, (0, -1))[1]]
+    check(set(port_lines) == {"gitops/ai-layer/workshop-mcp-server.py", "gitops/ai-layer/ticket_site.py"},
+          f"the two ports' markers ({PORT_START.strip()!r}) are found where the literals are read ({sorted(port_lines)})")
     flagged = [(p, n, v[:120]) for p, n, v in literals if f.spans(v)]
     for p, n, v in flagged[:10]:
         print(f"     {p}:{n} {v!r}")
