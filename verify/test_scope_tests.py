@@ -321,14 +321,18 @@ FIXTURE_TEST = ('import pathlib, sys\n'
 TIER_HEAD = "# SUITE: e2e\n# E2E TIER: tools\n"
 STUB = "#!/bin/sh\nexit 0\n"
 NODE24 = '#!/bin/sh\ncase "$1" in -p) echo 24 ;; --version) echo v24.22.0 ;; esac\n'
-FETCH_STUB = '#!/usr/bin/env bash\necho "fixture fetch ran" >>"$FETCH_LOG"\n'
+# The image's stand-in (#1188): logs the call, then runs the runner as the container does, with WIB_E2E_TOOLS set.
+IMAGE_STUB = ('#!/usr/bin/env bash\necho "fixture image ran" >>"$FETCH_LOG"\nshift\n'
+              'mkdir -p "${TMPDIR}/image-tools/bin"\n'
+              'WIB_E2E_TOOLS="${TMPDIR}/image-tools" exec bash "$(dirname "$0")/run-e2e-tools.sh" "$@"\n')
 FIXTURE_MAP = """full:
   - verify/run-tests.sh
   - verify/run-e2e-tools.sh
   - verify/scope_tests.py
   - verify/no-cloud.sh
   - verify/ensure-submodules.sh
-  - verify/fetch-e2e-tools.sh
+  - verify/e2e-image.sh
+  - verify/e2e_image.py
   - verify/playwright_browsers.py
 unread:
   - notes.md
@@ -350,7 +354,8 @@ def fixture(tmp: pathlib.Path) -> tuple[pathlib.Path, str]:
     for name in ("run-tests.sh", "run-e2e-tools.sh", "scope_tests.py", "no-cloud.sh", "ensure-submodules.sh",
                  "tf_plugin_cache.py", "artifact_cache.py"):
         shutil.copy2(VERIFY / name, v / name)
-    (v / "fetch-e2e-tools.sh").write_text(FETCH_STUB)
+    (v / "e2e-image.sh").write_text(IMAGE_STUB)
+    (v / "e2e_image.py").write_text("import sys\nsys.exit(0)\n")
     (v / "playwright_browsers.py").write_text("import sys\nsys.exit(0)\n")
     for area in ("alpha", "beta"):
         (root / area).mkdir()
@@ -424,7 +429,7 @@ with tempfile.TemporaryDirectory() as t:
           rc == 0 and ran(out) == ALL_OFFLINE and "scope:" not in out, out)
     rc, out = run(root, tmp, "run-e2e-tools.sh", None)
     check(f"without HECATON_BASE_SHA run-e2e-tools.sh runs the offline suite and every tier test (exit {rc})",
-          rc == 0 and ALL_E2E | ALL_OFFLINE <= ran(out) and "fixture fetch ran" in out
+          rc == 0 and ALL_E2E | ALL_OFFLINE <= ran(out) and "fixture image ran" in out
           and "3 checks ran (the offline suite and 2 tier tests)" in out, out)
 
     commit(root, "alpha/data.txt", "alpha 2\n")
@@ -437,15 +442,15 @@ with tempfile.TemporaryDirectory() as t:
     rc, out = run(root, tmp, "run-e2e-tools.sh", base)
     check(f"run-e2e-tools.sh runs test_alpha.py and test_tier_alpha.py, and nothing of beta's (exit {rc})",
           rc == 0 and ran(out) == {"run-tests.sh (the offline suite)", "test_alpha.py", "test_tier_alpha.py"}, out)
-    check("it fetched the tools, since a tier test runs, and says how many tier tests it left",
-          "fixture fetch ran" in out and "1 of the 2 tier tests; the other 1 read nothing it touched" in out
+    check("it ran the tier in the image, since a tier test runs, and says how many tier tests it left",
+          "fixture image ran" in out and "1 of the 2 tier tests; the other 1 read nothing it touched" in out
           and "  test_tier_alpha.py: reads alpha/data.txt" in out, out)
 
     alpha_base = git(root, "rev-parse", "HEAD")
     commit(root, "notes.md", "more\n")
     rc, out = run(root, tmp, "run-e2e-tools.sh", alpha_base)
-    check(f"with only an unread path changed, no test runs and the tools are not fetched (exit {rc})",
-          rc == 0 and ran(out) == {"run-tests.sh (the offline suite)"} and "fixture fetch ran" not in out
+    check(f"with only an unread path changed, no test runs and no image is run (exit {rc})",
+          rc == 0 and ran(out) == {"run-tests.sh (the offline suite)"} and "fixture image ran" not in out
           and "no tier test reads what the change touched" in out
           and "0 of the 2 tier tests" in out and "0 of the 2 offline tests" in out, out)
 
@@ -457,7 +462,7 @@ with tempfile.TemporaryDirectory() as t:
           and "running every test" in out, out)
     rc, out = run(root, tmp, "run-e2e-tools.sh", notes_base)
     check(f"and run-e2e-tools.sh runs everything too (exit {rc})",
-          rc == 0 and ALL_E2E | ALL_OFFLINE <= ran(out) and "fixture fetch ran" in out, out)
+          rc == 0 and ALL_E2E | ALL_OFFLINE <= ran(out) and "fixture image ran" in out, out)
 
     runner_base = git(root, "rev-parse", "HEAD")
     commit(root, "gamma/new.txt", "new\n")
