@@ -70,7 +70,9 @@ LABEL = {"rbac_scoped": "RBAC scope", "kyverno": "Kyverno", "kubearmor": "KubeAr
 GROUPS = {"ai": ("input", "output", "mcp", "budget"), "all": ("k8s", "agency", "input", "output", "mcp", "budget")}
 # How many steps each switch runs, each one saying which clusters it changed.
 STEPS = {"ai": 2, "all": 4}
-ROLE_GROUPS = {"k8s", "agency", "rbac"}  # each writes the workshop-agent Role, so each can move the other's field
+# k8s and rbac apply c5 or c8 over whatever Role is there, so either can move least privilege's field too. agency keeps
+# each cluster's Secret rule (#1358, #1362): it reads the Role and never moves RBAC scope.
+ROLE_GROUPS = {"k8s", "rbac"}
 failures: list[str] = []
 
 
@@ -93,6 +95,12 @@ COMMITTED = next(d for d in yaml.safe_load_all(GATEWAY.read_text(encoding="utf-8
                  and d["metadata"]["name"] == "agentgateway-c7-config")["data"]["config.yaml"]
 if "'true' # c7-rule" not in COMMITTED:
     sys.exit(f"ANCHOR MISSING: {GATEWAY.relative_to(REPO)} has no line \"'true' # c7-rule\"")
+# The workshop-agent Roles the switches apply, as the challenge-fixes ConfigMap ships them: the fake answers a Role
+# read with the one a cluster holds, so the agency steps pick c5/c6/c8 from its real Secret rule.
+CHALLENGES = next(d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8"))
+                  if d and d.get("kind") == "ConfigMap" and d["metadata"]["name"] == "challenge-fixes")["data"]
+ROLES = {f: yaml.safe_load(CHALLENGES[f]) for f in ("c5-scoped-role.yaml", "c6-least-privilege-role.yaml",
+                                                     "c6-broad-secrets-role.yaml", "c8-broad-role.yaml")}
 NARROWED = COMMITTED.replace("'true' # c7-rule", "'mcp.tool.name == \"get_weather\"' # c7-rule")
 
 # A kubectl that plays both clusters. MODE: linked, unlinked (no peer Secret), peer-down (the peer cannot be reached).
@@ -130,7 +138,7 @@ def controls(c):
         "networkpolicy": c["netpol"], "kyverno": c["policies"]["restrict-image-registries"] == "Deny",
         "kubearmor": c["kubearmor"], "falco": True, "tool_allowlist": narrowed or evil(c) == ["get_weather"],
         "rbac_scoped": c["role"] in ("c5-scoped-role.yaml", "c6-least-privilege-role.yaml"),
-        "agency_scoped": c["role"] == "c6-least-privilege-role.yaml"}}
+        "agency_scoped": c["role"] in ("c6-least-privilege-role.yaml", "c6-broad-secrets-role.yaml")}}
 def proxy(c, path, key=None):
     u = urllib.parse.urlsplit(path)
     if u.path == "/controls":
@@ -164,7 +172,7 @@ elif "--raw" in a:
 elif "apply" in a or "delete" in a:
     f = os.path.basename(a[a.index("-f") + 1])
     on = "apply" in a
-    if f in ("c5-scoped-role.yaml", "c6-least-privilege-role.yaml", "c8-broad-role.yaml"):
+    if f in S["roles"]:
         c["role"] = f; c.setdefault("roles", []).append(f)
     elif f == "c3-kubearmor-policy.yaml":
         c["kubearmor"] = on
@@ -173,6 +181,8 @@ elif "apply" in a or "delete" in a:
     else:
         sys.stderr.write("fake kubectl: no such file " + f + "\n"); sys.exit(1)
     print(f + (" configured" if on else " deleted"))
+elif "get" in a and "role" in a:
+    print(json.dumps(S["roles"][c["role"]]))
 elif "validatingpolicy" in a:
     p = a[a.index("validatingpolicy") + 1]
     if "patch" in a:
@@ -240,7 +250,7 @@ def controls_of(c: dict) -> dict:
     evil = c["agent"]["spec"]["declarative"]["tools"][1]["mcpServer"]["toolNames"]
     return {"ai": dict(c["guards"]), "infra": {
         "rbac_scoped": c["role"] in ("c5-scoped-role.yaml", "c6-least-privilege-role.yaml"),
-        "agency_scoped": c["role"] == "c6-least-privilege-role.yaml",
+        "agency_scoped": c["role"] in ("c6-least-privilege-role.yaml", "c6-broad-secrets-role.yaml"),
         "kyverno": c["policies"]["restrict-image-registries"] == "Deny",
         "kubearmor": c["kubearmor"], "networkpolicy": c["netpol"],
         "tool_allowlist": narrowed or evil == ["get_weather"]}}
@@ -269,7 +279,7 @@ def run(cmd: str, args: tuple[str, ...] = (), start_on: bool = False, mode: str 
             (bindir / b).chmod(0o755)
         start = {"this": cluster("this", start_on), PEER: cluster(PEER, start_on)}
         state = pathlib.Path(tmp, "state")
-        state.write_text(json.dumps(start))
+        state.write_text(json.dumps({**start, "roles": ROLES}))
         env = {**os.environ, "HOME": str(home), "PATH": f"{bindir}:{os.environ['PATH']}", "WIB_CLUSTER_NAME": HERE,
                "CALLS": str(pathlib.Path(tmp, "calls")), "STATE": str(state), "MODE": mode,
                "SLEPT": str(pathlib.Path(tmp, "slept"))}
@@ -351,6 +361,11 @@ for name in NAMES + EXTRA:
         owned = {f for g in mine for f in FIELDS[g]}
         if ROLE_GROUPS & set(mine):
             owned |= {("infra", "rbac_scoped"), ("infra", "agency_scoped")}
+        if name == "agency":
+            seq = [(c["cluster"], "read" if "get" in c["args"] else "apply") for c in calls
+                   if c["args"][:5] == ["-n", "agent", "get", "role", "workshop-agent"] or "apply" in c["args"]]
+            check(f"{cmd}: reads the workshop-agent Role on each cluster, then applies there (#1358, #1362)",
+                  seq == [("this", "read"), ("this", "apply"), (PEER, "read"), (PEER, "apply")], str(seq))
         not_moved = [f"{ctx} {k}" for ctx in ("this", PEER) for g in mine for k in FIELDS[g]
                      if flat(r["end"][ctx])[k] is not want]
         moved = [f"{ctx} {k}" for ctx in ("this", PEER) for k, v in flat(r["end"][ctx]).items()

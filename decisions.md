@@ -54334,3 +54334,39 @@ CD rolls web-terminal, the next run on the issue runs, from the private terminal
 `-off` for k8s, agency, input, output, mcp, budget, topic, ai and all, and `guards-on`/`guards-off` and one
 `guard-<name>-on/off` pair as aliases, leaving both at the start state, or `python3 verify/stage_switch_run.py` with
 its closing pair. Switching the KubeCon clusters on rehearsal day was not done from a draft.
+
+## 2026-11-11 · #1350 · run 20466 · Run 20435's skip-markers failure, and the rename carried onto #1358 and #1362's agency steps
+
+**Why run 20435 failed.** The skip-markers gate counts `exit 2` on any non-comment line of a test as exit-as-skip.
+`verify/test_guardrails_names.py` had it in a check's message, `guardrails-k8s-on soon: exit 2, its usage line ...`,
+which tests that a bad seconds argument is refused with the usage code. Nothing was skipped; the message now says
+`the usage code 2`, and the gate's own counter (`skipmarks.count`, run here against origin/staging for every changed
+file) finds no added marker.
+
+**Rebased onto staging.** Staging had moved under run 20435's branch: #1358 and #1362 made guard-agency-on and
+guard-agency-off read each cluster's workshop-agent Role and keep its Secret rule (`_keep_secrets`, `_agency_on`,
+`_agency_off`). The rebase carried that into the renamed `guardrails-agency-on/off` (git merged the bodies; the two
+comment conflicts were resolved keeping staging's steps and #1350's `_admission`, with the new names). Run 20435's
+`guardrails-all-on/off` still applied c6 and c5 directly, so they now call `_both _agency_on` and `_both _agency_off`
+too. The order still holds: all-on runs k8s (c5, RBAC on) and then agency, which reads the scoped Role and applies
+c6-least-privilege-role.yaml; all-off runs agency off, which reads that Role and applies c5, and then k8s off (c8).
+`test_guard_switch_both.py` and `test_guard_switch_controls.py`, which #1358 and #1362 extended, were renamed to the new
+names as run 20435 did the rest. The new test's fake kubectl now answers the Role read with the Role a cluster holds,
+from the challenge-fixes ConfigMap, and models least privilege as c6-least-privilege or c6-broad-secrets. It checks that
+guardrails-agency-on/off read the Role on each cluster before they apply there, and that agency never moves RBAC scope
+(256 checks).
+
+**Tests run**, each once and passing: `test_guardrails_names.py`, `test_guard_switch_both`, `test_guard_switch_controls`,
+`test_guards_all_both`, `test_guardrails_switch`, `test_guard_commands_echo`, `test_terminal_quiet`, `test_topic_guard`,
+`test_finale_cap`, `test_finale_cap_peer`, `test_kubecon_probe`, `test_stage_switch_run`,
+`test_stage_switch_night_before`, `test_challenge_fallbacks`, `test_coc_admission`, `test_c7_gateway_toggle`,
+`test_guard_mcp_both`, `test_guard_input_both`, `test_evil_tools_by_name`, `test_topic_guard_proxy`,
+`test_fetch_inventory`, `test_agency_role_check`, `test_ai_layer_role_sync`, `test_room_reader_rbac`,
+`test_scope_tests` and `test_test_map`; `scope_tests.py check` reports 0 problems. The full scoped `run-tests.sh` and
+`run-e2e-tools.sh` are left to validation.
+
+**Live.** This run changed nothing on either cluster. Michael asked on the issue that both be left at the talk's start
+state. A read of guard-proxy's `/controls` on each, through the API server's Service proxy, at the end of the run:
+every AI guard (output, input block-list, injection classifier, budget, topic) false on both, and networkpolicy,
+kyverno, kubearmor, tool_allowlist, rbac_scoped and agency_scoped false on both (falco, not a switch, true on the
+private cluster). Run 20435's Not yet run items stand, and #1351 runs the switches live after promotion.
