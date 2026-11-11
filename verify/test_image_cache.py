@@ -340,12 +340,15 @@ try:
             start = int(rng.removeprefix("bytes=").rstrip("-")) if rng else 0
             status = store["ranged"] if rng else 200
             body = big[start:] if status == 206 else big
+            # The cut is taken before a byte of the answer goes out (#1324). A client that refuses a 200 leaves on its
+            # headers, and the next case puts its own cuts in the store: a handler that took its cut after the headers
+            # took one of those on a loaded host, the next case got one cut fewer, and its fetch finished.
+            cut = store["cuts"].pop(0) if store["cuts"] else None
             self.send_response(status)
             self.send_header("Content-Length", str(len(body)))
             if status == 206:
                 self.send_header("Content-Range", f"bytes {start}-{len(big) - 1}/{len(big)}")
             self.end_headers()
-            cut = store["cuts"].pop(0) if store["cuts"] else None
             self.wfile.write(body if cut is None else body[:cut])
 
     real_sleep, ic._sleep = ic._sleep, lambda s: None

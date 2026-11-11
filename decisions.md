@@ -51650,3 +51650,26 @@ words, as test_kubecon_probe.py's 424 re-send check holds, so the check now read
 hand and missed this reader. This time every offline test whose code names a path the change touches, 152 of them, ran
 through `run-tests.sh` with `HECATON_TEST_FILES`, as the gate passes them: "ALL OFFLINE RENDER-GATE TESTS GREEN", exit 0.
 `test_test_map.py` passed alone. This fix touches only a test no cluster runs, so it needs no live check.
+
+## 2026-11-11 · #1324 · run 20229 · test_image_cache.py's cut store took the next case's cut on a loaded host
+
+**What failed.** Hecaton's heavy gate went red on staging `49387d36` on the offline suite alone, and inside it on
+`test_image_cache.py` alone. The gate's log is the gate user's and this run cannot read it. The test passed here every
+time it ran, alone, through `run-tests.sh` with `HECATON_TEST_FILES`, under the gate's bare environment, with TMPDIR
+outside the worktree as the gate sets it, and under umasks 077, 027 and 002.
+
+**Cause.** A race in the fake blob store #1320 added. Its handler took the case's next cut from `store["cuts"]` after
+it had sent the headers. In the case "a resume answered 200 is refused", the client reads the 200's headers, raises
+`RangeRefused` and leaves without the body, so the test went on to the next case, which put nine cuts of 100 bytes in
+the store, while the 200's handler thread had still to reach its `pop`. On a loaded host, as the gate's (four checks at
+a time), that thread took one of the nine. The next case then got eight cuts, its ninth answer came whole, the fetch
+finished, and "a body still short after 8 resumes fails" read NO ERROR. A 0.3 s sleep put before the `pop` makes it
+fail that way every time: `FAIL  a body still short after 8 resumes fails, naming where it ended  (NO ERROR)`.
+
+**Fix.** The handler takes its cut before it sends a byte, so a client cannot leave before the cut is taken, and a
+case's cuts are its own. With a 0.5 s sleep put after the headers instead, the test passes: "All image cache checks
+passed". `image_cache.py` itself is unchanged; the code under test was right.
+
+**Tests.** `python3 verify/test_image_cache.py`, alone: "All image cache checks passed", exit 0. The test reads no new
+path, so the scope map is unchanged. The scoped offline suite and `bash verify/run-e2e-tools.sh` are left to the gate.
+This change touches only a test no cluster runs, so it needs no live check.
