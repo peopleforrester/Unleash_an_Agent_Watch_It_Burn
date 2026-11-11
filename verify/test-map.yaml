@@ -2144,6 +2144,16 @@ rules:
       - verify/pii_scrub_cases.py
     tests:
       - verify/test_collector_pii_scrub.py
+  - name: test_collector_relay_live_checks.py
+    paths:
+      - gitops/bootstrap/apps/otel-collector-attendee.yaml
+      - gitops/bootstrap/apps/otel-collector-burn.yaml
+      - gitops/bootstrap/apps/otel-collector.yaml
+      - gitops/otel-collector
+      - gitops/otel-collector/**
+      - verify/test_collector_relay_live.py
+    tests:
+      - verify/test_collector_relay_live_checks.py
   - name: test_collector_startup_budget.py
     paths:
       - gitops/bootstrap/apps/otel-collector-attendee.yaml
