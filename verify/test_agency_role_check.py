@@ -1,11 +1,12 @@
 # ABOUTME: Offline gate for verify/agency_role_check.py (#1151): run against the c5, c6 and c8 workshop-agent Roles of
-# ABOUTME: resources.yaml through a kubectl on PATH, only c6 reads as applied, and with no context it fails, reading nothing.
+# ABOUTME: resources.yaml through a kubectl on PATH, only the two c6 read as applied, and with no context it fails.
 """The check reads the workshop-agent Role on each named cluster and prints applied or not applied. Here a kubectl on
 PATH plays one cluster per context, each holding one Role from the challenge-fixes ConfigMap in
 gitops/ai-layer/resources.yaml (or the Role the file ships at its top), returned as the API server would return it.
 
 Held here:
   * c6-least-privilege-role.yaml reads as applied, and so does the same Role with its rules split and reordered;
+  * c6-broad-secrets-role.yaml, guard-agency-on's Role where RBAC is off (#1362), reads as applied, named;
   * c5-scoped-role.yaml, c8-broad-role.yaml, c8-scoped-role.yaml and the shipped Role read as not applied, each named,
     with create or patch on Deployments or Pods granted;
   * c6 with one more rule reads as not applied and matches no ConfigMap Role;
@@ -32,7 +33,8 @@ no_cloud.setup()
 REPO = pathlib.Path(__file__).resolve().parent.parent
 CHECK = REPO / "verify/agency_role_check.py"
 RESOURCES = REPO / "gitops/ai-layer/resources.yaml"
-KEYS = ("c5-scoped-role.yaml", "c6-least-privilege-role.yaml", "c8-broad-role.yaml", "c8-scoped-role.yaml")
+KEYS = ("c5-scoped-role.yaml", "c6-least-privilege-role.yaml", "c6-broad-secrets-role.yaml", "c8-broad-role.yaml",
+        "c8-scoped-role.yaml")
 
 failures: list[str] = []
 
@@ -44,7 +46,7 @@ def check(name: str, cond: bool, detail: str = "") -> None:
 
 
 def load_roles() -> tuple[dict[str, dict], dict]:
-    """The four ConfigMap Roles by key, and the shipped workshop-agent Role at the top of resources.yaml."""
+    """The five ConfigMap Roles by key, and the shipped workshop-agent Role at the top of resources.yaml."""
     docs = [d for d in yaml.safe_load_all(RESOURCES.read_text()) if d]
     cm = next((d for d in docs if d.get("kind") == "ConfigMap" and d["metadata"]["name"] == "challenge-fixes"), None)
     if cm is None:
@@ -101,7 +103,8 @@ def main() -> int:
     # c6 with one rule more: no workload writes, but not the Role guard-agency-on applies.
     extra = copy.deepcopy(c6)
     extra["rules"].append({"apiGroups": [""], "resources": ["events"], "verbs": ["list"]})
-    cases = {"ctx-c6": c6, "ctx-c6-split": split, "ctx-c5": roles["c5-scoped-role.yaml"],
+    cases = {"ctx-c6": c6, "ctx-c6-split": split, "ctx-c6-broad": roles["c6-broad-secrets-role.yaml"],
+             "ctx-c5": roles["c5-scoped-role.yaml"],
              "ctx-c8-broad": roles["c8-broad-role.yaml"], "ctx-c8-scoped": roles["c8-scoped-role.yaml"],
              "ctx-shipped": shipped, "ctx-c6-extra": extra}
 
@@ -123,6 +126,7 @@ def main() -> int:
         want = {
             "ctx-c6": "applied: the workshop-agent Role is c6-least-privilege-role.yaml",
             "ctx-c6-split": "applied: the workshop-agent Role is c6-least-privilege-role.yaml",
+            "ctx-c6-broad": "applied: the workshop-agent Role is c6-broad-secrets-role.yaml",
             "ctx-c5": "not applied: the workshop-agent Role is c5-scoped-role.yaml "
                       "(create or patch on Deployments or Pods: granted)",
             "ctx-c8-broad": "not applied: the workshop-agent Role is c8-broad-role.yaml "

@@ -14,6 +14,9 @@ Checked here, with a kubectl on PATH that plays two clusters:
   * guard-agency-off reads each cluster's Role first and keeps its Secret rule (#1358): c8-broad-role.yaml where RBAC is
     off, c5-scoped-role.yaml where it is on, so guards-off, guardrails-off, guard-agency-off (the 2026-11-11 16:14Z
     reset) ends broad on both, and a Role it cannot read is not written;
+  * guard-agency-on keeps each cluster's Secret rule too (#1362): c6-least-privilege-role.yaml where RBAC is on,
+    c6-broad-secrets-role.yaml where it is off, so guard-agency-on then guard-agency-off from the start state (after
+    guardrails-off) ends with the shipped broad Role and RBAC scope off on both clusters;
   * what the two commands ask of the peer is inside its guardrails-switch grant, and that grant is #774's plus
     #1148's one guard-proxy Service proxy rule;
   * guardrails-on and guardrails-off make the same kubectl calls and print the same output as before #1147, held to
@@ -118,7 +121,7 @@ elif "/controls" in " ".join(a):
     print(json.dumps({"ai": {"output": False}, "infra": {
         "kyverno": s.get("restrict-image-registries") == "Deny",
         "rbac_scoped": role in ("c5-scoped-role.yaml", "c6-least-privilege-role.yaml"),
-        "agency_scoped": role == "c6-least-privilege-role.yaml"}, "host": ctx + ".example"}))
+        "agency_scoped": role in ("c6-least-privilege-role.yaml", "c6-broad-secrets-role.yaml")}, "host": ctx + ".example"}))
 json.dump(state, open(os.environ["STATE"], "w"))
 '''
 
@@ -205,10 +208,10 @@ ROLE = {"guard-agency-on": "c6-least-privilege-role.yaml", "guard-agency-off": "
 # The Role each cluster holds before the command, in talk order: guard-agency-on after guardrails-on's c5, guard-agency-off
 # after guard-agency-on's c6. The checks below run each command from there.
 TALK_START = {"guard-agency-on": "c5-scoped-role.yaml", "guard-agency-off": "c6-least-privilege-role.yaml"}
-# The calls each makes on two linked clusters: two reads of the peer Secret, then per cluster guard-agency-off's read of
-# the Role (#1358) and the apply, then the closing /controls read on each (#1349).
-LINKED_CALLS = {"guard-agency-on": 6, "guard-agency-off": 8}
-STEP = {"guard-agency-on": "_both _apply c6-least-privilege-role.yaml", "guard-agency-off": "_both _agency_off"}
+# The calls each makes on two linked clusters: two reads of the peer Secret, then per cluster the read of the Role
+# (#1358, #1362) and the apply, then the closing /controls read on each (#1349).
+LINKED_CALLS = {"guard-agency-on": 8, "guard-agency-off": 8}
+STEP = {"guard-agency-on": "_both _agency_on", "guard-agency-off": "_both _agency_off"}
 
 print("== _both is in .guardlib, and the two commands use it ==")
 lib = helpers.get(".guardlib", "")
@@ -219,8 +222,10 @@ for cmd, f in ROLE.items():
     body = helpers.get(cmd, "")
     check(f"{cmd} switches through {STEP[cmd]}, and runs no kubectl of its own",
           STEP[cmd] in body and "kubectl" not in body, body)
-check(".guardlib defines _agency_off, which applies through _apply", re.search(r"^_agency_off\(\) \{", lib, re.M)
-      is not None and '_apply "$f" "$@"' in lib)
+check(".guardlib defines _keep_secrets, which applies through _apply, and _agency_on and _agency_off on it",
+      re.search(r"^_keep_secrets\(\) \{", lib, re.M) is not None and '_apply "$f" "$@"' in lib
+      and "_agency_on() { _keep_secrets c6-broad-secrets-role.yaml c6-least-privilege-role.yaml \"$@\"; }" in lib
+      and "_agency_off() { _keep_secrets c8-broad-role.yaml c5-scoped-role.yaml \"$@\"; }" in lib)
 check("the KubeCon terminals run gitops/ai-layer/web-terminal/entrypoint.sh: ai-layer mounts it over the image's copy",
       "entrypoint.sh=web-terminal/entrypoint.sh" in (REPO / "gitops/ai-layer/kustomization.yaml").read_text(encoding="utf-8")
       and "{ name: entrypoint, mountPath: /entrypoint.sh, subPath: entrypoint.sh, readOnly: true }"
@@ -284,6 +289,77 @@ for who in ("this", PEER):
     check(f"guard-agency-off: a Role it cannot read on {who} is not written there, and the run fails",
           r["rc"] == 1 and who not in applied and len(applied) == 1, f"{r['rc']} {applied}\n{r['stdout']}")
 
+def creates_workloads(rules: list[dict]) -> bool:
+    return any(("apps" in x.get("apiGroups", []) and "deployments" in x.get("resources", []))
+               or ("" in x.get("apiGroups", []) and "pods" in x.get("resources", []))
+               for x in rules if {"create", "patch", "*"} & set(x.get("verbs", [])))
+
+
+def secrets_broad(rules: list[dict]) -> bool:
+    return any("" in x.get("apiGroups", []) and "secrets" in x.get("resources", []) and not x.get("resourceNames")
+               for x in rules)
+
+
+def badges(stdout: str) -> dict[str, tuple[str, str]]:
+    """Each cluster's closing /controls line, split into what it reads as on and as off."""
+    out = {}
+    for ln in stdout.splitlines():
+        ln = ln.strip()
+        if ln.startswith("Kubernetes") and ":" in ln:
+            on, _, off = ln.partition("off:")
+            out[len(out)] = (on, off)
+    return out
+
+
+print("== guard-agency-on keeps each cluster's Secret rule: least privilege on never turns RBAC on (#1362) ==")
+c6b = "c6-broad-secrets-role.yaml"
+check(f"challenge-fixes holds {c6b}", c6b in ROLE_RULES, str(sorted(ROLE_RULES)))
+check(f"{c6b} is c6-least-privilege-role.yaml's workload rules with c8-broad-role.yaml's Secret rule",
+      [x for x in ROLE_RULES.get(c6b, []) if "secrets" not in x.get("resources", [])]
+      == [x for x in ROLE_RULES[c6] if "secrets" not in x.get("resources", [])]
+      and [x for x in ROLE_RULES.get(c6b, []) if "secrets" in x.get("resources", [])]
+      == [x for x in ROLE_RULES[c8] if "secrets" in x.get("resources", [])], str(ROLE_RULES.get(c6b)))
+for this0, peer0, want_this, want_peer, why in (
+        (c8, c8, c6b, c6b, "from the start state, the shipped broad Role on both"),
+        (c5, c5, c6, c6, "after guardrails-on, in talk order: RBAC is on"),
+        (c8, c5, c6b, c6, "this cluster broad, the peer scoped: each keeps its own")):
+    r = run("guard-agency-on", "linked", start=this0, start_peer=peer0)
+    applies = [(c["cluster"], c["args"][-1].rsplit("/", 1)[-1]) for c in r["calls"] if c["args"][:1] == ["apply"]]
+    check(f"guard-agency-on {why}: applies {want_this} here and {want_peer} on {PEER}, exit 0",
+          r["rc"] == 0 and applies == [("this", want_this), (PEER, want_peer)], f"{r['rc']} {applies}")
+    reads = [c for c in r["calls"] if c["args"] == ["-n", "agent", "get", "role", "workshop-agent", "-o", "json"]]
+    check(f"guard-agency-on {why}: reads the Role on each cluster before it applies, and prints the read",
+          [c["cluster"] for c in reads] == ["this", PEER] and r["replayed"] == r["calls"], str(r["calls"]))
+    for ctx, start0, want in (("this", this0, want_this), (PEER, peer0, want_peer)):
+        rules = ROLE_RULES[want]
+        check(f"guard-agency-on {why}: {ctx} ends with no create or patch on Deployments or Pods, and its Secret rule "
+              f"as it was", not creates_workloads(rules) and secrets_broad(rules) == secrets_broad(ROLE_RULES[start0]),
+              str(rules))
+for who in ("this", PEER):
+    r = run("guard-agency-on", "linked", start=c8, start_peer=c8, unreadable=who)
+    applied = [c["cluster"] for c in r["calls"] if c["args"][:1] == ["apply"]]
+    check(f"guard-agency-on: a Role it cannot read on {who} is not written there, and the run fails",
+          r["rc"] == 1 and who not in applied and len(applied) == 1, f"{r['rc']} {applied}\n{r['stdout']}")
+
+# The rehearsal #1362 reported: from the start state (guardrails-off after a talk that had scoped both Roles),
+# guard-agency-on, then guard-agency-off.
+r = run("guard-agency-on", "linked", before=("guardrails-off",), start=c5, start_peer=c5)
+applies = [(c["cluster"], c["args"][-1].rsplit("/", 1)[-1]) for c in r["calls"] if c["args"][:1] == ["apply"]]
+read = badges(r["stdout"])
+check("guard-agency-on after guardrails-off applies the broad-Secret least-privilege Role on both clusters",
+      r["rc"] == 0 and applies == [("this", c6b), (PEER, c6b)], f"{r['rc']} {applies}")
+check("and its closing read shows least privilege on and RBAC scope off on both clusters",
+      len(read) == 2 and all("least privilege" in on and "RBAC scope" in off for on, off in read.values()),
+      r["stdout"])
+r = run("guard-agency-off", "linked", before=("guardrails-off", "guard-agency-on"), start=c5, start_peer=c5)
+applies = [(c["cluster"], c["args"][-1].rsplit("/", 1)[-1]) for c in r["calls"] if c["args"][:1] == ["apply"]]
+read = badges(r["stdout"])
+check("guardrails-off, guard-agency-on, guard-agency-off ends with the shipped broad Role on both clusters",
+      r["rc"] == 0 and applies == [("this", c8), (PEER, c8)], f"{r['rc']} {applies}")
+check("and its closing read shows RBAC scope and least privilege off on both, the start state",
+      len(read) == 2 and all("RBAC scope" in off and "least privilege" in off for _on, off in read.values()),
+      r["stdout"])
+
 print("== the peer Secret is there, its cluster cannot be reached ==")
 for cmd, f in ROLE.items():
     r = run(cmd, "peer-down", start=TALK_START[cmd])
@@ -343,11 +419,12 @@ check("the grant is #774's, with #1148's get on guard-proxy's Service proxy alon
                 ("agent", "networkpolicies", "*"): {"get", "list", "watch", "create", "patch", "delete"},
                 ("", "validatingpolicies", "restrict-image-registries"): {"get", "patch"},
                 ("", "validatingpolicies", "deny-external-registries"): {"get", "patch"}}, str(GRANT))
-for cmd, f in ROLE.items():
+for f in (c5, c6, c6b, c8):
     ds = docs(FIXES[f])
     check(f"~/challenges/{f} is the workshop-agent Role in agent alone, the one Role the peer may write",
           [(d["kind"], d["metadata"]["namespace"], d["metadata"]["name"]) for d in ds] == [("Role", "agent", "workshop-agent")])
-    r = run(cmd, "linked", start=TALK_START[cmd])
+for cmd, start0 in [(c, TALK_START[c]) for c in ROLE] + [("guard-agency-on", c8), ("guard-agency-off", c6b)]:
+    r = run(cmd, "linked", start=start0)
     # kubectl apply on an existing Role reads it and patches it; writing rules the switch identity does not hold
     # needs escalate on that Role. The Role exists from git, so no create. guard-agency-off's read is a get (#1358).
     need = {("agent", "roles", "workshop-agent", v) for c in r["calls"] if c["cluster"] == PEER

@@ -1373,7 +1373,9 @@ data:
     # it is a bot that cannot create workloads at all. This Role is c5-scoped-role.yaml (the CEO's record stays out of
     # reach) without create or patch on Deployments and Pods, so deploy_app's apply comes back Forbidden, for a new
     # Joker and for one already there. The reaper's patch on deployments/scale stays, so a Joker that landed before the
-    # fix is still scaled to zero. guard-agency-off applies c5-scoped-role.yaml to put the workload verbs back.
+    # fix is still scaled to zero. guard-agency-on applies it where the RBAC guardrail is on; where it is off it applies
+    # c6-broad-secrets-role.yaml, below (#1362). guard-agency-off gives the workload verbs back with c5-scoped-role.yaml
+    # here and c8-broad-role.yaml there (#1358).
     apiVersion: rbac.authorization.k8s.io/v1
     kind: Role
     metadata:
@@ -1396,6 +1398,33 @@ data:
         resources: ["secrets"]
         resourceNames: ["workshop-agent"]
         verbs: ["get"]
+  c6-broad-secrets-role.yaml: |
+    # Least privilege with the RBAC guardrail still off (#1362): c6-least-privilege-role.yaml's workload verbs and
+    # c8-broad-role.yaml's Secret rule. guard-agency-on applies it where the live workshop-agent Role still reads every
+    # Secret, so turning least privilege on from the start state (after guardrails-off) leaves RBAC off, and
+    # guard-agency-off then reads it as broad and puts c8-broad-role.yaml back: a rehearsal from the start state ends
+    # at the start state. In talk order, after guardrails-on, the Role is scoped and guard-agency-on applies c6.
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: Role
+    metadata:
+      name: workshop-agent
+      namespace: agent
+    rules:
+      - apiGroups: ["apps"]
+        resources: ["deployments"]
+        verbs: ["get", "list"]
+      - apiGroups: ["apps"]
+        resources: ["deployments/scale"]
+        verbs: ["patch"]
+      - apiGroups: [""]
+        resources: ["pods"]
+        verbs: ["get", "list"]
+      - apiGroups: [""]
+        resources: ["configmaps", "services"]
+        verbs: ["create", "get", "list", "patch"]
+      - apiGroups: [""]
+        resources: ["secrets"]
+        verbs: ["get", "list"]
   cloud-credential-probe.yaml: |
     # Challenge 8, "and its cloud credential?" (#203). READ-ONLY: it changes nothing on the cluster or in AWS
     # beyond one five-token Nova Pro reply. It runs as agent-sa, so it gets exactly the AWS credential
