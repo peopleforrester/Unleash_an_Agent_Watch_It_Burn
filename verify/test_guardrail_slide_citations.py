@@ -94,7 +94,7 @@ ALLOWED = [
      "four slides' fails\", not run(broken)[f\"{label} no longer says 'four slides'\"])",
      "the stale wording a self-check puts back"),
     ("verify/test_seg3_timing.py",
-     "names slide 30's retry and the guardrail sets on slides 31 to 43, and no longer the four single guardrail slides.",
+     "names slide 29's retry and the guardrail sets on slides 30 to 42, and no longer the four single guardrail slides.",
      "the docstring naming the stale wording the test bans"),
     ("verify/test_seg3_timing.py",
      "\"four guardrail slides\",",

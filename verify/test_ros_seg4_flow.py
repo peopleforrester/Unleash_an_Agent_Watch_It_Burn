@@ -8,9 +8,9 @@ diagrams as thirty-eight slides and `389c384` retired the appendix, which left 1
 (rounds-agenticburn#170, 2026-11-11) moved the desk's first slide to `#/8` and gave Challenges 3 and 4 title cards, so
 the deck had 129 slides (#1327). Rounds `4627d95` (rounds-agenticburn#172, from Michael's rehearsal of 2026-11-11) moved
 that slide back into Challenge 3, after "AI guardrails", added the slide giving the room the desk and the bottom line
-before Challenge 4, and took four slides out of the close, so the deck has 127 slides: Challenge 3 on `#/42` to `#/67`,
-from its card, Challenge 4 on `#/68` to `#/117`, from its card, the close from `#/118` (#1348). Segments 4 and 5 cite each slide by that URL
-hash, `#/N`; the rest of the file keeps its own count from 1 (#1099's note). This is the copy of the deck the offline
+before Challenge 4, and took the CNCF-floor and three break-it slides out of the close, so the deck has 127
+slides: Challenge 3 on `#/42` to `#/67`, from its card, Challenge 4 on `#/68` to `#/117`, from its card, the close
+from `#/118` (#1348). Segments 4 and 5 cite each slide by that URL hash, `#/N`; the rest of the file keeps its own count from 1 (#1099's note). This is the copy of the deck the offline
 suite holds; verify/test_ros_deck_live.py holds the same file to the deck rounds serves, read live. This test holds:
 
   1. Segment 4's steps, its `- **...**` bullets, cite `#/42` to `#/67`, and segment 5's cite `#/68` to `#/117`, each
