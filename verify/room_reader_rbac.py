@@ -19,9 +19,10 @@ SA = "workshop-mcp"
 READER = "workshop-mcp-room-reader"
 SWAPPED = "workshop-agent"
 # The challenge-fixes keys that replace the workshop-agent Role: the guardrails switch and guard-rbac-on/off
-# (c5-scoped-role, c8-broad-role), guard-agency-on/off (c6-least-privilege-role, c5-scoped-role), and Challenge 8's
-# fix and reset in the lab (c8-scoped-role, c8-broad-role).
-EXPECTED_SWAPS = {"c5-scoped-role.yaml", "c6-least-privilege-role.yaml", "c8-broad-role.yaml", "c8-scoped-role.yaml"}
+# (c5-scoped-role, c8-broad-role), guard-agency-on/off (c6-least-privilege-role or c6-broad-secrets-role, then
+# c5-scoped-role or c8-broad-role, #1362), and Challenge 8's fix and reset in the lab (c8-scoped-role, c8-broad-role).
+EXPECTED_SWAPS = {"c5-scoped-role.yaml", "c6-least-privilege-role.yaml", "c6-broad-secrets-role.yaml",
+                  "c8-broad-role.yaml", "c8-scoped-role.yaml"}
 
 
 def read_kinds(room_read_kinds) -> list[tuple[str, str, str]]:

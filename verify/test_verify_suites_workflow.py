@@ -10,11 +10,12 @@ read green.
 
 #1047: the tools tier reads issues with gh (verify/gh_comments.py, #863), which never reads anonymously, so the e2e
 job sets GH_TOKEN to the run's own token and widens its permissions to contents and issues, both read. The offline
-job reads no issue and keeps the workflow's contents: read alone. Before the tier, the e2e job runs
-verify/ci_chromium_libs.py, which unpacks the libraries and fonts Playwright's Chromium needs and Tanjiro lacks.
+job reads no issue and keeps the workflow's contents: read alone.
 
-#1200: the e2e job installs Node with actions/setup-node before the suite, at a major run-e2e-tools.sh accepts (24 or
-later; 26 since #1200), so the node harnesses never run on a Node the tier refuses.
+#1359: no job installs Node with actions/setup-node or runs verify/ci_chromium_libs.py. #1047 and #1200 added both to
+the e2e job for the tier's node harnesses and Playwright's Chromium on Tanjiro's own Debian. Since #1188 the tier runs
+inside the wib-e2e-tools image, which holds Node and Chromium, and a push no tier test reads runs the offline suite on
+the host, which needs neither, so the two steps served no check.
 
 #1313: before the suite, the e2e job writes TMPDIR=$RUNNER_TEMP to GITHUB_ENV. Unset, run-e2e-tools.sh takes the
 checkout's tmp/, 119 bytes on Tanjiro, and a Terraform provider's socket under it passes Linux's 107-byte limit, so no
@@ -81,7 +82,11 @@ GH_TOKEN = "${{ github.token }}"
 BASE_ENV = {"GH_TOKEN": GH_TOKEN}
 WORKFLOW_PERMISSIONS = {"contents": "read", "actions": "read"}
 E2E_PERMISSIONS = {"contents": "read", "issues": "read", "actions": "read"}
+# #1359: the two steps #1047 and #1200 added to the e2e job, which the wib-e2e-tools image (#1188) made needless; the
+# mutation cases put each back and the checker must fail it.
 CHROMIUM_STEP = 'python3 verify/ci_chromium_libs.py "$RUNNER_TEMP/chromium-libs"'
+NODE_STEP = {"uses": "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+             "with": {"node-version": "26", "package-manager-cache": False}}
 # #1313: the e2e job's TMPDIR is the job's temp directory; the checkout's tmp/ is too long for a provider's socket.
 TMPDIR_STEP = 'echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"'
 # #1331: uv comes from the runner's artifact cache, after the step that names it and before the venv uv makes.
@@ -237,31 +242,25 @@ def problems(doc: dict, text: str) -> list[str]:
                      "verify/gh_comments.py finds no token and the tier's issue reads fail (#1047)")
     if e2e.get("permissions") != E2E_PERMISSIONS:
         found.append(f"e2e-tools: permissions are {e2e.get('permissions')!r}, not {E2E_PERMISSIONS}")
-    # #1047: Chromium's libraries and fonts are unpacked for the job before the tier, which needs them.
     e2e_runs = [str(s.get("run", "")).strip() for s in (e2e.get("steps") or [])]
-    if CHROMIUM_STEP not in e2e_runs:
-        found.append(f"e2e-tools: no step runs `{CHROMIUM_STEP}`, so Chromium cannot start on Tanjiro (#1047)")
-    elif SUITES["e2e-tools"] in e2e_runs and e2e_runs.index(CHROMIUM_STEP) > e2e_runs.index(SUITES["e2e-tools"]):
-        found.append(f"e2e-tools: `{CHROMIUM_STEP}` runs after the suite")
     # #1313: unset, TMPDIR is the checkout's tmp/, 119 bytes on Tanjiro, where no Terraform provider can start.
     if TMPDIR_STEP not in e2e_runs:
         found.append(f"e2e-tools: no step runs `{TMPDIR_STEP}`, so the suite's TMPDIR is the checkout's tmp/, too long "
                      "for a Terraform provider's socket (#1313)")
     elif SUITES["e2e-tools"] in e2e_runs and e2e_runs.index(TMPDIR_STEP) > e2e_runs.index(SUITES["e2e-tools"]):
         found.append(f"e2e-tools: `{TMPDIR_STEP}` runs after the suite (#1313)")
-    # #1200: the node harnesses run on the Node on PATH, which run-e2e-tools.sh refuses only below 24, so the e2e job
-    # installs a Node major of 24 or later (26 today) before the suite.
-    e2e_steps = e2e.get("steps") or []
-    node_steps = [i for i, st in enumerate(e2e_steps) if str(st.get("uses") or "").startswith("actions/setup-node@")]
-    if not node_steps:
-        found.append("e2e-tools: no actions/setup-node step, so the tier runs on whatever Node the runner has (#1200)")
-    for i in node_steps:
-        version = str((e2e_steps[i].get("with") or {}).get("node-version", ""))
-        if not re.fullmatch(r"\d+", version) or int(version) < 24:
-            found.append(f"e2e-tools: setup-node installs node-version {version!r}, not a major of 24 or later, "
-                         "which run-e2e-tools.sh refuses (#1200)")
-        if SUITES["e2e-tools"] in e2e_runs and i > e2e_runs.index(SUITES["e2e-tools"]):
-            found.append("e2e-tools: setup-node runs after the suite")
+    # #1359: since #1188 the tier runs inside the wib-e2e-tools image, which holds Node and Playwright's Chromium, and
+    # the offline suite on the host needs neither, so no job installs Node or unpacks Chromium's libraries.
+    for name, job in jobs.items():
+        for st in (job.get("steps") or []) if isinstance(job, dict) else []:
+            if not isinstance(st, dict):
+                continue
+            if str(st.get("uses") or "").startswith("actions/setup-node@"):
+                found.append(f"{name}: an actions/setup-node step; the tier's Node is the wib-e2e-tools image's "
+                             "(#1188), and the offline suite needs none (#1359)")
+            if "ci_chromium_libs.py" in str(st.get("run") or ""):
+                found.append(f"{name}: a step runs verify/ci_chromium_libs.py; the tier's Chromium is the "
+                             "wib-e2e-tools image's (#1188), and the offline suite needs none (#1359)")
     if "permissions" in (jobs.get("offline") or {}):
         found.append("offline: has its own permissions; it reads nothing beyond the checkout")
     if set(jobs) != set(SUITES):
@@ -394,17 +393,14 @@ cases = {
     "issues: write on the e2e job": lambda d: d["jobs"]["e2e-tools"]["permissions"].update({"issues": "write"}),
     "contents: write on the e2e job": lambda d: d["jobs"]["e2e-tools"]["permissions"].update({"contents": "write"}),
     "permissions on the offline job": lambda d: d["jobs"]["offline"].update({"permissions": {"issues": "read"}}),
-    "Node 22 on the e2e job (#1200)": lambda d: [st["with"].update({"node-version": "22"})
-                                                 for st in d["jobs"]["e2e-tools"]["steps"]
-                                                 if str(st.get("uses", "")).startswith("actions/setup-node@")],
-    "no setup-node step on the e2e job (#1200)": lambda d: d["jobs"]["e2e-tools"].update(
-        {"steps": [st for st in d["jobs"]["e2e-tools"]["steps"]
-                   if not str(st.get("uses", "")).startswith("actions/setup-node@")]}),
-    "no Chromium libraries step": lambda d: d["jobs"]["e2e-tools"].update(
-        {"steps": [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() != CHROMIUM_STEP]}),
-    "the Chromium libraries step after the suite": lambda d: d["jobs"]["e2e-tools"].update(
-        {"steps": [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() != CHROMIUM_STEP]
-         + [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() == CHROMIUM_STEP]}),
+    "the setup-node step back on the e2e job (#1359)": lambda d: d["jobs"]["e2e-tools"]["steps"].insert(
+        -1, dict(NODE_STEP)),
+    "a setup-node step on the offline job (#1359)": lambda d: d["jobs"]["offline"]["steps"].insert(
+        -1, dict(NODE_STEP)),
+    "the Chromium libraries step back on the e2e job (#1359)": lambda d: d["jobs"]["e2e-tools"]["steps"].insert(
+        -1, {"name": "Chromium's libraries and fonts, unpacked for this job", "run": CHROMIUM_STEP}),
+    "the Chromium libraries step in a multi-line run (#1359)": lambda d: d["jobs"]["e2e-tools"]["steps"].insert(
+        -1, {"run": "set -euo pipefail\n" + CHROMIUM_STEP + "\n"}),
     "no TMPDIR step on the e2e job (#1313)": lambda d: d["jobs"]["e2e-tools"].update(
         {"steps": [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() != TMPDIR_STEP]}),
     "setup-uv back on the offline job (#1331)": lambda d: d["jobs"]["offline"]["steps"].insert(

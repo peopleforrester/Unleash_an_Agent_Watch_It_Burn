@@ -1756,8 +1756,11 @@ The length is left as it is (Michael, 2026-11-11; #1040 stays with the presenter
   polite note or a plain request to deploy: on 2026-11-08 LLM Guard scored such a
   ticket clean and the admin bot deployed it with `guard-input-on` alone (#1102,
   question 1120). With both commands on, the Role stops that ticket. `guard-agency-off`
-  gives the workload verbs back and keeps each cluster's Secret rule: scoped after
-  `guardrails-on`, broad after `guardrails-off` (#1358). The 2-hour lab keeps its
+  gives the workload verbs back. Both commands keep each cluster's Secret rule: scoped
+  after `guardrails-on`, broad after `guardrails-off` (#1358, #1362). From the start
+  state `guard-agency-on` applies `c6-broad-secrets-role.yaml`, the same workload rules
+  with every Secret readable, so a rehearsal of `guard-agency-on` then
+  `guard-agency-off` ends where it began, with RBAC off. The 2-hour lab keeps its
   admission tier, `guard-admission-on`, on HC-7731's refused image.
 - **The retry (`#/53`).** It reads "Try your attack again." Say: "Reset your bot and ask
   BurritoBot about your ticket again. It should no longer deploy anything. Let's talk
