@@ -318,6 +318,25 @@ _guardrails() { local st="$1" pause="${2:-0}" peer g bad=() line
 _apply() { local f="$1" c; shift
   c=("$@" apply -f "$HOME/challenges/$f")
   _show "${c[@]}"; "${c[@]}" >/dev/null 2>&1; }
+# _agency_off <kubectl...> : guard-agency-off's step for _both (#1358). It gives the workload verbs back and leaves the
+# Secret rule as that cluster has it: where the live workshop-agent Role still lists Secrets or gets them without naming
+# them (the RBAC guardrail is off, guard-proxy's rbac_scoped false) it applies c8-broad-role.yaml, otherwise
+# c5-scoped-role.yaml. It used to apply c5-scoped-role.yaml everywhere, so turning least privilege off turned RBAC on:
+# on 2026-11-11 at 16:14:16Z, guards-off, guardrails-off and guard-agency-off from the private terminal left both
+# KubeCon clusters scoped three seconds after guardrails-off had opened them. A Role it cannot read changes nothing.
+_agency_off() { local c r f
+  c=("$@" -n agent get role workshop-agent -o json)
+  _show "${c[@]}"; r="$("${c[@]}" 2>/dev/null)" || return 1
+  f="$(printf '%s' "$r" | python3 -c 'import json, sys
+try:
+    rules = json.load(sys.stdin).get("rules") or []
+except ValueError:
+    sys.exit(1)
+broad = any("" in (x.get("apiGroups") or []) and "secrets" in (x.get("resources") or [])
+            and ("list" in (x.get("verbs") or []) or ("get" in (x.get("verbs") or []) and not x.get("resourceNames")))
+            for x in rules)
+print("c8-broad-role.yaml" if broad else "c5-scoped-role.yaml")' 2>/dev/null)" || return 1
+  _apply "$f" "$@"; }
 # _toggle <query> <kubectl...> : a switch step for _both. guard-proxy's /toggle?<query> on one cluster (#1148). Here,
 # with plain kubectl, it is _px, the kubectl exec into deploy/guard-proxy it always was. On the peer it is a GET through
 # the API server's Service proxy on guard-proxy:8080, the one guard-proxy grant guardrails-switch holds there
@@ -994,8 +1013,10 @@ EOS
 # guard-agency-on: the support ticket's cluster fix at KubeCon (#775), least privilege (OWASP LLM06, Excessive Agency).
 # HC-666's Joker comes from registry.burritobot.co, which Kyverno trusts, so admission passes it. This Role,
 # c6-least-privilege-role.yaml, takes create and patch on Deployments and Pods away from agent-sa, so deploy_app comes
-# back Forbidden whatever the image; the CEO's record stays scoped. guard-agency-off applies c5-scoped-role.yaml, the
-# Role guard-rbac-on and guardrails-on leave. The 2-hour lab's second tier stays guard-admission-on, above.
+# back Forbidden whatever the image; the CEO's record stays scoped. guard-agency-off gives the workload verbs back and
+# keeps each cluster's Secret rule (_agency_off, #1358): c5-scoped-role.yaml, the Role guard-rbac-on and guardrails-on
+# leave, where RBAC is on, and c8-broad-role.yaml where it is off, so a reset that runs it after guardrails-off ends at
+# the start state. The 2-hour lab's second tier stays guard-admission-on, above.
 # Both apply their Role on this cluster and on the other KubeCon cluster (_both in .guardlib, #1147), so the fix run
 # from the private terminal reaches the public bot the room plays on. On the 2-hour lab's lone cluster, this one alone.
 cat > "$HOME/guard-agency-on" <<'EOS'
@@ -1017,9 +1038,9 @@ cat > "$HOME/guard-agency-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 rc=0
-if _both _apply c5-scoped-role.yaml; then
+if _both _agency_off; then
   echo "🔓 Least privilege OFF for the support ticket. agent-sa can create Deployments and Pods again, so the"
-  echo "    ticket's Joker lands. The CEO's record stays out of reach."
+  echo "    ticket's Joker lands. The CEO's record is left as each cluster had it: RBAC is its own switch."
 else
   echo "⚠️  The Role did not change everywhere. Wait a moment and try 'guard-agency-off' again; it is safe to repeat."
   rc=1
