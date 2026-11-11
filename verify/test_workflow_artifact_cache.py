@@ -58,12 +58,12 @@ JOBS = {
     ("keep-sample-app-tag.yml", "tag"): False,        # puts a pinned manifest on a ghcr.io tag; it fetches nothing to use
     ("plan-policy.yml", "check"): True,               # PyYAML, tools.yaml's binaries, the Terraform provider mirror
     ("push-jokers.yml", "jokers"): True,              # crane from e2e-tools.lock
-    ("verify-suites.yml", "offline"): True,           # PyYAML
-    ("verify-suites.yml", "e2e-tools"): True,         # PyYAML, e2e-tools.lock, charts, providers, packages
+    ("verify-suites.yml", "offline"): True,           # uv (#1331), PyYAML
+    ("verify-suites.yml", "e2e-tools"): True,         # uv (#1331), PyYAML, e2e-tools.lock, charts, providers, packages
     ("weaver-registry-check.yml", "check"): True,     # weaver, pinned by WEAVER_SHA256
 }
 # A step that fetches a pinned artifact, or runs a suite or script that does.
-FETCH = re.compile(r"fetch-e2e-tools\.sh|artifact-cache\.sh|artifact_cache|package_cache\.py|tf_plugin_cache\.py|"
+FETCH = re.compile(r"fetch-e2e-tools\.sh|artifact-cache\.sh|artifact_cache|package_cache\.py|ci-uv\.sh|tf_plugin_cache\.py|"
                    r"install-tools\.py|run-e2e-tools\.sh|run-tests\.sh|e2e-tools\.lock|\bcurl\b|\bwget\b|"
                    r"pip3?[ ]install|uv[ ]pip|helm (pull|repo)|terraform init")
 CACHE_VARS = ("WIB_ARTIFACT_CACHE", "HECATON_TOOLS_CACHE", "TF_PLUGIN_CACHE_DIR", "PLAYWRIGHT_BROWSERS_PATH",

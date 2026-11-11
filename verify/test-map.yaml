@@ -1645,6 +1645,15 @@ rules:
       - verify/python.lock
     tests:
       - verify/test_ci_chromium_libs.py
+  - name: test_ci_uv.py
+    paths:
+      - verify/artifact-cache.sh
+      - verify/artifact_cache.py
+      - verify/ci-artifact-cache.sh
+      - verify/ci-uv.sh
+      - verify/ci-uv.sh/**
+    tests:
+      - verify/test_ci_uv.py
   - name: test_cluster_provenance.py
     paths:
       - agent

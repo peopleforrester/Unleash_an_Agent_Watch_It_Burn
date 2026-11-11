@@ -49,6 +49,11 @@ tries in all (a stub sleep stands in for the waits); a read GitHub answered with
 timeout. The fetch now runs under timeout with a 120 s limit and is tried again after the same waits. A stub git
 passes every call through to git but fails or hangs the first fetches, and a stub timeout logs its call and, for the
 hang, shortens the limit so the real timeout kills the hung fetch in seconds.
+
+#1331: both jobs failed in "Set up job" on staging 44f3939c and d2ebbd3e, before any step: the runner empties its action
+directory for every job and downloads each action again, and astral-sh/setup-uv's archive timed out three times on
+Tanjiro's link. No job uses that action now. Each runs verify/ci-uv.sh after the artifact cache step and before the
+venv step, which serves uv from the runner's artifact cache by its SHA-256; verify/test_ci_uv.py runs the script.
 """
 from __future__ import annotations
 
@@ -79,6 +84,10 @@ E2E_PERMISSIONS = {"contents": "read", "issues": "read", "actions": "read"}
 CHROMIUM_STEP = 'python3 verify/ci_chromium_libs.py "$RUNNER_TEMP/chromium-libs"'
 # #1313: the e2e job's TMPDIR is the job's temp directory; the checkout's tmp/ is too long for a provider's socket.
 TMPDIR_STEP = 'echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"'
+# #1331: uv comes from the runner's artifact cache, after the step that names it and before the venv uv makes.
+CACHE_STEP = "bash verify/ci-artifact-cache.sh"
+UV_STEP = "bash verify/ci-uv.sh"
+VENV_STEP = re.compile(r"^\s*uv venv\b", re.M)
 STAGING_REF = "refs/heads/staging"
 AGENT_REF = "refs/heads/agent/1113-1"
 
@@ -288,8 +297,23 @@ def problems(doc: dict, text: str) -> list[str]:
             found.append(f"{name}: no step runs `{BASE_STEP}`, so HECATON_BASE_SHA is never set")
         elif want in runs and runs.index(BASE_STEP) > runs.index(want):
             found.append(f"{name}: `{BASE_STEP}` runs after the suite")
+        # #1331: an action is downloaded again for every job, before any step can retry it; uv is served by a step.
         for s in steps:
-            if str(s.get("run", "")).strip() in (want, BASE_STEP):
+            if "setup-uv" in str(s.get("uses") or ""):
+                found.append(f"{name}: installs uv with `{s['uses']}`, an archive the runner downloads again for every "
+                             "job, before any step, which timed out on Tanjiro's link (#1331)")
+        venv = next((i for i, r in enumerate(runs) if VENV_STEP.search(r)), None)
+        if runs.count(UV_STEP) != 1:
+            found.append(f"{name}: runs `{UV_STEP}` {runs.count(UV_STEP)} times, not once, so uv is not on PATH (#1331)")
+        else:
+            at = runs.index(UV_STEP)
+            if CACHE_STEP not in runs or runs.index(CACHE_STEP) > at:
+                found.append(f"{name}: `{UV_STEP}` runs before `{CACHE_STEP}`, so WIB_ARTIFACT_CACHE is not set (#1331)")
+            if venv is None or venv < at:
+                found.append(f"{name}: no `uv venv` step after `{UV_STEP}`, so the suite's Python is not made with "
+                             "the uv the job pins (#1331)")
+        for s in steps:
+            if str(s.get("run", "")).strip() in (want, BASE_STEP, UV_STEP):
                 for key in ("if", "continue-on-error", "env", "working-directory", "shell"):
                     if key in s and not (key == "env" and s["run"].strip() == BASE_STEP):
                         found.append(f"{name}: the step `{s['run'].strip()}` has `{key}`")
@@ -383,6 +407,21 @@ cases = {
          + [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() == CHROMIUM_STEP]}),
     "no TMPDIR step on the e2e job (#1313)": lambda d: d["jobs"]["e2e-tools"].update(
         {"steps": [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() != TMPDIR_STEP]}),
+    "setup-uv back on the offline job (#1331)": lambda d: d["jobs"]["offline"]["steps"].insert(
+        2, {"uses": "astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2", "with": {"version": "0.13.7"}}),
+    "no uv step on the e2e job (#1331)": lambda d: d["jobs"]["e2e-tools"].update(
+        {"steps": [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() != UV_STEP]}),
+    "the uv step twice on the offline job (#1331)": lambda d: d["jobs"]["offline"]["steps"].append(
+        {"name": "uv again", "run": UV_STEP}),
+    "the uv step before the artifact cache step (#1331)": lambda d: d["jobs"]["offline"].update(
+        {"steps": [s for s in d["jobs"]["offline"]["steps"] if s.get("run", "").strip() != CACHE_STEP]
+         + [s for s in d["jobs"]["offline"]["steps"] if s.get("run", "").strip() == CACHE_STEP]}),
+    "the uv step after the venv step (#1331)": lambda d: d["jobs"]["e2e-tools"].update(
+        {"steps": [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() != UV_STEP]
+         + [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() == UV_STEP]}),
+    "continue-on-error on the uv step (#1331)": lambda d: [s.update({"continue-on-error": True})
+                                                           for s in d["jobs"]["e2e-tools"]["steps"]
+                                                           if s.get("run", "").strip() == UV_STEP],
     "the TMPDIR step after the suite (#1313)": lambda d: d["jobs"]["e2e-tools"].update(
         {"steps": [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() != TMPDIR_STEP]
          + [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() == TMPDIR_STEP]}),

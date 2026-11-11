@@ -52430,3 +52430,51 @@ Application is Synced and Healthy with the `otel-collector-coc-mask` ConfigMap i
 should then read about 25 KB with no `transform/coc_mask` definition. The collector pods should roll on the new
 annotation and log `Everything is ready` with no restart, and
 `COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_collector_pii_scrub_live.py` should pass.
+## 2026-11-11 · #1331 · run 20271 · verify-suites installs uv from the runner's artifact cache, not with astral-sh/setup-uv
+
+**What was red.** verify-suites on staging 44f3939c (Actions run 42966599043) and then on d2ebbd3e (42968258309) failed
+both jobs in "Set up job", before any step ran. Every annotation is the same: the runner's download of
+`https://codeload.github.com/astral-sh/setup-uv/tar.gz/68559e99...` hit its 100 s HttpClient timeout three times.
+No test ran and no test failed; the run before them, on f7f376f3 (42964685455), was green. The runner empties its
+action directory at the start of every job and downloads each action again, so the 2.4 MB setup-uv archive crossed
+Tanjiro's link twice per push, and run 20154's entry already traced timeouts like this one to that link
+(infrastructure-end-device-management#55). From this host the same archive came in 1.4 s.
+
+**Why the workflow changes now.** Run 20154 left the workflow alone because Michael had asked on #1314 that
+verify-suites.yml stay as it was until hecaton's runner change reached Tanjiro. That change landed at about 19:02Z on
+2026-11-10 (his comment on #1314), so the ruling no longer holds the file, and a red that recurs on two pushes in a row
+is the repo's to remove where it can.
+
+**What changed.**
+- New `verify/ci-uv.sh` replaces `astral-sh/setup-uv` in both jobs, as a step after `verify/ci-artifact-cache.sh`. It
+  gets uv 0.13.7's release archive through `verify/artifact-cache.sh get` by its SHA-256, so a warm runner reads it
+  with no network, and a miss is fetched with the cache's own retries, which a step can have and an action download
+  cannot. The URL is the one setup-uv itself used, Astral's mirror of the GitHub release. The SHA-256
+  `c5221ff4...196d83` was read from the release's `.sha256` file and from Astral's versions manifest, and the
+  download hashed to it.
+- On a self-hosted runner with none of its inputs set, setup-uv added `$HOME/.local/bin` (or its XDG form), uv's
+  directory and `UV_PYTHON_INSTALL_DIR` to PATH, in that order, and exported `UV_PYTHON_INSTALL_DIR` (the runner's
+  value, else `$HOME/.local/share/uv/python`). Read from the action's source at that commit. ci-uv.sh writes the same,
+  so `package_cache._find_python` looks for and installs its Pythons where it did before.
+- `test_verify_suites_workflow.py` fails a job that uses setup-uv, runs ci-uv.sh other than once, runs it before the
+  cache step or after the `uv venv` step, or gives it continue-on-error; six broken copies show each check fires.
+- New `test_ci_uv.py` runs the script beside a stub artifact cache and a packed stub uv: the paths, their order and
+  the env line for a plain runner and for one with its own directories, and eleven ways it fails, each exiting 1 and
+  writing nothing to GITHUB_PATH or GITHUB_ENV.
+- `test_workflow_artifact_cache.py` counts ci-uv.sh as a fetch, so the cache step must come first;
+  `test_package_cache.py` reads ci-uv.sh as the job setting uv up; fetch-inventory.yaml classes the new call sites
+  and drops the action's.
+
+What still downloads per job: actions/checkout (0.5 MB) and, in the e2e job, actions/setup-node (1.8 MB). Neither
+timed out in these two runs. If one does, the same move applies.
+
+**Checked here.** `bash verify/ci-uv.sh` with a fresh RUNNER_TEMP and the cache under HOME: the first run fetched the
+archive once (one fetch.log line), the second fetched nothing, and both put `uv 0.13.7 (x86_64-unknown-linux-gnu)` on
+the written PATH.
+
+**Tests run**, each once and passing: `test_ci_uv.py` (new, 36 checks), `test_verify_suites_workflow.py`,
+`test_workflow_artifact_cache.py`, `test_package_cache.py`, `test_fetch_inventory.py`, `test_scope_tests.py`,
+`test_test_map.py`, and `python3 verify/fetch_inventory.py check`. The criterion, CI green on staging, can only be
+read after hecaton promotes this branch and verify-suites runs on the new staging tip.
+
+**No live cluster check.** The change touches .github/ and verify/ files no cluster runs.

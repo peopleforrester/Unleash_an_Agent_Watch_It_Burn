@@ -95,12 +95,6 @@ sites:
     class: none
     why: 'comments, a step name, and the call that hands scripts/ghcr_version_tag.py a crane: build on loopback, whose fetches are classed there'
   .github/workflows/verify-suites.yml:
-  - match: setup-uv
-    lines: 2
-    class: pinned
-    kind: tool
-    pin: .github/workflows/verify-suites.yml (the action's commit, which fixes its uv)
-    cached: false
   - match: uv\svenv\s--python\s3\.13
     lines: 2
     class: pinned
@@ -542,6 +536,17 @@ sites:
     lines: 1
     class: none
     why: a comment naming curl's connect timeout, which git's fetch of staging waited out on staging 3da68e84 (#1330); the script runs no curl
+  verify/ci-uv.sh:
+  - match: artifact-cache\.sh" get
+    lines: 1
+    class: pinned
+    kind: tool
+    pin: verify/ci-uv.sh (UV_SHA256, uv's release archive from Astral's mirror, in place of astral-sh/setup-uv, #1331)
+    cached: true
+  - match: .
+    lines: 2
+    class: none
+    why: the tar that unpacks uv and uvx from the archive the cache served, and its failure message; neither fetches
   verify/ci_chromium_libs.py:
   - match: '"-q", "(update|download)"'
     lines: 2
@@ -744,7 +749,7 @@ sites:
     lines: 1
     class: pinned
     kind: tool
-    pin: .github/workflows/verify-suites.yml (setup-uv's version 0.13.7, whose table names each CPython build and its sha256) and package_cache.ENVS's Python version; run only when uv finds none on the host (#1314)
+    pin: verify/ci-uv.sh (uv 0.13.7, whose table names each CPython build and its sha256) and package_cache.ENVS's Python version; run only when uv finds none on the host (#1314)
     cached: false
   - match: .
     lines: 9
@@ -1119,6 +1124,11 @@ sites:
     lines: 9
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_ci_uv.py:
+  - match: .
+    lines: 9
+    class: none
+    why: a stub uv and uvx the test packs, a stub artifact cache beside ci-uv.sh, and checks on their names and on the script's text; nothing leaves the host
   verify/test_chat_span_token_counts.py:
   - match: urlopen
     lines: 1
@@ -1887,9 +1897,9 @@ sites:
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   verify/test_verify_suites_workflow.py:
   - match: .
-    lines: 1
+    lines: 3
     class: none
-    why: the docstring naming curl's connect timeout, which git's fetch of staging waited out on staging 3da68e84 (#1330); the test runs no curl
+    why: the docstring naming curl's connect timeout, which git's fetch of staging waited out on staging 3da68e84 (#1330), and the uv venv step's regex and message (#1331); the test runs neither
   verify/test_walkthrough_no_state.sh:
   - match: .
     lines: 1

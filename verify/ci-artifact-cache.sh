@@ -8,7 +8,7 @@
 # artifact cache (verify/artifact_cache.py, #1117), so each job on a runner reads the one copy that runner already holds
 # (#1123). RUNNER_TOOL_CACHE is the runner's own variable: on a self-hosted runner it is <runner>/_work/_tool, beside
 # the job workspaces and shared by every job the runner takes (on Tanjiro,
-# /srv/gha-agent/Unleash_an_Agent_Watch_It_Burn/_work/_tool, where setup-uv and setup-node keep their tools), and the
+# /srv/gha-agent/Unleash_an_Agent_Watch_It_Burn/_work/_tool, where setup-node keeps its tools), and the
 # runner's .env can move it; on a GitHub-hosted runner it is /opt/hostedtoolcache. So the same step serves the tanjiro
 # and megumi runners and the hosted ones without naming any of them. Before #1123 the e2e job's downloads sat in the
 # workspace's verify/.tools, and the clean step had to spare it; that step now removes everything git does not track.

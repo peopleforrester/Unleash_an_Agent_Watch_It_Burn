@@ -518,7 +518,8 @@ for wf in sorted((REPO / ".github/workflows").glob("*.yml")):
               root_set is not None and root_set < at)
         check(f"{wf.name} {job_name}: it installs the pyyaml environment",
               re.search(r"package_cache\.py install pyyaml --python \S", joined) is not None)
-        uses_uv = any("setup-uv" in (s.get("uses") or "") for s in job.get("steps") or [])
+        uses_uv = any("setup-uv" in (s.get("uses") or "") or str(s.get("run", "")).strip() == "bash verify/ci-uv.sh"
+                      for s in job.get("steps") or [])
         check(f"{wf.name} {job_name}: with uv where the job sets uv up, else with pip",
               ("--pip" in joined) != uses_uv)
         py = re.search(r"python-version: '(\d+\.\d+)'", wf.read_text()) or re.search(r"uv venv --python (\d+\.\d+)", joined)

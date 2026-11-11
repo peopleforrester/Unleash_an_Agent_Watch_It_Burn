@@ -1835,6 +1835,11 @@ reads:
     - verify/package_cache.py
     - verify/playwright_browsers.py
     - verify/python.lock
+  test_ci_uv.py:
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/ci-artifact-cache.sh
+    - verify/ci-uv.sh
   test_cloud_credential_probe_admission.py:
     - gitops/ai-layer/resources.yaml
     - policies/floor/minimal-floor.yaml
