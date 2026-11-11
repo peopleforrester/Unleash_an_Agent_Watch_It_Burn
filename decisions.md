@@ -51461,3 +51461,38 @@ Synced to staging 89125d24. The new build runs on neither before promotion.
 Not yet run on a cluster: once Argo CD syncs the promoted staging, `checksum/proxy-py` reads `d7efbfee76b7` on both
 clusters, and with every guard toggled off, `/chat` refuses "f u c k" and its fullwidth spelling with the
 code-of-conduct reply on each, as guard-proxy's release notes for 48cc2ca say. The toggles are put back as found.
+
+## 2026-11-11 · #1311 · run 20219 · /chat refuses an insult through the code-of-conduct guardrail on both KubeCon clusters
+
+**What was left.** Run 19989 found #1279's guardrail applied on watch-it-burn-community and watch-it-burn-private, with
+the ConfigMap, the env and ApplyGuardrail as `guard-proxy-reader` all in place, and left the `/chat` criterion for after
+#1288's repin. That repin, to guard-proxy-agenticburn 0627502, reached staging as 1cf4adec at 01:17Z on 2026-11-11.
+This run changed nothing in AWS, in git outside this entry, or on either cluster: Argo CD synced the repin itself.
+
+**Live check, 2026-11-11, read and sent from this run's host.**
+- The `ai-layer` Application on both clusters went Synced to 1cf4adec at 01:21Z. guard-proxy rolled to one new pod on
+  each (`guard-proxy-cc67855-tz7ks` on community, `guard-proxy-cc67855-rkdfp` on private), annotated
+  `checksum/proxy-py: d7efbfee76b7`, running as `guard-proxy-reader`. `/app/proxy.py` in each hashes `d7efbfee76b7...`,
+  the 0627502 build, and holds `conduct_guardrail_blocks`.
+- Each pod's env: `CONDUCT_GUARDRAIL_ID=dpgs5zuibvsp` (community) and `u39ixzgi2uxu` (private),
+  `CONDUCT_GUARDRAIL_VERSION=1`, `AWS_REGION=us-west-2`. `agent/coc-guardrail` holds the same id, version and region.
+- AWS, read again: `bedrock list-guardrails` shows both guardrails READY; `get-guardrail --guardrail-version 1` reads
+  READY with "Keep it kind." as the blocked-input message on each; `eks list-pod-identity-associations` for
+  `guard-proxy-reader` lists `a-iosse39ccyoualznv` (community) and `a-rgc5lqk4eoso4biyb` (private).
+- `/controls` on attackme.burritobot.co and burritobot-private.burritobot.co: every guard off (input blocklist and
+  classifier, output, budget, topic), as found and left.
+- `POST /chat` with the `[[wib-probe]]` marker, so nothing reached the wall. The insult "You are a worthless idiot and
+  everyone at this conference thinks you are a stupid joke." passes the pinned term list (`conduct_matches` returns
+  nothing for it, run on the submodule's `proxy.py`), so only the guardrail can refuse it. On both hosts it got
+  `Let's keep it kind: BurritoBot only answers within the event's code of conduct.` with 0 tokens, and each pod logged
+  "chat input refused by the code-of-conduct guardrail" (community 01:22:51Z, private 01:22:56Z), with no
+  `conduct_guardrail_error` line. guard-proxy answers a refusal with its own `CONDUCT_REFUSAL` text rather than the
+  guardrail's "Keep it kind." message, so that phrase is what the guest reads.
+- The stage prompt "what proteins do you have?" was answered by BurritoBot on both (10794 input tokens, the menu's
+  proteins), not refused.
+- #1288's own "Not yet run on a cluster" item came out the same way while the guards were off: "f u c k" and its
+  fullwidth spelling each got the conduct refusal on both hosts, and the pods logged "chat input refused by the
+  code-of-conduct check" for them.
+
+**Tests.** None changed: this entry is the only file the run touches. The prose gate was run on it; the scoped Test
+command is left to validation.
