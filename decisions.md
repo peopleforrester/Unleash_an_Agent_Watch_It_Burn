@@ -53628,3 +53628,47 @@ whose source names `facilitation`, `ai-layer/web` or `docs/` as a directory.
 note, which reaches the private cluster's `/kubecon` only after promotion. Not yet run on a cluster: fetch
 `https://burritobot-private.burritobot.co/kubecon` then and find "the take-home" in segment 6's heading and no
 "Now break it".
+## 2026-11-11 · #1355 · run 20429 · build-e2e-tools-image builds, checks and pushes with one runtime, docker
+
+**What the job log says.** The log of Actions run 43045328973 (job 130607629462, the first run of
+`.github/workflows/build-e2e-tools-image.yml`, on the staging push of 2f56c35e) was read through
+`gh api repos/<repo>/actions/jobs/130607629462/logs`, since `gh run view --log-failed` is refused to a run. The Build
+step's output is podman's: `STEP 1/24: FROM ...`, then `COMMIT ghcr.io/peopleforrester/wib-e2e-tools:51ec299b51b3558f-65501e27`
+and `Successfully tagged` at 15:09:58. `verify/e2e-image.sh` picks podman before docker, and the ubuntu-latest runner
+has both. The check step then ran `docker run ... "${REF}"`, and docker printed
+`Unable to find image 'ghcr.io/peopleforrester/wib-e2e-tools:51ec299b51b3558f-65501e27' locally`, then
+`docker: Error response from daemon: error from registry: denied`, and the step ended
+`Process completed with exit code 125`. So the cause is the one the issue inferred: the image was in podman's store,
+docker has its own, its pull of a tag that ghcr.io does not have was refused, and 125 is docker's own exit code for that.
+The push step was skipped.
+
+**Change.** `e2e-image.sh` now reads `WIB_CONTAINER_RUNTIME`: when it names podman or docker, that runtime is used
+and nothing else is tried. Any other value, or one that is not on PATH, fails with a message that names it. When
+the variable is unset, the order is podman, then docker, as before, so a host's `run` is unchanged. The workflow sets
+`WIB_CONTAINER_RUNTIME: docker` once for the job, and the check (`"${WIB_CONTAINER_RUNTIME}" run --rm --pull=never`)
+and the login go through it. Docker is the one chosen because `scripts/ghcr_version_tag.py` tags, inspects
+and pushes with docker alone (as it does for the web-terminal build). `--pull=never` makes a missing image fail as a
+missing image instead of a trip to ghcr.io. The tag is unchanged: `e2e-image.sh` and the workflow are not among the
+inputs `verify/e2e_image.py` hashes, so `python3 verify/e2e_image.py ref` still prints
+`ghcr.io/peopleforrester/wib-e2e-tools:51ec299b51b3558f-65501e27`.
+
+**Tests.** `verify/test_e2e_image.py` gains section 5b, which runs `e2e-image.sh build` with podman and docker stand-ins
+both on PATH. With `WIB_CONTAINER_RUNTIME=docker` it builds with docker under the lock's tag and label, and never calls
+podman. With the variable unset it picks podman. With `nerdctl` it exits 1, naming nerdctl, and builds nothing.
+Section 6 now holds that the push helper uses docker alone, that the job sets `WIB_CONTAINER_RUNTIME: docker`, and that
+no step names podman or docker itself. The test passed, as did `test_scope_tests.py`, `test_test_map.py`,
+`test_workflow_registry_writes.py`, `test_no_system_temp_paths.py` and `test_workflow_artifact_cache.py`, each run once
+on its own. `scope_tests.py write` left the map as it was.
+
+**Not yet run on GitHub.** A run may not push or start a workflow that publishes. Staging's copy still has the bug,
+so a workflow_dispatch now would fail the same way. Once hecaton promotes these commits to staging, their push starts
+the workflow, since both changed files are in its `paths`. The next run on the issue reads that run's job log for a
+docker build, check and push to `51ec299b51b3558f-65501e27`.
+
+**Visibility.** On 2026-11-11, an anonymous token request for `peopleforrester/wib-e2e-tools` still answered 403,
+because the package does not exist yet. GITHUB_TOKEN creates the package on its first push, linked to this public
+repository through the image's `org.opencontainers.image.source` label. If an anonymous pull still answers 403 after
+that push, the package is private, and the last step is Michael's: set wib-e2e-tools to Public in the package's
+settings on GitHub. GitHub's REST API has no endpoint that changes a package's visibility, so no run can do it.
+
+**Live check.** None: this change touches `verify/` and `.github/workflows/`, which no cluster runs.
