@@ -54043,3 +54043,64 @@ Run against the old entrypoint it fails 13 checks; against this one both tests p
 web-terminal: from the private terminal at the start state, `guard-agency-off` must print `c8-broad-role.yaml` for both
 clusters and leave RBAC scope off in its read. The promotion's own ai-layer sync should leave the broad Role broad on
 both (rules sha256 `2c33da5b83ffdbb1`).
+## 2026-11-11 · #1360 · run 20454 · run-e2e.sh and iam-policy.yml copy the lock's binaries out of the wib-e2e-tools image; fetch-e2e-tools.sh is removed
+
+**Change.** `verify/e2e-image.sh` gains a `tools <dir>` verb. It finds the image this lock names the way `run` does
+(used when the host holds the tag, pulled once when not, a failure naming the image and `bash verify/e2e-image.sh
+build` when neither works), creates a container of it without starting it, and copies `/opt/wib-e2e-tools/bin` and
+`tools.txt` out into a staging directory inside `<dir>`. It holds that `tools.txt` to this checkout's lock
+(`e2e_image.py matches`) and checks that every tool it names is an executable in `bin`. Only then does it replace
+`<dir>/bin` and `<dir>/tools.txt`, and it removes the container either way. So `<dir>/bin` never holds another
+lock's binaries or a half copy. `run` and `tools` share one `ensure_image` function, so the two cannot drift apart.
+
+- `verify/run-e2e.sh`, the by-hand live suite, runs `e2e-image.sh tools verify/.tools` in its prerequisite check and
+  still puts `verify/.tools/bin` first on PATH and points the six path variables at it. It no longer asks for tar,
+  sha256sum or xz, which only the fetch used. It still asks for curl, since `backstage-footprint.sh` calls it. The
+  copy needs python3 and either podman or docker, and a host with neither gets that listed as missing.
+- `.github/workflows/iam-policy.yml` runs `bash verify/e2e-image.sh tools verify/.tools` with
+  `WIB_CONTAINER_RUNTIME: docker`, as build-e2e-tools-image.yml does (#1355). It watches `verify/e2e-image.sh` and
+  `verify/e2e_image.py` in place of the fetch script. The image pulls from ghcr.io with no login (run 20434's
+  anonymous token read), and the job's token stays `contents: read`.
+- `verify/scope_audit.py tools` copies the tools the same way.
+- `verify/fetch-e2e-tools.sh` is deleted, and so is its fetch-inventory entry. Nothing in the repo runs it.
+
+**One cost, stated once.** A change to `e2e-tools.lock` or to an image build input gets a new image tag, and
+ghcr.io has that tag only after build-e2e-tools-image.yml pushes it from staging. Until then, iam-policy.yml fails on
+that change, naming the image, the same way the tools tier already does (#1188). It passes once the build lands and
+the job is re-run. The old per-file fetch had no such wait, but keeping it would leave two ways to get the same
+binaries, which this issue removes.
+
+**Messages.** Twenty-two tests named the deleted script in a docstring or a failure message. They now point at
+`verify/run-e2e-tools.sh` (which runs them inside the image) or at "the e2e-image tools verb". They do not name
+`e2e-image.sh` by path: the scope extractor follows a named script, and `e2e-image.sh` pulls in `e2e_image.py`, which
+reads the whole of `verify/`. Naming it would have made each of those tier tests run on every `verify/` change. Each
+changed test still selects itself.
+
+**Tests.**
+- `verify/test_e2e_image.py` gains section 5c, which runs `e2e-image.sh tools` with a podman stand-in. An image on
+  the host copies every lock tool, executable, with its `tools.txt`. It replaces the old `bin` and leaves no staging
+  directory. The calls are exactly exists, `create --pull=never`, two `cp` and `rm -f`, with no pull, no start and no
+  download. An image of another lock, an image missing a tool, and an image the host lacks and cannot pull each
+  exit 1, naming why, with the old tools left as they were and the container removed.
+- `test_e2e_tools_tier.py` loses its fetch fixtures and cases. Its run-e2e.sh section now runs the real
+  `e2e-image.sh` in the scratch copy with a podman stand-in. The image's kubectl is what checks the cluster, and an
+  image of another lock, or an absent one, is listed as missing with no kubectl run.
+- `test_iam_policy_ci.py`, `test_workflow_artifact_cache.py` (its fetch pattern now reads `e2e-image.sh run|tools`,
+  so the image build job stays classed as not fetching), `test_fetch_inventory.py` and `test_e2e_toolchain.py` follow
+  the change. The inventory's counts for run-e2e.sh and the two tests are updated, and the scope map drops 24 stale
+  `verify/fetch-e2e-tools.sh` reads.
+- Each of these passed alone, as did `scope_tests.py check`, `test_scope_tests.py` and `test_test_map.py`.
+
+**Run for real on netcup.** As this run's pool user, whose podman held tag `51ec299b51b3558f-65501e27`:
+- `bash verify/e2e-image.sh tools "$TMPDIR/tools-live"` printed `already on this host (podman)` and `11 pinned tools
+  from ghcr.io/peopleforrester/wib-e2e-tools:51ec299b51b3558f-65501e27`, and exited 0 in 13 s. `conftest --version`
+  answered 0.71.1, `terraform version` v1.15.6 and `kubectl version --client` v1.36.2. No container was left behind.
+  A second run replaced a planted stale file in `bin`.
+- `bash verify/run-e2e.sh` with no context set copied the same 11 tools into `verify/.tools/bin` and stopped in its
+  prerequisite check, listing only the unset variables.
+- With `CONTEXT=watch-it-burn-private COMMUNITY_CONTEXT=watch-it-burn-community PRIVATE_CONTEXT=watch-it-burn-private`
+  and the IAM and drift variables left unset, it did the same, and neither cluster was listed as unreachable. So
+  the image's kubectl answered both clusters' `/readyz`. That was a read, and it changed nothing on either cluster.
+
+**Not yet run.** iam-policy.yml on GitHub's runner with docker, which runs on the next push that touches its paths.
+This commit touches its paths.
