@@ -128,6 +128,7 @@ rules:
       - verify/test_guard_proxy_pin_1048.py
       - verify/test_guard_proxy_pin_1225.py
       - verify/test_guard_proxy_pin_1267.py
+      - verify/test_guard_proxy_pin_1288.py
       - verify/test_guard_proxy_pin_bound_pricing.py
       - verify/test_guard_proxy_pin_on_main.sh
       - verify/test_guard_toggle_record.py
@@ -1871,6 +1872,7 @@ rules:
       - verify/test_coc_pattern_copies.py
   - name: test_coc_pattern_linear.py
     paths:
+      - .gitmodules
       - challenges/PROMPT-CATALOG.md
       - docs/research/2026-11-09-coc-floor
       - docs/research/2026-11-09-coc-floor/**
@@ -1879,9 +1881,15 @@ rules:
       - gitops/**
       - gitops/**/*
       - gitops/**/*/**
+      - images/llm-guard
+      - images/llm-guard/**
+      - verify/artifact-cache.sh
+      - verify/artifact_cache.py
       - verify/coc_linear_cases.py
       - verify/coc_mask_cases.py
       - verify/coc_pattern_copies.py
+      - verify/ensure-submodules.sh
+      - verify/git_mirror.py
       - verify/topic_cases.py
     tests:
       - verify/test_coc_pattern_linear.py
