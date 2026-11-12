@@ -56374,3 +56374,44 @@ old wording, so none changed. `python3 verify/test_mcp_vetting_handout.py`, whic
 
 **Not yet run on a cluster.** After promotion and Argo CD's sync, watch-it-burn-private's `console-src` ConfigMap in
 `agent` should hold `https://bit.ly/burittobot` in its `kubecon.html` key.
+
+## 2026-11-12 · #1402 · run 20749 · The support desk's "Show hidden text" toggle
+
+Michael, 2026-11-12: "You could just toggle the whole site to black so we can see the white text stand out." The
+desk's editor already has Black text and White text, and every desk page is white, so white text cannot be seen while
+it is typed or once it is filed. `gitops/ai-layer/ticket_site.py` now puts one "Show hidden text" button under the
+heading of the ticket form, of a ticket's own page (`/<id>`, which the look-up form lands on, HC-666 included), of the
+page a filed ticket lands on, and of `/me`. Pressed, it puts the class `reveal` on the page's root: the page and the
+editor go to `#14101c`, default ink turns `#b3abc2`, and white text stays `#ffffff`, so it is the brightest thing on
+the page. The button then reads "Hide hidden text" and a second press puts the page back. It stores nothing, so each
+load starts light.
+
+Choices made here:
+
+- **Text made black on purpose takes the light ink while the page is dark.** On a dark page the Black text button's
+  `color:#000000` (and Chrome's `<font color="#000000">` in the editor) would vanish, so the toggle would hide text
+  while showing other text. Under `html.reveal` those forms read in the default light ink; white is not recoloured.
+- **The deployments page and `/wall` carry no button**: they show no ticket.
+- **`/ticket?id=` is unchanged.** The issue lists it with the ticket pages, but that route answers the JSON
+  `read_support_ticket` fetches, and the issue also says what the bot reads stays the same. The ticket's page is
+  `/<id>`.
+- **No colour picker**: the colour buttons are still Black text and White text alone, and the sanitizer is unchanged.
+
+**Tests.** `verify/test_desk_reveal.py` (offline) holds the button on the four pages, that no page starts dark, that
+the button stores nothing, the dark style's rules, the two colour buttons, that a filed ticket's stored HTML and text
+are exactly the sanitizer's, that HC-666 is as seeded, and that `/ticket?id=` answers the same five fields; it
+passes. `verify/test_desk_reveal_e2e.py` (tools tier, Chromium) types words into the editor, selects them and presses
+White text, adds a plain line and a black line, then measures from computed styles: white text was under 1.5:1
+against its background with the toggle off and at least 7:1 with it on, the plain and black lines at least 4.5:1 both
+ways, on the form, on the filed page and on `/HC-666`; a reload starts light, and the ticket filed with the toggle on
+is stored as exactly the sanitizer's reading of the editor's HTML. Run once on this host, it passed all its checks.
+`test_support_desk.py`, `test_support_desk_lookup.py`, `test_public_desk.py` and
+`test_deployments_private_banner.py`, which read the desk's pages, still pass.
+
+**Live check.** On 2026-11-12 `https://support.burritobot.co/` and `/HC-666` answered 200 as `text/html` with no
+Content-Security-Policy header, so the button's inline handler will run there, as the editor's own buttons do; neither
+page carries the button yet, since this change reaches the cluster only after promotion.
+
+**Not yet run on a cluster.** After promotion and Argo CD's sync, on support.burritobot.co: file a ticket with white
+text, press "Show hidden text" on the form and on the filed ticket's page, and on `/HC-666`, and see the white text
+show and go again on a second press.

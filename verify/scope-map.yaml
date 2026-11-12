@@ -3282,6 +3282,20 @@ reads:
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
+  test_desk_reveal.py:
+    - gitops/ai-layer/ticket_site.py
+  test_desk_reveal_e2e.py:
+    - facilitation/kubecon-na-2026-audience-qr.svg
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/event.js
+    - images/llm-guard
+    - images/workshop-mcp/Dockerfile
+    - scripts/audience-qr.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
+    - verify/python.lock
   test_desk_ticket_live.py:
     - agent
     - challenges/c3-secret-grep/agent-prompt.txt

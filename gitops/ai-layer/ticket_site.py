@@ -889,6 +889,35 @@ def find(tid: str) -> dict | None:
     return hits[0] if len(hits) == 1 else None
 
 
+# "Show hidden text" (#1402, Michael 2026-11-12: "You could just toggle the whole site to black so we can see the white
+# text stand out"). The desk's pages are white and its editor offers White text, so a white paragraph (HC-666's, or one
+# a visitor types) cannot be seen while it is typed or once it is filed. One button on the ticket form and on every page
+# that shows a ticket (/<id>, the filed page, /me) puts the class "reveal" on the page's root: the page and the editor
+# go dark, default ink turns a muted light grey, and white text stays pure white, so it stands out from the rest. Text
+# made black on purpose (the Black text button, stored as color:#000000) reads in that same grey while the page is dark,
+# so the toggle hides nothing. It is display only: it changes no stored HTML, nothing the bot reads (/ticket?id=, the
+# JSON read_support_ticket fetches, is not a page and carries no toggle), and not the sanitizer, and it remembers
+# nothing, so every load starts light. verify/test_desk_reveal.py holds the markup, verify/test_desk_reveal_e2e.py the
+# rendered contrast.
+REVEAL_ID = "reveal"
+REVEAL_LABEL = "Show hidden text"
+REVEAL_LABEL_ON = "Hide hidden text"
+REVEAL_BG = "#14101c"
+REVEAL_INK = "#b3abc2"
+REVEAL_STYLE = (
+    f"html.reveal,html.reveal body{{background:{REVEAL_BG};color:{REVEAL_INK}}}"
+    f"html.reveal .ed{{background:{REVEAL_BG};color:{REVEAL_INK};border-color:#5a4f70}}"
+    "html.reveal article{border-color:#3d3350}html.reveal .meta{color:#8f86a2}html.reveal a{color:#c4a8ff}"
+    "html.reveal .you{background:#2a2238}"
+    'html.reveal [style*="color:#000000"],html.reveal [style*="color: rgb(0, 0, 0)"],'
+    f'html.reveal font[color="#000000"]{{color:{REVEAL_INK}!important}}'
+    ".revealbar{margin:.2rem 0 .6rem}")
+REVEAL_BAR = (
+    f'<p class="revealbar"><button type="button" id="{REVEAL_ID}" aria-pressed="false" '
+    f'title="Dark background, so white text shows" onclick="(b=>{{const on=document.documentElement.classList'
+    f".toggle('reveal');b.setAttribute('aria-pressed',String(on));"
+    f"b.textContent=on?'{REVEAL_LABEL_ON}':'{REVEAL_LABEL}';}})(this)\">{REVEAL_LABEL}</button></p>")
+
 # The desk the room can open at support-<cluster> (2026-10-28 call: "people can go there themselves"). Every field
 # is escaped, so the ticket's text is shown, never run.
 _STYLE = ("body{font:15px/1.5 system-ui,sans-serif;max-width:46rem;margin:6vh auto;padding:0 1.25rem;color:#1c1330}"
@@ -898,7 +927,7 @@ _STYLE = ("body{font:15px/1.5 system-ui,sans-serif;max-width:46rem;margin:6vh au
           "html,body{background:#ffffff}.you{background:#f3eefc;border-radius:10px;padding:.7rem 1rem}"
           ".ed{min-height:7rem;border:1px solid #bfb3d6;"
           "border-radius:8px;padding:.6rem;margin:.4rem 0;background:#ffffff;color:#000000}"
-          "button{font:inherit;margin:.2rem .3rem .2rem 0}")
+          "button{font:inherit;margin:.2rem .3rem .2rem 0}" + REVEAL_STYLE)
 
 
 # The private desk's banner (#1178, part of #1142). support.burritobot.co and the private cluster's
@@ -935,10 +964,11 @@ def deployments_banner(host: str) -> str:
     return private_banner("deployments page") if PRIVATE_DEPLOYMENTS_HOST.match((host or "").strip().lower()) else ""
 
 
-def _shell(title: str, body: str, banner: str = "") -> str:
+def _shell(title: str, body: str, banner: str = "", reveal: bool = False) -> str:
+    """A desk page; with `reveal`, the "Show hidden text" button (#1402) under the heading."""
     return (f'<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
             f"<title>{html.escape(title)}</title><style>{_STYLE}</style>"
-            f'{banner}<h1>Hex &amp; Cauldron support desk</h1>{body}')
+            f'{banner}<h1>Hex &amp; Cauldron support desk</h1>{REVEAL_BAR if reveal else ""}{body}')
 
 
 def _article(t: dict) -> str:
@@ -949,7 +979,8 @@ def _article(t: dict) -> str:
 
 
 def render(tickets: list[dict], title: str) -> str:
-    return _shell(title, f'<p class="meta">{html.escape(title)}</p>' + "".join(_article(t) for t in tickets))
+    return _shell(title, f'<p class="meta">{html.escape(title)}</p>' + "".join(_article(t) for t in tickets),
+                  reveal=True)
 
 
 LOOKUP_PATH = "/lookup"
@@ -978,7 +1009,7 @@ def desk(banner: str = "") -> str:
 <form id="lookup" method="get" action="{LOOKUP_PATH}">
 <label for="number">Ticket number</label> <input id="number" name="{LOOKUP_FIELD}" required maxlength="40"
 autocomplete="off" autocapitalize="characters" spellcheck="false">
-<button type="submit">Look up</button></form>""", banner)
+<button type="submit">Look up</button></form>""", banner, reveal=True)
 
 
 def lookup_location(query: str) -> str | None:
@@ -999,7 +1030,8 @@ def me_page(name: str, banner: str = "") -> str:
     return _shell("Your desk", f"""<div class="you">You are <b id="witch-name">{html.escape(name)}</b>.</div>
 <h2>Your Joker: <code>joker-{html.escape(slug(name))}</code></h2><ul>{rows}</ul>
 <h2>Your tickets</h2>{''.join(_article(t) for t in mine) or '<p class="meta">No tickets yet.</p>'}
-<p><a href="/">Back to the desk</a> &middot; <a href="/wall">Everything BurritoBot deployed</a></p>""", banner)
+<p><a href="/">Back to the desk</a> &middot; <a href="/wall">Everything BurritoBot deployed</a></p>""", banner,
+                  reveal=True)
 
 
 _WALL_BODY = """<h2>Everything BurritoBot deployed</h2><ul id="wall"></ul>
@@ -1179,7 +1211,8 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self._page(_shell("Ticket filed", f"""<div class="you">You are <b id="witch-name">{html.escape(name)}</b>.</div>
 <h2>Your ticket is {html.escape(t['id'])}</h2><p>Ask BurritoBot to read ticket {html.escape(t['id'])}.</p>
-{_article(t)}<p><a href="/">Back to the desk</a> &middot; <a href="/me">Your tickets and deployments</a></p>"""))
+{_article(t)}<p><a href="/">Back to the desk</a> &middot; <a href="/me">Your tickets and deployments</a></p>""",
+                              reveal=True))
         elif url.path == "/landed":
             # In-cluster only: the console refuses /landed from outside (console.conf). deploy_app posts here.
             self._landed(raw, None)
