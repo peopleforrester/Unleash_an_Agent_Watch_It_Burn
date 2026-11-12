@@ -56098,3 +56098,11 @@ source), `python3 verify/test_scope_tests.py`, `python3 verify/test_test_map.py`
 `python3 verify/test_deck_shift_slide_citations.py`. `verify/scope-map.yaml` and `verify/test-map.yaml` carry the
 new test, from `python3 verify/scope_tests.py write`. No live check: the change touches only files under `verify/`
 that no cluster runs.
+
+**Run 20626, after run 20624 failed the tests gate.** `verify/test_test_map.py` failed: `verify/test-map.yaml` held
+`verify/deck_renumber.py/**` as well as the file. Run 20624 ran `python3 verify/scope_tests.py write` before
+`git add`, and `widen()` in `verify/scope_tests.py` adds `<entry>/**` for an entry that is not a tracked file, so
+the untracked tool was written as a directory too. With the file tracked, `write` drops that line. Run
+`scope_tests.py write` after `git add` of a new file. `python3 verify/test_test_map.py`,
+`python3 verify/test_scope_tests.py`, `python3 verify/test_deck_renumber.py` and
+`python3 verify/test_deck_shift_slide_citations.py` now pass.

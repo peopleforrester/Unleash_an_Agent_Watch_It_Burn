@@ -2648,7 +2648,6 @@ rules:
   - name: test_deck_renumber.py
     paths:
       - verify/deck_renumber.py
-      - verify/deck_renumber.py/**
     tests:
       - verify/test_deck_renumber.py
   - name: test_delivered_tags.py
