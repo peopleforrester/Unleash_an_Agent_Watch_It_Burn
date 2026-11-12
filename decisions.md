@@ -55968,3 +55968,37 @@ with 2 `apply -refresh-only` lines. Criterion 2 needs the first drift report aft
 the moved checkout.
 
 **Live check.** Skipped: nothing the clusters run changed, and this run wrote only this entry.
+
+## 2026-11-12 · #1385 · run 20599 · The chat page drops its BurritoBot button, which linked to the page it sits on
+
+Whitney, 2026-11-12, on the chat page: "a button to get to BurritoBot, which is silly". Part of #1384. The chat
+page's BurritoBot button went to `/`, the chat page itself, and the page's init rewrote that href to carry the
+cluster and user.
+
+**Changes.**
+- `gitops/ai-layer/web/burritbot.html`: the `#bbbtn` header link and the init line that set its href are gone. The
+  header comment that called the bar "the same four buttons as the VTT" now says the bar is the VTT's less
+  BurritoBot, and why. Terminal, Datadog, Deployments, Support, Beacon and Feedback, and the public-host hiding of
+  Terminal and Datadog, are unchanged. `lab.html` and `platform.html` are untouched and keep their BurritoBot
+  buttons, which open the chat from somewhere else.
+- `verify/test_chat_no_burritobot_button.py` (new, offline): the chat page has no element with id `bbbtn`, names
+  `bbbtn` nowhere outside a comment, and has no header button labelled BurritoBot; `lab.html` and `platform.html`
+  each carry one `#bbbtn` header button that goes to `/`. Run against staging's `burritbot.html` it fails three
+  checks; on this change it passes.
+- `verify/test_chat_no_desk_link.py` adds that no header button on the chat page goes to `/` or `/?..`, and that
+  init builds no `'/?'` link, so a self-link under another id fails as well. It fails on staging's page.
+- `verify/test_mobile_titles.py`: the header buttons in order are `vttbtn ddbtn depbtn supbtn bcnbtn fbbtn`.
+- `verify/test_mobile_titles_e2e.py`: the shown header buttons are six as shipped (was seven) and three on the
+  workshop copy (was four), with the docstring and check names to match.
+- `verify/test_audience_page_e2e.py` and `verify/test_audience_feedback_live.py`: the stub DOM no longer names
+  `bbbtn`.
+- `verify/scope-map.yaml` and `verify/test-map.yaml` carry the new test, from `python3 verify/scope_tests.py write`.
+
+**Live check.** None run in this run: the change is to a page the clusters serve, so the check needs it promoted
+and synced first.
+
+**Not yet run on a cluster.** On watch-it-burn-community (https://attackme.burritobot.co/) and
+watch-it-burn-private (https://burritobot-private.burritobot.co/), once Argo CD has synced this change: the served
+chat page has no BurritoBot button in its header (no element with id `bbbtn`), and the other header buttons show
+as before. The live-check child of #1384 owes it; `verify/test_audience_feedback_live.py` with
+`COMMUNITY_CONTEXT=watch-it-burn-community` covers the community page's init with the new stub DOM.

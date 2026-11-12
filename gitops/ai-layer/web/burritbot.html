@@ -326,12 +326,13 @@
   <header>
     <div class="brand"><svg class="logo"><use href="#cauldron"/></svg> BurritoBot <small class="dom" style="font-weight:600;opacity:.8;font-size:12px">· burritobot.co</small></div>
     <div class="spacer"></div>
-    <!-- THE SAME FOUR BUTTONS AS THE VTT, same order (Michael, 2026-08-30). This page had no navigation
+    <!-- THE VTT'S BUTTONS, same order (Michael, 2026-08-30), less BurritoBot. This page had no navigation
          at all, so an attendee who opened BurritoBot had no way back to their terminal except browser
-         history. Keep in sync with the identical block in lab.html. Here each button's icon and label are
-         separate spans (#1214), so a phone whose one-row bar cannot fit the labels shows the icons alone. -->
+         history. Keep in sync with the block in lab.html, except that this page has no BurritoBot button:
+         it linked to the page it sits on (Whitney, 2026-11-12, #1385), and lab.html and platform.html keep
+         theirs. Here each button's icon and label are separate spans (#1214), so a phone whose one-row bar
+         cannot fit the labels shows the icons alone. -->
     <a class="hb" id="vttbtn" href="/lab" target="_blank" rel="noopener" aria-label="Terminal" title="Terminal"><span class="hbi" aria-hidden="true">&#9000;</span><span class="hbl"> Terminal</span></a>
-    <a class="hb" id="bbbtn" href="/" aria-label="BurritoBot" title="BurritoBot"><span class="hbi" aria-hidden="true">&#127791;</span><span class="hbl"> BurritoBot</span></a>
     <a class="hb" id="ddbtn" href="https://app.datadoghq.com" target="_blank" rel="noopener" aria-label="Datadog" title="Datadog"><span class="hbi" aria-hidden="true">&#128202;</span><span class="hbl"> Datadog</span></a>
     <!-- THE ROOM'S OWN PAGES (#1347, Michael 2026-11-11: "Why wouldn't we have buttons for that at the upper
          right-hand side so they can do it themselves?"). Deployments, Support and Beacon, on the public and the
@@ -994,7 +995,6 @@
       // Join with & when the href already carries a query string (#364). A bare '?' on a URL that
       // already has one drops the cluster identity silently instead of failing loudly.
       if(fb&&!evfb)fb.href+=(fb.href.indexOf('?')>=0?'&':'?')+nq.join('&');
-      var bbn=document.getElementById('bbbtn'); if(bbn)bbn.href='/?'+nq.join('&');
     }
     // Same as lab.html: show the name the student was GIVEN (the hostname they are on), not the
     // internal watch-it-burn-attendee-NNN slot id, which is not what is on their claim page and is not
