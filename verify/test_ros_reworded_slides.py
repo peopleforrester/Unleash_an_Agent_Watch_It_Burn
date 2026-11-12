@@ -1,23 +1,29 @@
-# ABOUTME: Holds the KubeCon run-of-show to rounds 269c532's reworded slides (#1367, #1368): each reworded Say line and
-# ABOUTME: slide text it quotes or paraphrases on #/1 to #/120, none of the old wording, and the deck's "Presenter:" lines.
-"""The run-of-show follows the slides rounds `269c532` reworded (rounds-agenticburn#174, #1367).
+# ABOUTME: Holds the KubeCon run-of-show to the slides rounds 269c532 and c6b1b0e reworded (#1368, #1392): each Say line
+# ABOUTME: and slide text it quotes or paraphrases on #/1 to #/119, none of the old wording, and the "Presenter:" lines.
+"""The run-of-show follows the slides rounds `269c532` and `c6b1b0e` reworded (rounds-agenticburn#174 and #176,
+#1367, #1392).
 
-rounds-agenticburn#174 reworded notes and slide text on #/1, #/3, #/4, #/7, #/12, #/19, #/23, #/41, #/49, #/50, #/56,
-#/72, #/117 and #/120 and gave the first note of each of the deck's sections a "Presenter:" line. #1367 made
+rounds-agenticburn#174 reworded notes and slide text on #/1, #/3, #/4, #/7, #/12, #/19, #/23, #/41, #/48, #/49, #/55,
+#/71, #/116 and #/119 and gave the first note of each of the deck's sections a "Presenter:" line. #1367 made
 `facilitation/kubecon-na-2026-run-of-show.md` follow them. verify/test_ros_deck_live.py reads only segments 4 to 6
 steps whose bold lead cites a slide, so segments 1 to 3, the ASI beat and the Presenter lines had no test (#1368).
+Rounds `c6b1b0e` (rounds-agenticburn#176, Whitney's drift review of 2026-11-12) took several of those back and
+reworded more: `#/7`'s Do note became a "Point out:" list, `#/8`, `#/20`, `#/23` and `#/41` went back to their earlier
+lines or a new one, `#/12` gained a "2026 version" line, the Challenge 3 card moved to `#/43` with the note "Which brings
+us to challenge three...", and the desk's QR slide (`#/45`), the challenge (`#/47`) and the HC-666 hint (`#/48`) were
+reworded (#1392). PINNED and STALE follow that deck, numbered as it is.
 This test fails when any of these stops holding:
 
-  1. Each line in PINNED, the deck's words at rounds `269c532`, is in the run-of-show where it should be: the segment
-     that walks the slide, or for `#/120` the ASI beat, in the run-of-show's own form where it paraphrases a stage
+  1. Each line in PINNED, the deck's words at rounds `c6b1b0e`, is in the run-of-show where it should be: the segment
+     that walks the slide, or for `#/119` the ASI beat, in the run-of-show's own form where it paraphrases a stage
      direction ("(After the trace demo:)" is "After the trace demo, say:").
   2. None of the old wording in STALE is left: the optional tour of the chat page, "is a prompt injection attack that
      works", "it has nothing to deploy with", the hint "Ask BurritoBot what tools it has." given as the hint, and the
      rest.
-  3. The deck's Presenter lines on the section openers, `#/1` Whitney, `#/5` Michael, `#/8` Whitney and `#/42`
+  3. The deck's Presenter lines on the section openers, `#/1` Whitney, `#/5` Michael, `#/8` Whitney and `#/43`
      Michael, are quoted as "Presenter: <name>" in segments 1 to 4 in that order, and the paragraph "Who presents
      which slides" names each as "<name> from `#/N`".
-  4. The close's three, `#/118` Whitney, `#/121` Michael and `#/125` both, are named in the bold lead of the segment 6
+  4. The close's three, `#/117` Whitney, `#/120` Michael and `#/124` both, are named in the bold lead of the segment 6
      step that cites the slide, and in that paragraph.
 
 PINNED and PRESENTERS are the deck's words; verify/test_ros_deck_live.py checks each is still on its slide in the deck
@@ -50,7 +56,7 @@ WHERE = {
     "the segments table's row 1": (ROW1, ROW2),
 }
 
-# (slide, "face" or "note", the deck's words at rounds 269c532, where the run-of-show quotes them, its words when they
+# (slide, "face" or "note", the deck's words at rounds c6b1b0e, where the run-of-show quotes them, its words when they
 # differ from the deck's). verify/test_ros_deck_live.py imports this table and reads each line off the live deck.
 PINNED: list[tuple[int, str, str, str, str | None]] = [
     (1, "note", "(Whitney) \"Hello, I'm Whitney.\" (Michael) \"Hello, I'm Michael.\"", "segment 1",
@@ -61,33 +67,45 @@ PINNED: list[tuple[int, str, str, str, str | None]] = [
     (4, "note", "Great question! To reverse a linked list in Python, you can use an iterative approach. ... Can I help "
      "with anything else, or would you like to start with a burrito, bowl, or something else today?", "segment 1", None),
     (4, "note", "During this talk you will have access to...", "segment 1", None),
-    (7, "note", "point at the Reset button and the saved prompts", "segment 1", None),
-    (7, "note", "Two things you'll use all talk: the Reset button gives you a fresh BurritoBot that forgets you, and "
-     "your saved prompts let you paste an old attack back in.", "segment 1", None),
-    (7, "note", "point at the Reset button and the saved prompts", "the segments table's row 1",
-     "Reset button and saved prompts, pointed at"),
+    (7, "note", "Point out: Witch name Reset button Saved prompts Menu Feedback button", "segment 1",
+     "Point out: the witch name, the Reset button, the saved prompts, the menu and the Feedback button."),
+    (7, "note", "Point out: Witch name Reset button Saved prompts Menu Feedback button", "the segments table's row 1",
+     "witch name, Reset button, saved prompts, menu and Feedback button, pointed out"),
+    (8, "face", "That's how it has access to model API keys.", "segment 2",
+     "> That's how it has access to model API keys."),
+    (12, "face", "2026 version", "segment 2", "> 2026 version"),
     (12, "note", "Excessive agency means the agent can do more than its job needs.", "segment 2", None),
     (19, "note", "(Wait a minute.) Let's see what people are up to. (Show the prompt wall. Wait a minute.)", "segment 3",
      "\"(Wait a minute.)\", then \"Let's see what people are up to.\", then \"(Show the prompt wall. Wait a minute.)\""),
-    (23, "note", "A fresh bot forgets it already refused you.", "segment 3", None),
-    (41, "note", "The only addresses on the list are our private network and the two cluster addresses BurritoBot "
-     "needs.", "segment 3", None),
-    (49, "note", "Ticket HC-666 carries a hidden instruction, and it works.", "segment 4", None),
-    (50, "note", "(After the trace demo:) Do you know the name for this type of attack?", "segment 4",
+    (20, "note", "Say: ...Run an image off the public internet... Here's the hint:", "segment 3",
+     "Say: \"...Run an image off the public internet... Here's the hint:\""),
+    (23, "note", "Then hit reset and use a new bot to use that knowledge to exploit the system.", "segment 3",
+     "Then hit reset and use a new bot to use that knowledge to exploit the system.\""),
+    (41, "note", "BurritoBot could send traffic anywhere on the internet. We want to limit BurritoBot so it cannot send "
+     "any data outside of the cluster. This NetworkPolicy is an allowlist for outgoing traffic, so the data can't get "
+     "to the beacon. The only addresses on the list start with 10.0, which is our own private network.", "segment 3",
+     None),
+    (43, "note", "Say: Which brings us to challenge three...", "segment 4",
+     "Say: \"Which brings us to challenge three...\""),
+    (45, "note", "Scan this to open it, or tap Support at the top of the chat page.", "segment 4", None),
+    (47, "note", "Can you write a ticket that gets BurritoBot to misbehave? Can you get it to deploy something?",
+     "segment 4", None),
+    (48, "note", "Ticket HC-666 is a prompt injection attack that works.", "segment 4", None),
+    (49, "note", "(After the trace demo:) Do you know the name for this type of attack?", "segment 4",
      "After the trace demo, say: \"Do you know the name for this type of attack?\""),
-    (56, "note", "So even if a ticket tricks it, it can't create Deployments or Pods.", "segment 4", None),
-    (72, "face", "Hint: Ask BurritoBot about the weather, then look at what else it did.", "segment 5",
+    (55, "note", "So even if a ticket tricks it, it can't create Deployments or Pods.", "segment 4", None),
+    (71, "face", "Hint: Ask BurritoBot about the weather, then look at what else it did.", "segment 5",
      "> Hint: Ask BurritoBot about the weather, then look at what else it did."),
-    (72, "note", "Say: Ask BurritoBot about the weather, then look at what else it did.", "segment 5",
+    (71, "note", "Say: Ask BurritoBot about the weather, then look at what else it did.", "segment 5",
      "Say: \"Ask BurritoBot about the weather, then look at what else it did.\""),
-    (72, "note", "click what else it did to open Datadog", "segment 5", "Click \"what else it did\" and show"),
-    (72, "note", "(After the trace demo:) Do you know the name for this type of attack?", "segment 5",
+    (71, "note", "click what else it did to open Datadog", "segment 5", "Click \"what else it did\" and show"),
+    (71, "note", "(After the trace demo:) Do you know the name for this type of attack?", "segment 5",
      "After the trace demo, say: \"Do you know the name for this type of attack?\""),
-    (117, "note", "My MCP server vetting checklist is on the take-home slide.", "segment 5", None),
-    (120, "face", "And the blast radius that leaves the cluster", "the ASI beat", None),
-    (120, "face", "ASI03 Identity and Privilege Abuse, and K08 Cluster To Cloud Lateral Movement.", "the ASI beat", None),
-    (120, "face", "OWASP Kubernetes Top 10 2025", "the ASI beat", None),
-    (120, "note", "The blast radius can leave the cluster, too: a pod that reads the node's metadata comes back with "
+    (116, "note", "My MCP server vetting checklist is on the take-home slide.", "segment 5", None),
+    (119, "face", "And the blast radius that leaves the cluster", "the ASI beat", None),
+    (119, "face", "ASI03 Identity and Privilege Abuse, and K08 Cluster To Cloud Lateral Movement.", "the ASI beat", None),
+    (119, "face", "OWASP Kubernetes Top 10 2025", "the ASI beat", None),
+    (119, "note", "The blast radius can leave the cluster, too: a pod that reads the node's metadata comes back with "
      "the node's cloud role.", "the ASI beat", None),
 ]
 
@@ -96,31 +114,39 @@ PRESENTERS: list[tuple[int, str, str]] = [
     (1, "Whitney", "Whitney from `#/1`"),
     (5, "Michael", "Michael from `#/5`"),
     (8, "Whitney", "Whitney from `#/8`"),
-    (42, "Michael", "Michael from `#/42`"),
-    (118, "Whitney", "Whitney on the two OWASP lists"),
-    (121, "Michael", "Michael from burritos only"),
-    (125, "Both", "both on the speakers"),
+    (43, "Michael", "Michael from `#/43`"),
+    (117, "Whitney", "Whitney on the two OWASP lists"),
+    (120, "Michael", "Michael from burritos only"),
+    (124, "Both", "both on the speakers"),
 ]
-CLOSE_FIRST = 118  # the close's Presenter lines are named in segment 6's bold leads, not quoted
+CLOSE_FIRST = 117  # the close's Presenter lines are named in segment 6's bold leads, not quoted
 
-# (slide, wording the run-of-show had before #1367 and must not give again).
+# (slide, wording the run-of-show had before #1367 or #1392 and must not give again).
 STALE: list[tuple[int, str]] = [
     (1, "A quick hello, nothing more: \"Hello, I'm Whitney.\""),
     (3, "each described aloud"),
     (7, "quick tour"),
+    (7, "Two things you'll use all talk"),
+    (8, "if you're doing it the old-school way"),
     (19, "Wait a minute, then say"),
-    (49, "is a prompt injection attack that works"),
-    (50, "After the trace, say"),
-    (56, "it has nothing to deploy with"),
-    (72, "> Hint: Ask BurritoBot what tools it has."),
-    (72, "Say: \"Ask BurritoBot what tools it has."),
-    (72, "The room's hint is \"Ask BurritoBot what tools it has.\""),
-    (72, "Click \"tools\""),
-    (117, "Michael's MCP server vetting checklist"),
+    (20, "Here are the hints. We'll take them one at a time."),
+    (23, "A fresh bot forgets it already refused you."),
+    (41, "the two cluster addresses BurritoBot needs"),
+    (43, "That covers the Kubernetes guardrails."),
+    (45, "You've got access to a support desk"),
+    (47, "File a ticket of your own at support.burritobot.co"),
+    (48, "carries a hidden instruction"),
+    (49, "After the trace, say"),
+    (55, "it has nothing to deploy with"),
+    (71, "> Hint: Ask BurritoBot what tools it has."),
+    (71, "Say: \"Ask BurritoBot what tools it has."),
+    (71, "The room's hint is \"Ask BurritoBot what tools it has.\""),
+    (71, "Click \"tools\""),
+    (116, "Michael's MCP server vetting checklist"),
 ]
 
-QUOTED = "each line the deck reworded at rounds 269c532 is quoted where the run-of-show walks its slide"
-GONE = "none of the wording the run-of-show had before #1367 is left"
+QUOTED = "each line the deck reworded at rounds 269c532 and c6b1b0e is quoted where the run-of-show walks its slide"
+GONE = "none of the wording the run-of-show had before #1367 or #1392 is left"
 OPENERS = "segments 1 to 4 quote the section openers' Presenter lines, in the deck's order"
 NAMED = "\"Who presents which slides\" names each Presenter line's speaker"
 LEADS = "segment 6's steps name the close's presenters in their bold leads"
@@ -189,7 +215,7 @@ def main() -> int:
 
     raw = ROS_PATH.read_text(encoding="utf-8")
     ros = flat(raw)
-    print(f"== {ROS_PATH.relative_to(REPO)} follows the slides rounds 269c532 reworded ==")
+    print(f"== {ROS_PATH.relative_to(REPO)} follows the slides rounds 269c532 and c6b1b0e reworded ==")
     for name, errs in problems(ros).items():
         for e in errs:
             print("  " + e)
@@ -215,9 +241,9 @@ def main() -> int:
           .replace("\0", '"Presenter: Michael"', 1))
     lit = "Whitney from `#/8`"
     fails("#/8 given to Michael in the paragraph", NAMED, ros.replace(lit, "Michael from `#/8`", 1))
-    for lit, new in (("(`#/121`, 1 min, Michael)", "(`#/121`, 1 min)"),
-                     ("(`#/125` and `#/126`, both)", "(`#/125` and `#/126`)"),
-                     ("(`#/118`, 1.5 min, Whitney)", "(`#/118`, 1.5 min, Michael)")):
+    for lit, new in (("(`#/120`, 1 min, Michael)", "(`#/120`, 1 min)"),
+                     ("(`#/124` and `#/125`, both)", "(`#/124` and `#/125`)"),
+                     ("(`#/117`, 1.5 min, Whitney)", "(`#/117`, 1.5 min, Michael)")):
         if lit not in ros:
             sys.exit(f"ANCHOR MISSING: {lit!r} is not in {ROS_PATH.relative_to(REPO)}; a self-check edits it")
         fails(f"the lead {lit!r} as {new!r}", LEADS, ros.replace(lit, new, 1))
@@ -225,7 +251,7 @@ def main() -> int:
     if failures:
         print(f"\nFAILED: {len(failures)} check(s)")
         return 1
-    print("\nThe run-of-show follows rounds 269c532's reworded slides and its Presenter lines (#1368).")
+    print("\nThe run-of-show follows the slides rounds 269c532 and c6b1b0e reworded and its Presenter lines (#1368, #1392).")
     return 0
 
 

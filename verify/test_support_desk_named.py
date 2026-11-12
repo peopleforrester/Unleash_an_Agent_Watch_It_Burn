@@ -20,7 +20,7 @@ segment 4 stops naming the one desk and page for both clusters, names the admin 
 host, drops the presenters' range, or has the admin bot read any number but a presenter one or HC-666: the rule
 Michael added, so a ticket the room wrote never runs on the presenters' bot.
 
-Since #1381 (rounds-agenticburn#175, Whitney, 2026-11-12) the `#/47` demo ticket is filed the room's way: through the
+Since #1381 (rounds-agenticburn#175, Whitney, 2026-11-12) the `#/46` demo ticket is filed the room's way: through the
 desk's form, read back on the room's bot, `https://attackme.burritobot.co`, by the four-digit number the form gives. This
 fails when that step files through the presenters' path again (`kubectl port-forward`, `curl`, `/presenter-ticket`) or
 asks the admin bot for it. The presenters' range and its route stay, held by verify/test_presenter_ticket_range.py.
@@ -62,15 +62,15 @@ check(f"segment 4 says the admin bot reads the same desk, `{private}`",
 check(f"segment 4 names the one desk and the one deployments page, `{sd.DEPLOYMENTS}`, for both clusters",
       f"Both clusters' bots read the one support desk, `{community}`, and deploy to the one deployments page, "
       f"`{sd.DEPLOYMENTS}`," in SEG)
-check(f"#/49's deploy opens the one deployments page, `https://{sd.DEPLOYMENTS}`",
-      f"\"deploy\" opens the same deployments page as on `#/48`, `https://{sd.DEPLOYMENTS}`, the one both bots "
+check(f"#/48's deploy opens the one deployments page, `https://{sd.DEPLOYMENTS}`",
+      f"\"deploy\" opens the same deployments page as on `#/47`, `https://{sd.DEPLOYMENTS}`, the one both bots "
       "deploy to" in SEG)
 named_private = [h for h in sd.PRIVATE_DESK_HOSTS if h in SEG]
 check("segment 4 names neither of the admin cluster's own desk hosts", not named_private, str(named_private))
 check("and that check fails on a segment 4 that sends the presenters to the private desk again",
       bool([h for h in sd.PRIVATE_DESK_HOSTS if h in SEG + f" File it on `https://{sd.PRIVATE_DESK_HOSTS[0]}`."]))
 
-print("== the presenters keep their range, read only it or HC-666 on the admin bot, and file #/47 the room's way ==")
+print("== the presenters keep their range, read only it or HC-666 on the admin bot, and file #/46 the room's way ==")
 nums = sd.presenter_numbers()
 first, last = f"HC-{nums.start}", f"HC-{nums.stop - 1}"
 check(f"segment 4 names the presenters' range, {first} to {last}, as ticket_site.py's PRESENTER_NUMBERS",
@@ -78,13 +78,13 @@ check(f"segment 4 names the presenters' range, {first} to {last}, as ticket_site
 check(f"segment 4 tells the presenters to read only {first} to {last} or {', '.join(sd.ADMIN_FIXED)} on the admin bot",
       f"On the admin bot, read only a presenter number, {first} to {last}, or {sd.ADMIN_FIXED[0]}" in SEG
       and "Never read a four-digit number there: that is a room ticket" in SEG)
-STEP47 = "**\"Let's file a ticket.\" (`#/47`).**"
+STEP47 = "**\"Let's file a ticket.\" (`#/46`).**"
 if STEP47 not in SEG:
     sys.exit(f"ANCHOR MISSING: {STEP47!r} is not in segment 4 of {sd.RUN_OF_SHOW}; the demo ticket checks read that step")
 
 
 def step47(seg: str) -> str:
-    """`#/47`'s step in the flattened segment 4, from its bold lead to the next step's."""
+    """`#/46`'s step in the flattened segment 4, from its bold lead to the next step's."""
     return seg.split(STEP47, 1)[1].split(" - **", 1)[0]
 
 
@@ -117,10 +117,10 @@ OLD47 = (STEP47 + " The presenter files a short, ordinary complaint (\"My burrit
          "support ticket HC-900?\" (the number the desk gave), and BurritoBot reads the ticket back.")
 check(f"the demo ticket is filed through the desk's form and read on the room's bot, `https://{attackme}` (#1381)",
       files_the_room_way(S47), S47[:200])
-check("and that check fails on the old #/47 step, filed through the presenters' path", not files_the_room_way(OLD47))
-check("the #/47 step has no port-forward, curl, /presenter-ticket, admin bot or presenter number (#1381)",
+check("and that check fails on the old #/46 step, filed through the presenters' path", not files_the_room_way(OLD47))
+check("the #/46 step has no port-forward, curl, /presenter-ticket, admin bot or presenter number (#1381)",
       not presenters_path(S47), str(presenters_path(S47)))
-check("and that check fails on the old #/47 step", len(presenters_path(OLD47)) == 6, str(presenters_path(OLD47)))
+check("and that check fails on the old #/46 step", len(presenters_path(OLD47)) == 6, str(presenters_path(OLD47)))
 
 
 def admin_reads(seg: str) -> list[str]:

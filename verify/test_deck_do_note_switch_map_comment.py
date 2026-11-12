@@ -39,7 +39,9 @@ LINK_ISSUE = "peopleforrester/Unleash_an_Agent_Watch_It_Burn#1346"
 AUTHORS = {"hecatongithub", "peopleforrester"}
 # The rounds-agenticburn commit the DO notes were read from (decisions.md, #1352).
 DECK_COMMIT = "4627d95"
-# Slide hash -> the DO note's old switches, in the order the note types them, each with its replacement.
+# Slide hash -> the DO note's old switches, in the order the note types them, each with its replacement. The hashes are
+# the 127-slide deck's at 4627d95, as decisions.md and the comment on #171 give them, and stay so: since rounds c6b1b0e
+# (rounds-agenticburn#176, #1392) the deck has 126 slides and these notes are on #/27, #/51, #/73 and #/120.
 DECK_NOTES: dict[str, list[tuple[str, str]]] = {
     "#/27": [("guardrails-on", "guardrails-k8s-on")],
     "#/52": [("guard-agency-on", "guardrails-agency-on"), ("guard-input-on", "guardrails-input-on")],

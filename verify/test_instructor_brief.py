@@ -350,12 +350,18 @@ check("Challenge 1 says there is no fix here and that RBAC arms with Challenge 2
       "No fix here (#776)" in _c5 and "RBAC arms with Challenge 2's <code>guardrails-k8s-on</code>" in _c5)
 check("the stage no longer runs guardrails-rbac-on (or its old name) anywhere on the page",
       "guardrails-rbac-on" not in KUBECON and "guard-rbac-on" not in KUBECON)
-# The deck opens the 2026 edition since rounds 4627d95 (rounds-agenticburn#172, #1348), where Excessive Agency is LLM03.
-check("Challenge 1 ends on the OWASP GenAI LLM Top 10 2026, naming LLM02 and LLM03, as the run-of-show's segment 2 does",
-      'href="https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/"' in _c5
+# The deck's slide 12 links the official page, genai.owasp.org/llm-top-10/, again since rounds c6b1b0e
+# (rounds-agenticburn#176, #1392), with a "2026 version" line linking the 2026 list on GitHub; Excessive Agency is
+# LLM03 in the 2026 edition (#1348).
+_GH_2026 = "https://github.com/GenAI-Security-Project/GenAI-LLM-Top10/tree/main/2026/final"
+_ros2_owasp = " ".join(ROS.split("### Segment 2:", 1)[1].split("### Segment 3:", 1)[0].split())
+check("Challenge 1 ends on the OWASP Top 10 page and its 2026 version, naming LLM02 and LLM03, as the run-of-show's "
+      "segment 2 does",
+      'href="https://genai.owasp.org/llm-top-10/"' in _c5 and f'href="{_GH_2026}"' in _c5
       and "<b>LLM02</b> Sensitive Information Disclosure" in _c5
-      and "<b>LLM03</b> Excessive Agency" in _c5 and "genai.owasp.org/resource/owasp-genai-llm-top-10-2026/" in ROS
-      and "genai.owasp.org/llm-top-10/" not in ROS)
+      and "<b>LLM03</b> Excessive Agency" in _c5 and "`https://genai.owasp.org/llm-top-10/`" in _ros2_owasp
+      and f"`{_GH_2026}`" in _ros2_owasp and "> 2026 version" in _ros2_owasp
+      and "owasp-genai-llm-top-10-2026" not in _ros2_owasp and "owasp-genai-llm-top-10-2026" not in _c5)
 # Each challenge's trace comes right after the presenters' live attack and before its fix (#818).
 for b, n, fix in (("C5", 1, None), ("C6", 3, "guardrails-agency-on"), ("C7", 4, "guardrails-mcp-on")):
     blk = " ".join(" ".join(beat_blocks.get(b, [])).split())
@@ -628,12 +634,13 @@ for n, line in ((2, "Regarding excessive agency, there are a lot of Kubernetes g
                    .split())
     ros_sec = " ".join(ROS.split(f"### Segment {n}:", 1)[1].split(f"### Segment {n + 1}:", 1)[0].split())
     check(f"segment {n}'s hand-off is the run-of-show's", line in sec and line in ros_sec)
-# Segment 3's hand-off is the note on Challenge 3's title card, #/42, word for word (rounds 8f53ce2,
-# rounds-agenticburn#170, #1327; #/43 until rounds 4627d95 moved the desk slide out of the opening, #1348); until that
-# card, it was the note of the "AI guardrails" heading, which is now #/43 inside segment 4 (rounds-agenticburn#82, #1098). The run-of-show carries it as its whole Hand-off line; the /kubecon
-# page's copy is #1100's, which adds its check here.
-_S3_HANDOFF = '"That covers the Kubernetes guardrails. It is time for Challenge 3."'
-check("segment 3's hand-off in the run-of-show is slide #/42's note, word for word (#1327)",
+# Segment 3's hand-off is the note on Challenge 3's title card, word for word (rounds 8f53ce2, rounds-agenticburn#170,
+# #1327). Since rounds c6b1b0e (rounds-agenticburn#176, #1392) the card is #/43, after the "AI guardrails" heading on
+# #/42, and its note is "Which brings us to challenge three...", replacing "That covers the Kubernetes guardrails. It is
+# time for Challenge 3."; until the card, the hand-off was the heading's note (rounds-agenticburn#82, #1098). The
+# run-of-show carries it as its whole Hand-off line; the /kubecon page's copy is #1100's, which adds its check here.
+_S3_HANDOFF = '"Which brings us to challenge three..."'
+check("segment 3's hand-off in the run-of-show is slide #/43's note, word for word (#1327, #1392)",
       _ros_handoff(3) == _S3_HANDOFF)
 check("and the 2026-11-06 hand-off is gone from the run-of-show",
       "Next, the bot doing what a stranger asked." not in " ".join(ROS.split()))
@@ -641,10 +648,13 @@ check("and the 2026-11-06 hand-off is gone from the run-of-show",
 _page_seg3_handoffs = re.findall(
     r'<p class="note"><b>Hand-off:</b> (.*?)</p>',
     KUBECON.split('<span class="n">SEGMENT 3', 1)[1].split('<span class="n">SEGMENT 4', 1)[0], re.S)
-check("segment 3's hand-off on the page is slide #/42's note, word for word, as in the run-of-show (#1100, #1327)",
+check("segment 3's hand-off on the page is slide #/43's note, word for word, as in the run-of-show (#1100, #1392)",
       [" ".join(h.split()) for h in _page_seg3_handoffs] == [_S3_HANDOFF])
 check("and the 2026-11-06 hand-off is gone from the page",
       "the bot doing what a stranger asked" not in " ".join(KUBECON.split()))
+check("and the card's old note, \"That covers the Kubernetes guardrails.\", is gone from both (#1392)",
+      "That covers the Kubernetes guardrails." not in " ".join(ROS.split())
+      and "That covers the Kubernetes guardrails." not in " ".join(KUBECON.split()))
 
 print("== the OWASP close (#687, #842, #849, #1348) ==")
 _seg6 = KUBECON.split('<span class="n">SEGMENT 6', 1)[1]
