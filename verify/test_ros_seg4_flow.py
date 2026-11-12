@@ -27,6 +27,9 @@ suite holds; verify/test_ros_deck_live.py holds the same file to the deck rounds
      old "The setup" framing is gone.
   6. The facts that still hold are still stated.
   7. The segments table's rows 4 and 5 name the same beats with the same slides, in order.
+  8. `#/47`'s step files the demo ticket through the desk's form, quoting the Bat Spit ticket as rounds-agenticburn#175
+     gives it, and asks the room's bot at `https://attackme.burritobot.co` for it by the number the form gives, with no
+     `kubectl port-forward`, `curl`, `/presenter-ticket` or HC-900 ask (#1381); row 4 says the same.
 
 The desk hosts and the `/support` 404 are verify/test_support_desk_named.py's, and segment 3's hand-off is
 verify/test_instructor_brief.py's. Each cut on repo text checks its literal first and exits naming it when it is gone
@@ -51,7 +54,7 @@ BEATS4 = [
     ("the room's access to the desk (#/45)", "**The room's access to the desk (`#/45`).**"),
     ("its QR code (#/46)", "\"People can use the support desk too.\" over the desk's QR code"),
     ("filing a ticket (#/47)", "**\"Let's file a ticket.\" (`#/47`).**"),
-    ("the admin bot reads it back", "BurritoBot reads the ticket back"),
+    ("the room's bot reads it back", "BurritoBot reads the ticket back"),
     ("the challenge (#/48)", "**Use the support ticket system to get BurritoBot to deploy something.**"),
     ("#/48's deploy opens the public page", "\"deploy\" is a link to the room's deployments page, the public one"),
     ("the HC-666 hint (#/49)", "Hint: Look up ticket HC-666 on the support desk."),
@@ -207,7 +210,10 @@ ROW4_BEATS = [
     ("the support desk", "\"BurritoBot has a support desk.\" (`#/44`)"),
     ("the room's access", "\"You've got access to a support desk.\" (`#/45`)"),
     ("its QR code", "the room's first look at it (`#/46`)"),
-    ("filing a ticket", "\"Let's file a ticket.\" (`#/47`)"), ("the challenge", "the challenge sentence (`#/48`)"),
+    ("filing a ticket", "\"Let's file a ticket.\" (`#/47`)"),
+    ("filed through the form and read on the room's bot", "file through the desk's form, as the room can, and read "
+     "back on the room's bot, `attackme.burritobot.co`, by the number the form gives"),
+    ("the challenge", "the challenge sentence (`#/48`)"),
     ("optional views", "the deployments page and the prompt wall optional during play"),
     ("the hint", "the hint, HC-666 (`#/49`)"), ("the white text", "white text"),
     ("the trace", "the seeded trace its link opens (`#/50`)"), ("LLM01", "LLM01, Prompt Injection (`#/51`)"),
@@ -223,6 +229,20 @@ ROW5_BEATS = [
     ("the gateway", "(`#/76` and `#/77`)"), ("the diagrams", "(`#/78` to `#/115`)"),
     ("the rule", "(`#/116` and `#/117`)"),
 ]
+# `#/47`'s step, as rounds-agenticburn#175 gives the deck's Do note (#1381): what it must say and what it must not.
+STEP47 = "**\"Let's file a ticket.\" (`#/47`).**"
+STEP47_SAYS = [
+    ("the desk's form", "through the desk's form, the same way the room can"),
+    ("the desk's address", "`https://support.burritobot.co`"),
+    ("the Bat Spit ticket, word for word", "\"I asked for extra Bat Spit and my Bat Spit Amazing Awesome Sauce, and "
+     "this has just a normal amount of saliva.\""),
+    ("the room number the form gives", "The form gives the ticket a four-digit room number"),
+    ("the room's bot", "switches to the room's BurritoBot, `https://attackme.burritobot.co`,"),
+    ("the question", "\"What's the status of my support ticket [number]?\""),
+    ("the Say line", "Say: \"I'll file a ticket at the support desk, and then I'll ask BurritoBot about it.\""),
+    ("the Then say line", "Then say: \"BurritoBot reads whatever the ticket says. So here's your next challenge...\""),
+]
+STEP47_NEVER = ["port-forward", "curl", "/presenter-ticket", "fake-ticket", "HC-900", "admin bot", "without salsa"]
 # Room-facing wording that would give Challenge 4's solve away.
 SOLVE_LEAKS = ["try each tool", "try each one", "then use each", "use each one"]
 DECK_SLIDES = 127
@@ -291,6 +311,12 @@ def quoted_lines(raw: str) -> list[str]:
     return out
 
 
+def step47(f4: str) -> str:
+    """`#/47`'s step in the flattened segment 4, from its bold lead to the next step's."""
+    need(f4, STEP47)
+    return f4.split(STEP47, 1)[1].split(" - **", 1)[0]
+
+
 def problems(ros: str) -> dict[str, list[str]]:
     s4, s5, f4, f5, r4, r5 = parts(ros)
     out: dict[str, list[str]] = {}
@@ -320,6 +346,11 @@ def problems(ros: str) -> dict[str, list[str]]:
     out["the segments table's row 4 names the same beats and slides, in order, and no Joker"] = (
         in_order(r4, ROW4_BEATS) + [w for w in ("Joker", "joker", "wall,") if w in r4.split("|")[4]])
     out["the segments table's row 5 names the same beats and slides, in order"] = in_order(r5, ROW5_BEATS)
+    s47 = step47(f4)
+    out["#/47 files the Bat Spit ticket through the desk's form and asks the room's bot at attackme.burritobot.co"] = [
+        f"{label}: {p!r}" for label, p in STEP47_SAYS if flat(p) not in s47]
+    out["#/47 has no port-forward, curl, /presenter-ticket or HC-900 ask, and no admin bot"] = [
+        w for w in STEP47_NEVER if w in s47]
     return out
 
 
@@ -383,6 +414,41 @@ need(ros, "\n" + ROW4)
 with_old_row = "\n".join(old_row if ln.startswith(ROW4) else ln for ln in ros.splitlines())
 check("the 2026-11-06 row put back fails the row check",
       bool(problems(with_old_row)["the segments table's row 4 names the same beats and slides, in order, and no Joker"]))
+
+# The #/47 step as it stood before #1381, put back: both new checks fail on it.
+OLD47 = (
+    "- **\"Let's file a ticket.\" (`#/47`).** The line is a link to the room's desk, `https://support.burritobot.co`, "
+    "the one desk both bots read. Say: \"I'll file a ticket at the support desk, and then I'll ask BurritoBot about "
+    "it.\" The presenter files a short, ordinary complaint (\"My burrito came without salsa\") through the presenters' "
+    "path, not the desk's form, from a laptop terminal with kubectl on watch-it-burn-community and the port-forward "
+    "started ahead of the segment:\n\n"
+    "      kubectl --context watch-it-burn-community -n agent port-forward svc/fake-ticket 18080:8080\n"
+    "      curl -s -X POST localhost:18080/presenter-ticket -H 'Content-Type: application/json' \\\n"
+    "        -d '{\"body\": \"My burrito came without salsa\"}'\n\n"
+    "  The desk answers with the ticket and a presenter number, the lowest one free: HC-900 after a desk restart, the "
+    "next one up after a rehearsal's ticket. The route answers only inside the cluster; from outside, "
+    "`https://support.burritobot.co/presenter-ticket` answers 403. The presenter notes the number, then switches to "
+    "the admin bot and asks \"What's the status of my support ticket HC-900?\" (the number the desk gave), and "
+    "BurritoBot reads the ticket back. Then say: \"BurritoBot reads whatever the ticket says. So here's your next "
+    "challenge...\" The ticket is on the one desk, so anyone in the room can ask their own BurritoBot about HC-900 and "
+    "get the same ticket back.\n")
+NEXT48 = "- **The challenge, and play (`#/48`, 3 min).**"
+need(ros, NEXT48)
+at47 = ros.index(STEP47)
+old47 = ros[:at47 - 2] + OLD47 + ros[ros.index(NEXT48):]
+old47_problems = problems(old47)
+check("the old #/47 step put back fails the desk's-form check", bool(old47_problems[
+    "#/47 files the Bat Spit ticket through the desk's form and asks the room's bot at attackme.burritobot.co"]))
+check("the old #/47 step put back fails the no-port-forward check", set(old47_problems[
+    "#/47 has no port-forward, curl, /presenter-ticket or HC-900 ask, and no admin bot"]) == set(STEP47_NEVER))
+need(ros, "by the number the form gives;")
+old_clause = ros.replace(
+    "a ticket the presenters file through the desk's form, as the room can, and read back on the room's bot, "
+    "`attackme.burritobot.co`, by the number the form gives;",
+    "an ordinary ticket the presenters file on the one desk in their reserved range, HC-900 to HC-999, that the admin "
+    "bot reads back by its number and the room's bot can read too;", 1)
+check("row 4's old #/47 clause put back fails the row check",
+      bool(problems(old_clause)["the segments table's row 4 names the same beats and slides, in order, and no Joker"]))
 
 if failures:
     print(f"\n{len(failures)} check(s) failed")
