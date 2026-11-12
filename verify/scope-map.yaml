@@ -2492,7 +2492,7 @@ reads:
     - verify/.tools/bin/otelcol-contrib
     - verify/collector_render.py
     - verify/e2e-tools.lock
-    - verify/fetch-e2e-tools.sh
+    - verify/run-e2e-tools.sh
   test_collector_relay_live_checks.py:
     - gitops/bootstrap/apps/otel-collector-attendee.yaml
     - gitops/bootstrap/apps/otel-collector-burn.yaml

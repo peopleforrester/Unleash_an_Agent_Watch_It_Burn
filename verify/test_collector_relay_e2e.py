@@ -18,7 +18,7 @@ resource must carry k8s.pod.ip 127.0.0.1, the sender's address, which k8s_attrib
 hid it. The collector's own metrics must count the 600 sent by otlp_grpc/relay, accepted by otlp/relay, and none
 refused, failed or turned away by the queue.
 
-Fails when the binary is missing: run verify/fetch-e2e-tools.sh (verify/run-e2e-tools.sh does).
+Fails when the binary is missing: run it through verify/run-e2e-tools.sh, which runs it in the wib-e2e-tools image.
 """
 from __future__ import annotations
 
@@ -39,7 +39,8 @@ import yaml
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from collector_render import REPO, collector_config, feature_gate_args  # noqa: E402
 
-OTELCOL = REPO / "verify/.tools/bin/otelcol-contrib"
+# run-e2e-tools.sh names the pinned collector in OTELCOL_CONTRIB, the image's inside wib-e2e-tools (#1188); by hand, the copied-out one.
+OTELCOL = pathlib.Path(os.environ.get("OTELCOL_CONTRIB") or REPO / "verify/.tools/bin/otelcol-contrib")
 LOCK = REPO / "verify/e2e-tools.lock"
 START_BOUND = float(os.environ.get("COLLECTOR_START_BOUND", "120"))  # seconds the collector gets to take the spans
 INTAKE, TRACES, RECEIVER, EXPORTER = "traces/intake", "traces", "otlp/relay", "otlp_grpc/relay"
@@ -55,7 +56,7 @@ def check(name: str, cond: bool, detail: str = "") -> None:
 
 
 if not os.access(OTELCOL, os.X_OK):
-    print(f"FAIL: {OTELCOL} is missing; run bash verify/fetch-e2e-tools.sh (this is a failure, not a skip)")
+    print(f"FAIL: {OTELCOL} is missing; run it through bash verify/run-e2e-tools.sh, in the wib-e2e-tools image (this is a failure, not a skip)")
     sys.exit(1)
 pinned = next(line.split()[1] for line in LOCK.read_text().splitlines() if line.startswith("otelcol-contrib "))
 version = subprocess.run([str(OTELCOL), "--version"], capture_output=True, text=True, check=True).stdout.strip()
