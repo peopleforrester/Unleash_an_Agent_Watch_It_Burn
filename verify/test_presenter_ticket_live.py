@@ -6,9 +6,9 @@ Run 18741 did that flow by hand on watch-it-burn-community; verify/presenter_tic
 this holds the check, with no cluster, no model and no network beyond localhost:
 
   1. the check files the presenters' way: port-forward svc/fake-ticket in agent on watch-it-burn-community, then POST
-     /presenter-ticket, and asks the bot "What's the status of my support ticket HC-<n>?". The run-of-show's `#/47`
-     step no longer files this way since #1381 (it uses the desk's form and the room's bot), so this no longer reads
-     that step; the route and the range stay for rehearsals;
+     /presenter-ticket, and asks the bot "What's the status of my support ticket HC-<n>?". The run-of-show's "Let's
+     file a ticket." step no longer files this way since #1381 (it uses the desk's form and the room's bot), so this
+     no longer reads that step; the route and the range stay for rehearsals;
   2. the whole flow against the real gitops/ai-layer/ticket_site.py: the ticket is filed through POST /presenter-ticket,
      numbered in the desk's own PRESENTER_NUMBERS (HC-900 on a fresh desk, the next one after a rehearsal's ticket),
      shown on the desk's page for its number, read back by a bot whose read_support_ticket reads that desk, its reply
