@@ -31,8 +31,8 @@ In order, this:
    and checks in that same read that the private KEPT row and the community GONE row, of the same name, are unmarked,
    that the sweep deleted the private GONE Deployment, and that both others still run;
 8. runs the page the room sees, https://deployments.burritobot.co/, in node against those rows: the private GONE line
-   reads "Someone deployed nginx at <t>, removed at <t> private" with the class the page greys, and the other two lines
-   carry no class;
+   reads "<stand-in> deployed nginx at <t>, removed at <t> private" with the class the page greys, and the other two
+   lines carry no class, <stand-in> being the made-up witch name /deployments.json gives a nameless row (#1397);
 9. always puts the private policies back to the actions it read, deletes all three Deployments, removes the three rows
    from the one page with the community desk's loopback-only /desk-forget (#1215), and checks the policies and the
    names of every Deployment, StatefulSet, DaemonSet, Job and CronJob in agent on both clusters are as found, and that
@@ -404,10 +404,14 @@ def run_checks() -> None:
             if page:
                 lines, err = page_lines(page, [marked[k] for k in (P_GONE, P_KEPT, C_GONE)])
                 want = {
-                    f"Someone deployed nginx at {marked[P_GONE]['at']}, removed at {marked[P_GONE]['removed_at']} "
-                    f"{PRIVATE_LABEL}": "removed",
-                    f"Someone deployed maintenance-shell at {marked[P_KEPT]['at']} {PRIVATE_LABEL}": "",
-                    f"Someone deployed nginx at {marked[C_GONE]['at']} {COMMUNITY_LABEL}": ""}
+                    f"{marked[P_GONE].get('witch')} deployed nginx at {marked[P_GONE]['at']}, removed at "
+                    f"{marked[P_GONE]['removed_at']} {PRIVATE_LABEL}": "removed",
+                    f"{marked[P_KEPT].get('witch')} deployed maintenance-shell at {marked[P_KEPT]['at']} "
+                    f"{PRIVATE_LABEL}": "",
+                    f"{marked[C_GONE].get('witch')} deployed nginx at {marked[C_GONE]['at']} {COMMUNITY_LABEL}": ""}
+                check("each of the three rows, deployed with no name, reads a stand-in witch name, never 'Someone' "
+                      "(#1397)", all(marked[k].get("stand_in") is True and marked[k].get("witch")
+                                     for k in (P_GONE, P_KEPT, C_GONE)), json.dumps([marked[k] for k in (P_GONE, P_KEPT, C_GONE)]))
                 by_text = {x["text"]: x["cls"] for x in lines}
                 for text, cls in want.items():
                     check(f"the page's script renders {text!r} " + ("with the class it greys" if cls else "ungreyed"),

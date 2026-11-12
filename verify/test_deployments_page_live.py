@@ -118,9 +118,10 @@ if public:
             page = resp.read().decode("utf-8", "replace")
         check(f"https://{host}/ is the deployments page", "Everything BurritoBot deployed" in page)
         check("and names no Joker", "joker" not in page.lower())
-        check("each line reads '<witch name> deployed <image short name> at <time>', 'Someone' with no name (#995)",
-              "b.textContent=x.witch||'Someone';" in page and "createTextNode(' deployed ')" in page
-              and "deployed by" not in page)
+        check("each line reads '<witch name> deployed <image short name> at <time>' (#995), a nameless row under the "
+              "stand-in name /deployments.json gives it, never 'Someone' (#1397)",
+              "b.textContent=x.witch;" in page and "createTextNode(' deployed ')" in page
+              and "Someone" not in page and "deployed by" not in page)
         check("with the full image as the short name's hover text", "c.title=x.image;" in page)
     except (urllib.error.URLError, TimeoutError) as e:
         check(f"https://{host}/ answers", False, f"{type(e).__name__}: {e}")

@@ -16,7 +16,8 @@ the room) lists it, one line "<witch name> deployed <image short name> at <time>
 (#995), with no Joker anywhere and nothing of the support desk reachable under that name. Since #995 the witch name is
 the X-Witch-Name header on the tools/call's own request, which kagent copies from guard-proxy's A2A request (the
 Agent's allowedHeaders), and the model's requested_by is read only when there is none; a deploy with no browser behind
-it reads "Someone deployed ...". The chat page shows "see your deployments" once the visitor's first one lands.
+it reads a stand-in name from the desk's own vocabulary, the same one for that row on every read and never stored on
+it (#1397), so no line reads "Someone". The chat page shows "see your deployments" once the visitor's first one lands.
 
 deploy_app runs here against a stand-in for the Kubernetes API that records every call, and reports to the real ticket
 site on localhost. No cluster, no model. test_public_images_served.py reads the four games from their registries.
@@ -389,8 +390,9 @@ check("?witch=<slug> filters to that visitor", wait_for(lambda: rows(f"?witch={E
       and all(r["witch"] == EDGAR for r in rows(f"?witch={EDGAR_SLUG}")))
 check("another visitor's filter does not see it", rows("?witch=" + site.slug(site.NAME_SPACE[0])) == [])
 deploy(workload("anon", "redis"), requested_by="Bob from accounting")
-check("a name the vocabulary does not make is not shown: the row has no witch",
-      wait_for(lambda: any(r["name"] == "anon" and r["witch"] == "" for r in rows())))
+check("a name the vocabulary does not make is not shown: the row has no witch and reads a stand-in (#1397)",
+      wait_for(lambda: any(r["name"] == "anon" and r["stand_in"] and r["witch"] != "Bob from accounting"
+                           and r["witch"] in site.NAME_SPACE for r in rows())))
 deploy(workload("lowercase", "redis"), requested_by="  edgar the   KELPIE ")
 check("the name is matched whatever its case and spacing",
       wait_for(lambda: any(r["name"] == "lowercase" and r["witch"] == EDGAR for r in rows())))
@@ -433,14 +435,34 @@ deploy(workload(room_joker, site.ROOM_IMAGE), headers={"X-Witch-Name": EDGAR})
 check("an HC-666 Joker is credited to the person chatting, not to the name the Deployment was given",
       wait_for(lambda: any(r["name"] == room_joker and r["witch"] == EDGAR for r in rows())), str(rows()[:3]))
 deploy(workload("probe-redis", "redis"), headers={})
-check("a tools/call with no browser behind it (no header, no requested_by) has no witch",
-      wait_for(lambda: any(r["name"] == "probe-redis" and r["witch"] == "" for r in rows())), str(rows()[:3]))
+check("a tools/call with no browser behind it (no header, no requested_by) has no witch, and reads a stand-in",
+      wait_for(lambda: any(r["name"] == "probe-redis" and r["stand_in"] for r in rows())), str(rows()[:3]))
 deploy(workload("probe-named", "redis"), requested_by=AGATHA, headers={"Mcp-Session-Id": "probe"})
 check("with no header, the model's requested_by is still read, as before the guard-proxy half is pinned",
       wait_for(lambda: any(r["name"] == "probe-named" and r["witch"] == AGATHA for r in rows())), str(rows()[:3]))
 probe = next((r for r in rows() if r["name"] == "probe-redis"), {})
-check("its row names the image's short name, which the page reads as 'Someone deployed redis at ...'",
+check("its row names the image's short name, which the page reads as '<stand-in> deployed redis at ...'",
       probe.get("app") == "redis" and probe.get("image") == "redis", str(probe))
+# The stand-in (#1397): a name from the vocabulary, picked from the row itself, never written on the row, never handed
+# out, and kept out of every visitor's own view.
+_probe_row = next((r for r in site.LANDINGS if r["name"] == "probe-redis"), {})
+check("the probe's line reads stand_in_name of its own row, a name the vocabulary makes",
+      probe.get("witch") == site.stand_in_name(_probe_row) and probe.get("witch") in site.NAME_SPACE, str(probe))
+check("the same row reads the same stand-in on every read",
+      all(next(r for r in rows() if r["name"] == "probe-redis")["witch"] == probe.get("witch") for _ in range(3)))
+check("the stand-in is never stored: the landed row itself still has no witch", _probe_row.get("witch") == "",
+      str(_probe_row))
+check("and never handed out: the desk's names-taken set is unchanged by reading the page",
+      (lambda before: (rows(), set(site._taken) == before)[1])(set(site._taken)))
+_own_view = rows("?witch=" + site.slug(probe.get("witch", "x")))
+check("no visitor's ?witch= view lists a stand-in row, not even the view of the stand-in's own name",
+      all(not r["stand_in"] and r["name"] != "probe-redis" for r in _own_view), str(_own_view))
+check("a named row is never marked a stand-in", all(not r["stand_in"] for r in rows(f"?witch={EDGAR_SLUG}")))
+_a = {"name": "joker-walk-in-customer", "cluster": "community", "ts": 1.0, "at": "08:15:00"}
+_b = dict(_a, ts=2.0, at="08:16:00")
+check("each of #1397's five walk-in rows gets its own stand-in, picked by its landing time, not one name for all",
+      len({site.stand_in_name(dict(_a, ts=float(i), at=f"08:1{i}:00")) for i in range(5)}) > 1
+      and site.stand_in_name(_a) == site.stand_in_name(dict(_a)) and site.stand_in_name(_a) != site.stand_in_name(_b))
 check("the short name drops the registry, the path, the tag and the digest",
       site.image_label("registry.burritobot.co:5000/burritobot/tron-lightcycle-game:v2@sha256:" + "a" * 64)
       == "tron-lightcycle-game" and site.image_label("tron-lightcycle-game") == "tron-lightcycle-game")
@@ -460,9 +482,10 @@ check("/ is the deployments page", code == 200 and "Everything BurritoBot deploy
 check("it fills from /deployments.json", "fetch('/deployments.json'" in page)
 script = page[page.find("<script>"):page.find("</script>")]
 check("each line is '<witch name> deployed <image short name> at <time>' (#995)",
-      "b.textContent=x.witch||'Someone';" in script and "createTextNode(' deployed ')" in script
+      "b.textContent=x.witch;" in script and "createTextNode(' deployed ')" in script
       and "c.textContent=x.app;" in script and "createTextNode(' at '+x.at)" in script, script)
-check("a line with no witch name reads 'Someone deployed ...'", "x.witch||'Someone'" in script)
+check("the page has no 'Someone' fallback: a nameless row's witch is its stand-in (#1397)",
+      "Someone" not in page and "x.witch||" not in script, script)
 check("the full image is the short name's hover text", "c.title=x.image;" in script)
 check("no deployment name in parentheses, no 'deployed by', no 'landed', and no Joker anywhere",
       "x.name" not in script and "'('" not in script and "deployed by" not in page and "landed" not in page.lower()

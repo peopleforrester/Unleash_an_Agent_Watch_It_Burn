@@ -56283,3 +56283,85 @@ the `console-src` ConfigMap as before. It still gives the old hand-off once, as 
 **Not yet run on a cluster.** After promotion, the page the private cluster serves carries this change:
 `curl -s https://burritobot-private.burritobot.co/kubecon` contains "Which brings us to challenge three..." and no
 "That covers the Kubernetes guardrails.", and `python3 verify/test_ros_deck_live.py` passes once #1394 and #1395 land.
+## 2026-11-12 · #1396 · run 20640 · scope_tests.py write gives the same Test map for a new file before and after `git add`
+
+`widen()` in `verify/scope_tests.py` writes a literal entry as itself and, unless the entry is a file, as
+`<entry>/**` too. `test_map()` passed it only the tracked files, so `python3 verify/scope_tests.py write` run before
+`git add` of a new tool wrote the tool as a directory as well. Run 20624 on #1391 wrote
+`verify/deck_renumber.py/**` that way, and `verify/test_test_map.py` failed on it once the tool was tracked. Of the
+two fixes the issue offered, this takes the first: `Tree.untracked()` lists what `git ls-files --others
+--exclude-standard` prints, the files git would add (as `changed_paths()` already reads them), and `test_map()`
+counts those as files. The order of `write` and `git add` no longer matters, so the AGENTS.md wording stays as it is.
+An ignored file is not counted, so a host's ignored files cannot change the map, and a new directory still takes
+`<dir>/**`. The scope map side already read a new file from disk (`(root / c).is_file()`), which is why
+`verify/scope-map.yaml` was right in #1391 and only the Test map was wrong.
+
+**Tests.** `verify/test_test_map.py` gains point 4: a scratch git repo under the run's TMPDIR holds a tracked test, a
+new tool, a new directory and an ignored file; the Test map written with the tool untracked equals the one written
+after `git add`, the tool has no `/**` line, and the directory and the ignored file keep theirs. With `test_map()`
+put back to the tracked files alone the equality check fails on exactly `verify/tool.py/**`; with the change all of
+`test_test_map.py` passes. `scope_tests.py write` changed nothing in either map.
+
+**Live check.** Skipped: the change touches only `verify/scope_tests.py` and `verify/test_test_map.py`, which no
+cluster runs.
+## 2026-11-12 · #1394 · run 20630 · Run-of-show and /kubecon: the take-home URL is `michaelrishiforrester.com/burritobot`
+
+Michael asked on the day of the talk for the take-home page to move from `/unleashed` to `/burritobot` (MRF-website#175,
+with the deck in rounds filed alongside). `facilitation/kubecon-na-2026-run-of-show.md` now names
+`michaelrishiforrester.com/burritobot` in the segments table's row 6 and in the "Take home, and the feedback ask" step,
+whose encoded URL is `https://michaelrishiforrester.com/burritobot/`; that step cites #1394 and says MRF-website#175
+moved the page. `gitops/ai-layer/web/kubecon.html` line 554 labels and links the same URL and cites #1394. Neither
+file names `michaelrishiforrester.com/unleashed` any more. The #1369 entry above keeps the old URL as history.
+
+**Tests.** No test or script under `verify/` or `scripts/` reads `michaelrishiforrester.com/unleashed`, the
+`MRF-website#171` citation or the step's bold lead, so none changed. `python3 verify/test_ros_deck_live.py` fails 9
+checks at this run, none on the take-home: the deck at https://rounds.agenticburn.com/attendee.html now has 126 slides
+after rounds-agenticburn#176, which #1390 and #1392 carry. The deck itself still labels slide 124
+`michaelrishiforrester.com/unleashed` as this run reads it, and `https://michaelrishiforrester.com/burritobot/` answered
+404 while `/unleashed/` answered 200, so the page and the deck land through MRF-website#175 and its rounds issue. The
+prose gate's scanner passes on the three changed files, read against base 2cd44069.
+
+**Live check.** This doc-lane run has no cluster context, so it read neither cluster.
+
+**Not yet run on a cluster.** After promotion and Argo CD's sync, watch-it-burn-private's `console-src` ConfigMap in
+`agent` should hold `michaelrishiforrester.com/burritobot` in its `kubecon.html` key and no
+`michaelrishiforrester.com/unleashed`: `kubectl --context watch-it-burn-private -n agent get cm -o name | grep
+console-src`, then read that key.
+## 2026-11-12 · #1397 · run 20659 · A nameless deploy reads a stand-in witch name, never "Someone"
+
+**Ask.** Michael, 2026-11-12: the deployments page cannot say "Someone"; a deploy with no witch name behind it must
+read a made-up name. Live that morning, deployments.burritobot.co showed five `joker-walk-in-customer` rows from
+attackme with `"witch": ""`, each rendered "Someone deployed maintenance-shell".
+
+**Change.** `gitops/ai-layer/ticket_site.py` gains `stand_in_name(row)`: a name from the desk's own vocabulary
+(`NAME_SPACE`, "<First> the <Creature>"), picked by the SHA-256 of the row's cluster, name, landing time and clock
+time, so the same row reads the same name on every read and five rows of one name read different names. It is never
+written on the row and never added to `_taken`, the set of names handed to visitors. `/deployments.json` sets a nameless
+row's `witch` to it and adds `stand_in` (true for such a row), and the page's script drops its `||'Someone'`
+fallback. A visitor's `?witch=<slug>` view still filters on the stored name, so it never lists a stand-in row. The
+issue's own spec settled the shape; no draft existed (`prior-drafts.sh` printed NONE).
+
+**Known limit.** A stand-in can be a name the desk later hands a visitor (768 names, a room of up to 300), so a
+student can see "their" name on a pre-seeded row. Keeping each row's name fixed, as the issue asks, rules out moving
+off a name once it is handed out; the `stand_in` flag in the JSON marks such rows.
+
+**Tests.** `verify/test_public_images.py` (offline) holds the stand-in: a name the vocabulary makes, equal to
+`stand_in_name` of the landed row, the same on three reads, not stored, `_taken` unchanged, absent from every
+`?witch=` view, and the page has no "Someone"; exit 0. `verify/test_deployments_witch_line_e2e.py` (tools tier) now
+pairs each rendered line with its own row instead of counting a guessed name, since the probe's stand-in turns on its
+landing time: `bash verify/run-e2e-tools.sh test_deployments_witch_line_e2e.py`, 1 check in 0m15s, ALL GREEN, exit 0
+(the probe read "Mabel the Warlock deployed redis at 15:09:50, removed at 15:09:51").
+`verify/test_private_chat_deployments.py` takes `stand_in` into its key set; exit 0. Also run once, unchanged, exit 0:
+`test_desk_removed_rows.py`, `test_deployments_private_banner.py`, `test_witch_name_vocab.py`, `test_room_jokers.py`,
+`test_support_desk.py`, `test_ros_deployments_removed_row.py`. The three live tests that expected "Someone"
+(`test_deployments_page_live.py`, `test_deployments_removed_live.py`, `test_private_removed_row_live.py`) now expect
+each row's own stand-in.
+
+**Live check (read only, watch-it-burn-community).** Before the change: `https://deployments.burritobot.co/deployments.json`
+listed 6 rows, 5 with `"witch": ""` and no `stand_in` key; the page's script carried `x.witch||'Someone'`; Argo CD's
+`ai-layer` Application read Synced at c7ae5181 (this run's base). Nothing on the cluster was changed.
+
+**Not yet run on a cluster.** The desk takes the change only once hecaton promotes it and Argo CD rolls the
+`fake-ticket` pod (its ConfigMap name carries the content hash). Then `CONTEXT=watch-it-burn-community python3
+verify/test_deployments_page_live.py` and a read of `https://deployments.burritobot.co/deployments.json` (every row's
+`witch` a name, none "Someone") are owed by the next run on the issue.

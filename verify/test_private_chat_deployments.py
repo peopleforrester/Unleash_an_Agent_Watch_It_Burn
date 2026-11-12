@@ -230,9 +230,9 @@ check(f"agatha-the-banshee: 200 and her two private rows, newest first ({code})"
       code == 200 and [r["name"] for r in rows] == ["agatha-private-2", "agatha-private-1"], str(rows))
 check("each row labelled private, carrying her witch name", bool(rows) and all(r["cluster"] == "private"
                                                                                 and r["witch"] == AGATHA for r in rows))
-check("and the rows are the deployments page's own, nothing of the desk's",
-      bool(rows) and all(set(r) == {"name", "kind", "image", "app", "witch", "at", "removed_at", "cluster", "server"}
-                     for r in rows))
+check("and the rows are the deployments page's own, nothing of the desk's (stand_in since #1397, false on her own rows)",
+      bool(rows) and all(set(r) == {"name", "kind", "image", "app", "witch", "stand_in", "at", "removed_at", "cluster",
+                                    "server"} and r["stand_in"] is False for r in rows))
 check("the relay asked the deployments page for her and nothing else, with no token",
       desk_seen[before:] == [("/deployments.json?witch=agatha-the-banshee", "")], str(desk_seen[before:]))
 _, page_rows = get(f"{DESK}/deployments.json?witch=agatha-the-banshee")
