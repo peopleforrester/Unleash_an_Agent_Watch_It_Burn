@@ -55929,3 +55929,42 @@ command.
 two directories and that report.
 
 **Live check.** Skipped: nothing the clusters run changed, and this run wrote only this entry.
+## 2026-11-12 · #1376 · run 20610 · The guarded move waits for 23:30Z; this run escalates nothing and holds the issue to 2026-11-13
+
+**Context.** Question 1205 answered run 20601's act: the custodian tier ran it at 13:50Z and it exited 3 with
+`NOT YET`, changing nothing, because it is before 2026-11-12T23:30Z and the `# wib-backups (#643)` crontab lines,
+the 22:50Z teardown and `unschedule` among them, are still installed. The answer asks for the same argv, unchanged,
+at or after 23:30Z once the teardown has run, and for no escalation before then. This run started at 13:52Z, so the
+precondition cannot hold during it, and no change in this repo can make it hold sooner: it waits on the clock and
+the teardown alone.
+
+**What this run did.** Nothing on netcup and no new act. `bash verify/prior-drafts.sh 1376 origin/staging` printed NONE:
+the drafts of runs 20601 and 20608 are both in staging. Netcup's checkout was last read at about 13:45Z (run 20601's entry above) and
+nothing scheduled there moves it before 23:30Z, so it was not read again.
+
+**The act to escalate again, verbatim.** The next run on the issue, at or after 23:30Z, first checks that the
+crontab no longer holds `# wib-backups (#643)` lines (the teardown's `unschedule` ran), then puts this act back in
+`escalate` unchanged: tool `ssh`, no host, argv `bash`, `-c` and the script below, with run 20601's why. If the
+crontab lines are still there, the teardown needs looking at first and the act would exit 3 again.
+
+```bash
+set -u
+cd ~/repos/talks/Unleash_an_Agent_Watch_It_Burn || exit 1
+[ "$(date -u +%s)" -ge "$(date -u -d 2026-11-12T23:30:00Z +%s)" ] || { echo "NOT YET: it is before 2026-11-12T23:30Z, and the KubeCon session's 22:50Z standby teardown runs from this checkout; nothing changed"; exit 3; }
+if crontab -l 2>/dev/null | grep -qF '# wib-backups (#643)'; then echo "NOT YET: the backup schedule's crontab lines are still installed, so its teardown and unschedule have not run; nothing changed"; exit 3; fi
+exec 9>>infra/terraform/fleet/logs/.backups-watch.lock
+flock -n 9 || { echo "NOT YET: a backups.py watcher still holds infra/terraform/fleet/logs/.backups-watch.lock; nothing changed"; exit 3; }
+here=$(git rev-parse --short HEAD)
+git status --short --untracked-files=no
+git stash push -m "pre-1376-move from ${here}" || exit 1
+if ! { git fetch -q origin main && git checkout -q --detach origin/main; }; then echo "fetch or checkout failed; restoring the edits"; git stash pop --index || echo "the edits are kept in stash@{0}"; exit 1; fi
+echo "moved ${here} -> $(git rev-parse --short HEAD)"
+echo "apply -refresh-only lines in fleet.sh: $(grep -c 'apply -refresh-only' infra/terraform/fleet/fleet.sh)"
+git stash list | head -1
+```
+
+**Criteria.** Neither is met. Criterion 1 needs the act above to run after 23:30Z and netcup's fleet.sh read back
+with 2 `apply -refresh-only` lines. Criterion 2 needs the first drift report after the next standby wave built from
+the moved checkout.
+
+**Live check.** Skipped: nothing the clusters run changed, and this run wrote only this entry.
