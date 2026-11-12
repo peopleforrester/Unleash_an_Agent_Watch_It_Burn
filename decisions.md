@@ -55091,3 +55091,40 @@ guards against the old deck's numbering, so the new test joins SEG4_READERS with
 20504's scoped selection had not picked that test, and the run did not run it. `python3
 verify/test_deck_shift_slide_citations.py` now passes, as do `test_scope_tests.py` and `test_ros_reworded_slides.py`;
 `scope_tests.py write` added nothing.
+
+## 2026-11-12 · #1369 · run 20508 · Run-of-show segment 6 and /kubecon: `#/124` is one QR code to `michaelrishiforrester.com/unleashed/`
+
+Rounds `3f345b5` (rounds-agenticburn#173) replaced the take-home slide's five QR codes with one, labeled
+`michaelrishiforrester.com/unleashed` and encoding `https://michaelrishiforrester.com/unleashed/`, a page
+(MRF-website#171) that links the MCP server vetting checklist, the GitHub repo, the feedback form
+(`https://feedback.burritobot.co/?source=deck`), whitneylee.com and michaelrishiforrester.com. Its Say line is now
+"Take this home: one code opens a page with the MCP server vetting checklist, the GitHub repo with the whole platform as
+code, and the feedback form. Our sites are there too." I read slide 124 off https://rounds.agenticburn.com/attendee.html
+(127 slides) and it carries exactly that: one image, one hint, that note.
+
+`facilitation/kubecon-na-2026-run-of-show.md` changes in the three places the issue names: the segments table's row 6
+and the Segment 6 intro say "one QR code", and the "Take home, and the feedback ask" step names the one code, its label
+and URL, lists what the page links, and quotes the new Say line word for word. The feedback ad-lib now says the form is
+on the page the code opens: "Scan this, and the feedback form is right there on the page: one tap, tell us how it went;
+the thanks page takes you on to rate us on Sessionize." `gitops/ai-layer/web/kubecon.html` carried the same five codes
+and the old Say line in its segment 6 control and notes, so it changes too, beyond the issue's list: one code, the page
+it opens, and the new Say line.
+
+**Tests.** `python3 verify/test_ros_deck_live.py` against the live deck: every check and self-check PASS. On the
+staging run-of-show before this change it fails "every quote in a step is on a slide its bold lead cites", on the old
+Say line, so the check reads this step. `test_audience_event.py` (it holds `feedback.burritobot.co/?source=deck` in
+segment 6), `test_challenge_slide_headers.py`, `test_deck_shift_slide_citations.py`, `test_finale_cap.py`,
+`test_instructor_brief.py`, `test_kubecon_seg4_flow.py`, `test_mcp_vetting_handout.py`, `test_ros_over_slot_seg5.py`,
+`test_ros_reworded_slides.py`, `test_ros_seg4_flow.py`, `test_trace_walkthrough_view.py` and `test_scope_tests.py` pass
+(`test_finale_cap.py` and `test_trace_walkthrough_view.py` once this worktree's guard-proxy submodule was initialized).
+The prose gate passes. The scoped offline selection is 290 tests, since 290 read one of the two files; the rest are
+left to the gate.
+
+**Live check.** The change touches `gitops/ai-layer/web/kubecon.html`, which the private cluster serves at `/kubecon`
+from the `console-src` ConfigMap in namespace `agent` (the community cluster drops the page, #909). Read before
+promotion: watch-it-burn-private's `console-src-5cdfmkh962` still holds "five QR" once; watch-it-burn-community's
+`console-src-42dmmhdm8t` holds no kubecon.html.
+
+**Not yet run on a cluster.** After promotion and Argo CD's sync, watch-it-burn-private's `console-src` ConfigMap in
+`agent` should hold "one QR" and "Take this home: one code opens a page" and no "five QR":
+`kubectl --context watch-it-burn-private -n agent get cm -o name | grep console-src`, then read its `kubecon.html` key.
