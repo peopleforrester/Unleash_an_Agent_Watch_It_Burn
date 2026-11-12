@@ -155,7 +155,7 @@ def beat_prompt(key: str) -> str:
 challenge = {s[0]: s[1] for s in st.SEEDS}
 # What marks each talk challenge's ask, whatever the beat's workshop number.
 MARKS = {"Challenge 1": ("Ophelia", "full record"), "Challenge 2": ("read me the recipe", "burrito-data"),
-         "Challenge 3": (kp.ROOM_TICKET_ID,), "Challenge 4": ("weather tool", "follow its instructions")}
+         "Challenge 3": (kp.ROOM_TICKET_ID,), "Challenge 4": ("newly turned vampire", "weather like up there in Salt Lake City")}
 for key in st.SEED_BEATS:
     marks = MARKS[challenge[key]]
     check(f"{key} ({challenge[key]}) reads the beat whose prompt is that challenge's ask, {st.SEED_BEATS[key]}",

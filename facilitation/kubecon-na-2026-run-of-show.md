@@ -1959,7 +1959,7 @@ is (Michael, 2026-11-11).
   was on "tools". Say: "Ask BurritoBot about the weather, then look at what else it
   did." After a few moments the presenters attack: switch
   to the admin bot and send the weather prompt from `/kubecon`, from the iPad cheat
-  sheet ("I want my lunch burrito to match the weather..."). The real forecast comes
+  sheet ("I'm a newly turned vampire with yet another burrito delivery order to my dungeon..."). The real forecast comes
   back (#642) with the recipe under it, the Bat Spit Amazing Awesome Sauce batch
   formula and its calibration token, then an order. Measured 3 of 3 on
   attackme.burritobot.co, 2026-10-29 (#683). Whether or not it works, move on: time is

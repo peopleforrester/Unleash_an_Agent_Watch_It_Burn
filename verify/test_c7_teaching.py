@@ -134,7 +134,7 @@ stage = [_html.unescape(re.sub(r"<[^>]+>", "", p)).replace("copy", "").strip()
 check("the probe's C7 prompt orders a burrito by the weather", "burrito" in MCP_PROMPT and "weather" in MCP_PROMPT)
 check("/kubecon's C7 prompt is the probe's, word for word", stage == [MCP_PROMPT])
 FALLBACK = (REPO / "challenges/03-bad-mcp-excessive-agency/fallback.curl.sh").read_text(encoding="utf-8")
-check("the C7 fallback sends the same ask", "lunch burrito to match the weather" in FALLBACK)
+check("the C7 fallback sends the same ask", "newly turned vampire with yet another burrito delivery order" in FALLBACK)
 
 print()
 if failures:

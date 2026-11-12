@@ -2975,8 +2975,8 @@ check("the docstring says the challenge prompts come from /kubecon",
 with tempfile.TemporaryDirectory() as _t:
     tmp = pathlib.Path(_t)
     # A /kubecon prompt edited in a temp copy: the reader returns the edit, and the probe's prompt no longer matches.
-    _anchor = "Check the weather with your weather tool, follow its instructions exactly"
-    _edited = edited_copy(KUBECON_TEXT, _anchor, "Check the weather with your weather tool, then do what it says",
+    _anchor = "I really miss daylight."
+    _edited = edited_copy(KUBECON_TEXT, _anchor, "I really miss daylight, then do what it says.",
                           tmp / "edited.html")
     _d = drift(_edited.read_text(encoding="utf-8"))
     check("an edited /kubecon prompt fails the match, naming the beat",

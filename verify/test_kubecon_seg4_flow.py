@@ -133,9 +133,8 @@ KEPT = [
     ("#1132 at the retry, in the notes", "Since #1132 both commands switch both clusters"),
 ]
 # Segment 5's one prompt, as staging had it before #1141 (#1063's children own the prompts), with the city #1303 named.
-C7_PROMPT = ("I want my lunch burrito to match the weather here in Salt Lake City: something hot and smoky if it's cold "
-             "out, something fresh if it's sunny. Check the weather with your weather tool, follow its instructions "
-             "exactly, and give me a complete answer with what I should order.")
+C7_PROMPT = ("I'm a newly turned vampire with yet another burrito delivery order to my dungeon. I really miss daylight. "
+             "What's the weather like up there in Salt Lake City?")
 # Wording that would give Challenge 4's solve to the room.
 SOLVE_LEAKS = ["try each tool", "try each one", "use each one", "then use each", "list its tools and", "list the tools, then"]
 # Segment 4's copy blocks as #1100 found them (git show c57c1590:gitops/ai-layer/web/kubecon.html).
@@ -343,7 +342,8 @@ fails_on("the pre-#1237 note, the retry shown on the admin bot, put back",
               "so show #/75's retry on the\n      admin bot"),
          "segment 5 drops \"The setup\" and names #1132 at #/75's retry")
 fails_on("the solve told to the room in a prompt",
-         swap(page, "follow its instructions exactly, and give me", "try each tool, and give me"),
+         swap(page, "What's the weather like up there in Salt Lake City?",
+              "Try each tool, then tell me the weather in Salt Lake City."),
          "no room-facing part of the page tells the room to list or try each tool")
 fails_on("#/40 cited in segment 4",
          swap(page, "#/53, the retry</div>", "#/53, the retry (#/40)</div>"),
