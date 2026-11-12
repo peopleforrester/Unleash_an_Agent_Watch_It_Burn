@@ -8,7 +8,8 @@
     backups.py down <wave|all|name...>      destroy them (dry run unless --apply); keeps a cluster that holds
                                             a hostname and destroys the rest
     backups.py preflight <wave|name...>     fleet.sh preflight in each region the standbys are built in
-    backups.py check [name...]              self-check clusters on their own console LB; exit 1 on any failure
+    backups.py check [name...]              self-check clusters on their own console LB, found by its AWS tags;
+                                            exit 1 on any failure
     backups.py status                       which cluster each hostname is routed to now
     backups.py watch [--until T]            the automatic promotion loop
     backups.py promote <role> <name>        hand a role's hostname to a named cluster now (failing back, or a drill)
@@ -270,6 +271,46 @@ def console_lb(c: Cluster, account: str) -> str | None:
         except (subprocess.TimeoutExpired, OSError):
             return None
         return r.stdout.strip() or None
+
+
+# The tags the AWS Load Balancer Controller puts on the NLB it makes for agent/console.
+LB_CLUSTER_TAG = "elbv2.k8s.aws/cluster"
+LB_STACK_TAG, CONSOLE_STACK = "service.k8s.aws/stack", "agent/console"
+
+
+def console_lb_tagged(c: Cluster, account: str, run: Callable = subprocess.run) -> str | None:
+    """The console Service's NLB hostname, read from AWS alone: the load balancer in the cluster's region whose
+    controller tags name this cluster and agent/console. `check` reads it this way, so whoever holds the account's
+    AWS profile can self-check a standby. The cluster's own API answers only the identities that have an access
+    entry on it, and a dispatched run's role has none on a standby, so `check` there read "no console LB" for six
+    standbys that each answered in full on their LB (#1375). None when there is no such LB or there are two."""
+    env = {**os.environ, "AWS_PROFILE": account}
+
+    def aws(*args: str):
+        try:
+            r = run(["aws", "elbv2", *args, "--region", c.region, "--output", "json"],
+                    capture_output=True, text=True, timeout=60, env=env)
+            return json.loads(r.stdout) if r.returncode == 0 else None
+        except (subprocess.TimeoutExpired, OSError, ValueError):
+            return None
+    got = aws("describe-load-balancers")
+    if not got:
+        return None
+    dns = {lb["LoadBalancerArn"]: lb.get("DNSName", "") for lb in got.get("LoadBalancers", [])
+           if lb.get("LoadBalancerName", "").startswith("k8s-agent-console")}
+    arns, found = list(dns), []
+    for i in range(0, len(arns), 20):   # describe-tags takes at most 20 ARNs a call
+        tags = aws("describe-tags", "--resource-arns", *arns[i:i + 20])
+        if tags is None:
+            return None
+        for d in tags.get("TagDescriptions", []):
+            t = {x["Key"]: x["Value"] for x in d.get("Tags", [])}
+            if t.get(LB_CLUSTER_TAG) == c.name and t.get(LB_STACK_TAG) == CONSOLE_STACK:
+                found.append(dns[d["ResourceArn"]])
+    if len(found) > 1:
+        log(f"  {c.name}: {len(found)} console LBs in {c.region} carry its tags ({', '.join(found)}); not guessing")
+        return None
+    return found[0] if found and found[0] else None
 
 
 # The KubeCon floor (#985): the profile whose clusters get it when they take a hostname, and what it is. Kyverno
@@ -695,8 +736,42 @@ def cmd_preflight(x: Ctx, a) -> int:
     return rc
 
 
+def checkout_freshness(here: pathlib.Path = HERE, run: Callable = subprocess.run) -> tuple[bool | None, str]:
+    """Whether this checkout holds origin/main's tip: True when it does, False when it does not, None when either
+    could not be read. origin/main is read with `git ls-remote`, which writes nothing to the checkout. The 2026-11-12
+    night-before wave ran from netcup's checkout at 7783f256, a week behind main, so it had no WIB_NO_LINK (#985):
+    each region's build linked the guardrails of the KubeCon pair's names and failed in the two regions they are not
+    in, and the watcher that would promote a standby could neither arm its floor nor link it (#1375)."""
+    def git(*args: str):
+        try:
+            return run(["git", "-C", str(here), *args], capture_output=True, text=True, timeout=60)
+        except (subprocess.TimeoutExpired, OSError):
+            return None
+    h = git("rev-parse", "HEAD")
+    head = h.stdout.strip() if h is not None and h.returncode == 0 else ""
+    if not head:
+        return None, "could not read this checkout's commit"
+    r = git("ls-remote", "origin", "refs/heads/main")
+    tip = r.stdout.split()[0] if r is not None and r.returncode == 0 and r.stdout.split() else ""
+    if not tip:
+        return None, f"this checkout is at {head[:8]}; origin/main could not be read"
+    if tip == head:
+        return True, f"this checkout is at origin/main ({head[:8]})"
+    a = git("merge-base", "--is-ancestor", tip, "HEAD")
+    if a is not None and a.returncode == 0:
+        return True, f"this checkout is at {head[:8]}, which holds origin/main ({tip[:8]})"
+    top = shlex.quote(str(here.parent.parent.parent))
+    return False, (f"this checkout is at {head[:8]} and does not hold origin/main ({tip[:8]}), so this runs an older "
+                   f"fleet.sh and backups.py than main. Move it first: git -C {top} fetch origin && "
+                   f"git -C {top} checkout --detach origin/main")
+
+
 def cmd_up(x: Ctx, a) -> int:
     targets = x.select(a.selectors)
+    if not a.dry_run:
+        # Said, not refused: standbys built from an older checkout still serve, and a refused wave builds none.
+        fresh, why = checkout_freshness()
+        log(f"up: {'STALE: ' if fresh is False else ''}{why}")
     rc = 0
     built: list[Cluster] = []
     for region, cs in by_region(targets).items():
@@ -722,12 +797,16 @@ def cmd_up(x: Ctx, a) -> int:
     return (check_clusters(x, built) if built else 0) | rc
 
 
-def check_clusters(x: Ctx, cs: list[Cluster], chat: bool = True) -> int:
+def check_clusters(x: Ctx, cs: list[Cluster], chat: bool = True,
+                   lb_of: Callable[[Cluster, str], str | None] | None = None) -> int:
+    """Self-check each cluster on its console LB, found by its AWS tags (console_lb_tagged), so the check needs the
+    account's AWS profile and no access entry on the cluster."""
+    lb_of = lb_of or console_lb_tagged
     rc = 0
     for c in cs:
-        lb = console_lb(c, x.account)
+        lb = lb_of(c, x.account)
         if not lb:
-            ok, why = False, "no console LB (cluster unreachable, or the Service has no hostname yet)"
+            ok, why = False, f"no console LB tagged for it in {c.region} (the cluster is down, or its Service has no LB yet)"
         else:
             ok, why = self_check(f"https://{lb}", x.hosts[c.role], chat)
         print(f"  {'PASS' if ok else 'FAIL'}  {c.name:<30} {c.region:<10} {why}")

@@ -3837,7 +3837,12 @@ converge_one() {
         fi
         return 0
     fi
-    record_fail "${name}:apps=${healthy}/${total} endpoint=${ep}"
+    # Name each app that was not Synced and Healthy, with its sync and health status, as health_one does. The
+    # 2026-11-12 night-before wave's three private standbys ended "apps=38/40" and "apps=39/40" with no name, and the
+    # wave's log was all anyone had to go on (#1375).
+    local unhealthy; unhealthy="$(jq -r '[.items[] | select((.status.sync.status!="Synced") or (.status.health.status!="Healthy"))
+        | "\(.metadata.name) (\(.status.sync.status // "?")/\(.status.health.status // "?"))"] | join(", ")' <<<"${apps}")"
+    record_fail "${name}:apps=${healthy}/${total} unhealthy=[${unhealthy}] endpoint=${ep}"
 }
 
 # Re-check the provisioned set and repair, up to CONVERGE_ROUNDS times. Takes <clusters-per-account>,

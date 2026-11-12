@@ -55716,3 +55716,76 @@ verify/test_drift_rebuilt_states.py`, `test_drift_floor.py`, `test_floor_rebuild
 and `bash verify/test_fleet_settle_after_apply.sh`, all passing. `verify/scope-map.yaml` and `verify/test-map.yaml`
 gain the new test's entry. The prose gate passes. No dependency was added; rsync and ssh were already on
 tanjiro-wsl2.
+
+## 2026-11-12 · #1375 · run 20589 · The night-before standby wave ran from netcup's week-old checkout; `backups.py check` reads each standby from AWS, and all six pass
+
+**Context.** Netcup's `infra/terraform/fleet/logs/backups-night-before.log` had `1 cluster(s) FAILED` and
+`that step failed` after the scheduled build in us-east-2 and us-east-1. `bash verify/prior-drafts.sh 1375
+origin/staging` printed NONE and the issue had no comments. The log was read whole (295 lines) through
+`sources repo-cat`, beside netcup's `fleet.sh`, `backups.py`, `backups-watch.log` and `failover.jsonl`.
+
+**What failed, from the log.** Every region failed, us-west-2 included, which the issue did not list:
+- `fleet.sh instructors up all` failed in all three regions, each time on the private standby alone:
+  `watch-it-burn-private-b0N:bedrock-profiles`. Its line reads `ModelConfig bedrock-haiku never appeared in agent;
+  its tagged profile is not pinned`: Argo CD made the private profile's ModelConfigs more than the 300 s
+  `WIB_MODELCONFIG_WAIT` after its bootstrap, and haiku, read first, used up the wait. The converge after it
+  pinned haiku on all three (`bedrock-haiku now calls ...`), so this one is repaired by the step built for it.
+- After the build, `instructors up` ran `guardrails-link` on the default names, `watch-it-burn-community` and
+  `watch-it-burn-private`. In us-east-2 and us-east-1 neither exists, so `UNREACHABLE (no kubeconfig)` and
+  `NOT linked both ways`. In us-west-2 it reached the live KubeCon pair and re-applied their `guardrails-peer`
+  Secrets. Read on both clusters at 12:45Z: each Secret still names the other, and its only managed-fields
+  entry is `kubectl-client-side-apply` at 2026-11-05T15:34Z, so the re-apply wrote identical content and changed
+  nothing. No standby is linked to anything.
+- `fleet.sh converge` then failed in all three regions on the private standby alone, after 3 rounds:
+  `apps=38/40` (b01), `apps=39/40` (b02, b03). The line names no app. The community standbys converged 24/24.
+- The old `backups.py` self-check at the log's end read all six `healthy`.
+
+**The cause: netcup's checkout is at 7783f256 (2026-11-05), 1,436 commits behind main
+(b6a0edb9) and 1,478 behind staging.** The converge lines say so (`this checkout is 7783f25`), and netcup's `fleet.sh`, `backups.py` and
+`backups.tsv` hash the same as 7783f256's. That checkout predates 72b00a47 (#985), which gave the standby build
+`WIB_NO_LINK`, so the wave linked the default pair in every region. It also predates #985's floor and link at
+promotion and 4c60ab27's desk link (#1159): the watcher running there now (`backups-watch.log`, every 5 minutes)
+would promote a standby without arming Kyverno admission and without linking its guardrails or its desk. On
+current code the same wave would skip the link, still miss haiku in the build, pin it in the converge, and still
+fail the region on the private converge, whose unhealthy apps are not known (the run's role has no access entry
+on a standby, and the live `watch-it-burn-private`, same profile, reads 40/40 Synced and Healthy).
+
+**Are the standbys fit to be promoted.** Their self-check, yes: `backups.py check` on this branch, run with the
+accen-dev session at about 12:45Z, printed `PASS ... healthy` for all six and exited 0, each with the full check
+(`/healthz`, the storefront, `/controls` and one chat). Guardrails, no: none is linked, which on current code is
+the design (the watcher links the new holder at promotion), but netcup's watcher is the old one and does not.
+
+**Changes.**
+- `backups.py check` (and `up`'s check after a build) finds each console LB from AWS: the load balancer in the
+  cluster's region whose AWS Load Balancer Controller tags are `elbv2.k8s.aws/cluster=<name>` and
+  `service.k8s.aws/stack=agent/console` (`console_lb_tagged`). Before, it asked the cluster's API, and from this
+  run it read `no console LB` for all six, because only identities with an access entry reach a standby's API. Two
+  LBs tagged for one cluster read as none rather than a guess. The watcher still reads the LB through kubectl,
+  since it needs that access to arm and link anyway.
+- `backups.py up` logs whether its checkout holds origin/main (`git ls-remote`, which writes nothing), and
+  `STALE` with the move to make when it does not. It warns rather than refuses: a stale checkout's standbys still
+  serve, and a refused wave builds none.
+- `fleet.sh converge` names each unhealthy app with its sync and health status in its failure line
+  (`unhealthy=[app (OutOfSync/Progressing), ...]`), as `health` already did, so the next wave's log says which
+  of the private standby's apps did not settle.
+- The run-of-show's step 4 says the schedule's checkout must hold origin/main before each wave, gives the move,
+  and says to stop the running watcher after it so cron starts the new one.
+
+**Not fixed here: moving netcup's checkout.** It is a command as Michael on netcup, which no run reaches, so it is
+in the report's escalation: fetch and `checkout --detach origin/main` in `~/repos/talks/Unleash_an_Agent_Watch_It_Burn`,
+then stop the watcher holding `infra/terraform/fleet/logs/.backups-watch.lock`. The six-hours wave runs at 14:50Z
+today from whatever that checkout holds; on 7783f256 it builds the nine public standbys and logs the same
+`guardrails-link` failure in us-east-2 and us-east-1, with a no-op re-apply on the live pair in us-west-2.
+
+**Tests.** `python3 verify/test_backups.py` (new: the tag lookup's match, profile and region, a cluster with no
+LB, two LBs, aws failing; `check_clusters` passing each LB its role's hostname and failing the one without; the
+freshness line for a stale, current, ahead and unreadable checkout) and `bash verify/test_fleet_converge_repairs.sh`
+(new: a converge that fails names `app-3 (OutOfSync/Progressing), app-7 (Synced/Degraded)`), both all passing.
+The scope map needed no change. The prose gate passes.
+
+**Live check.** Read only: the six standbys' self-check over HTTPS (one chat each), ELBv2 describe calls in
+three regions, and the two `guardrails-peer` Secrets' metadata on the KubeCon pair. Nothing was changed on any
+cluster or in AWS.
+
+**Not yet run on a cluster.** The private standby's unhealthy apps: the next wave run from a current checkout
+names them in `backups-night-before.log`.

@@ -243,6 +243,19 @@ check "and only then does it say CONVERGED 2/2" \
   '[[ "${rc}" -eq 0 ]] && grep -q "CONVERGED: 2/2" "${T}/stderr" && ! grep -q "stopped with exit" "${T}/stderr"'
 rm -f "${T}/agent_tools"; : >"${T}/stderr"
 
+echo "== a cluster that does not converge names its unhealthy apps (#1375) =="
+# The 2026-11-12 night-before wave: each private standby ended "apps=38/40" or "apps=39/40" with no app named.
+python3 -c 'import json; s={3:("OutOfSync","Progressing"),7:("Synced","Degraded")}; print(json.dumps({"items":[{"metadata":{"name":f"app-{i}"},"status":{"sync":{"status":s.get(i,("Synced",))[0]},"health":{"status":s.get(i,("","Healthy"))[1]}}} for i in range(12)]}))' >"${T}/apps.json"
+: >"${CALLS}"
+WIB_LOG_DIR="${T}/logs" WIB_CONVERGE_ROUNDS=1 src 'provider_write_kubeconfig() { :; }; require_tools() { :; }
+    converge_endpoint() { echo console.example; }
+    pin_bedrock_profiles() { :; }; pin_coc_guardrail() { :; }
+    cmd_converge watch-it-burn-private'; rc=$?
+check "it fails, and its line names each unhealthy app with its sync and health status" \
+  '[[ "${rc}" -ne 0 ]] && grep -qF "watch-it-burn-private:apps=10/12 unhealthy=[app-3 (OutOfSync/Progressing), app-7 (Synced/Degraded)] endpoint=console.example" "${T}/stderr"'
+python3 -c 'import json; print(json.dumps({"items":[{"metadata":{"name":f"app-{i}"},"status":{"sync":{"status":"Synced"},"health":{"status":"Healthy"},"operationState":{"phase":"Succeeded"}}} for i in range(12)]}))' >"${T}/apps.json"
+: >"${T}/stderr"
+
 echo "== repair_agent_tools: the #679 state is recreated from git =="
 # Both KubeCon clusters on 2026-10-29: git's workshop-mcp had twelve tools, the live Agent the eleven from before
 # read_support_ticket (#640), and Argo CD cannot write one element of the tools array on a toolnames profile

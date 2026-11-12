@@ -511,6 +511,92 @@ check("after a failed build the converge still runs", ran_repaired == ["instruct
 check("a converge that repairs it makes the region green", rc_repaired == 0)
 check("a converge that cannot repair it leaves the region failed", rc_broken == 1 and ran_broken == ["instructors", "converge"])
 
+print("== check finds each console LB by its AWS tags, with no access entry on the cluster (#1375) ==")
+# 2026-11-12: a dispatched run's role, which has no access entry on a standby, read "no console LB" for all six
+# night-before standbys through kubectl, while each answered the full self-check on its LB.
+def _tag(cluster: str, stack: str = "agent/console") -> list[dict]:
+    return [{"Key": "elbv2.k8s.aws/cluster", "Value": cluster}, {"Key": "service.k8s.aws/stack", "Value": stack}]
+_lbs = [{"LoadBalancerName": "k8s-agent-console-1b3f89ecc6", "LoadBalancerArn": "arn:c01", "DNSName": "c01.elb"},
+        {"LoadBalancerName": "k8s-agent-console-1ad80301b0", "LoadBalancerArn": "arn:p01", "DNSName": "p01.elb"},
+        {"LoadBalancerName": "k8s-agent-console-aaaaaaaaaa", "LoadBalancerArn": "arn:x", "DNSName": "x.elb"},
+        {"LoadBalancerName": "k8s-monitori-grafana-0000", "LoadBalancerArn": "arn:graf", "DNSName": "graf.elb"}]
+_lb_tags = {"arn:c01": _tag("watch-it-burn-community-b01"), "arn:p01": _tag("watch-it-burn-private-b01"),
+            "arn:x": _tag("watch-it-burn-community-b01", "agent/other"), "arn:graf": _tag("watch-it-burn-community-b01")}
+_aws_seen: list[tuple[list[str], str]] = []
+_aws_mode = {"fail": False}
+def _fake_aws(cmd, **kw):  # noqa: E306
+    _aws_seen.append((cmd, kw.get("env", {}).get("AWS_PROFILE", "")))
+    if _aws_mode["fail"]:
+        return type("R", (), {"returncode": 254, "stdout": ""})()
+    if cmd[2] == "describe-load-balancers":
+        out = {"LoadBalancers": _lbs}
+    else:
+        arns = cmd[cmd.index("--resource-arns") + 1:cmd.index("--region")]
+        out = {"TagDescriptions": [{"ResourceArn": a, "Tags": _lb_tags.get(a, [])} for a in arns]}
+    return type("R", (), {"returncode": 0, "stdout": json.dumps(out)})()
+_c01 = b.Cluster("watch-it-burn-community-b01", "community", "us-east-2", "night-before", "a")
+check("the LB whose tags name the cluster and agent/console is its console",
+      b.console_lb_tagged(_c01, "accen-dev", _fake_aws) == "c01.elb")
+check("each aws call names the account's profile and the cluster's region",
+      _aws_seen and all(p == "accen-dev" and cmd[cmd.index("--region") + 1] == "us-east-2" for cmd, p in _aws_seen))
+check("tags are read only for console LBs", not any("arn:graf" in cmd for cmd, _ in _aws_seen))
+check("a cluster no LB is tagged for has none",
+      b.console_lb_tagged(b.Cluster("watch-it-burn-community-b04", "community", "us-east-2", "six-hours", "b"),
+                          "accen-dev", _fake_aws) is None)
+_lb_tags["arn:x"] = _tag("watch-it-burn-community-b01")
+check("two console LBs tagged for one cluster: none, rather than a guess",
+      b.console_lb_tagged(_c01, "accen-dev", _fake_aws) is None)
+_aws_mode["fail"] = True
+check("aws failing: none", b.console_lb_tagged(_c01, "accen-dev", _fake_aws) is None)
+
+import contextlib, io  # noqa: E401,E402
+_x = type("X", (), {"account": "accen-dev",
+                    "hosts": {"community": "attackme.agenticburn.com", "admin": "burritobot-private.agenticburn.com"}})()
+_sc_seen: list[tuple[str, str]] = []
+_real_sc = b.self_check
+b.self_check = lambda base, host, chat=True: (_sc_seen.append((base, host)) or (True, "healthy"))
+_buf = io.StringIO()
+try:
+    with contextlib.redirect_stdout(_buf):
+        _rc = b.check_clusters(_x, [_c01, b.Cluster("watch-it-burn-private-b01", "admin", "us-east-2", "night-before", "b"),
+                                    b.Cluster("watch-it-burn-community-b04", "community", "us-east-2", "six-hours", "b")],
+                               lb_of=lambda c, acct: {"watch-it-burn-community-b01": "c01.elb",
+                                                      "watch-it-burn-private-b01": "p01.elb"}.get(c.name))
+finally:
+    b.self_check = _real_sc
+_out = _buf.getvalue()
+check("check self-checks each LB with its role's hostname",
+      _sc_seen == [("https://c01.elb", "attackme.agenticburn.com"), ("https://p01.elb", "burritobot-private.agenticburn.com")],
+      str(_sc_seen))
+check("and prints a line for each standby: PASS for the two with an LB, FAIL for the one without",
+      "PASS  watch-it-burn-community-b01" in _out and "PASS  watch-it-burn-private-b01" in _out
+      and "FAIL  watch-it-burn-community-b04" in _out and "no console LB tagged for it in us-east-2" in _out, _out)
+check("and exits 1 on the one without", _rc == 1)
+check("check finds the LB by its tags unless told otherwise",
+      b.check_clusters.__defaults__ is not None and None in b.check_clusters.__defaults__
+      and "lb_of = lb_of or console_lb_tagged" in pathlib.Path(b.__file__).read_text(encoding="utf-8"))
+
+print("== up says whether its checkout holds origin/main (#1375) ==")
+# The 2026-11-12 night-before wave ran from netcup's checkout at 7783f256, a week behind main.
+_HEAD, _TIP = "7783f256" + "0" * 32, "b6a0edb9" + "1" * 32
+def _fake_git(head: str = _HEAD, tip: str = _TIP, ancestor: int = 1, remote_rc: int = 0):  # noqa: E306
+    def run(cmd, **kw):
+        if "rev-parse" in cmd:
+            return type("R", (), {"returncode": 0, "stdout": head + "\n"})()
+        if "ls-remote" in cmd:
+            return type("R", (), {"returncode": remote_rc, "stdout": f"{tip}\trefs/heads/main\n" if remote_rc == 0 else ""})()
+        return type("R", (), {"returncode": ancestor, "stdout": ""})()
+    return run
+_here = pathlib.Path("/home/michael/repos/talks/Unleash_an_Agent_Watch_It_Burn/infra/terraform/fleet")
+_f, _why = b.checkout_freshness(_here, _fake_git())
+check("a checkout that lacks origin/main's tip is stale, and the line names both commits and the move",
+      _f is False and "7783f256" in _why and "b6a0edb9" in _why
+      and "git -C /home/michael/repos/talks/Unleash_an_Agent_Watch_It_Burn checkout --detach origin/main" in _why, _why)
+check("a checkout at origin/main is current", b.checkout_freshness(_here, _fake_git(tip=_HEAD))[0] is True)
+check("a checkout ahead of origin/main is current", b.checkout_freshness(_here, _fake_git(ancestor=0))[0] is True)
+check("origin/main unreadable: neither, and it says so",
+      b.checkout_freshness(_here, _fake_git(remote_rc=128)) == (None, "this checkout is at 7783f256; origin/main could not be read"))
+
 print("== up and down, dry run: one fleet.sh run per region, standbys kept out of the router ==")
 # A live `backups.py up` on this host writes its own backups-* roster files; only the dry runs' would be a fault. The
 # dry runs below, in this process and in each backups.py they start, get a temp directory of the test's own, so the

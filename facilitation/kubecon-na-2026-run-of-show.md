@@ -733,7 +733,9 @@ them and moves a hostname when its cluster fails:
   skips a region that fails it.
 - **Self-check.** Run on each console's own load balancer: `/healthz`, the
   storefront, `/controls`, and a chat that carries the probe marker, so it never
-  reaches the wall. `backups.py check` runs it on demand.
+  reaches the wall. `backups.py check` runs it on demand. It finds each console's
+  load balancer by its AWS tags, so the accen-dev profile is all it needs, with no
+  access entry on the cluster (#1375).
 - **Promotion.** After three failed checks in a row (about a minute), the hostname
   goes to the next standby in order that passes. That includes the burritobot.co
   twin and the service hosts. The router reloads with no redeploy, and
@@ -855,6 +857,17 @@ which is `2026-11-12T20:50:00Z` (conference-knowledge `kubecon-na-2026`).
    then `crontab -l | grep wib-backups` shows four lines. In UTC: night-before wave
    02:50, six-hours wave 14:50, watcher 03:50 to 22:20, teardown 22:50, all on
    2026-11-12.
+
+   The lines run the checkout they were made in, so that checkout holds origin/main
+   before the first wave and again before the six-hours one:
+   `git -C ~/repos/talks/Unleash_an_Agent_Watch_It_Burn fetch origin && git -C ~/repos/talks/Unleash_an_Agent_Watch_It_Burn checkout --detach origin/main`.
+   Each `backups.py up` logs whether it does, and `STALE` when it does not. The
+   2026-11-12 night-before wave ran netcup's checkout at 7783f256, a week behind
+   main: it linked the guardrails of the KubeCon pair's names in each region instead
+   of leaving the standbys unlinked, and its watcher cannot arm or link a standby it
+   promotes (#1375). A watcher already running keeps its old code until it exits, so
+   after the move stop it (`fuser infra/terraform/fleet/logs/.backups-watch.lock`
+   names its process); cron starts the new one within 5 minutes.
 5. **During:** `backups.py status` (who holds each hostname), `backups.py check`
    (every console's self-check), and `infra/terraform/fleet/logs/failover.jsonl` (every promotion).
 6. **Teardown.** The 22:50 line runs `backups.py down all --apply` and removes the
