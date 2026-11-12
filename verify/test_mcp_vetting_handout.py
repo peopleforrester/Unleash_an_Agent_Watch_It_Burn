@@ -57,12 +57,13 @@ check("every gate has something to verify", len(re.findall(r"^Verify:$", body, f
 
 print("== the close links it ==")
 ros = RUN_OF_SHOW.read_text(encoding="utf-8")
-close = ros.partition("### Segment 6:")[2].partition("- **The close (")[2].partition("\n- **Delivers:**")[0]
+# The close starts at the stack slide since rounds-agenticburn#184 cut "Every attack today was a plausible request." (#1418).
+close = ros.partition("### Segment 6:")[2].partition("- **The stack (")[2].partition("\n- **Delivers:**")[0]
 check("the run-of-show's close carries the handout's public link", PUBLIC_URL in close)
 c7 = ros.partition("### Segment 5: Challenge 4")[2].partition("### Segment 6")[0]
 check("C7's hand-out line names the handout file", "docs/mcp-server-vetting-checklist.md" in c7)
 page = KUBECON_PAGE.read_text(encoding="utf-8")
-page_close = page.partition("<b>The close (Michael")[2].partition("</section>")[0]
+page_close = page.partition("<b>The stack (Michael")[2].partition("</section>")[0]
 check("the /kubecon page's close links the handout", f'href="{PUBLIC_URL}"' in page_close)
 
 if failures:

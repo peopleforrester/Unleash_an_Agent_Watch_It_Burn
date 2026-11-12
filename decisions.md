@@ -56617,3 +56617,11 @@ recaps' notes in place of the challenge column) and `test_imds_credential_theft.
 narrate the beat). The segment tests all pass.
 
 Not yet run: `verify/test_ros_deck_live.py` against the live deck.
+
+## 2026-11-12 · #1418 · by hand · the take-home link is bit.ly/burritobot, as the deck's QR code encodes
+
+Rounds `94feae9` points the take-home QR code at `https://bit.ly/burritobot` (Michael's corrected short link; it 301s
+to `michaelrishiforrester.com/burritobot/`, checked 2026-11-12). The run-of-show's segment 6 row and take-home step and
+`/kubecon`'s take-home link follow; the take-home step notes that #1399's `bit.ly/burittobot` still redirects.
+`test_mcp_vetting_handout.py` cuts the close at the stack slide, since #184 cut "Every attack today was a plausible
+request."; it passes.
