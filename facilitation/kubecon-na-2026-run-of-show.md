@@ -989,7 +989,7 @@ deck's line says who speaks the slides.
 | 3 | 5 | W+M | Challenge 2, the Kubernetes catch-all: "It is time for Challenge 2!", "Everything you already knew about Kubernetes security", "BurritoBot has none of these things.", the challenge sentence on slide 17, then the three attacks built up one per slide on slides 18 to 20, where play starts ("pick just one attack") and the prompt wall goes up after a minute; a hint slide for each attack (slides 21 to 26), whose "deploy" link opens the deployments wall, and the recap of all three with their hints and one more minute of play (slide 27), the beacon view opened from the `agenticburn.com/beacon` link; Whitney's live attack on the private bot, the recipe read, then its pre-seeded trace `c2-attack`, the same read; then, depending on #774, "Let's turn on Kubernetes guardrails." (slide 28), whose link opens the admin terminal, where `guardrails-k8s-on` arms RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy on both clusters; then "Try your attacks again." (slide 29), the room resetting its bot and retrying its saved prompts, and one set per guardrail on slides 30 to 42 (RBAC, an admission policy, runtime security, NetworkPolicy), each recalling its attack, naming the fix and showing its YAML | Deploys a public image, reads the recipe file, posts to the beacon; after the switch (#774), tries Challenges 1 and 2 again and is stopped | 3, 4, 5, 7 |
 | 4 | 7 | W+M | Challenge 3, `#/42` to `#/67`: the title card, "It is time for Challenge 3!" (`#/42`) and the "AI guardrails" heading (`#/43`); "BurritoBot has a support desk." (`#/44`), which reads tickets by ticket number; "You've got access to a support desk." (`#/45`), at `support.burritobot.co` or the Support button at the top of the chat page; the desk's QR code, the room's first look at it (`#/46`), where a ticket is filed and looked up by its number and none can be browsed; "Let's file a ticket." (`#/47`), an ordinary ticket the presenters file on the one desk in their reserved range, HC-900 to HC-999, that the admin bot reads back by its number and the room's bot can read too; the challenge sentence (`#/48`), its "deploy" opening the room's deployments page, the deployments page and the prompt wall optional during play; the hint, HC-666 (`#/49`), whose white text the presenters select live to show, then their live attack on the private bot and its deployment landing on the one deployments page, `deployments.burritobot.co`, tagged with its cluster; Kyverno, at Deny since segment 3's switch (#774), admits it from the internal registry; then the seeded trace its link opens (`#/50`); LLM01, Prompt Injection (`#/51`); "Let's turn on some guardrails." (`#/52`), whose link opens the admin terminal, where `guardrails-agency-on`, then `guardrails-input-on`, run on the private bot; "Try your attack again." (`#/53`), the room's retry on the public bot, which both commands reach (#1132); "Pesky RBAC!" and the optional Kyverno question (`#/54`), the Role before and after (`#/55` and `#/56`); LLM Guard, with products that do the same (`#/57`); the nine-slide architecture diagram, a request's path, where LLM Guard checks the ticket and the dead ticket (`#/58` to `#/66`); and the bottom line, an AI guardrail classified the ticket as malicious and blocked it (`#/67`) | Writes its own injection ticket or asks BurritoBot to read HC-666, then tries again | 4, 5, 6, 7 |
 | 5 | 5 | M+W | Challenge 4, `#/68` to `#/117`: the title card, "It is time for Challenge 4!" (`#/68`); BurritoBot gets its tools from MCP servers, and not every one can be trusted (`#/69` and `#/70`); "Find the poisoned MCP tool." (`#/71`), the prompt wall optional during play; the hint, "Ask BurritoBot about the weather, then look at what else it did." (`#/72`), then Michael's live weather ask on the private bot and the seeded trace its "what else it did" link opens; LLM04, Supply Chain (`#/73`); "Let's turn on an MCP gateway." (`#/74`), `guardrails-mcp-on` on the private bot; "Try your attack again." (`#/75`), the room's retry on the public bot, which `guardrails-mcp-on` reaches (#1132); the MCP gateway, agentgateway in the notes (`#/76` and `#/77`); the two diagrams, one weather question without and then with the gateway (`#/78` to `#/115`); and its rule before and after (`#/116` and `#/117`) | Hunts for the poisoned tool, then tries again | 2, 4, 6, 7 |
-| 6 | 5 | M+W | The OWASP close, `#/118` to `#/126`, `guardrails-topic-on`, the take-home's five QR codes, the speakers and "Thank you" (`#/126`) | Scans the take-home and rates the session | 7, 8 |
+| 6 | 5 | M+W | The OWASP close, `#/118` to `#/126`, `guardrails-topic-on`, the take-home's one QR code to `michaelrishiforrester.com/unleashed`, the speakers and "Thank you" (`#/126`) | Scans the take-home and rates the session | 7, 8 |
 
 Total 30 minutes. Segments 2 to 5 are 22 minutes of hands-on. There is no separate
 trace walk-through any more: each challenge shows its own trace after the presenters'
@@ -2095,8 +2095,8 @@ The steps follow the deck's close (`#/118` to `#/126`), in the order rounds `462
 gave it (rounds-agenticburn#172, from Michael's rehearsal of 2026-11-11), with a Say line
 on every slide: the OWASP GenAI LLM Top 10 2026 on `#/118`, the Kubernetes Top 10 on
 `#/119`, the ASI beat on `#/120`, "Sell burritos. Nothing more." (`#/121`), the close on
-`#/122` and `#/123`, the take-home's five QR codes on `#/124`, the speakers on `#/125` and
-"Thank you" (`#/126`).
+`#/122` and `#/123`, the take-home's one QR code on `#/124` (rounds `3f345b5`,
+rounds-agenticburn#173), the speakers on `#/125` and "Thank you" (`#/126`).
 
 **No finale (#1348).** Michael cut "Now break it" at the rehearsal of 2026-11-11 ("get rid
 of the now break it"), and rounds `4627d95` deleted it with the slides around it, "We
@@ -2175,17 +2175,20 @@ community cluster's $25 `COST_CAP_USD` holds as before, and nothing lowers it.
   whether or not the model cooperates. LLM Guard is the upstream project, archived in
   July 2026; we run its last release, 0.3.16, from our own offline image; the guard proxy
   is the piece Michael wrote because nothing else toggles a guardrail without a redeploy.
-- **Take home, and the feedback ask (`#/124`, #1162):** five QR codes, each with one
-  label and nothing else on the slide: "MCP server vetting checklist" (#649,
+- **Take home, and the feedback ask (`#/124`, #1162, #1369):** one QR code and nothing
+  else on the slide, labeled `michaelrishiforrester.com/unleashed` and encoding
+  `https://michaelrishiforrester.com/unleashed/` (rounds `3f345b5`, rounds-agenticburn#173;
+  the page is MRF-website#171). That page links the MCP server vetting checklist (#649,
   `https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/blob/main/docs/mcp-server-vetting-checklist.md`),
-  "GitHub repo" (`github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn`, the
-  Monday-morning takeaway), "Feedback" (`https://feedback.burritobot.co/?source=deck`,
-  rounds-agenticburn#107), "whitneylee.com" and "michaelrishiforrester.com". Say: "Take
-  these home: the MCP server vetting checklist, the GitHub repo with the whole platform as
-  code, and the feedback form. Our sites are there too." On the Feedback QR, add a line
-  of your own, not in the notes: "Scan this, one tap, tell us how it went; the thanks
-  page takes you on to rate us on Sessionize." The storefront's Feedback button opens
-  the same form with `source=burritobot`.
+  the GitHub repo (`github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn`, the
+  Monday-morning takeaway), the feedback form (`https://feedback.burritobot.co/?source=deck`,
+  rounds-agenticburn#107), whitneylee.com and michaelrishiforrester.com. Say: "Take this
+  home: one code opens a page with the MCP server vetting checklist, the GitHub repo with
+  the whole platform as code, and the feedback form. Our sites are there too." Then add a
+  line of your own, not in the notes, for the feedback form on the page the code opens:
+  "Scan this, and the feedback form is right there on the page: one tap, tell us how it
+  went; the thanks page takes you on to rate us on Sessionize." The storefront's Feedback
+  button opens the same form with `source=burritobot`.
 - **Close out (`#/125` and `#/126`, both):** on the speaker slide (`#/125`), give the full
   speaker introductions (the bios held back from the quick hello in segment 1): "We're
   Whitney Lee and Michael Forrester. Find us after the talk, or at our sites." Then the
