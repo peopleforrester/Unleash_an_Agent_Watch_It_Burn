@@ -13,12 +13,16 @@ numbers in the conversation's attributes and in every span-event attribute. This
   - it never touches the other span attributes (session.id and the other ids stay whole);
   - the attendee and instructor collectors carry no scrub, because C1's fake customer records are meant to show
     in a student's own trace;
+  - on the KubeCon clusters the scrub is the community cluster's alone: kubecon-community runs
+    otel-collector-burn and kubecon-private the unscrubbed otel-collector, and the run-of-show and /kubecon say
+    the burritobot-private tab is not scrubbed and why (#1413);
   - the four patterns are RE2-safe, written once per context, and do to attendee and demo text what
     pii_scrub_cases.py says. test_collector_pii_scrub_e2e.py runs the same cases through the real collector;
   - the run-of-show's Teardown carries the purge of burritobot-public from Whitney's org that #647 owes after
     the talk, so it is done on the day rather than remembered.
 
-Offline: reads the collector value files, gitops/ai-layer/resources.yaml and the run-of-show.
+Offline: reads the collector value files, gitops/ai-layer/resources.yaml, the run-of-show, the two KubeCon profiles,
+the collector Application files and gitops/ai-layer/web/kubecon.html.
 """
 from __future__ import annotations
 
@@ -123,6 +127,40 @@ record = c5_record()
 check("C5's record, a street address the trace is meant to keep, is unchanged", scrub_text(record) == record)
 for text in UNTOUCHED:
     check(f"unchanged: {text[:60]}...", scrub_text(text) == text, scrub_text(text))
+
+print("== the KubeCon clusters: community scrubs, private does not, and the presenters are told so (#1413) ==")
+BOOT = REPO / "gitops" / "bootstrap"
+
+
+def profile_apps(name: str) -> list[str]:
+    return yaml.safe_load((BOOT / f"values-{name}.yaml").read_text(encoding="utf-8")).get("apps") or []
+
+
+def app_value_files(name: str) -> list[str]:
+    app = yaml.safe_load((BOOT / "apps" / f"{name}.yaml").read_text(encoding="utf-8"))
+    return [f for s in app["spec"]["sources"] for f in (s.get("helm") or {}).get("valueFiles") or []]
+
+
+community, private = profile_apps("kubecon-community"), profile_apps("kubecon-private")
+check("kubecon-community runs otel-collector-burn and not otel-collector",
+      "otel-collector-burn" in community and "otel-collector" not in community, str(community))
+check("kubecon-private runs otel-collector and not otel-collector-burn",
+      "otel-collector" in private and "otel-collector-burn" not in private, str(private))
+check("otel-collector-burn loads values-burn.yaml, where the scrub is",
+      any(f.endswith("/values-burn.yaml") for f in app_value_files("otel-collector-burn")))
+check("otel-collector loads no values-burn.yaml, so burritobot-private scrubs nothing",
+      not any(f.endswith("/values-burn.yaml") for f in app_value_files("otel-collector")),
+      str(app_value_files("otel-collector")))
+SCOPE_NOTE = "tab is not scrubbed at all"
+ros_text = (REPO / "facilitation" / "kubecon-na-2026-run-of-show.md").read_text(encoding="utf-8")
+brief = (REPO / "gitops" / "ai-layer" / "web" / "kubecon.html").read_text(encoding="utf-8")
+for label, text, tab in (("the run-of-show", ros_text, "`burritobot-private` " + SCOPE_NOTE),
+                         ("/kubecon", brief, "<code>burritobot-private</code> " + SCOPE_NOTE)):
+    note = text.partition(tab)[2][:1200]
+    check(f"{label} says the burritobot-private tab is not scrubbed ({tab!r})", bool(note))
+    check(f"{label}'s note names #1413", "(#1413" in note[:40], note[:80])
+    check(f"{label}'s note says the private /chat asks no login", "asks no login" in note, note[:300])
+    check(f"{label}'s note answers the room's question, telemetry as a leak path", "leak path" in note, note[:300])
 
 print("== the run-of-show's teardown carries the purge the planning call promised ==")
 ros = (REPO / "facilitation" / "kubecon-na-2026-run-of-show.md").read_text()

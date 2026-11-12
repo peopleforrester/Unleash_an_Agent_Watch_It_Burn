@@ -2153,9 +2153,12 @@ rules:
     paths:
       - facilitation/kubecon-na-2026-run-of-show.md
       - gitops/ai-layer/resources.yaml
+      - gitops/ai-layer/web/kubecon.html
       - gitops/bootstrap/apps/otel-collector-attendee.yaml
       - gitops/bootstrap/apps/otel-collector-burn.yaml
       - gitops/bootstrap/apps/otel-collector.yaml
+      - gitops/bootstrap/values-kubecon-community.yaml
+      - gitops/bootstrap/values-kubecon-private.yaml
       - gitops/otel-collector
       - gitops/otel-collector/**
       - infra/datadog-fleet/dashboard.yaml

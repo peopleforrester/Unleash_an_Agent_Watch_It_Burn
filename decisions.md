@@ -56415,3 +56415,57 @@ it; the scope and test maps carry its entry.
 
 **Live check.** Skipped: the change touches the README, a challenge doc and a test under `verify/` that no
 cluster runs; the prompt itself is unchanged.
+## 2026-11-12 · #1413 · run 20807 · The PII scrub is the community cluster's alone, and the private tab's scope is now documented
+
+From rounds-agenticburn#161, the 2026-11-08 audience review: traces carry names and addresses, and the scrub
+(`transform/scrub_pii`, `gitops/otel-collector/values-burn.yaml`, #647) is burn-only, while the traces the talk shows
+are filtered to `burritobot-private`. The issue asked for the scrub's scope on the KubeCon clusters to be checked and
+then either extended or documented. `verify/prior-drafts.sh 1413 origin/staging` printed NONE, so this run is the
+first draft.
+
+**Live check (both clusters at staging `76a88eed`, the otel-collector Application Synced and Healthy on each).**
+Read-only: the Application's value files, and the traces pipelines in the rendered `relay` key of
+`monitoring/otel-collector-opentelemetry-collector-agent` and in `otel-collector-datadog`.
+
+    watch-it-burn-community  valueFiles values.yaml, values-burn.yaml
+      scrub_pii defined: True
+      last two traces processors: coc_mask, scrub_pii
+      exporters: span_metrics, forward/llmobs, debug (+ datadog, datadog/connector from datadog.yaml)
+    watch-it-burn-private    valueFiles values.yaml
+      scrub_pii defined: False
+      last two traces processors: llmobs_apm_off, coc_mask
+      exporters: otlp_grpc/tempo, span_metrics, forward/llmobs, debug (+ datadog, datadog/connector)
+
+So `burritobot-public` is scrubbed of e-mails, cards, SSNs and phone numbers, and `burritobot-private` is scrubbed of
+nothing, in Datadog and in Tempo. `https://burritobot-private.burritobot.co/` answered 200, and console.conf's
+`location = /chat` carries no auth, so the private bot takes a prompt from any phone that opens its host.
+
+**Documented, not extended.** The issue allowed either. The private tab stays unscrubbed:
+- Its traces carry the presenters' prompts and the seeded, made-up records. Challenge 1's private trace shows the
+  Secret's record, Ophelia Thorn's name and street address, and that leak is the beat's lesson (LLM02).
+- The issue's headline is names and street addresses, and a pattern scrub catches neither. Extending
+  `transform/scrub_pii` to the private cluster would mask e-mails and phone numbers there and still leave the names and
+  addresses the review named. Catching those needs an entity recognizer, which no collector here runs.
+- An extension would need a fifth collector Application and overlay for kubecon-private alone, since
+  `otel-collector` is shared with the admin, full and local-inference profiles, for text the room is not meant to put
+  there.
+- The room's text reaches that tab two ways, both written down now: a phone on the private host's `/chat`, which the
+  room is never given but which shows in the address bar when the deck opens the private terminal, and a room ticket
+  the private bot reads because a prompt there names its four-digit number (the presenters' tickets are HC-900 to
+  HC-999, #1156).
+
+**The change.** The run-of-show's Datadog-on-stage paragraph and the matching note on `/kubecon`
+(`gitops/ai-layer/web/kubecon.html`) now say the `burritobot-private` tab is not scrubbed and why, name the two ways
+room text can reach it, and give the presenters an answer if the room asks whether telemetry is a leak path.
+`verify/test_collector_pii_scrub.py` gains a section that holds the documented scope to the config: kubecon-community
+lists `otel-collector-burn`, which loads values-burn.yaml, kubecon-private lists `otel-collector`, which does not, and
+both documents carry the note with #1413, "asks no login" and "leak path". Extending the scrub to private later fails
+that section until the two notes change with it. `python3 verify/scope_tests.py write` added the two profiles and
+kubecon.html to the test's reads in `verify/scope-map.yaml` and `verify/test-map.yaml`.
+
+**Tests.** `python3 verify/test_collector_pii_scrub.py` passes. The other tests that read kubecon.html and the
+run-of-show are left to validation.
+
+**Not yet run on a cluster.** After promotion and Argo CD's sync, watch-it-burn-private's `console-src` ConfigMap in
+`agent` should hold "tab is not scrubbed at all" in its `kubecon.html` key. No collector config changed, so neither
+collector restarts.

@@ -1047,6 +1047,23 @@ the private terminal prints the password in its catalogue).
 On the `burritobot-public` tab, e-mails, card numbers, SSNs and phone numbers in the
 room's prompts read `[EMAIL]`, `[CARD]`, `[SSN]` and `[PHONE]`: attackme's collector
 scrubs them before export (#647). Names and other free text are not scrubbed.
+The `burritobot-private` tab is not scrubbed at all (#1413, read live on both clusters
+on 2026-11-12): watch-it-burn-community runs `otel-collector-burn`, whose traces
+pipeline ends with `transform/scrub_pii`, and watch-it-burn-private runs the
+instructor `otel-collector`, `values.yaml` alone, with no scrub. That is on purpose.
+The private bot's traces carry the presenters' own prompts and the made-up records,
+and its Challenge 1 trace shows the Secret's record, Ophelia Thorn's name and street
+address, because the leak is the lesson (LLM02); a pattern scrub would catch neither
+the name nor the address. The room's text reaches that tab two ways only: a phone that
+opens `burritobot-private.burritobot.co`, whose `/chat` asks no login (the room is
+never given the host, but it shows in the address bar when the deck opens the private
+terminal), and a room ticket the private bot reads because a prompt there names its
+four-digit number (the presenters' tickets are three digits, HC-900 to HC-999).
+If the room asks whether telemetry is a leak path: yes. A trace keeps what the model
+saw. The room's bot scrubs e-mails, cards, SSNs and phone numbers before export; a
+name or a street address needs an entity recognizer, which no collector here runs;
+the presenters' bot scrubs nothing, because its data is made up and the leak is
+what it shows.
 
 **The prompt wall.** Every prompt the room sends is projected, anonymously. Say so
 in segment 1, before anyone types.
