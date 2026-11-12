@@ -211,6 +211,15 @@ below, by the operator's own AWS identity, `nwuser` (2026-11-07, #1041). The rep
 it runs from, so that checkout is moved forward with `git checkout --detach origin/main`, which leaves the
 guard-proxy submodule as it stands; it was at ec03eb5f until then.
 
+**The standbys are not in tanjiro's states.** `backups.py schedule` runs from the checkout on netcup, so #643's
+standbys and the lab VPCs of us-east-1 and us-east-2 are applied there, and their states are in that checkout's
+`infra/terraform/fleet/states/` and `aws/network/states/`. The report on tanjiro-wsl2 cannot read them. So while a
+wave is up, each of its standbys is in the report's Unmanaged table, made by `user/nwuser` with Terraform's user
+agent from netcup's address. The first report to show this was 2026-11-12T11:17Z, with the night-before wave
+(#1373). `import-state.py provenance accen-dev <standby> --region <region>` shows the root built it, and the
+register must not list it: it is in a state. A standby still in the report after the schedule's teardown line
+has run is a leak: `backups.py down all --apply` on netcup removes it, and then its region's `audit-zero`.
+
 `scheduled-drift.sh` supplies the PATH that cron does not have, keeps a dated copy of each report, and
 posts the result to a single open GitHub issue titled "Fleet drift report". It comments if that issue
 is already open and opens it if not. A clean day is posted only when the issue is open.
@@ -500,6 +509,7 @@ On the AWS plane, these are created by a controller, a script or another system,
 | Bucket `watch-it-burn-exfil-hoop` | `games/eso-s3-exfil/s3-hoop-setup.sh` | `games/eso-s3-exfil/teardown.sh`; listed in `known-unmanaged.yaml` |
 | Clusters and buckets tagged `lab-platform:managed=true` | lab-platform (`labctl event up`) | lab-platform's own teardown; listed in `known-unmanaged.yaml` |
 | Packt's resources in accen-dev (tagged `Workshop=packt`) | the co-tenant | never by us; listed in `known-unmanaged.yaml` |
+| Buckets tagged `Repo=courses/aws-engagement-ready` (`er-v3-tfstate-shared-783241407859-us-east-1` in aws1-student34, 2026-11-09) | Michael's other course, whose bootstrap stack keeps its Terraform state there | that course; never by us; listed in `known-unmanaged.yaml` (#1373) |
 
 The drift report sweeps only S3 buckets and EKS clusters. The other AWS rows are cleaned up by
 teardown, which is where their lifecycle is managed. The Datadog dashboards root

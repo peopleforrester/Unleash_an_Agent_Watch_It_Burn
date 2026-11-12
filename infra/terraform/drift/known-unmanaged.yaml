@@ -40,3 +40,11 @@ entries:
     accounts: [accen-dev]
     made_by: the Packt project (co-tenant in accen-dev)
     why: Same co-tenant rule as their buckets.
+  - kind: s3-bucket
+    tag: { Repo: courses/aws-engagement-ready }
+    accounts: ["*"]
+    made_by: Michael's other course, courses/aws-engagement-ready (its Lab1-Bootstrap stack, as user/Mforrester)
+    why: >-
+      The course's own Terraform state bucket (er-v3-tfstate-shared-<account>-<region>, tagged Component=terraform-state,
+      ManagedBy=Terraform), made in aws1-student34 on 2026-11-09 and owned by that course's bootstrap, not by any root
+      here (#1373). Not ours to manage or remove; the Repo tag names the owner.

@@ -55584,3 +55584,61 @@ community and 25,326 on private, `exit=0`.
 for a later run on a cluster.
 
 No dependency was added.
+
+## 2026-11-12 · #1373 · run 20585 · The 2026-11-12T11:17Z drift report's seven findings: six night-before standbys in netcup's states, and the other course's state bucket registered
+
+**Context.** The daily drift report on tanjiro-wsl2 posted seven unmanaged resources and no drifted state:
+six EKS clusters in accen-dev (`watch-it-burn-community-b01` to `-b03` and `watch-it-burn-private-b01` to `-b03`) and
+the S3 bucket `er-v3-tfstate-shared-783241407859-us-east-1` in aws1-student34. `bash verify/prior-drafts.sh 1373
+origin/staging` printed NONE and the issue had no comments. The issue had no checklist, so four acceptance criteria
+were added to its body first.
+
+**The six clusters are #643's night-before wave, in Terraform states on netcup.** Read with this run's accen-dev
+session at about 11:30Z:
+- `eks list-clusters`: b01 pair in us-east-2, b02 pair in us-east-1, b03 pair in us-west-2, beside the KubeCon pair.
+  These are exactly the night-before rows of `infra/terraform/fleet/backups.tsv`.
+- CloudTrail `CreateCluster`: b01 pair 02:50:50Z, b02 pair 03:19:15Z and 03:19:17Z, b03 pair 03:50:04Z and
+  03:50:12Z, all from `152.53.192.39` (netcup's address, `infra/dns/README.md`) with the user agent
+  `Terraform/1.16.4 ... terraform-provider-aws/6.70.0`. The run-of-show schedules that wave at 02:50Z on 2026-11-12.
+- `python3 infra/terraform/fleet/import-state.py provenance accen-dev <cluster> --region <region>` on all six: every
+  mark held, `verdict: built from infra/terraform/aws/cluster`, `choice: import`, `register: no entry covers it`,
+  `follows: yes`, exit 0.
+- Netcup's checkout, read through `sources repo-ls`: `infra/terraform/fleet/states/` holds
+  `watch-it-burn-{community,private}-b0{1,2,3}.tfstate`, and `aws/network/states/` holds
+  `accen-dev.us-east-1.tfstate` and `accen-dev.us-east-2.tfstate`. Tanjiro's checkout, read only with the fleet
+  verb on tanjiro-wsl2, holds only the two KubeCon states and has no `aws/network/states/` directory.
+- Netcup's `logs/backups-night-before.log` shows the scheduled `fleet.sh instructors up all` in each region from
+  02:50:12Z, and `logs/backups-watch.log` at 11:20:45Z sees a console LB on all six.
+
+So none of the six is unmanaged: each is in a state the report cannot read, because `backups.py schedule` runs on
+netcup and the report runs on tanjiro. None goes in the register, which is for what no state holds. They come down
+with the schedule's teardown line (22:50Z on 2026-11-12, `backups.py down all --apply`), so tomorrow's report
+should not list them. If it does, that is a leak, and docs/floor.md now says so and names the command.
+
+One thing noticed and not this issue's: the night-before log has `1 cluster(s) FAILED` and `that step failed`
+after the up in us-east-2 and us-east-1, while both clusters of each pair read `ok` and their watcher sees a
+console. It is named as a followup.
+
+**The bucket is the state bucket of Michael's other course.** Its tags, read on tanjiro-wsl2 through the fleet verb
+with the aws1-student34 profile: `Repo=courses/aws-engagement-ready`, `Component=terraform-state`,
+`ManagedBy=Terraform`, `Lab=Lab1-Bootstrap`, `Stack=bootstrap`, `Owner=michael.r.forrester`, `OrgPrefix=er`. The
+report's CloudTrail column names `user/Mforrester` on 2026-11-09. It belongs to that course's bootstrap, not to a
+root here, so it is registered rather than removed: `known-unmanaged.yaml` gets an `s3-bucket` entry on the tag
+`Repo: courses/aws-engagement-ready` for every account, the tag naming the owner. docs/floor.md's register gets
+its row. The report's own `match_register`, run on those tags, returns the entry's `made_by`, and returns nothing for
+an untagged bucket or for the six standbys. No other fleet account holds an `er-` bucket.
+
+**docs/floor.md**, after "The schedule": a paragraph saying the standbys and the two regional lab VPCs are applied
+from netcup, so the tanjiro report lists a standby while its wave is up, and one still listed after the teardown is
+a leak.
+
+**Live check.** Read only, as above: AWS (EKS, CloudTrail, the provenance reads), netcup's checkout and logs, and
+tanjiro's checkout and the bucket's tags. Nothing in AWS or on either cluster was changed. The change touches
+`infra/terraform/drift/known-unmanaged.yaml`, docs/floor.md and this file, none of which a cluster runs.
+
+**Not yet run on a cluster.** Nothing. The next drift report (2026-11-13T11:17Z) shows whether the teardown removed
+the standbys and whether the bucket is now covered.
+
+**Tests.** `python3 verify/test_drift_floor.py` (`All drift-floor checks passed.`) and `python3
+verify/test_drift_report.py` (`All drift-report checks passed.`), each run once. The prose gate was run on the two
+changed Markdown files. No dependency was added.
