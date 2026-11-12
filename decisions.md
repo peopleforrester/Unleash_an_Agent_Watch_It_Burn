@@ -55346,3 +55346,67 @@ and no new ListenOverflows on the guard-proxy pod, as #1342 ran it for #1337.
 `test_challenge_fallbacks.py`, `test_guard_proxy_pin_on_main.sh` (18 of 18), `test_guard_proxy_pin_1316.py`,
 `test_guard_proxy_pin_1288.py`, `test_beat03_c7.py` and `test_scope_tests.py`. The scoped selection for these three
 paths is 326 offline and 41 tools-tier tests; the rest are left to validation.
+## 2026-11-12 · #1371 · run 20577 · A live test for #1336's replay reading, run once on attackme after the split synced: 2.03 CPU at peak, idle 13 s after the replay, no span dropped, no restart
+
+**The gap.** Test review run 20575 found no test for #1336's last criterion: with the traces processors behind the
+queued loopback, a replay reading shows the collector above one core or keeping pace, with no restart. Both #1336
+entries above named the reading under "Not yet run on a cluster".
+
+**The test.** New `verify/test_collector_replay_pace_live.py` (`# SUITE: e2e`, needs COMMUNITY_CONTEXT) runs run
+20295's replay, `load_replay.py attackme.burritobot.co --yes --source catalog --users 500 --seed 1336`, under the
+cluster's guard lock. It first checks that the cluster runs the split (the live relay.yaml's `traces/intake` and
+`traces`, the relay queue's two consumers, a CPU limit above one core, the DaemonSet rolled out), and sends nothing
+when it does not. From 30 s before the replay to 60 s after it, it reads the kubelet's CPU counter for each collector
+pod and the collector's own :8888 counters through a port-forward, every 5 s. It fails unless:
+
+- a kubelet interval during the replay read above 1.2 CPU, or by 15 s after the replay's end every pod was idle (under
+  0.1 CPU from then on) and the relay queue held under one 256-span request. The bound is 1.2 and not 1.0 because the
+  pre-split collector read 0.86 to 1.03 a kubelet interval on one goroutine (run 20295); 15 s is #1336's "about 15 s";
+- the collector's pods and restart counts are the same before and after, and the readings cover the whole window;
+- the receivers refused and failed no span on `otlp` and `otlp/relay`, `otlp_grpc/relay`'s `enqueue_failed` and
+  `send_failed` did not move, and no sender (agentgateway, workshop-agent, guard-proxy, evil-mcp-shim) logged an
+  export it gave up on;
+- every planned turn was sent and came back, 200 or more were served, the cost cap refused none, and 1,000 or more
+  spans crossed the loopback.
+
+What the replay had the bot create is deleted afterwards by `test_load_replay_live.py`'s own cleanup, which the test
+imports. New `verify/test_collector_replay_pace_live_checks.py` runs the judges offline. Run 20295's pre-split reading
+fails on the pace check, the senders' logs and the loopback count. A reading at 1.6 CPU and one at 0.9 CPU idle 5 s
+after the replay both pass. Each of 23 ways the criterion can stop holding fails on its own check, the bounds hold at
+1.2/1.21 CPU and 15/16 s, and the flow sends nothing off attackme, unsynced or without the lock. The sync gate is held
+against this checkout's burn relay and the pre-split relay the cluster ran at 08:13 UTC. `fetch-inventory.yaml`
+classes the scrape's `urlopen` as a live cluster fetch through a port-forward. The checks file sits in the scope map's
+`always` list for the reason `test_load_replay_live_checks.py` does (load_replay.py's run-time glob).
+
+**The live run.** The split reached watch-it-burn-community from staging at about 08:13 UTC (the collector pod
+`otel-collector-opentelemetry-collector-agent-9cwwq` rolled, 0 restarts, `Everything is ready`). Then
+`COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_collector_replay_pace_live.py` passed every check, exit 0:
+
+    replay        1,500 sent over 149.1 s, 08:25:37 to 08:28:07 UTC, 352 served, 1,148 refused by guard-proxy's
+                  cluster window, 0 errors, cost cap 0
+    spend         /cost $8.6295 before, $12.0101 after: this replay $3.3806, $0.00960 a served turn
+    CPU           a kubelet interval, seconds from the replay's start: -10..+8 0.01, +8..+20 0.82, +20..+37 2.03,
+                  +37..+50 1.84, +50..+66 0.09, +66..+84 1.00, +84..+102 1.99, +102..+117 0.73, +117..+135 0.16,
+                  +135..+148 1.23, +148..+163 0.22, +163..+182 0.00: above one core at 2.03, idle from 12.5 s past
+                  the replay's end
+    counters      read by hand after the run: otlp accepted 17,344 and otlp/relay accepted 17,344 since the roll
+                  (8,658 at 08:21), relay sent 17,344, relay queue 0, refused and failed 0 on both receivers, no
+                  enqueue_failed or send_failed series
+    senders       no export given up; collector restarts 0 before and after
+
+Against run 20295's reading before the split (one core flat, idle 74 to 88 s after the replay, four agentgateway
+exports given up), both arms now hold. The test prints its counter totals as a note from this commit on; this run read
+them by hand because the note came after the run.
+
+**Cluster state.** The replay added $3.38 to attackme's spend counter, now $12.02 of its $25 cap; the Night Before's
+`./fleet.sh reset-bot watch-it-burn-community` zeroes it. The bot created nothing new during the replay. It applied over
+`joker-walk-in-customer`, which an earlier replay created at 08:15 UTC, ten minutes before this one, together with
+`joker-walk-in` (replicas 0). The test names such an object and does not revert it, so both stay as they are, with
+`joker-walk-in-customer` at 1 replica. The guard lock was taken and released, and the port-forwards ended with the
+sampler.
+
+**Tests run**, each once and passing: `test_collector_replay_pace_live_checks.py`, `test_fetch_inventory.py`,
+`test_test_map.py`, `test_scope_tests.py` with `HECATON_BASE_SHA` at the merge base, and the live test above. The other
+tests the change selects are left to validation.
+
+No dependency was added.
