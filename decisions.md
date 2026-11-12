@@ -56625,3 +56625,15 @@ to `michaelrishiforrester.com/burritobot/`, checked 2026-11-12). The run-of-show
 `/kubecon`'s take-home link follow; the take-home step notes that #1399's `bit.ly/burittobot` still redirects.
 `test_mcp_vetting_handout.py` cuts the close at the stack slide, since #184 cut "Every attack today was a plausible
 request."; it passes.
+
+## 2026-11-12 · by hand · the private bot's Datadog button opens the admin cluster's traces, the last hour
+
+Michael, 2026-11-12: the chat page's Datadog button should go "straight in and show the last hour's worth of traces"
+for the burritobot-private cluster. It had always opened the bare `https://app.datadoghq.com`. On a
+`burritobot-private.` host the page's init now sets it to Agent Observability's traces,
+`ml_app:burritobot k8s.cluster.name:burritobot-private`, with `start` an hour before `end` and `paused=false`, and resets
+the window on each click so a page left open still opens on the last hour. Other hosts keep the plain link, and the
+public bot still hides the button. `test_audience_page_e2e.py` runs the page's init and reads the link on both private
+hosts; it passes, with the chat page's other tests.
+
+Not yet run on a cluster: press Datadog on https://burritobot-private.burritobot.co while signed in.

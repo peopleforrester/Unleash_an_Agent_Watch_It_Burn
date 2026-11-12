@@ -68,7 +68,7 @@ HARNESS = r"""
 const vm = require('vm');
 const [eventSrc, initSrc, search, host, quick, applySrc, answers] = JSON.parse(require('fs').readFileSync(0, 'utf8'));
 const els = {};
-for (const id of ['vttbtn', 'ddbtn', 'fbbtn', 'clusterid', 'clusterfoot']) els[id] = { href: '', textContent: '', title: '', hidden: false };
+for (const id of ['vttbtn', 'ddbtn', 'fbbtn', 'clusterid', 'clusterfoot']) els[id] = { href: '', textContent: '', title: '', hidden: false, addEventListener() {} };
 // The room's buttons (#1347) ship hidden with no href, as the markup has them.
 for (const id of ['depbtn', 'supbtn', 'bcnbtn']) els[id] = { href: '', textContent: '', title: '', hidden: true };
 els.fbbtn.href = quick;
@@ -91,7 +91,7 @@ for (const a of (answers || [])) {
   if (a !== 'none') vm.runInContext('applyControls(' + JSON.stringify(a) + ')', ctx);
   steps.push([els.supbtn.hidden, els.supbtn.href, refits.length]);
 }
-process.stdout.write(JSON.stringify({ steps, fb: els.fbbtn.href, terminalHidden: els.vttbtn.hidden === true,
+process.stdout.write(JSON.stringify({ steps, dd: els.ddbtn.href, fb: els.fbbtn.href, terminalHidden: els.vttbtn.hidden === true,
                                        datadogHidden: els.ddbtn.hidden === true,
                                        room: ['depbtn', 'supbtn', 'bcnbtn'].map(id => [els[id].hidden, els[id].href]) }));
 """
@@ -145,7 +145,7 @@ check("with no event set (the workshop) it stays, even on attackme", run_init(""
 check("hiding the Terminal alone leaves the Datadog button, so each knob is its own",
       run_init('window.WIB_EVENT = { hideTerminalOnPublic: true, publicHosts: ["attackme.agenticburn.com"] };')
       == {"fb": QUICK + "&cluster=watch-it-burn-community&user=a%40b.example", "terminalHidden": True,
-          "datadogHidden": False, "room": [[True, ""]] * 3, "steps": []})
+          "datadogHidden": False, "room": [[True, ""]] * 3, "steps": [], "dd": ""})
 
 print("== the room's own pages are a button each, on the public and the private bot alike (#1347) ==")
 ROOM = [[False, "https://deployments.burritobot.co/"], [True, ""],
@@ -192,6 +192,19 @@ check("guardrails-agency-on's fields alone keep it hidden", got.get("steps") == 
 got = run_init("", "attackme.burritobot.co", [ON])
 check("with Kyverno on but no supportUrl in the event (the workshop), it stays hidden",
       got.get("steps") == [[True, "", 0]], repr(got.get("steps")))
+
+print("== the private bot's Datadog button opens the admin cluster's traces, the last hour (Michael, 2026-11-12) ==")
+import urllib.parse as _up
+for host in ("burritobot-private.burritobot.co", "burritobot-private.agenticburn.com"):
+    dd = run_init(EVENT_JS, host).get("dd", "")
+    q = _up.parse_qs(_up.urlparse(dd).query)
+    check(f"on {host} it opens Agent Observability filtered to burritobot-private",
+          dd.startswith("https://app.datadoghq.com/llm/traces?")
+          and q.get("query") == ["ml_app:burritobot k8s.cluster.name:burritobot-private"], dd)
+    span = int(q.get("end", ["0"])[0]) - int(q.get("start", ["0"])[0])
+    check(f"on {host} the window is the last hour, live", span == 3600000 and q.get("paused") == ["false"], dd)
+check("an attendee's own cluster keeps the plain Datadog link",
+      run_init(EVENT_JS, "soot-ember.agenticburn.com").get("dd") == "", repr(run_init(EVENT_JS, "soot-ember.agenticburn.com").get("dd")))
 
 print("== the committed QR is exactly segno's rendering of publicUrl ==")
 r = subprocess.run([*package_cache.run_cmd("segno"), "python", "-I",

@@ -996,6 +996,16 @@
     // Datadog only when the presenters put it on the big screen.
     var ddb=document.getElementById('ddbtn');
     if(ddb && ev.hideDatadogOnPublic===true && onPublic) ddb.hidden=true;
+    // On the presenters' bot the Datadog button opens Agent Observability's traces for the admin cluster, the last
+    // hour, live (Michael, 2026-11-12). The window is set when the button is pressed, so a page left open all
+    // morning still opens on the hour before the click.
+    if(ddb && /^burritobot-private\./.test(location.hostname)){
+      var ddTraces=function(){ var now=Date.now(); return 'https://app.datadoghq.com/llm/traces?query='+
+        encodeURIComponent('ml_app:burritobot k8s.cluster.name:burritobot-private')+
+        '&start='+(now-3600000)+'&end='+now+'&paused=false'; };
+      ddb.href=ddTraces();
+      ddb.addEventListener('click', function(){ ddb.href=ddTraces(); });
+    }
     // The room's own pages (#1347): a button shows, on every host, only when event.js names its page, and goes
     // there verbatim, with no cluster or user, as the event's Feedback form does.
     [['depbtn','deploymentsUrl'],['supbtn','supportUrl'],['bcnbtn','beaconUrl']].forEach(function(p){
