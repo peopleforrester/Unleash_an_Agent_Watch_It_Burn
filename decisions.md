@@ -56323,3 +56323,33 @@ and without wide fonts: all green. `test_chat_no_desk_link.py` holds the markup 
 
 Not yet run on a cluster: on watch-it-burn-community and watch-it-burn-private, no Support at the start state, Support
 after `guardrails-k8s-on` within one poll, hidden again after `guardrails-k8s-off`, and a one-row bar on a phone (#1388).
+
+## 2026-11-12 · #1355 · run 20710 · build-e2e-tools-image builds, checks and pushes the current tag with docker, and it pulls anonymously
+
+**Runs on GitHub since the fix.** Run 20429's one-runtime fix reached staging as 905c5ccc. Since then
+`build-e2e-tools-image` ran four times on staging and once on main, and each run's six steps all ended success:
+43052897996 (staging 905c5ccc), 43063675248 (staging 5a3ab270), 43073875031 (staging 6d4db3b3), 43089914524 (staging
+ab98c7e1) and 43100710834 (main b6a0edb9). The first three built `51ec299b51b3558f-65501e27`. From ab98c7e1 on the
+build inputs hash to `51ec299b51b3558f-6970efce`, which is what `python3 verify/e2e_image.py ref` prints at this run's
+base, 14681fe2. No build input changed between ab98c7e1 and 14681fe2.
+
+**The job log of run 43089914524** (job 130763935266, read with `gh api --allow-escape-sequences
+repos/<repo>/actions/jobs/130763935266/logs`) shows one runtime throughout. Every step's environment carries
+`WIB_CONTAINER_RUNTIME: docker`. The Build step's output is BuildKit's (`#5 [ 1/20] FROM ...`, `#25 naming to
+ghcr.io/peopleforrester/wib-e2e-tools:51ec299b51b3558f-6970efce done`), not podman's `STEP 1/24`, and ends
+`built ghcr.io/peopleforrester/wib-e2e-tools:51ec299b51b3558f-6970efce`. The check ran
+`"${WIB_CONTAINER_RUNTIME}" run --rm --pull=never ... "${REF}"` and printed `v24.22.2` and `uv 0.13.7`. The push
+step printed `Login Succeeded`, then `51ec299b51b3558f-6970efce: digest:
+sha256:332a41e16b252cb92af623fb45115bcb80c498876a49f3d9cfbc0990eceec6e1`, and `scripts/ghcr_version_tag.py` ended
+`pushed ghcr.io/peopleforrester/wib-e2e-tools:51ec299b51b3558f-6970efce`.
+
+**Anonymous pull.** On 2026-11-12, with no login, an anonymous token from `https://ghcr.io/token?scope=repository:peopleforrester/wib-e2e-tools:pull`
+read the manifest of `51ec299b51b3558f-6970efce` with HTTP 200: an OCI index whose digest is the
+`sha256:332a41e1...` the push printed, with a linux/amd64 manifest of 24 layers (985340955 bytes). The same token
+fetched that manifest's config blob, whose `io.github.peopleforrester.watch-it-burn.source-tree` label reads
+`51ec299b51b3558f-6970efce`. The older tag `51ec299b51b3558f-65501e27` also answered 200. So the package is public,
+and no visibility step is left for Michael. The 1 GB of layers was not downloaded here; `e2e-image.sh run` pulls them
+on a host that needs the tier.
+
+**Tests and live check.** This entry is the only change, so no test changed and none was run; the prose gate was run
+on it. No cluster check: the change touches neither what the clusters run nor `verify/` code.
