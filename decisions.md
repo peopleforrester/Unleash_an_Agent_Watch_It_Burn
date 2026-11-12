@@ -54951,3 +54951,38 @@ clusters were left at the start state the test checks. `agent/terminal-auth` was
 standalone stream to reconnect, the 12h cut no longer reaches the session, so this run did not chase it further.
 
 **Tests.** No code changed, so no offline test was run. The live check above is the test.
+
+## 2026-11-12 · #1326 · run 20488 · The collector half of #1316's live check, after d20a0643 and #1328, #1332 synced: green on both clusters
+
+`bash verify/prior-drafts.sh 1326 origin/staging` printed LANDED for run 20240's draft and NONE to port. Run 20240 met
+the guard-proxy and name-policy criteria and left the collector one open: community's collector crashlooped parsing
+#1316's four 108,437-character statements. Since then d20a0643 (a 300 s startupProbe, a 2-CPU limit), #1328 (the mask
+cut into 36 short patterns) and #1332 (the mask in its own ConfigMap, `otel-collector-coc-mask`) reached staging, and
+Argo CD synced them at 2026-11-11 06:31Z. This run read both clusters at staging `eaf79ff5`, 03:44Z to 03:53Z. It
+changed nothing on either cluster and ran no model call.
+
+**The collector, on both clusters.** The `otel-collector` Application is Synced and Healthy, its last operation
+`Succeeded` (community 06:31:46Z, private 06:31:27Z), its sync options `CreateNamespace=false ServerSideApply=true`.
+Both collector ConfigMaps (`otel-collector-opentelemetry-collector-agent` and `otel-collector-coc-mask`) carry no
+last-applied annotation and one field manager, `argocd-controller` with operation `Apply`, so Argo CD applies them
+server-side. The DaemonSet carries the startupProbe (failureThreshold 60, period 5 s) and the 2-CPU limit. One pod
+each (community `9zznp`, private `8qxf4`), Running and ready for 21 hours with 0 restarts.
+`COMMUNITY_CONTEXT=watch-it-burn-community PRIVATE_CONTEXT=watch-it-burn-private python3
+verify/test_collector_coc_mask_live.py` passed 24 of 24, exit 0: the coc-mask ConfigMap is Argo CD's, defines
+`transform/coc_mask` alone, and its SHA-256 is the DaemonSet's `checksum/coc-mask` (`829e6a36...0455`). The same
+contexts on `verify/test_collector_pods_ready_live.py` passed 18 of 18, exit 0: each pod runs that checksum and logged
+`Everything is ready. Begin running and processing data.` at start-up.
+
+**The scrub.** `COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_collector_pii_scrub_live.py` (which runs
+`verify/pii_scrub_live.py`) passed 22 of 22, exit 0, with no 429: the span came back scrubbed from APM and Agent
+Observability, and the 168-hour scans read 23,459 APM spans and 26,817 Agent Observability spans with no raw match. It
+left one `wib-pii-scrub-check` span in Whitney's org under burritobot-public, which the post-talk purge deletes. The
+scrub is the community cluster's alone: private's `otel-collector` renders `values.yaml` without `values-burn.yaml`,
+and its relay ConfigMap names no `scrub_pii`, so the check has no private run, by its own design.
+
+**The other two criteria, re-read.** Both clusters' `agent/guard-proxy` Deployment still reads `checksum/proxy-py`
+`ef48fb92f4d9`. Both clusters' `code-of-conduct-names` floor variable is staging's expression exactly, its pattern
+52,863 characters, with `typeChecking` empty. The /chat refusals and the two KubeCon probes (admin 34 of 34, community
+22 of 22) are run 20240's, on this same build and pattern; they were not run again.
+
+**Tests.** No code changed. The three live tests above are the test; nothing offline was run.
