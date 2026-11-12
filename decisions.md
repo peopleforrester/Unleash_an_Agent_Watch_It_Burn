@@ -54914,3 +54914,40 @@ read `decisions.md` and no tools-tier test; the ones that parse its entries or s
 `test_repo_identity.py`, `test_guard_toggle_record.py`, `test_platform_baseline.py`, `test_turn_guard.py`) pass
 here, and the rest are left to validation. `test_guard_toggle_record.py` first failed, as it does on the base commit, because
 this worktree had no guard-proxy submodule checked out; it passed once `bash verify/ensure-submodules.sh` checked it out.
+
+## 2026-11-12 · #1323 · run 20487 · The 3003 bind answers the agent's GET /mcp with 405 on both KubeCon clusters, rule unchanged, floor probes green
+
+**Prior work.** `prior-drafts.sh 1323 origin/staging` printed LANDED for run 20222's `origin/agent/1323-20222` and
+NONE to port. That run's `c7-sse-route` Job (`39192b2d`) is in staging, and this run makes no change to it. This run
+does the checks that run's entry named under "Not yet run on a cluster".
+
+**The Job ran on both clusters.** ai-layer is Synced and Healthy at staging `1b25f80d` on both. `c7-sse-route-4ffef145`
+is Complete on both (private 2026-11-11 02:21:06Z to 02:21:14Z, community 02:21:25Z to 02:21:30Z). Its log on each
+reads `added the no-standalone-sse route to agentgateway-c7-config's 3003 bind. Rule before and after: - 'true' #
+c7-rule`. The live config.yaml on each now ends in the route, and its one `# c7-rule` line reads `- 'true' # c7-rule`.
+
+**The 405, from the gateway log** (`kubectl --context <ctx> -n agent logs deploy/agentgateway -c agentgateway-c7 |
+grep http.method=GET`):
+
+- watch-it-burn-private. The agent's (10.0.124.146) standalone stream that opened before the Job ran was cut at the
+  12h timeout: `2026-11-11T11:23:50Z route=default/route0 http.status=200 duration=43200001ms`. Its reconnect 1.5
+  seconds later went to the new route: `11:23:52Z route=default/no-standalone-sse http.status=405 reason=DirectResponse`,
+  same trace id. That is the moment that failed the session on 2026-11-10 (the 404 `mcp: session not found` at
+  12:18:11Z). It answered 405 again at 13:27:18Z. The gateway logged no 404 on 2026-11-11 or -12. The agent's log over
+  30 hours has no `session not found`, and a deploy_app call went through at 13:27:20Z.
+- watch-it-burn-community. The first 405 is at 2026-11-11T03:31:06Z, and every GET /mcp since then is answered 405
+  by `no-standalone-sse`. That is 22 of them in 30 hours, among them the current agent pod's (10.0.32.242 before this
+  run's probe, 10.0.55.217 after it). The last stream from before the route closed at 03:31:07Z with a 200 after
+  12369576 ms. No 404 since the Job ran.
+
+**The rule and the floor probes.** `PRIVATE_CONTEXT=watch-it-burn-private COMMUNITY_CONTEXT=watch-it-burn-community
+python3 verify/test_coc_floor_probes_live.py` ran once, with exit 0: 69 PASS, 0 FAIL, `All floor-on probe checks
+passed`, and the guard lock was held on both clusters throughout. It spent $0.0837 over 14 model calls on
+burritobot-private.agenticburn.com and $0.0977 ($3.2868 to $3.3845) over 10 on attackme.agenticburn.com, for #503.
+Afterwards the C7 rule still read `- 'true' # c7-rule` on both, the same as before the Job and after it, and both
+clusters were left at the start state the test checks. `agent/terminal-auth` was not read.
+
+**Still open.** Why agentgateway forgot a session the evil-mcp shim never ended is still not established. With no
+standalone stream to reconnect, the 12h cut no longer reaches the session, so this run did not chase it further.
+
+**Tests.** No code changed, so no offline test was run. The live check above is the test.
