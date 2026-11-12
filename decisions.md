@@ -55894,3 +55894,38 @@ tests it is the next one built after the move, and no later session is scheduled
 netcup's fleet.sh back for criterion 1 and the next drift report for criterion 2.
 
 **Live check.** Skipped: nothing the clusters run changed, and this run wrote only this entry.
+## 2026-11-12 · #1377 · run 20604 · Netcup's two copies wait for its checkout to hold ba634961; the move aside is one act that checks netcup's own fleet.sh
+
+**Context.** Run 20591's change (ba634961: off the state host, fleet.sh and preflight read accen-dev's home-region
+lab VPC from AWS) is on staging. Its two acts on netcup were answered by question 1204: the custodian tier did not
+run them, because GitHub main (b6a0edb9) does not hold ba634961 (44 commits behind it, checked again at 13:48Z), and
+an act from a run whose branch did not merge goes to no tier.
+
+**Read at about 13:50Z, through `sources repo-ls` and `repo-cat`.** Netcup's `fleet.sh` has no
+`read_home_lab_vpc_from_aws`, so its checkout is still at 7783f256. Both copies are where #1377 found them:
+`infra/org/boundary/states/accen-dev.tfstate` and `infra/terraform/aws/network/terraform.tfstate`, with no
+`.stale-1377` beside either. The watcher logged at 13:44Z with the night-before standbys up. The six-hours wave
+(14:50Z) and the 22:50Z teardown run from that checkout and read its lab VPC copy, so the copy cannot move today.
+#1376 escalated the checkout's move to `origin/main`, guarded to run after 23:30Z.
+
+**The act escalated here.** Run 20591's first act, the checkout's move, is dropped: #1376's guarded act does it and
+keeps the checkout's tracked edits in a stash, which 20591's did not. What is left is one `bash -c` on netcup, as
+Michael, whose guard is the real precondition, netcup's own checkout, not main. It changes nothing and exits 3 with
+`NOT YET` when netcup's fleet.sh lacks `read_home_lab_vpc_from_aws` or its preflight.sh lacks `read from AWS by its
+tags`, when a watcher holds `logs/.backups-watch.lock`, or when a `fleet.sh`, `preflight.sh` or `backups.py` command
+is running as Michael. Past those, it renames each copy to `<name>.stale-1377` with `mv -n`, says "already moved"
+for one already renamed, refuses with exit 1 when both a copy and its `.stale-1377` exist, and lists both
+directories. `terraform.tfstate.backup` stays; the drift report copies only `*.tfstate`.
+
+**Checked on a scratch clone, nothing on a host.** At 7783f256 with both copies present: the first `NOT YET`, exit 3.
+At ba634961: a held lock gave the second, a running `fleet.sh` the third, each exit 3 with nothing renamed. With all
+clear it renamed both, exit 0; a second run said "already moved" for each, exit 0; a fresh copy beside its
+`.stale-1377` was refused, exit 1, with both files intact. The process guard first used `pgrep -f`, which matched
+any command line naming fleet.sh, the act's own `bash -c` among them; it now reads only the first two words of each
+command.
+
+**Criteria.** Criterion 2 stands as run 20591 left it. Criterion 1 needs main to hold ba634961, #1376's move after
+23:30Z, then this act, then the next daily drift report on tanjiro-wsl2. The next run on the issue reads netcup's
+two directories and that report.
+
+**Live check.** Skipped: nothing the clusters run changed, and this run wrote only this entry.
