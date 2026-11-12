@@ -939,10 +939,6 @@ sites:
     class: none
     why: docstrings, comments, messages and the CRANE variable's checks
   verify/test_presenter_ticket_live.py:
-  - match: 'curl -s -X POST localhost:18080'
-    lines: 1
-    class: none
-    why: a literal the test looks for in the run-of-show's segment 4, the presenters' command; it runs nothing
   - match: urlopen
     lines: 5
     class: loopback
@@ -983,6 +979,11 @@ sites:
     lines: 1
     class: loopback
     why: the support desk's own server on 127.0.0.1, which the test starts
+  verify/test_ros_seg4_flow.py:
+  - match: .
+    lines: 5
+    class: none
+    why: words the test checks are absent from the run-of-show's ticket step, the old step it puts back to show the check fails, and its docstring (#1381); it runs nothing
   verify/tf_plugin_cache.py:
   - match: urlopen|path = artifact_cache\.get\(
     lines: 2
@@ -1805,10 +1806,10 @@ sites:
     kind: lab-endpoint
     target: the support desk's public host
   verify/test_support_desk_named.py:
-  - match: 'curl -s -X POST localhost:18080/presenter-ticket'
-    lines: 1
+  - match: .
+    lines: 5
     class: none
-    why: a literal the test looks for in the run-of-show's segment 4, the presenters' command; it runs nothing
+    why: words the test checks are absent from the run-of-show's ticket step, the old step it shows failing, and its docstring (#1381); it runs nothing
   verify/test_terminal_login_live.sh:
   - match: .
     lines: 8

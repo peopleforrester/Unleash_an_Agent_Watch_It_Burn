@@ -56191,3 +56191,22 @@ and `test_desk_coc.py` are unchanged, and the one test edit is the one this deci
 20596's workspace; staging moved to 956505e1 since its base f49ef2d8 without editing any file the branch changes
 except this append-only record, so nothing was ported again. Live check skipped, as in run 20596's entry: a document
 and tests only.
+
+## 2026-11-12 · #1381 · run 20627 · Why run 20622's tests gate failed, and the fix
+
+**Cause.** The gate ran 473 test files; two failed, each on text runs 20596 and 20622 added:
+- `test_deck_shift_slide_citations.py` (#1099) allows a slide hash from `#/43` up only in segments 4 to 6 and their
+  readers. The new docstring of `verify/test_presenter_ticket_live.py` cited the ticket step by its hash. It now names
+  the step by its quoted title instead.
+- `test_fetch_inventory.py` (#1116) counts every line under `verify/` that names a fetch command (`curl`,
+  `port-forward`) as a call site that `verify/fetch-inventory.yaml` must class. The new absence checks in
+  `test_ros_seg4_flow.py` (5 lines) and `test_support_desk_named.py` (5 lines) name those words, and the inventory
+  still claimed the removed `curl -s -X POST localhost:18080` lines in `test_support_desk_named.py` and
+  `test_presenter_ticket_live.py`. The inventory now classes the new lines `none` (they run nothing), drops the
+  removed `test_presenter_ticket_live.py` entry and replaces the `test_support_desk_named.py` one.
+
+**Tests, each alone.** `test_fetch_inventory.py`, `test_deck_shift_slide_citations.py`,
+`test_presenter_ticket_live.py`, `test_ros_seg4_flow.py`, `test_support_desk_named.py`, `test_fleet_contract.py` (a
+reader of the inventory), `test_scope_tests.py`, `test_test_map.py` and `test_lint.py`: all exit 0. The scope map and
+test map needed no change. Question 1203's entry above stands as written. Live check skipped: tests and a
+`verify/` inventory only.
