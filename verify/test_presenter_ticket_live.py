@@ -5,9 +5,10 @@ ticket filed on the one desk in the reserved range, read by number by the public
 Run 18741 did that flow by hand on watch-it-burn-community; verify/presenter_ticket_live.py does it as a check, and
 this holds the check, with no cluster, no model and no network beyond localhost:
 
-  1. the run-of-show's "Let's file a ticket." step still files the demo ticket the way the check does: port-forward
-     svc/fake-ticket in agent on watch-it-burn-community, then POST /presenter-ticket, and asks the bot "What's the
-     status of my support ticket HC-<n>?"; a reworded step names the literal it lost;
+  1. the check files the presenters' way: port-forward svc/fake-ticket in agent on watch-it-burn-community, then POST
+     /presenter-ticket, and asks the bot "What's the status of my support ticket HC-<n>?". The run-of-show's `#/47`
+     step no longer files this way since #1381 (it uses the desk's form and the room's bot), so this no longer reads
+     that step; the route and the range stay for rehearsals;
   2. the whole flow against the real gitops/ai-layer/ticket_site.py: the ticket is filed through POST /presenter-ticket,
      numbered in the desk's own PRESENTER_NUMBERS (HC-900 on a fresh desk, the next one after a rehearsal's ticket),
      shown on the desk's page for its number, read back by a bot whose read_support_ticket reads that desk, its reply
@@ -59,13 +60,7 @@ def check(name: str, cond: bool, detail: str = "") -> None:
         failures.append(name)
 
 
-print("== 1. the run-of-show's ticket step files and asks the way the check does ==")
-seg4 = sdh.segment_4(sdh.RUN_OF_SHOW.read_text(encoding="utf-8"))
-for literal in ("kubectl --context watch-it-burn-community -n agent port-forward svc/fake-ticket 18080:8080",
-                f"curl -s -X POST localhost:18080{ptl.PATH}", "What's the status of my support ticket HC-900?"):
-    if literal not in seg4:
-        sys.exit(f"ANCHOR MISSING: {literal!r} is not in segment 4 of {sdh.RUN_OF_SHOW}; presenter_ticket_live.py "
-                 "files the demo ticket and asks the bot the way that step says")
+print("== 1. the check files and asks the presenters' way ==")
 check("the check forwards the step's service and port, and posts to its path",
       ptl.SERVICE == "svc/fake-ticket" and ptl.SERVICE_PORT == 8080
       and ptl.FORWARD[:3] == ["-n", "agent", "port-forward"]
