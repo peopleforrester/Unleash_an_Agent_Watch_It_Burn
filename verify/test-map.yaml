@@ -6824,6 +6824,13 @@ rules:
       - verify/topic_cases.py
     tests:
       - verify/test_promo_villains.py
+  - name: test_prompt_tuning_disclosed.py
+    paths:
+      - README.md
+      - challenges/03-bad-mcp-excessive-agency/beat.md
+      - gitops/workshop-agent/agent.yaml
+    tests:
+      - verify/test_prompt_tuning_disclosed.py
   - name: test_prompt_wall_redaction.py
     paths:
       - gitops/ai-layer/guard-proxy
