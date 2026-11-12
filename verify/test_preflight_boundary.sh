@@ -42,7 +42,8 @@ case "$1 $2" in
       denied)  echo "An error occurred (AccessDenied) when calling the GetPolicy operation: not authorized." >&2; exit 254 ;;
       *) echo watch-it-burn-permissions-boundary ;;
     esac ;;
-  "ec2 describe-vpcs") echo vpc-0abc ;;
+  # VPCS_TAGGED (#1377): what a describe-vpcs by the lab VPC's tags finds; unset, the one live VPC.
+  "ec2 describe-vpcs") echo "${VPCS_TAGGED-vpc-0abc}" ;;
   "bedrock get-foundation-model-availability") echo AVAILABLE ;;
 esac
 exit 0
@@ -64,7 +65,10 @@ OUT="${T}/out"
 run() {
   local accts="$1"; shift
   : >"${CALLS}"
-  env -u WIB_DEFAULT_ACCOUNT -u WIB_EVENT WIB_ATTENDEE_ACCOUNTS="${accts}" WIB_REGION=us-west-2 "$@" \
+  # This host is the state host unless a case names another, so the default account's lab VPC is read from its
+  # state here (#1377).
+  env -u WIB_DEFAULT_ACCOUNT -u WIB_EVENT WIB_ATTENDEE_ACCOUNTS="${accts}" WIB_REGION=us-west-2 \
+    WIB_STATE_HOST="$(hostname -s 2>/dev/null || hostname)" "$@" \
     bash "${FLEET_DIR}/preflight.sh" 1 >"${OUT}" 2>&1
   rc=$?
 }
@@ -154,6 +158,54 @@ echo "== a stray states/<default>.tfstate is called out (down-infra never destro
 reset_states; echo vpc >"${NET}/terraform.tfstate"; echo vpc >"${NET}/states/accen-dev.tfstate"
 run accen-dev
 check "note names the stray state"             'grep -F note "${OUT}" | grep -qF "stray ${FLEET_DIR}/../aws/network/states/accen-dev.tfstate"'
+
+echo "== off the state host, the default account's home-region lab VPC is read from AWS, not a state (#1377) =="
+# Netcup's checkout kept a second copy of aws/network/terraform.tfstate only because the backup schedule's us-west-2
+# standbys read their subnets from it, and backups.py runs this preflight for each region first. Off the state
+# host the copy is moved aside, so preflight finds the VPC in AWS by its tags, as fleet.sh does there.
+OFF=(WIB_STATE_HOST=elsewhere-host)
+reset_states
+run accen-dev "${OFF[@]}"
+check "exit 0 with no lab VPC state on this host" '[[ "${rc}" -eq 0 ]]'
+check "PREFLIGHT GREEN"                          'has "PREFLIGHT GREEN"'
+check "PASS names the VPC, read from AWS, and the state host" \
+      'grep -F PASS "${OUT}" | grep -qF "lab VPC vpc-0abc present and live (read from AWS by its tags; its state is on elsewhere-host)"'
+check "found by the network root's Name and project tags, as accen-dev in us-west-2" \
+      'grep -F "ec2 describe-vpcs" "${CALLS}" | grep -F "Name=tag:Name,Values=watch-it-burn-lab-vpc" | grep -F "Name=tag:project,Values=watch-it-burn" | grep -F -- "--region us-west-2" | grep -qF "[AWS_PROFILE=accen-dev]"'
+check "and no terraform output was read for the network" '! grep -qF "aws/network" "${CALLS}"'
+reset_states; echo vpc >"${NET}/terraform.tfstate"
+run accen-dev "${OFF[@]}"
+check "a local copy left on this host is named as a second copy to move aside" \
+      'grep -F note "${OUT}" | grep -qF "a second copy of accen-dev'"'"'s lab VPC state is here, ${FLEET_DIR}/../aws/network/terraform.tfstate"'
+check "and is not read"                          '! grep -qF "output -state=${FLEET_DIR}/../aws/network/terraform.tfstate" "${CALLS}"'
+check "and the run is still GREEN"               '[[ "${rc}" -eq 0 ]] && has "PREFLIGHT GREEN"'
+reset_states
+run accen-dev "${OFF[@]}" VPCS_TAGGED=
+check "no tagged VPC in AWS fails"               '[[ "${rc}" -eq 1 ]]'
+check "naming the tag, the account and the region" \
+      'fail_line "no lab VPC tagged Name=watch-it-burn-lab-vpc in accen-dev/us-west-2" >/dev/null'
+check "with the apply to run on the state host, against terraform.tfstate" \
+      'fail_line "no lab VPC tagged" | grep -qF "on the state host elsewhere-host (this host is " && fail_line "no lab VPC tagged" | grep -qF "terraform -chdir=${FLEET_DIR}/../aws/network apply -state=terraform.tfstate -var profile=accen-dev"'
+run accen-dev "${OFF[@]}" "VPCS_TAGGED=vpc-1 vpc-2"
+check "two tagged VPCs fail, naming both"        '[[ "${rc}" -eq 1 ]] && fail_line "2 VPCs tagged Name=watch-it-burn-lab-vpc in accen-dev/us-west-2 (vpc-1 vpc-2)" >/dev/null'
+reset_states
+run accen-dev "${OFF[@]}" BOUNDARY_accen_dev=missing
+check "a missing boundary's apply is named for the state host, which holds every boundary state" \
+      'fail_line "MISSING in accen-dev" | grep -qF "on the state host elsewhere-host (this host is " && fail_line "MISSING in accen-dev" | grep -qF "${BAPPLY_DEV}"'
+run accen-dev BOUNDARY_accen_dev=missing
+check "and on the state host the apply line carries no host" '! fail_line "MISSING in accen-dev" | grep -qF "on the state host"'
+reset_states; echo vpc >"${NET}/states/aws1-student31.tfstate"
+run accen-dev,aws1-student31 "${OFF[@]}"
+check "another account's home-region VPC is still read from its own state" \
+      'grep -qF "output -state=${FLEET_DIR}/../aws/network/states/aws1-student31.tfstate -raw vpc_id" "${CALLS}" && [[ "${rc}" -eq 0 ]]'
+reset_states; echo vpc >"${NET}/states/accen-dev.us-east-2.tfstate"
+run accen-dev "${OFF[@]}" WIB_REGION=us-east-2
+check "and a standby region's VPC from its states/<acct>.<region>.tfstate, where the schedule applied it" \
+      'grep -qF "output -state=${FLEET_DIR}/../aws/network/states/accen-dev.us-east-2.tfstate -raw vpc_id" "${CALLS}" && [[ "${rc}" -eq 0 ]]'
+check "preflight names the same state host as fleet.sh" \
+      'grep -qx "WIB_STATE_HOST=\"\${WIB_STATE_HOST:-tanjiro-debian}\"" "${SRC}/preflight.sh" && grep -qx "readonly WIB_STATE_HOST=\"\${WIB_STATE_HOST:-tanjiro-debian}\"" "${SRC}/fleet.sh"'
+check "and the lab VPC name both read is the network root's" \
+      'grep -qE "^  name = \"watch-it-burn-lab-vpc\"$" "${SRC}/../aws/network/main.tf" && [[ "$(grep -c "^readonly LAB_VPC_NAME=\"watch-it-burn-lab-vpc\"" "${SRC}/preflight.sh" "${SRC}/fleet.sh" | grep -c ":1$")" -eq 2 ]]'
 
 echo "== the Night Before list applies the boundary before the platform comes up =="
 ROS="${HERE}/../facilitation/kubecon-na-2026-run-of-show.md"

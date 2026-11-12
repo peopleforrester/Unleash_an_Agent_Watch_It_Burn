@@ -203,7 +203,12 @@ holds the one copy of each KubeCon cluster state, `infra/terraform/fleet/states/
 and `watch-it-burn-private.tfstate` in `/home/michael/repos/talks/Unleash_an_Agent_Watch_It_Burn`, and every
 account's boundary and audit state and accen-dev's home-region lab VPC state. `fleet.sh up` and `down` refuse
 either KubeCon cluster on any other host, naming the state host, so its state is written there alone
-(`verify/test_fleet_state_host.sh`).
+(`verify/test_fleet_state_host.sh`). On any other host `fleet.sh` and `preflight.sh` read accen-dev's us-west-2
+lab VPC from AWS, by the tags the network root gives it (`Name=watch-it-burn-lab-vpc`, `project=watch-it-burn`),
+with its private subnets in CIDR order so zone a is still the first. They never read a local state of it there,
+and `fleet.sh down-infra` refuses it there, naming the state host (#1377). An apply of the boundary or of that
+lab VPC runs on the state host too, and `preflight.sh` off it says so in its apply line
+(`verify/test_preflight_boundary.sh`).
 
 The backup schedule is the one thing applied elsewhere. `backups.py schedule` runs from Michael's checkout on
 netcup, `~/repos/talks/Unleash_an_Agent_Watch_It_Burn`, so #643's standbys and the lab VPCs of us-east-1 and
@@ -223,10 +228,11 @@ lineage, with the private node group replaced since and no Bedrock guardrail), o
 accen-dev's home-region lab VPC, beside tanjiro-wsl2's rebuilt ones, which match AWS. The KubeCon copies on
 netcup are moved aside there, to `<name>.tfstate.stale-1374`, so that no apply plans against them. After that,
 `fleet.sh` on netcup names neither cluster in a selector that reads the states (`instructors`, `all`), and its
-routes shrink guard refuses a router table that would drop their rows: the pair's verbs run on tanjiro-wsl2. The
-boundary and lab VPC copies stay while the backup schedule's us-west-2 standbys take their subnets from that lab
-VPC state, and are listed until then. A root whose state on netcup is empty, such as its accen-dev audit state,
-is a note.
+routes shrink guard refuses a router table that would drop their rows: the pair's verbs run on tanjiro-wsl2.
+Netcup's boundary and home-region lab VPC copies go the same way, to `<name>.tfstate.stale-1377`, once its
+checkout holds #1377: the backup schedule's us-west-2 standbys then take their subnets from AWS, as above, and no
+longer from that copy. The drift report copies only `*.tfstate`, so a moved-aside copy is neither planned nor
+listed. A root whose state on netcup is empty, such as its accen-dev audit state, is a note.
 
 **The schedule.** The schedule is a daily cron job on the state host:
 

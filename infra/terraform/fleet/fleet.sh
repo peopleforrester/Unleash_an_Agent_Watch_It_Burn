@@ -130,14 +130,49 @@ is_standby_name() { [[ "$1" =~ ^watch-it-burn-(community|private)-b[0-9][0-9]$ ]
 # (the floor doc's "The state host"). Only this checkout's states/ is held; the shim tests set WIB_STATE_DIR.
 readonly WIB_STATE_HOST="${WIB_STATE_HOST:-tanjiro-debian}"
 is_kubecon_pair_name() { [[ "$1" == "watch-it-burn-community" || "$1" == "${SHARED_ADMIN_NAME}" ]]; }
+this_host() { hostname -s 2>/dev/null || hostname; }
+# Whether this run uses the checkout's own states/ on a host other than the state host. The shim tests, which set
+# WIB_STATE_DIR, never are.
+off_state_host() { [[ "${STATE_DIR}" == "${SCRIPT_DIR}/states" && "$(this_host)" != "${WIB_STATE_HOST}" ]]; }
 # Prints why this host may not write $1's state, or nothing when it may. ALWAYS exits 0.
 state_host_refusal() {
     is_kubecon_pair_name "$1" || return 0
-    [[ "${STATE_DIR}" == "${SCRIPT_DIR}/states" ]] || return 0
-    local here; here="$(hostname -s 2>/dev/null || hostname)"
-    [[ "${here}" == "${WIB_STATE_HOST}" ]] && return 0
+    off_state_host || return 0
     printf "%s's state is written on %s alone and this host is %s; run it there (the floor doc, \"The state host\")" \
-        "$1" "${WIB_STATE_HOST}" "${here}"
+        "$1" "${WIB_STATE_HOST}" "$(this_host)"
+}
+# The default account's home-region lab VPC is the state host's too (#1377). Netcup's checkout kept its own copy of
+# aws/network/terraform.tfstate (lineage 02c0c252) beside tanjiro-wsl2's (005d8893) only because the backup
+# schedule's us-west-2 standbys read their subnets from it. So off the state host fleet.sh reads that VPC from AWS,
+# by the Name and project tags the network root gives it, and never reads or writes a local state of it; down-infra
+# refuses it there. Every other lab VPC (another account's, or any account's outside the home region, where the
+# standbys build) keeps its state wherever it was applied.
+readonly LAB_VPC_NAME="watch-it-burn-lab-vpc"   # module "vpc" name in aws/network/main.tf
+home_lab_vpc_off_state_host() {
+    [[ "$1" == "${WIB_DEFAULT_ACCOUNT}" && "${WIB_REGION}" == "${WIB_HOME_REGION}" ]] && off_state_host
+}
+# Sets VPC_ID and SUBNETS_JSON (the private subnets in CIDR order, as the root's private_subnet_ids lists them, so
+# zone a is still the first) from AWS. Exits 1 unless exactly one such VPC holds at least one private subnet.
+read_home_lab_vpc_from_aws() {
+    local p="${WIB_DEFAULT_ACCOUNT}" r="${WIB_HOME_REGION}" ids
+    ids="$(AWS_PROFILE="${p}" aws ec2 describe-vpcs --region "${r}" \
+        --filters "Name=tag:Name,Values=${LAB_VPC_NAME}" "Name=tag:project,Values=watch-it-burn" \
+        --query 'Vpcs[].VpcId' --output text 2>/dev/null || true)"
+    read -ra ids <<<"${ids}"
+    if [[ "${#ids[@]}" -ne 1 ]]; then
+        log "${p}'s lab VPC in ${r} is read from AWS on this host, $(this_host) (its state is on ${WIB_STATE_HOST}), and ${#ids[@]} VPC(s) are tagged Name=${LAB_VPC_NAME} there${ids[*]:+: ${ids[*]}}; apply or fix it on ${WIB_STATE_HOST}"
+        exit 1
+    fi
+    VPC_ID="${ids[0]}"
+    SUBNETS_JSON="$(AWS_PROFILE="${p}" aws ec2 describe-subnets --region "${r}" \
+        --filters "Name=vpc-id,Values=${VPC_ID}" "Name=tag:kubernetes.io/role/internal-elb,Values=1" \
+        --query 'Subnets[].[CidrBlock,SubnetId]' --output text 2>/dev/null \
+        | python3 -c 'import ipaddress,json,sys
+rows=[l.split() for l in sys.stdin if len(l.split())==2]
+rows.sort(key=lambda r: ipaddress.ip_network(r[0]))
+print(json.dumps([r[1] for r in rows]) if rows else "")' || true)"
+    [[ -n "${SUBNETS_JSON}" ]] || { log "${p}'s lab VPC ${VPC_ID} in ${r} has no private subnet in AWS"; exit 1; }
+    log "${p}'s lab VPC in ${r}, read from AWS (its state is on ${WIB_STATE_HOST}): ${VPC_ID} ${SUBNETS_JSON}"
 }
 # The cluster holding each role's hostname, when backups.py has promoted a standby: "<role>\t<name>" lines.
 # No line for a role means its roster cluster holds it. cmd_routes reads it, so a later `routes roster` keeps
@@ -899,8 +934,9 @@ require_tools() {
     [[ "${missing}" -eq 0 ]] || exit 1
 }
 
-# Pull the shared VPC id and subnet id list (JSON) from the lab-vpc state.
+# Pull the shared VPC id and subnet id list (JSON) from the lab-vpc state, or from AWS off the state host (#1377).
 read_vpc() {
+    if home_lab_vpc_off_state_host "${WIB_DEFAULT_ACCOUNT}"; then read_home_lab_vpc_from_aws; return; fi
     VPC_ID="$(terraform -chdir="${LAB_VPC_DIR}" output -raw vpc_id 2>/dev/null || true)"
     SUBNETS_JSON="$(terraform -chdir="${LAB_VPC_DIR}" output -json private_subnet_ids 2>/dev/null || true)"
     if [[ -z "${VPC_ID}" || -z "${SUBNETS_JSON}" ]]; then
@@ -3018,6 +3054,9 @@ cmd_up() {
 # which callers treat as "fall back to a narrower filter" rather than "no VPC".
 read_vpc_id_for() {
     local acct="$1" state
+    # A subshell: the reader exits 1 when AWS does not name one VPC, which here means no id, not the end of fleet.sh.
+    # shellcheck disable=SC2031
+    if home_lab_vpc_off_state_host "${acct}"; then ( read_home_lab_vpc_from_aws 2>/dev/null; echo "${VPC_ID}" ); return; fi
     state="$(lab_vpc_state_for "${acct}")"
     [[ -f "${state}" ]] || return 1
     python3 - "${state}" <<'PYEOF' 2>/dev/null
@@ -3033,6 +3072,11 @@ PYEOF
 
 destroy_lab_vpc_for() {
     local acct="$1"
+    if home_lab_vpc_off_state_host "${acct}"; then
+        log "  ${acct}: REFUSING to destroy the lab VPC in ${WIB_REGION}: its state is on ${WIB_STATE_HOST} alone and this host is $(this_host); run down-infra there (#1377)"
+        record_fail "vpc-state-host:${acct}"
+        return 1
+    fi
     local state; state="$(lab_vpc_state_for "${acct}")"
     [[ -f "${state}" ]] || { log "  ${acct}: no lab VPC state, nothing to destroy"; return 0; }
     local live

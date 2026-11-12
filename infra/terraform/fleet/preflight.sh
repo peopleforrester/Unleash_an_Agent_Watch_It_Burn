@@ -66,6 +66,13 @@ WIB_HOME_REGION="${WIB_HOME_REGION:-us-west-2}"
 . "${SCRIPT_DIR}/event.sh"
 WIB_ATTENDEE_ACCOUNTS="${WIB_ATTENDEE_ACCOUNTS:-accen-dev,aws1-student31,aws1-student32,aws1-student33,aws1-student34}"
 WIB_DEFAULT_ACCOUNT="${WIB_DEFAULT_ACCOUNT:-accen-dev}"
+# The state host, as fleet.sh names it (#1374): every account's boundary state and the default account's
+# home-region lab VPC state are there alone. Off it, that lab VPC is read from AWS by its tags, as fleet.sh reads
+# it there (#1377), and the apply hints for it and the boundary name the state host.
+WIB_STATE_HOST="${WIB_STATE_HOST:-tanjiro-debian}"
+HERE_HOST="$(hostname -s 2>/dev/null || hostname)"
+readonly LAB_VPC_NAME="watch-it-burn-lab-vpc"   # module "vpc" name in aws/network/main.tf
+on_host_hint() { [[ "${HERE_HOST}" == "${WIB_STATE_HOST}" ]] || printf 'on the state host %s (this host is %s): ' "${WIB_STATE_HOST}" "${HERE_HOST}"; }
 
 # The pinned profile -> account-id map. Verified 2026-08-26 against sts get-caller-identity.
 # A profile that resolves to anything else is a hard failure, not a warning: it is the one condition
@@ -271,7 +278,7 @@ for acct in "${accounts[@]}"; do
     # The boundary has its own per-account state under infra/org/boundary/states/, the default account
     # included: it was never part of the lab VPC's single-account history.
     # The refresh-only apply after it settles the fresh state, so the next drift report does not list it (#956).
-    boundary_apply="terraform -chdir=${BOUNDARY_DIR} init && terraform -chdir=${BOUNDARY_DIR} apply -state=states/${acct}.tfstate -var profile=${acct} -var region=${WIB_REGION} -var event=${WIB_EVENT} && terraform -chdir=${BOUNDARY_DIR} apply -refresh-only -auto-approve -state=states/${acct}.tfstate -var profile=${acct} -var region=${WIB_REGION} -var event=${WIB_EVENT}"
+    boundary_apply="$(on_host_hint)terraform -chdir=${BOUNDARY_DIR} init && terraform -chdir=${BOUNDARY_DIR} apply -state=states/${acct}.tfstate -var profile=${acct} -var region=${WIB_REGION} -var event=${WIB_EVENT} && terraform -chdir=${BOUNDARY_DIR} apply -refresh-only -auto-approve -state=states/${acct}.tfstate -var profile=${acct} -var region=${WIB_REGION} -var event=${WIB_EVENT}"
     if boundary_err="$(AWS_PROFILE="${acct}" aws iam get-policy \
             --policy-arn "arn:aws:iam::${actual}:policy/${BOUNDARY_NAME}" \
             --query 'Policy.PolicyName' --output text 2>&1 >/dev/null)"; then
@@ -313,7 +320,23 @@ for acct in "${accounts[@]}"; do
     fi
     # Settled the same way as the boundary's (#956).
     vpc_apply="terraform -chdir=${LAB_VPC_DIR} apply -state=${vpc_state_arg} -var profile=${acct} -var region=${WIB_REGION} -var event=${WIB_EVENT} && terraform -chdir=${LAB_VPC_DIR} apply -refresh-only -auto-approve -state=${vpc_state_arg} -var profile=${acct} -var region=${WIB_REGION} -var event=${WIB_EVENT}"
-    if [[ ! -f "${vpc_state}" ]]; then
+    if [[ "${acct}" == "${WIB_DEFAULT_ACCOUNT}" && "${WIB_REGION}" == "${WIB_HOME_REGION}" && "${HERE_HOST}" != "${WIB_STATE_HOST}" ]]; then
+        # Off the state host this VPC has no state here (#1377): netcup's backup schedule builds its us-west-2
+        # standbys from it, so it is read from AWS by the tags the network root gives it, as fleet.sh reads it.
+        vpc_apply="$(on_host_hint)${vpc_apply}"
+        [[ -f "${LAB_VPC_DIR}/terraform.tfstate" ]] && note "a second copy of ${acct}'s lab VPC state is here, ${LAB_VPC_DIR}/terraform.tfstate, and fleet.sh does not read it on this host: its state is on ${WIB_STATE_HOST}, so move this one aside (#1377)"
+        lab_vpc_ids="$(AWS_PROFILE="${acct}" aws ec2 describe-vpcs --region "${WIB_REGION}" \
+            --filters "Name=tag:Name,Values=${LAB_VPC_NAME}" "Name=tag:project,Values=watch-it-burn" \
+            --query 'Vpcs[].VpcId' --output text 2>/dev/null || true)"
+        read -ra lab_vpc_ids <<<"${lab_vpc_ids}"
+        if [[ "${#lab_vpc_ids[@]}" -eq 1 ]]; then
+            ok "lab VPC ${lab_vpc_ids[0]} present and live (read from AWS by its tags; its state is on ${WIB_STATE_HOST})"
+        elif [[ "${#lab_vpc_ids[@]}" -eq 0 ]]; then
+            bad "no lab VPC tagged Name=${LAB_VPC_NAME} in ${acct}/${WIB_REGION} — apply it: ${vpc_apply}"
+        else
+            bad "${#lab_vpc_ids[@]} VPCs tagged Name=${LAB_VPC_NAME} in ${acct}/${WIB_REGION} (${lab_vpc_ids[*]}); fleet.sh reads exactly one — fix it on ${WIB_STATE_HOST}"
+        fi
+    elif [[ ! -f "${vpc_state}" ]]; then
         bad "no lab VPC state — apply it first: ${vpc_apply}"
     else
         lab_vpc_id="$(terraform -chdir="${LAB_VPC_DIR}" output -state="${vpc_state}" -raw vpc_id 2>/dev/null || true)"

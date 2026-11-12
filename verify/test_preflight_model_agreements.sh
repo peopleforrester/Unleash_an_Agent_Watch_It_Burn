@@ -110,7 +110,10 @@ OUT="${T}/out"
 run() {
   local accts="$1"; shift
   : >"${CALLS}"
-  env -u WIB_DEFAULT_ACCOUNT -u WIB_EVENT WIB_ATTENDEE_ACCOUNTS="${accts}" WIB_REGION=us-west-2 "$@" \
+  # This host is the state host unless a case names another, so the default account's lab VPC is read from its
+  # state here (#1377).
+  env -u WIB_DEFAULT_ACCOUNT -u WIB_EVENT WIB_ATTENDEE_ACCOUNTS="${accts}" WIB_REGION=us-west-2 \
+    WIB_STATE_HOST="$(hostname -s 2>/dev/null || hostname)" "$@" \
     bash "${FLEET_DIR}/preflight.sh" 1 >"${OUT}" 2>&1
   rc=$?
 }

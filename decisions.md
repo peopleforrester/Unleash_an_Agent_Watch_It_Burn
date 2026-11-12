@@ -55789,3 +55789,63 @@ cluster or in AWS.
 
 **Not yet run on a cluster.** The private standby's unhealthy apps: the next wave run from a current checkout
 names them in `backups-night-before.log`.
+## 2026-11-12 · #1377 · run 20591 · Off the state host, fleet.sh and preflight read accen-dev's home-region lab VPC from AWS, so netcup's boundary and lab VPC copies can be moved aside
+
+**Context.** Since #1374 the drift report lists `boundary accen-dev` and `lab VPC accen-dev` under "Held on two
+hosts": netcup's checkout holds its own `infra/org/boundary/states/accen-dev.tfstate` (lineage 6e926986) and
+`infra/terraform/aws/network/terraform.tfstate` (serial 1148, lineage 02c0c252) beside tanjiro-wsl2's (c6c66f4e,
+005d8893). The lab VPC copy stayed because the backup schedule's us-west-2 standbys took their subnets from it:
+`backups.py up` runs `fleet.sh preflight` and `fleet.sh instructors up all` with `WIB_REGION=us-west-2` on netcup,
+and both read accen-dev's home-region lab VPC from `terraform.tfstate`. Nothing in the schedule reads the boundary
+state; `preflight.sh` checks the boundary policy in IAM. `bash verify/prior-drafts.sh 1377 origin/staging` printed
+NONE and the issue had no comments.
+
+**Choice.** Of the issue's three routes, the first, in this form: off the state host, the home-region lab VPC is
+read from AWS rather than from the state host's file. Reading the file over ssh from netcup needs an ssh login from
+netcup to tanjiro-wsl2 that nothing records (the floor doc records the other direction only), and moving the
+schedule to tanjiro-wsl2 is a host change no run can make. #201's shared backend is held by question 899. AWS is
+what both copies describe, and both planned clean against it on 2026-11-12.
+- `fleet.sh`: `off_state_host` (the checkout's own `states/` on a host other than `WIB_STATE_HOST`; the shim tests
+  that set `WIB_STATE_DIR` never are) now also drives #1374's `state_host_refusal`. For `WIB_DEFAULT_ACCOUNT` in
+  `WIB_HOME_REGION` off the state host, `read_vpc` (and so `read_vpc_for`) calls `read_home_lab_vpc_from_aws`: the
+  one VPC tagged `Name=watch-it-burn-lab-vpc` and `project=watch-it-burn`, and its subnets tagged
+  `kubernetes.io/role/internal-elb=1`, sorted by CIDR, which is the order of the root's `private_subnet_ids`, so a
+  standby's zone a is still the first subnet. None or two VPCs exit 1, naming the state host. `read_vpc_id_for`,
+  which scopes the security-group sweep in `down_one`, reads the same. `down-infra` (and `down all`) refuses that
+  VPC off the state host with `vpc-state-host:<acct>`, rather than finding no state and saying there is nothing to
+  destroy. Every other lab VPC, another account's or any account's outside the home region where the standbys
+  build, keeps its state where it was applied.
+- `preflight.sh`: the same default `WIB_STATE_HOST`; off it, accen-dev's home-region lab VPC is checked by the same
+  tags in AWS, a local `terraform.tfstate` left there is a note naming it as a second copy to move aside, and the
+  apply lines for that VPC and for every boundary say to run them on the state host.
+- `docs/floor.md`, "The state host": the read from AWS, and netcup's two copies moved to `<name>.tfstate.stale-1377`
+  once its checkout holds this change. The drift report copies only `*.tfstate`, so a moved copy is not listed.
+
+**Live check, read-only, from this run's host (`v2202603344103445992`, off the state host as netcup is), about
+12:45Z.** With the `accen-dev` session:
+- `aws ec2 describe-vpcs` by the two tags in us-west-2: one VPC, `vpc-0607c27ee51fb233c`, private subnets
+  `subnet-0d80af76b70e4e1cc` (10.0.0.0/18, us-west-2a) and `subnet-0eb9a64421d4e53f2` (10.0.64.0/18, us-west-2b).
+  Both KubeCon clusters' `resourcesVpcConfig` name that VPC and those two subnets.
+- The night-before wave was up: `watch-it-burn-community-b03`'s node group is on `subnet-0d80af76b70e4e1cc` (zone a)
+  and `watch-it-burn-private-b03`'s on `subnet-0eb9a64421d4e53f2` (zone b), as backups.tsv says.
+- This branch's `fleet.sh`, sourced in this checkout (no `aws/network/terraform.tfstate` here): `read_vpc` printed
+  `accen-dev's lab VPC in us-west-2, read from AWS (its state is on tanjiro-debian): vpc-0607c27ee51fb233c
+  ["subnet-0d80af76b70e4e1cc", "subnet-0eb9a64421d4e53f2"]`; `read_vpc_id_for accen-dev` printed the VPC;
+  `node_subnets_for` gave community-b03 `["subnet-0d80af76b70e4e1cc"]` and private-b03
+  `["subnet-0eb9a64421d4e53f2"]`, the subnets the running standbys are on.
+- `WIB_ATTENDEE_ACCOUNTS=accen-dev WIB_REGION=us-west-2 bash preflight.sh 4` (the us-west-2 standbys' count):
+  `PASS  lab VPC vpc-0607c27ee51fb233c present and live (read from AWS by its tags; its state is on tanjiro-debian)`
+  and `PREFLIGHT GREEN: 1 account(s) ready for 4 cluster(s) each.`, exit 0.
+Nothing in AWS or on either cluster changed.
+
+**Not yet run on a host.** Netcup's checkout moves forward to a main holding this change, then its two copies are
+moved aside to `.stale-1377` (this run's escalation; no run reaches netcup). The next drift report on tanjiro-wsl2
+then lists neither `boundary accen-dev` nor `lab VPC accen-dev` under "Held on two hosts", and the next us-west-2
+wave builds from AWS. The next run on the issue reads that report in the "Fleet drift report" issue.
+
+**Tests.** Run once each: `bash verify/test_fleet_state_host.sh` (44 passed; 17 of them fail on staging's
+fleet.sh), `bash verify/test_preflight_boundary.sh` (50 passed; 13 fail on staging's preflight.sh), `bash
+verify/test_preflight_model_agreements.sh` (62 passed), `python3 verify/test_drift_floor.py`, `python3
+verify/test_scope_tests.py` and `python3 verify/test_test_map.py`. Both preflight tests now pin
+`WIB_STATE_HOST` to the host they run on, so their earlier cases read the state as before. The maps needed no
+change. shellcheck finds nothing new in fleet.sh. The prose gate passes. No dependency was added.
