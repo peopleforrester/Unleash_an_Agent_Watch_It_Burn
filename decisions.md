@@ -55045,3 +55045,40 @@ component intends, so /kubecon is the private cluster's alone. Nothing was chang
 **Not yet run on a cluster.** Once hecaton promotes this change and Argo CD syncs ai-layer, the private cluster's
 console-src `kubecon.html` should hash to `320c9ef2bdd92169` (the file at this change) and carry "then look at what
 else it did."; the next run on the issue, or the Night Before's "The run-of-show still matches the deck" step, reads it.
+
+## 2026-11-12 · #1368 · run 20504 · A test holds the run-of-show to rounds 269c532's reworded slides and Presenter lines
+
+**Prior work.** `bash verify/prior-drafts.sh 1368 origin/staging` printed NONE: no earlier draft to port.
+
+**What changed.** #1367 made `facilitation/kubecon-na-2026-run-of-show.md` follow the 14 slides rounds `269c532`
+reworded (rounds-agenticburn#174), but `verify/test_ros_deck_live.py` reads only segments 4 to 6 steps whose bold lead
+cites a slide, so segments 1 to 3, the ASI beat and the Presenter lines had no test. The new offline test
+`verify/test_ros_reworded_slides.py` pins the deck's words at `269c532` in a table (PINNED: 24 lines on `#/1`, `#/2`,
+`#/3`, `#/4`, `#/7`, `#/12`, `#/19`, `#/23`, `#/41`, `#/49`, `#/50`, `#/56`, `#/72`, `#/117` and `#/120`) and fails when:
+
+- a pinned line is not where the run-of-show walks its slide (the segment, the segments table's row 1 for `#/7`, the ASI
+  beat for `#/120`), in the run-of-show's own form where it paraphrases a stage direction ("(After the trace demo:)"
+  is "After the trace demo, say:", `#/1`'s "(Whitney)" is "Whitney:");
+- any of 12 old wordings is back (STALE: the tour of the chat page, "is a prompt injection attack that works", "it has
+  nothing to deploy with", "Ask BurritoBot what tools it has." given as the hint or Say, `Click "tools"`, "Michael's
+  MCP server vetting checklist", and the rest);
+- segments 1 to 4 stop quoting the section openers' Presenter lines in the deck's order (`#/1` Whitney, `#/5` Michael,
+  `#/8` Whitney, `#/42` Michael), the "Who presents which slides" paragraph stops naming each, or a segment 6 step's
+  bold lead stops naming the close's presenter (`#/118` Whitney, `#/121` Michael, `#/125` both).
+
+`#/2`'s note is pinned too, though #1367's list does not name it: the run-of-show quotes it in the step for `#/3`.
+`verify/test_ros_deck_live.py` gains a sixth check that imports the table and reads each pinned line off its slide's
+face or notes, and each Presenter line off the end of its slide's notes, on the deck rounds serves. So when rounds
+rewords one of these slides again, the live test names it, and the pin and the run-of-show move together. The pin's
+labels are "face" and "note", not "notes": the scope selector reads a bare "notes" literal as the repo's `notes/`
+directory. `verify/scope-map.yaml` names the live test's import of the new test, which `scope_tests.py write` did not add.
+
+**Tests.** `python3 -I verify/test_ros_reworded_slides.py`: 5 checks and 46 self-checks PASS (each pinned line
+removed, each old wording put back, and the Presenter lines swapped or dropped all fail it). Run on the run-of-show at
+`0ace877b`, before #1367, 22 of the 24 pinned lines are missing and all 12 old wordings are there, and the paragraph's
+anchor is absent. `python3 -I verify/test_ros_deck_live.py` against https://rounds.agenticburn.com/attendee.html
+(127 slides): 7 checks and 12 self-checks PASS, the two new self-checks (`#/23`'s note reworded, `#/42`'s Presenter
+line changed) included. `test_scope_tests.py`, `test_test_map.py` and `test_tests_own_inputs.py` pass. The scoped tools
+tier selects `test_ros_deck_live.py` (run above) and tests that read the two maps, left to the gate.
+
+**Live check.** None: the change touches only files under `verify/` that no cluster runs, and `decisions.md`.
