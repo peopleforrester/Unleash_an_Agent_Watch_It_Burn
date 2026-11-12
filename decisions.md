@@ -56021,3 +56021,49 @@ watch-it-burn-private (https://burritobot-private.burritobot.co/), once Argo CD 
 chat page has no BurritoBot button in its header (no element with id `bbbtn`), and the other header buttons show
 as before. The live-check child of #1384 owes it; `verify/test_audience_feedback_live.py` with
 `COMMUNITY_CONTEXT=watch-it-burn-community` covers the community page's init with the new stub DOM.
+
+## 2026-11-12 · #1377 · run 20623 · The move aside waits for main and for netcup's checkout move; the act is recorded verbatim for the next run
+
+**Context.** Question 1206 answered run 20604's act: the custodian tier did not run it, because netcup's checkout is
+at 7783f256 without ba634961 and GitHub main does not hold ba634961 either. The answer asks for the same act,
+unchanged, once hecaton has promoted ba634961 to main and #1376's guarded checkout move has run on netcup after
+23:30Z, and for no escalation before then.
+
+**Read at 14:16Z.** GitHub main is still b6a0edb9; `gh api .../compare/main...ba634961` reads `ahead`, 44 commits.
+`bash verify/prior-drafts.sh 1377 origin/staging` printed NONE: the drafts of runs 20591, 20603, 20604 and 20613 are
+all in staging. #1376's move is guarded to 2026-11-12T23:30Z and this run started before 14:20Z, so neither
+precondition can hold during it, and no commit here makes either hold sooner: one waits on promotion, the other on
+the clock and the 22:50Z teardown. Netcup was not read again; nothing scheduled there moves its checkout before
+23:30Z.
+
+**The act to escalate again, verbatim.** The next run on the issue first checks that main holds ba634961
+(`git merge-base --is-ancestor ba634961 origin/main`) and that #1376's move has run (its thread or decisions.md entry
+reads netcup's fleet.sh with `read_home_lab_vpc_from_aws`). Then it puts this act back in `escalate` unchanged: tool
+`ssh`, no host, argv `bash`, `-c` and the script below, with run 20604's why and the evidence it read. Should the
+act exit 3, its message names which guard still holds.
+
+```bash
+set -u
+cd ~/repos/talks/Unleash_an_Agent_Watch_It_Burn || exit 1
+f=infra/terraform/fleet/fleet.sh; p=infra/terraform/fleet/preflight.sh
+if ! grep -q 'read_home_lab_vpc_from_aws' "$f" || ! grep -q 'read from AWS by its tags' "$p"; then echo "NOT YET: this checkout ($(git rev-parse --short HEAD)) lacks #1377's change (ba634961), so its us-west-2 standbys still read the lab VPC state here; nothing changed"; exit 3; fi
+exec 9>>infra/terraform/fleet/logs/.backups-watch.lock
+flock -n 9 || { echo "NOT YET: a backups.py watcher holds infra/terraform/fleet/logs/.backups-watch.lock; nothing changed"; exit 3; }
+if ps -u "$(id -u)" -o args= | awk '{for(i=1;i<=2&&i<=NF;i++){n=$i;sub(/.*\//,"",n);if(n~/^(fleet\.sh|preflight\.sh|backups\.py)$/)f=1}}END{exit !f}'; then echo "NOT YET: a fleet.sh, backups.py or preflight.sh process is running as $(id -un); nothing changed"; exit 3; fi
+moved=0
+for s in infra/org/boundary/states/accen-dev.tfstate infra/terraform/aws/network/terraform.tfstate; do
+  if [ -e "$s" ]; then
+    [ -e "$s.stale-1377" ] && { echo "REFUSED: $s.stale-1377 already exists beside $s; nothing more changed"; exit 1; }
+    mv -n "$s" "$s.stale-1377" || exit 1; echo "moved $s -> $s.stale-1377"; moved=$((moved+1))
+  elif [ -e "$s.stale-1377" ]; then echo "already moved: $s.stale-1377"
+  else echo "neither $s nor $s.stale-1377 is here"; fi
+done
+echo "moved ${moved}; checkout at $(git rev-parse --short HEAD)"
+ls -la infra/org/boundary/states/ infra/terraform/aws/network/ | grep -E 'tfstate|/'
+```
+
+**Criteria.** Criterion 2 stands as run 20591 left it (ba634961 on staging; its test and its read-only live check).
+Criterion 1 needs the act above, then the next daily drift report on tanjiro-wsl2, read in the 'Fleet drift report'
+issue.
+
+**Live check.** Skipped: nothing the clusters run changed, and this run wrote only this entry.
