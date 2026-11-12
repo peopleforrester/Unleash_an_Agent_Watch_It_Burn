@@ -61,6 +61,14 @@ m = re.search(r'^\s*supportUrl:\s*"([^"]*)"', EVENT, re.M)
 check("event.js sends it to the one desk both bots read (#1145)", m is not None
       and m.group(1) == "https://support.burritobot.co/")
 
+print("== no header button leads back to the chat page itself (#1385) ==")
+# The BurritoBot button went to `/`, this page, and init rewrote it to `/?cluster=..`; Whitney had it taken off on
+# 2026-11-12. verify/test_chat_no_burritobot_button.py holds the button by its id; this holds any button by its href.
+hrefs = re.findall(r'<a class="hb" id="(\w+)"[^>]*\shref="([^"]*)"', PAGE[:PAGE.find("</header>")])
+check("no header button's href is the chat page's own '/' or '/?..'",
+      bool(hrefs) and not [h for h in hrefs if h[1] == "/" or h[1].startswith("/?")])
+check("and init builds no '/?' link", "'/?'" not in VISIBLE)
+
 print("== the witch name is plain text, set by neither cookie state to a link ==")
 m = re.search(r"function witchName\(\)\{.*?\n  \}\)\(\);", PAGE, flags=re.S)
 block = m.group(0) if m else ""

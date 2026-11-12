@@ -65,10 +65,11 @@ check("the title never wraps or shrinks",
       "flex-shrink:0;white-space:nowrap}" in PAGE)
 check("in icon mode a button's label is hidden", "header.hbicons a.hb .hbl{display:none}" in bar)
 buttons = re.findall(r'<a class="hb" id="(\w+)"[^>]*>(.*?)</a>', PAGE)
-# The VTT's four, plus the room's Deployments, Support and Beacon before Feedback (#1347), which ship hidden and show
-# only with an event's URLs (verify/test_audience_page_e2e.py runs that).
+# The VTT's four less BurritoBot, which linked to this page itself (#1385), plus the room's Deployments, Support and
+# Beacon before Feedback (#1347), which ship hidden and show only with an event's URLs (verify/test_audience_page_e2e.py
+# runs that). verify/test_chat_no_burritobot_button.py holds the BurritoBot button off this page.
 check("the header buttons are in the markup, in order",
-      [b[0] for b in buttons] == ["vttbtn", "bbbtn", "ddbtn", "depbtn", "supbtn", "bcnbtn", "fbbtn"])
+      [b[0] for b in buttons] == ["vttbtn", "ddbtn", "depbtn", "supbtn", "bcnbtn", "fbbtn"])
 check("the room's three ship hidden",
       all(" hidden" in re.search(rf'<a class="hb" id="{b}"[^>]*>', PAGE).group(0) for b in ("depbtn", "supbtn", "bcnbtn")))
 for bid, inner in buttons:

@@ -60,7 +60,7 @@ HARNESS = r"""
 const vm = require('vm');
 const [eventSrc, initSrc, search, host, quick] = JSON.parse(require('fs').readFileSync(0, 'utf8'));
 const els = {};
-for (const id of ['vttbtn', 'bbbtn', 'ddbtn', 'fbbtn', 'clusterid', 'clusterfoot']) els[id] = { href: '', textContent: '', title: '', hidden: false };
+for (const id of ['vttbtn', 'ddbtn', 'fbbtn', 'clusterid', 'clusterfoot']) els[id] = { href: '', textContent: '', title: '', hidden: false };
 // The room's buttons (#1347) ship hidden with no href, as the markup has them.
 for (const id of ['depbtn', 'supbtn', 'bcnbtn']) els[id] = { href: '', textContent: '', title: '', hidden: true };
 els.fbbtn.href = quick;

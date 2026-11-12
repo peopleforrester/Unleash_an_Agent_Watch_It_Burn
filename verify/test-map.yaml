@@ -1570,6 +1570,18 @@ rules:
       - verify/topic_cases.py
     tests:
       - verify/test_chat_coc.py
+  - name: test_chat_no_burritobot_button.py
+    paths:
+      - gitops/ai-layer/web/active-skin.js
+      - gitops/ai-layer/web/burritbot.html
+      - gitops/ai-layer/web/event.js
+      - gitops/ai-layer/web/lab-events.js
+      - gitops/ai-layer/web/lab.html
+      - gitops/ai-layer/web/platform.html
+      - gitops/ai-layer/web/skin.js
+      - gitops/ai-layer/web/skins.js
+    tests:
+      - verify/test_chat_no_burritobot_button.py
   - name: test_chat_no_desk_link.py
     paths:
       - gitops/ai-layer/web/burritbot.html
