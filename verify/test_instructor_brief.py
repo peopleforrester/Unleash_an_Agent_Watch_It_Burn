@@ -675,15 +675,17 @@ check("the close files Challenge 3 under K02 and K04 under Challenge 2 alone, on
       "(#853)",
       "K02 Overly Permissive Authorization (Challenges 1 and 3)" in _seg6_flat
       and "K04 Cluster Level Policy Enforcement (Challenge 2)," in _seg6_flat
-      and "K02 Overly Permissive Authorization Configurations (Challenges 1 and 3)" in _ros6_k
-      and "K04 Lack of Cluster Level Policy Enforcement (Challenge 2)," in _ros6_k
+      # Since rounds-agenticburn#184 the slides carry no challenge column and the run-of-show quotes their notes,
+      # which name what BurritoBot did under each item (#1418).
+      and "Overly permissive authorization: BurritoBot's Role let it read every Secret and create Deployments." in _ros6_k
+      and "Cluster-level policy: BurritoBot ran an image off the public internet" in _ros6_k
       and "Challenges 2 and 3" not in _seg6_flat and "Challenges 2 and 3" not in _ros6_k)
 # Michael cut the break-it finale at the rehearsal of 2026-11-11 (rounds-agenticburn#172, #1348): the close no longer
 # invites the room to drive the bill to the cap, on either page.
 check("the close no longer invites the room to break it (#1348)",
       "You have our permission." not in " ".join(_seg6.split()) and "Now break it" not in _seg6)
 _ros6 = ROS.split("### Segment 6:", 1)[1].split("\n## ", 1)[0]
-check("the run-of-show's close says the same", "LLM01 Prompt Injection" in _ros6 and "K05" in _ros6
+check("the run-of-show's close says the same", "Prompt\n  injection: a support ticket" in _ros6 and "K05" in _ros6
       and "You have our permission." not in _ros6)
 # Segment 2 names Excessive Agency as exploited in Challenge 1 (#820, deck slide 14), so the close maps it from
 # Challenge 1 on, on both pages (#842). It was LLM06 in the 2025 edition and is LLM03 in the 2026 one (#1348).
@@ -691,7 +693,7 @@ _ros2 = ROS.split("### Segment 2:", 1)[1].split("### Segment 3:", 1)[0]
 check("segment 2 names LLM03, Excessive Agency, as what Challenge 1 exploited (#820, #1348)",
       "**LLM03, Excessive Agency**" in _ros2)
 check("so the close maps LLM03 to Challenges 1 to 4 in the run-of-show and on the page (#842)",
-      "LLM03 Excessive Agency (Challenges 1 to 4)" in " ".join(_ros6.split())
+      "Excessive agency: BurritoBot could read every Secret, deploy any image and send data anywhere." in " ".join(_ros6.split())
       and "LLM03</b> Excessive Agency (Challenges 1 to 4)" in " ".join(_seg6.split())
       and "Challenges 2 to 4" not in _ros6 and "Challenges 2 to 4" not in _seg6)
 # #849 settled Excessive Agency at Challenges 1 to 4 against the deck's "Challenges 1, 2": since #775, Challenge 3's fix

@@ -107,8 +107,9 @@ check("it does not steal or touch the Pod Identity endpoint 169.254.170.23", "16
 print("== the presenter narrative tells the pivot the script actually shows (#837) ==")
 # #748 dropped `aws sts get-caller-identity` from the script; the stage copy that names the script must not
 # still promise it. The runbook is exempt: it names the call only to say the script does not make it.
-NARRATIVE = ("facilitation/kubecon-na-2026-run-of-show.md", "docs/RUN-OF-SHOW-2026-08.md",
-             "gitops/ai-layer/web/kubecon.html", "gitops/ai-layer/web/brief.html")
+# The KubeCon run-of-show and /kubecon no longer run the beat: rounds-agenticburn#184 cut the blast radius slide
+# (#1418), and the KubeCon attack table marks the IMDS row as not in the talk.
+NARRATIVE = ("docs/RUN-OF-SHOW-2026-08.md", "gitops/ai-layer/web/brief.html")
 for rel in NARRATIVE:
     text = (REPO / rel).read_text(encoding="utf-8")
     flat = re.sub(r"\s+", " ", text)

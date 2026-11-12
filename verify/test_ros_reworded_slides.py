@@ -44,7 +44,6 @@ SEGMENTS, ABSTRACT = "## The segments, in order", "## Abstract points to segment
 SEG = {n: f"### Segment {n}:" for n in range(1, 7)}
 WHO = "**Who presents which slides"
 ROW1, ROW2 = "| 1 | 3 |", "| 2 | 5 |"
-ASI, BURRITOS = "- **The ASI beat", "- **Burritos only"
 # Where a pinned line belongs: a part of the run-of-show cut between two literals.
 WHERE = {
     "segment 1": (SEG[1], SEG[2]),
@@ -52,7 +51,6 @@ WHERE = {
     "segment 3": (SEG[3], SEG[4]),
     "segment 4": (SEG[4], SEG[5]),
     "segment 5": (SEG[5], SEG[6]),
-    "the ASI beat": (ASI, BURRITOS),
     "the segments table's row 1": (ROW1, ROW2),
 }
 
@@ -102,12 +100,8 @@ PINNED: list[tuple[int, str, str, str, str | None]] = [
     (71, "note", "click tools to open Datadog", "segment 5", "Click **tools** and show"),
     (71, "note", "(After the trace demo:) Do you know what two OWASP vulnerabilities this represents?", "segment 5",
      "After the trace demo, say: \"Do you know what two OWASP vulnerabilities this represents?\""),
-    (116, "note", "My MCP server vetting checklist is on the take-home slide.", "segment 5", None),
-    (119, "face", "And the blast radius that leaves the cluster", "the ASI beat", None),
-    (119, "face", "ASI03 Identity and Privilege Abuse, and K08 Cluster To Cloud Lateral Movement.", "the ASI beat", None),
-    (119, "face", "OWASP Kubernetes Top 10 2025", "the ASI beat", None),
-    (119, "note", "The blast radius can leave the cluster, too: a pod that reads the node's metadata comes back with "
-     "the node's cloud role.", "the ASI beat", None),
+    (116, "note", "Michael's MCP server vetting checklist is on the take-home slide.", "segment 5", None),
+    # rounds-agenticburn#184 cut the blast radius slide and its ASI beat (#1418).
 ]
 
 # (slide, the name its notes end on after "Presenter: ", the words "Who presents which slides" gives it).
@@ -117,8 +111,8 @@ PRESENTERS: list[tuple[int, str, str]] = [
     (8, "Whitney", "Whitney from `#/8`"),
     (43, "Michael", "Michael from `#/43`"),
     (117, "Whitney", "Whitney on the two OWASP lists"),
-    (120, "Michael", "Michael from burritos only"),
-    (124, "Both", "both on the speakers"),
+    (119, "Michael", "Michael from burritos only"),
+    (122, "Both", "both on the speakers"),
 ]
 CLOSE_FIRST = 117  # the close's Presenter lines are named in segment 6's bold leads, not quoted
 
@@ -141,7 +135,7 @@ STALE: list[tuple[int, str]] = [
     (55, "it has nothing to deploy with"),
     # #/71's "Ask BurritoBot what tools it has." hint and its "tools" link are the deck's again since
     # rounds-agenticburn#182 (#1400), so they are no longer stale.
-    (116, "Michael's MCP server vetting checklist"),
+    # #/116's "Michael's MCP server vetting checklist" is the deck's again since rounds-agenticburn#184 (#1418).
 ]
 
 QUOTED = "each line the deck reworded at rounds 269c532 and c6b1b0e is quoted where the run-of-show walks its slide"
@@ -240,8 +234,8 @@ def main() -> int:
           .replace("\0", '"Presenter: Michael"', 1))
     lit = "Whitney from `#/8`"
     fails("#/8 given to Michael in the paragraph", NAMED, ros.replace(lit, "Michael from `#/8`", 1))
-    for lit, new in (("(`#/120`, 1 min, Michael)", "(`#/120`, 1 min)"),
-                     ("(`#/124` and `#/125`, both)", "(`#/124` and `#/125`)"),
+    for lit, new in (("(`#/119`, 1 min, Michael)", "(`#/119`, 1 min)"),
+                     ("(`#/122` and `#/123`, both)", "(`#/122` and `#/123`)"),
                      ("(`#/117`, 1.5 min, Whitney)", "(`#/117`, 1.5 min, Michael)")):
         if lit not in ros:
             sys.exit(f"ANCHOR MISSING: {lit!r} is not in {ROS_PATH.relative_to(REPO)}; a self-check edits it")

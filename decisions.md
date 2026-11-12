@@ -56600,3 +56600,20 @@ summary say "vampire". Challenge 3's "hidden instructions" and "human" are uncha
 (a model once called `apply_optimization`) stays. `test_ros_seg4_flow.py`'s diagram notes follow; it and the other
 segment tests pass. rounds-agenticburn#184 has since reworded `#/84`, `#/96`, `#/101` and `#/114` again on the live
 deck; #1418 follows it.
+
+## 2026-11-12 · #1418 · by hand · the run-of-show and /kubecon follow rounds-agenticburn#184, the 124-slide deck
+
+Whitney's #1418, worked in the talk-day freeze after #1390, #1395, #1400 and #1415. The live deck (rounds main `94feae9`,
+124 slides) was read slide by slide with `test_ros_deck_live.py`'s parser. Segment 5's quotes of `#/77` to `#/114` are
+the live notes word for word, replacing #1415's #183 wording where #184 reworded it, and `#/115` and `#/116` follow too
+(the fix slide ends "Michael's MCP server vetting checklist is on the take-home slide."). Lakera Guard is out of the LLM
+Guard list. Segment 6 follows the close: the OWASP recaps (`#/117`, `#/118`) quote their new notes with no challenge
+column, the blast radius beat and "Every attack today was a plausible request." are gone from both files, the stack
+(`#/120`) has no closing line on its face, the take-home notes are the six-link list, and the close's numbers run
+`#/119` to `#/123`. The attack table marks the IMDS row as not in the talk; `steal-node-creds.sh` and the IMDS challenge
+files are unchanged. Tests that pinned the old close follow: `test_ros_seg4_flow.py` (124 slides, the live diagram
+notes), `test_ros_reworded_slides.py` (no ASI beat, the close's Presenter slides), `test_instructor_brief.py` (the
+recaps' notes in place of the challenge column) and `test_imds_credential_theft.py` (the two KubeCon files no longer
+narrate the beat). The segment tests all pass.
+
+Not yet run: `verify/test_ros_deck_live.py` against the live deck.

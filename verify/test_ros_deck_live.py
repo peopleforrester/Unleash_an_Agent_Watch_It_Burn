@@ -259,9 +259,9 @@ def main() -> int:
     need(ros, lit, ROS_PATH)
     fails("a step's Say quote reworded in the run-of-show", STEPPED,
           ros_=ros.replace(lit, lit.replace("We found it", "Found it"), 1))
-    lit = "(`#/117` to `#/125`)"
+    lit = "(`#/117` to `#/123`)"
     need(ros, lit, ROS_PATH)
-    fails("segment 6 opened a slide late", RANGED, ros_=ros.replace(lit, "(`#/118` to `#/125`)", 1))
+    fails("segment 6 opened a slide late", RANGED, ros_=ros.replace(lit, "(`#/118` to `#/123`)", 1))
     lit = '"Try your attack again." (#/74)'
     need(plain(page), lit, PAGE_PATH)
     fails("a /kubecon quote cited on the wrong slide", PAGED, page_=page.replace("(#/74)", "(#/75)", 1))
