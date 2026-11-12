@@ -45,7 +45,14 @@ env=""; for a in "$@"; do [[ "${a}" == --from-env-file=* ]] && env="$(cat "${a#-
 [[ -z "${env}" ]] || while IFS= read -r l; do echo "env-file ${l}"; done <<<"${env}" >>"${CALLS}"
 case "$*" in
   *"config current-context"*) echo "ctx-test" ;;
-  *"get applications.argoproj.io -n argocd -o json"*) cat "${T}/apps.json" 2>/dev/null || echo '{"items":[]}' ;;
+  *"get applications.argoproj.io -n argocd -o json"*)
+    # Argo CD still syncing (#1383): after settle_after more reads, apps_settled.json becomes what it answers.
+    if [[ -f "${T}/settle_after" ]]; then
+      n="$(cat "${T}/settle_after")"
+      if (( n > 0 )); then echo $(( n - 1 )) >"${T}/settle_after"; else mv "${T}/apps_settled.json" "${T}/apps.json"; rm -f "${T}/settle_after"; fi
+    fi
+    echo x >>"${T}/app_reads"
+    cat "${T}/apps.json" 2>/dev/null || echo '{"items":[]}' ;;
   *"get pods -A -o json"*) cat "${T}/pods.json" 2>/dev/null || echo '{"items":[]}' ;;
   *"-n agent get configmap cluster-identity"*) cat "${T}/public_host" 2>/dev/null ;;
   *"get configmap cluster-identity"*) cat "${T}/identity" 2>/dev/null ;;
@@ -253,6 +260,61 @@ WIB_LOG_DIR="${T}/logs" WIB_CONVERGE_ROUNDS=1 src 'provider_write_kubeconfig() {
     cmd_converge watch-it-burn-private'; rc=$?
 check "it fails, and its line names each unhealthy app with its sync and health status" \
   '[[ "${rc}" -ne 0 ]] && grep -qF "watch-it-burn-private:apps=10/12 unhealthy=[app-3 (OutOfSync/Progressing), app-7 (Synced/Degraded)] endpoint=console.example" "${T}/stderr"'
+python3 -c 'import json; print(json.dumps({"items":[{"metadata":{"name":f"app-{i}"},"status":{"sync":{"status":"Synced"},"health":{"status":"Healthy"},"operationState":{"phase":"Succeeded"}}} for i in range(12)]}))' >"${T}/apps.json"
+: >"${T}/stderr"
+
+echo "== a converge after a build waits for Argo CD's syncs in flight before it judges the apps (#1383) =="
+# The 2026-11-12 night-before wave's private standbys were judged 9 to 11 minutes after bootstrap with kubearmor,
+# kyverno, cert-manager, prometheus and ai-layer still in their sync operations, and failed at 38/40 and 39/40.
+# mid_sync <started>: twelve apps (the platform floor is ten), prometheus and ai-layer Running since <started> and OutOfSync/Progressing.
+mid_sync() {
+  python3 - "$1" <<'PY'
+import json, sys
+busy = {"prometheus", "ai-layer"}
+def app(n):
+    if n in busy:
+        return {"metadata": {"name": n}, "status": {"sync": {"status": "OutOfSync"}, "health": {"status": "Progressing"},
+                "operationState": {"phase": "Running", "startedAt": sys.argv[1]}}}
+    return {"metadata": {"name": n}, "status": {"sync": {"status": "Synced"}, "health": {"status": "Healthy"},
+            "operationState": {"phase": "Succeeded"}}}
+print(json.dumps({"items": [app(n) for n in ["namespaces", "kubearmor", "prometheus", "ai-layer"] + [f"app-{i}" for i in range(8)]]}))
+PY
+}
+settled() { python3 -c 'import json; print(json.dumps({"items":[{"metadata":{"name":n},"status":{"sync":{"status":"Synced"},"health":{"status":"Healthy"},"operationState":{"phase":"Succeeded"}}} for n in ["namespaces","kubearmor","prometheus","ai-layer"]+[f"app-{i}" for i in range(8)]]}))'; }
+conv() { # $1: WIB_CONVERGE_SETTLE. One round; the cluster edges, the pins and the repairs are stubbed.
+  WIB_LOG_DIR="${T}/logs" WIB_CONVERGE_ROUNDS=1 WIB_CONVERGE_SETTLE="$1" WIB_CONVERGE_SETTLE_POLL=0 \
+    src 'provider_write_kubeconfig() { :; }; require_tools() { :; }
+    converge_endpoint() { echo console.example; }
+    pin_bedrock_profiles() { :; }; pin_coc_guardrail() { :; }; repair_step() { :; }
+    cmd_converge watch-it-burn-private-b03'
+}
+recent="$(date -u -d '2 minutes ago' +%FT%TZ)"
+mid_sync "${recent}" >"${T}/apps.json"; settled >"${T}/apps_settled.json"; echo 3 >"${T}/settle_after"
+: >"${T}/stderr"; rm -f "${T}/app_reads"; conv 600; rc=$?
+check "it waits while prometheus and ai-layer are mid-sync, naming them" \
+  'grep -q "watch-it-burn-private-b03: waiting up to [0-9]*s for Argo CD.s syncs in flight: prometheus, ai-layer" "${T}/stderr"'
+check "and once they end, judges the settled apps: CONVERGED" \
+  '[[ "${rc}" -eq 0 ]] && grep -q "watch-it-burn-private-b03: Argo CD.s syncs have settled" "${T}/stderr" && grep -q "watch-it-burn-private-b03: CONVERGED (apps 12/12" "${T}/stderr"'
+check "it read the apps until they settled, not once" '[[ "$(wc -l <"${T}/app_reads")" -ge 5 ]]'
+
+mid_sync "${recent}" >"${T}/apps.json"; rm -f "${T}/settle_after" "${T}/apps_settled.json"
+: >"${T}/stderr"; conv 1; rc=$?
+check "a settle budget that runs out names the syncs still in flight, and the cluster is judged as it stands" \
+  '[[ "${rc}" -ne 0 ]] && grep -q "watch-it-burn-private-b03: still mid-sync when the settle wait ended: prometheus, ai-layer; judging it as it stands" "${T}/stderr" &&
+   grep -qF "watch-it-burn-private-b03:apps=10/12 unhealthy=[prometheus (OutOfSync/Progressing), ai-layer (OutOfSync/Progressing)]" "${T}/stderr"'
+
+: >"${T}/stderr"; rm -f "${T}/app_reads"; conv 0; rc=$?
+check "with WIB_CONVERGE_SETTLE 0, the default the admin console runner's converge gets, it neither waits nor says so" \
+  '[[ "${rc}" -ne 0 ]] && ! grep -q "waiting up to\|mid-sync when" "${T}/stderr" && [[ "$(wc -l <"${T}/app_reads")" -le 2 ]]'
+
+mid_sync "$(date -u -d '40 minutes ago' +%FT%TZ)" >"${T}/apps.json"
+: >"${T}/stderr"; conv 600; rc=$?
+check "a sync Running past WIB_STUCK_SYNC_MIN is stuck, not in flight, and is not waited for" \
+  '[[ "${rc}" -ne 0 ]] && ! grep -q "waiting up to" "${T}/stderr"'
+: >"${T}/stderr"; WIB_LOG_DIR="${T}/logs" WIB_CONVERGE_ROUNDS=1 WIB_CONVERGE_SETTLE=soon \
+  src 'require_tools() { :; }; provider_write_kubeconfig() { return 1; }; cmd_converge watch-it-burn-private-b03'; rc=$?
+check "a settle budget that is not a number of seconds is refused" \
+  '[[ "${rc}" -eq 2 ]] && grep -q "WIB_CONVERGE_SETTLE is a number of seconds, not .soon." "${T}/stderr"'
 python3 -c 'import json; print(json.dumps({"items":[{"metadata":{"name":f"app-{i}"},"status":{"sync":{"status":"Synced"},"health":{"status":"Healthy"},"operationState":{"phase":"Succeeded"}}} for i in range(12)]}))' >"${T}/apps.json"
 : >"${T}/stderr"
 

@@ -624,8 +624,12 @@ check("the us-east-2 build carries b01 and private-b01 and nothing else",
       any("WIB_REGION=us-east-2" in l and "watch-it-burn-community-b01|" in l and "watch-it-burn-private-b01|" in l
           and "b02" not in l for l in ups))
 check("each build is followed by a converge of the same clusters in the same region",
-      any(l == f"WIB_REGION=us-east-2 {FLEET_DIR}/fleet.sh converge watch-it-burn-community-b01 watch-it-burn-private-b01"
+      any(l == f"WIB_REGION=us-east-2 WIB_CONVERGE_SETTLE=600 {FLEET_DIR}/fleet.sh converge watch-it-burn-community-b01 watch-it-burn-private-b01"
           for l in out))
+# #1383: the private standbys were judged while Argo CD was still syncing, and failed at 38/40 and 39/40.
+check("and that converge waits up to 600 s for Argo CD's syncs in flight before it judges the apps",
+      all(" WIB_CONVERGE_SETTLE=600 " in l for l in out if " converge " in l)
+      and sum(" converge " in l for l in out) == 3, r.stdout)
 check("a region with no lab VPC is named with the apply that makes one, and fails the run",
       r.returncode == 1 and "apply -state=states/accen-dev.us-east-2.tfstate" in r.stderr
       and "-var region=us-east-2" in r.stderr, r.stderr)

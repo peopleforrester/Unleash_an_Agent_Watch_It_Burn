@@ -48,7 +48,14 @@ for i in "${!args[@]}"; do
 done
 case "$*" in
   *" get modelconfig "*"{.spec.bedrock.region}"*) [[ -f "${T}/live/${cfg}" ]] && cat "${T}/live/${cfg}.region" 2>/dev/null ;;
-  *" get modelconfig "*) cat "${T}/live/${cfg}" 2>/dev/null ;;
+  *" get modelconfig "*)
+    # Argo has not applied ai-layer's wave 0 yet (#1383): no ModelConfig exists for the next mc_late reads.
+    if [[ -f "${T}/mc_late" ]]; then
+      n="$(cat "${T}/mc_late")"
+      if (( n > 0 )); then echo $(( n - 1 )) >"${T}/mc_late"; exit 1; fi
+      rm -f "${T}/mc_late"
+    fi
+    cat "${T}/live/${cfg}" 2>/dev/null ;;
   *" patch modelconfig "*)
     [[ -f "${T}/patch_fails" ]] && exit 1
     for i in "${!args[@]}"; do [[ "${args[$i]}" == "-p" ]] && body="${args[$((i+1))]}"; done
@@ -90,7 +97,7 @@ run() { # $1: the cluster name. Prints the function's exit code; its log goes to
         cat \"\${FAIL_FILE}\" >'${T}/ledger' 2>/dev/null || : >'${T}/ledger'" 2>"${T}/stderr" )
 }
 fresh() { # the four Bedrock ModelConfigs and the gateway as Argo first creates them, on their committed system ids
-  rm -f "${T}/live/"* "${T}/patch_fails" "${T}/gw_late" "${T}/drift_armed" "${T}/cm_fails"; : >"${CALLS}"
+  rm -f "${T}/live/"* "${T}/patch_fails" "${T}/gw_late" "${T}/mc_late" "${T}/drift_armed" "${T}/cm_fails"; : >"${CALLS}"
   echo "us.amazon.nova-pro-v1:0" >"${T}/live/bedrock-nova"
   echo "us.anthropic.claude-haiku-4-5-20251001-v1:0" >"${T}/live/bedrock-haiku"
   echo "us.anthropic.claude-sonnet-4-6" >"${T}/live/bedrock-sonnet"
@@ -227,6 +234,25 @@ fresh; rm -f "${T}/live/gw-BEDROCK_NOVA_MODEL"; rc="$(WAIT=1 run watch-it-burn-a
 check "a gateway without the env var fails after the wait" '[[ "${rc}" == "1" ]]'
 check "and says so" 'grep -q "agentgateway.s BEDROCK_NOVA_MODEL never appeared" "${T}/stderr"'
 check "the ModelConfigs are still pinned" '[[ "$(cat "${T}/live/bedrock-nova")" == "$(arn nova0001)" ]]'
+
+echo "== the private standby's ModelConfigs arrive minutes after bootstrap: the build waits for them (#1383) =="
+# The 2026-11-12 night-before wave: on all three private standbys bedrock-haiku "never appeared" in the 300 s wait,
+# because ai-layer's wave 0 came 8 to 10 minutes after the bootstrap, behind its kubearmor-gate Job.
+check "the build's wait, unset, is 900 s, set from those measured 8 to 10 minutes" \
+  '[[ "$(cd "${REPO}" && env -u WIB_MODELCONFIG_WAIT bash -c "source '"'"'${FLEET}'"'"' >/dev/null 2>&1; modelconfig_wait")" == 900 ]]'
+check "and WIB_MODELCONFIG_WAIT still sets it" \
+  '[[ "$(cd "${REPO}" && WIB_MODELCONFIG_WAIT=42 bash -c "source '"'"'${FLEET}'"'"' >/dev/null 2>&1; modelconfig_wait")" == 42 ]]'
+fresh; echo 6 >"${T}/mc_late"; rc="$(WAIT=30 run watch-it-burn-private-b03)"
+check "ModelConfigs that appear only after several reads are all waited for and pinned" \
+  '[[ "${rc}" == "0" && ! -f "${T}/mc_late" ]] && [[ "$(cat "${T}/live/bedrock-haiku")" == "$(arn haiku001)" ]] &&
+   [[ "$(cat "${T}/live/bedrock-opus")" == "$(arn opus0001)" ]] && ! grep -q "never appeared" "${T}/stderr"'
+fresh; rm -f "${T}/live/bedrock-"*; rc="$(WAIT=2 run watch-it-burn-private-b03)"
+reads() { grep -c "get modelconfig $1 -o jsonpath={.spec.model}" "${CALLS}"; }
+check "with none ever made, all four fail after one shared wait, not one wait each" \
+  '[[ "${rc}" == "1" ]] && [[ "$(grep -c "never appeared in agent" "${T}/stderr")" -ge 4 ]] &&
+   [[ "$(( $(reads bedrock-nova) + $(reads bedrock-haiku) + $(reads bedrock-sonnet) + $(reads bedrock-opus) ))" -le 7 ]]'
+check "converge's repair_one waits its 300 s a round, unless WIB_MODELCONFIG_WAIT says otherwise" \
+  'grep -qF "WIB_MODELCONFIG_WAIT=\"\${WIB_MODELCONFIG_WAIT:-300}\" pin_bedrock_profiles \"\${name}\" \"\${kcfg}\"" "${FLEET}"'
 
 echo "== the agentgateway Deployment arrives late on an armed admin cluster: it is waited for and pinned (#630) =="
 # The 2026-10-27 admin bring-up logged "could not point agentgateway's BEDROCK_NOVA_MODEL" and left the gateway
