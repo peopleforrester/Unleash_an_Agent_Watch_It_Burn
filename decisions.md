@@ -55849,3 +55849,48 @@ verify/test_preflight_model_agreements.sh` (62 passed), `python3 verify/test_dri
 verify/test_scope_tests.py` and `python3 verify/test_test_map.py`. Both preflight tests now pin
 `WIB_STATE_HOST` to the host they run on, so their earlier cases read the state as before. The maps needed no
 change. shellcheck finds nothing new in fleet.sh. The prose gate passes. No dependency was added.
+## 2026-11-12 · #1376 · run 20601 · Netcup's checkout is still 7783f256, without #956's settle step; its move is escalated with the guards both earlier refusals asked for
+
+**Context.** The standbys built on netcup read as drifted because netcup's checkout predates #956, whose
+refresh-only apply after each cluster apply settles a fresh state. `bash verify/prior-drafts.sh 1376
+origin/staging` printed NONE and the issue had no comments. Nothing in this repo needed changing: main (b6a0edb9)
+holds 7f3cdb4a, #956's change, and main's `fleet.sh` has both `apply -refresh-only` lines in `up_one`. What is
+missing is the move of Michael's checkout on netcup, which no run reaches.
+
+**Read at about 13:45Z, through `sources repo-cat` and `repo-ls`, nothing changed.**
+- Netcup's `infra/terraform/fleet/fleet.sh` (5,351 lines) hashes c6fa2087..., the same as 7783f256's, and has no
+  `apply -refresh-only` line. So the checkout has not moved since #1375 read it.
+- Its `backups-watch.log` shows the watcher running from that checkout every 5 minutes (13:44Z the last line),
+  with the six night-before standbys' LBs up and the nine six-hours ones not yet built.
+- The schedule this checkout installed: the six-hours wave at 14:50Z, the session at 20:50Z, the watcher until
+  22:20Z, and `backups.py down all --apply; backups.py unschedule` at 22:50Z. So the six-hours wave also builds
+  from 7783f256 and leaves its nine states unsettled, and all fifteen come down at 22:50Z.
+
+**Why the earlier escalations of this move did not run.** Two acts were answered on #1374 and #1375:
+- #1375's (question 1202): netcup's checkout has tracked edits (`ACTION_ITEMS.md`, `images.lock`,
+  `transcripts/_INBOX.md` and the `gitops/ai-layer/guard-proxy` pointer at fb6e2bf7), so its clean-tree guard
+  failed. The tier asked for an act that keeps those edits explicitly first.
+- #1374's (question 1201): the judge asked that the move run only after the 22:50Z teardown, so the running
+  watcher's code is not changed under it, with a guard in the act itself.
+
+**The act escalated here.** One `bash -c` on netcup, as Michael, which changes nothing and exits 3 with `NOT YET`
+when it is before 2026-11-12T23:30Z, when the crontab still holds a `# wib-backups (#643)` line (the teardown's
+`unschedule` has not run), or when a watcher holds `logs/.backups-watch.lock`. Past those, it records the tracked
+edits in `git stash push -m "pre-1376-move from <sha>"` (untracked and ignored files, the states and logs among
+them, stay where they are), fetches main, checks out `origin/main` detached, and prints the move, the count of
+`apply -refresh-only` lines in fleet.sh and the stash entry. A failed fetch or checkout puts the edits back with
+`git stash pop --index` and exits 1.
+
+**Checked on scratch clones of this repo, nothing on a host.** At 7783f256 with `ACTION_ITEMS.md` and
+`images.lock` edited, a staged guard-proxy pointer and an ignored `states/keep.tfstate`: before 23:30Z it printed
+the first `NOT YET`, exit 3, HEAD still 7783f256. With the time guard moved into the past, a stub crontab holding
+a `wib-backups` line gave the second `NOT YET`, and a held lock the third, each exit 3. With all three clear it
+moved 7783f256 to b6a0edb9, printed 2 refresh-only lines and the stash entry, and left `keep.tfstate` in place.
+With the remote pointed at a missing path, the fetch failed, the edits came back and HEAD stayed at 7783f256.
+
+**Criterion 2.** The first daily drift report after the six-hours wave runs after its 22:50Z teardown, so it
+lists no standby whether or not the move has run; that says nothing about the settle step. The first wave that
+tests it is the next one built after the move, and no later session is scheduled. The next run on the issue reads
+netcup's fleet.sh back for criterion 1 and the next drift report for criterion 2.
+
+**Live check.** Skipped: nothing the clusters run changed, and this run wrote only this entry.
