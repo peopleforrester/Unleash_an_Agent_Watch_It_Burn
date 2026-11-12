@@ -2825,11 +2825,6 @@ rules:
       - gitops/ai-layer/ticket_site.py
     tests:
       - verify/test_deployments_private_banner.py
-  - name: test_deployments_stand_in_name.py
-    paths:
-      - gitops/ai-layer/ticket_site.py
-    tests:
-      - verify/test_deployments_stand_in_name.py
   - name: test_desk_coc.py
     paths:
       - .gitmodules
