@@ -236,6 +236,17 @@ def idle_from(iv: list[tuple[float, float, float]], t_end: float) -> float | Non
     return start
 
 
+def deltas(r: Reading) -> dict[str, float]:
+    """Each counter's last scrape minus its first, per pod, summed over the pods read before the replay."""
+    delta = {k: 0.0 for k in METRICS}
+    for pod in r.pods_before:
+        mine = sorted(((t, m) for t, p, m in r.scrapes if p == pod), key=lambda x: x[0])
+        if mine:
+            for k in METRICS:
+                delta[k] += mine[-1][1][k] - mine[0][1][k]
+    return delta
+
+
 def judge(r: Reading) -> list[tuple[bool, str, str]]:
     """Above one core or keeping pace, no span dropped, no restart. (ok, check, detail) each."""
     if r.report is None:
@@ -279,13 +290,7 @@ def judge(r: Reading) -> list[tuple[bool, str, str]]:
                 f"its end, no gap over {GAP_S} s",
                 "; ".join(gaps + [f"scrape errors: {r.scrape_errors[:5]}"] if r.scrape_errors else gaps)))
 
-    # counters: last minus first, per pod, summed
-    delta = {k: 0.0 for k in METRICS}
-    for pod in pods:
-        mine = sorted((t, m) for t, p, m in r.scrapes if p == pod)
-        if mine:
-            for k in METRICS:
-                delta[k] += mine[-1][1][k] - mine[0][1][k]
+    delta = deltas(r)
     out.append((delta["intake_accepted"] >= MIN_SPANS and delta["relay_accepted"] >= MIN_SPANS,
                 f"the collector had real work: {MIN_SPANS} or more spans in at otlp and across the loopback",
                 f"otlp accepted {delta['intake_accepted']:,.0f}, {RECEIVER} accepted {delta['relay_accepted']:,.0f}"))
@@ -564,6 +569,8 @@ def main() -> int:
         for pod, rows in iv.items():
             print(f"  note  {pod} CPU a kubelet interval, seconds from the replay's start: "
                   + ", ".join(f"{a - reading.t_start:+.0f}..{b - reading.t_start:+.0f} {c:.2f}" for a, b, c in rows))
+        print("  note  counters over the reading: " + ", ".join(f"{k} {v:,.0f}" for k, v in deltas(reading).items()
+                                                           if k != "relay_queue"))
         print(f"  note  replay {reading.t_end - reading.t_start:.1f} s, from {lrl.stamp(reading.t_start)} to "
               f"{lrl.stamp(reading.t_end)}")
     print()
