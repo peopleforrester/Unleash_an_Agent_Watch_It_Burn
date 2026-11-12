@@ -898,7 +898,13 @@ _STYLE = ("body{font:15px/1.5 system-ui,sans-serif;max-width:46rem;margin:6vh au
           "html,body{background:#ffffff}.you{background:#f3eefc;border-radius:10px;padding:.7rem 1rem}"
           ".ed{min-height:7rem;border:1px solid #bfb3d6;"
           "border-radius:8px;padding:.6rem;margin:.4rem 0;background:#ffffff;color:#000000}"
-          "button{font:inherit;margin:.2rem .3rem .2rem 0}")
+          "button{font:inherit;margin:.2rem .3rem .2rem 0}"
+          # Show hidden text (#1402, Michael 2026-11-12): white text is invisible on the white page and in the white
+          # editor. The toggle turns every surface mid-grey, where both white and black ink read, so a visitor sees
+          # the white text they wrote and the room sees HC-666's. Display only: no stored text changes.
+          "html.reveal,html.reveal body,html.reveal .ed,html.reveal article,html.reveal .you{background:#767676}"
+          "html.reveal .meta{color:#000000}html.reveal a{color:#000000}"
+          "#reveal{float:right;margin:0 0 .5rem .5rem}")
 
 
 # The private desk's banner (#1178, part of #1142). support.burritobot.co and the private cluster's
@@ -935,10 +941,17 @@ def deployments_banner(host: str) -> str:
     return private_banner("deployments page") if PRIVATE_DEPLOYMENTS_HOST.match((host or "").strip().lower()) else ""
 
 
+# The "Show hidden text" toggle (#1402) on every desk page: the ticket form, a ticket's page and HC-666's. It only flips
+# a class on the page, so it starts off on every load and changes nothing BurritoBot reads.
+REVEAL_BUTTON = ('<button type="button" id="reveal" aria-pressed="false" onclick="var on=document.documentElement'
+                 '.classList.toggle(\'reveal\');this.setAttribute(\'aria-pressed\',on);this.textContent=on?'
+                 '\'Hide hidden text\':\'Show hidden text\'">Show hidden text</button>')
+
+
 def _shell(title: str, body: str, banner: str = "") -> str:
     return (f'<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
             f"<title>{html.escape(title)}</title><style>{_STYLE}</style>"
-            f'{banner}<h1>Hex &amp; Cauldron support desk</h1>{body}')
+            f'{banner}{REVEAL_BUTTON}<h1>Hex &amp; Cauldron support desk</h1>{body}')
 
 
 def _article(t: dict) -> str:
