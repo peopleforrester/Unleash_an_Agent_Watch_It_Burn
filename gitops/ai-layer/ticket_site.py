@@ -782,9 +782,11 @@ def record_cluster_read(d, cluster: str | None = None) -> dict:
 # --- deployments.burritobot.co (#773) ----------------------------------------------------------------------------
 # Every successful deployment, one line each, "<witch name> deployed <image short name> at <time>" (#995), the full
 # image as the short name's hover text: what the room deployed in Challenge 2, projected and on phones. The witch name
-# is the one the chat request itself carried (workshop-mcp's _request_witch); a deploy with no browser behind it, a
-# probe or a scripted test, reads "Someone deployed ...". A refusal is not shown: the room learns that from the bot's
-# reply. A row whose app the cluster has since deleted stays, greyed, and reads "..., removed at <time>" (#1049).
+# is the one the chat request itself carried (workshop-mcp's _request_witch). A deploy with no browser behind it, a
+# probe, a scripted test or a presenter's pre-seed, reads a stand-in name from the same vocabulary (#1397, Michael
+# 2026-11-12: "It can't say 'someone' ... just make up or choose a name"), so every line names a witch and nobody reads
+# "Someone". A refusal is not shown: the room learns that from the bot's reply. A row whose app the cluster has since
+# deleted stays, greyed, and reads "..., removed at <time>" (#1049).
 # The page names no Joker and links to nothing on the desk, so it gives away no later challenge. The console serves it
 # at deployments-<cluster> and deployments.burritobot.co (console.conf), and /deployments.json on the chat page's own
 # host, so the chat page can show "see your deployments" once the visitor's first one lands.
@@ -807,15 +809,25 @@ def image_label(image: str) -> str:
     return image.split("@", 1)[0].rsplit("/", 1)[-1].split(":", 1)[0]
 
 
+def stand_in_name(row: dict) -> str:
+    """A made-up witch name for a row that carries none (#1397): picked from the vocabulary by the row's own cluster,
+    name and landing time, so the same row reads the same name on every read. It is never stored on the row, so the
+    row stays nameless and no visitor's ?witch= view lists it, and never added to the names handed out."""
+    key = f"{row.get('cluster', '')}|{row.get('name', '')}|{row.get('ts')!r}|{row.get('at', '')}"
+    return NAME_SPACE[int(hashlib.sha256(key.encode()).hexdigest(), 16) % len(NAME_SPACE)]
+
+
 def deployments(witch_slug: str = "") -> list[dict]:
     """The landed rows, newest first, as the deployments page shows them; only one witch's when a slug is given."""
     with _lock:
         rows = [r for r in LANDINGS if r["ok"]]
     if witch_slug:
         rows = [r for r in rows if r.get("witch") and slug(r["witch"]) == witch_slug]
-    # app is what the line names: the image's short name, or the resource's own name for one that runs no image.
+    # app is what the line names: the image's short name, or the resource's own name for one that runs no image. A row
+    # with no witch reads its stand-in name, and says so in stand_in (#1397).
     return [{"name": r["name"], "kind": r.get("kind", ""), "image": r.get("image", ""),
-             "app": image_label(r.get("image", "")) or r["name"], "witch": r.get("witch", ""), "at": r["at"],
+             "app": image_label(r.get("image", "")) or r["name"], "witch": r.get("witch") or stand_in_name(r),
+             "stand_in": not r.get("witch"), "at": r["at"],
              "removed_at": r.get("removed_at", ""), "cluster": r.get("cluster", ""),
              "server": server_name(r.get("cluster", ""))} for r in rows[:200]]
 
@@ -832,7 +844,7 @@ async function tick(){try{const r=await fetch('/deployments.json'+(WITCH?'?witch
 if(!rows.length){const li=document.createElement('li');li.className='meta';li.textContent=%s;ul.replaceChildren(li);
 return;}
 ul.replaceChildren(...rows.map(x=>{const li=document.createElement('li');const b=document.createElement('b');
-b.textContent=x.witch||'Someone';li.appendChild(b);li.appendChild(document.createTextNode(' deployed '));
+b.textContent=x.witch;li.appendChild(b);li.appendChild(document.createTextNode(' deployed '));
 const c=document.createElement('code');c.textContent=x.app;if(x.image){c.title=x.image;}li.appendChild(c);
 li.appendChild(document.createTextNode(' at '+x.at));
 if(x.removed_at){li.className='removed';li.appendChild(document.createTextNode(', removed at '+x.removed_at));}
