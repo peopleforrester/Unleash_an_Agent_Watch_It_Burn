@@ -12,6 +12,11 @@ challenges wait until 2026-11-13, the day after the KubeCon NA 2026 breakout
 on or after 2026-11-13. The gap this note describes was confirmed live on 2026-11-04 (see "Confirmed live" below);
 the control and its arming flip are still owed on a cluster.
 
+**Update 2026-11-12 (#1410).** Namespace `agent` now enforces Pod Security Admission `baseline`
+(`gitops/namespaces/namespaces.yaml`), so the escape pod below is refused by the API server on every cluster,
+including the community cluster. The "admitted while unarmed" state this design assumes no longer exists: the
+challenge's build starts from that label. The facts below are as of 2026-11-04.
+
 The issue's done-when has three parts: the agent uses its legitimate `create` RBAC to launch a privileged pod that
 mounts host root and reads the node filesystem; the control refuses that pod **at admission** with a named policy in
 the error; and the refusal is wired into the arming set the student flips, so the flip is visible. This note specifies the

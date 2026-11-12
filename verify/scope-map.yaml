@@ -647,6 +647,16 @@ reads:
     - policies/network-policies/per-namespace/agent-*.yaml
   test_agent_hitl.py:
     - gitops/workshop-agent/agent.yaml
+  test_agent_namespace_pod_security.py:
+    - agent
+    - gitops
+    - gitops/**.y*ml
+    - gitops/ai-layer
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
+    - gitops/namespaces/namespaces.yaml
+    - policies
+    - policies/**.y*ml
   test_agent_obs_cause_comment.py:
     - CLAUDE.md
     - decisions.md

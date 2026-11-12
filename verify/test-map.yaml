@@ -599,6 +599,22 @@ rules:
       - gitops/workshop-agent/agent.yaml
     tests:
       - verify/test_agent_hitl.py
+  - name: test_agent_namespace_pod_security.py
+    paths:
+      - agent
+      - agent/**
+      - gitops
+      - gitops/**
+      - gitops/**/*.y*ml
+      - gitops/**/*.y*ml/**
+      - gitops/bootstrap/apps/**/*.yaml
+      - gitops/bootstrap/apps/**/*.yaml/**
+      - policies
+      - policies/**
+      - policies/**/*.y*ml
+      - policies/**/*.y*ml/**
+    tests:
+      - verify/test_agent_namespace_pod_security.py
   - name: test_agent_obs_flow.py
     paths:
       - agent

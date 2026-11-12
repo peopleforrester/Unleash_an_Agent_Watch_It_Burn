@@ -108,14 +108,16 @@ spec:
             httpGet: { path: /health, port: http }
             periodSeconds: 30
           securityContext:
-            # SYS_NICE for CPU thread affinity, nothing else. The image declares a non-numeric root USER, so
-            # the uid is pinned here for the kubelet to verify non-root.
+            # Every capability dropped. The sister adds SYS_NICE "for CPU thread affinity", but namespace agent
+            # enforces Pod Security baseline (#1410), which refuses that capability. Setting the process's own
+            # affinity needs none, and vLLM v0.23.0's NUMA binding (csrc/cpu/utils.cpp, init_cpu_memory_env) only
+            # warns when a call fails; a t3.2xlarge has one NUMA node. The image declares a non-numeric root
+            # USER, so the uid is pinned here for the kubelet to verify non-root.
             runAsNonRoot: true
             runAsUser: 1001
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
-              add: ["SYS_NICE"]
           volumeMounts:
             - name: dshm
               mountPath: /dev/shm

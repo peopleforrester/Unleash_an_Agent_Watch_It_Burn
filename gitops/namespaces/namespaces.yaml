@@ -1,5 +1,5 @@
 # ABOUTME: Kubernetes namespace definitions for all platform components.
-# ABOUTME: Creates 8 namespaces with PSS labels on apps namespace for defense-in-depth.
+# ABOUTME: Creates the platform namespaces, with PSS labels on apps and agent for defense-in-depth.
 ---
 apiVersion: v1
 kind: Namespace
@@ -75,6 +75,17 @@ metadata:
   labels:
     app.kubernetes.io/part-of: watch-it-burn
     app.kubernetes.io/component: ai-layer
+    # Pod Security Admission at baseline (#1410). The agent's Role creates pods and Deployments here, and without
+    # a label a privileged, hostPath, hostNetwork or hostPID pod from it was admitted on both KubeCon clusters
+    # (docs/research/2026-11-02-privileged-pod-hostpath-escape.md): a node escape past every guardrail the talk
+    # shows. PSA runs inside the API server, so it refuses that pod on the community cluster too, which has no
+    # Kyverno. Baseline, not restricted: every platform pod here meets baseline and most do not meet restricted.
+    # warn at baseline names the refusal when a Deployment is applied, before its ReplicaSet fails to make pods.
+    # verify/test_agent_namespace_pod_security.py holds the label and the pod templates that land here.
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: baseline
+    pod-security.kubernetes.io/warn-version: latest
     # The AWS load balancer controller's webhook adds a readiness gate to each pod a TargetGroupBinding selects
     # here, the console's, so a new console pod is Ready only once the NLB has it registered and healthy (#1258).
     # A cluster without the controller has no webhook, and the label does nothing there.

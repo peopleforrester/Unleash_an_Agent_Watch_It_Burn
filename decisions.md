@@ -56415,3 +56415,46 @@ it; the scope and test maps carry its entry.
 
 **Live check.** Skipped: the change touches the README, a challenge doc and a test under `verify/` that no
 cluster runs; the prompt itself is unchanged.
+## 2026-11-12 · #1410 · run 20803 · Namespace `agent` enforces Pod Security baseline
+
+From rounds-agenticburn#152: namespace `agent` carried no Pod Security Admission label, and `disallow-privileged`
+matches only `apps`, so a privileged, hostPath, hostPID pod from the agent's own ServiceAccount was admitted on both
+KubeCon clusters on 2026-11-04 (`docs/research/2026-11-02-privileged-pod-hostpath-escape.md`). The issue allowed
+either PSA baseline or a Kyverno policy. PSA was chosen: it runs inside the API server, so it refuses the pod on the
+community cluster too, which serves no Kyverno ValidatingPolicy. `gitops/namespaces/namespaces.yaml` now gives
+`agent` `enforce: baseline` and `warn: baseline`, both at `latest`. `apps` warns at restricted;
+`agent` warns at baseline because most platform pods in `agent` do not meet restricted and would warn on every sync; warn at baseline names the
+refusal when a Deployment is applied, before its ReplicaSet fails to make pods. `disallow-privileged` is unchanged: it
+still guards `apps` for the Beat-3 clown file.
+
+**vLLM drops SYS_NICE.** The new test found one pod template the label would refuse: the local-inference profile's
+`vllm-qwen3` (deploy-only, never on the fleet or the KubeCon clusters) added `SYS_NICE`, which baseline does not
+allow. It now drops every capability and adds none. vLLM v0.23.0's NUMA binding (`csrc/cpu/utils.cpp`,
+`init_cpu_memory_env`, read 2026-11-12) only warns when a call fails, setting a process's own CPU affinity needs no
+capability, and a t3.2xlarge has one NUMA node. `verify/test_local_inference.py` now holds no added capability.
+
+**What this does to #112's design.** The research note's challenge wanted the escape admitted while unarmed and
+refused once a student armed a Kyverno policy. With baseline enforced in `agent` it is refused from the start, by
+PSA, so that challenge's build has to start from this label (arm by lifting it, or stage the attack elsewhere).
+
+**Tests.** `verify/test_agent_namespace_pod_security.py` (new, offline): the label, a checker that flags each escape
+shape (privileged, hostPath, hostNetwork, hostPID, hostIPC, hostPort, a capability outside baseline's list), and every
+pod template the repo ships into `agent` (15 found) meets baseline. It passes, and `verify/test_local_inference.py`
+passes. The scope map and test map carry the new test.
+
+**Live check, 2026-11-12, server dry-runs only, nothing persisted, both clusters left as found.**
+- `kubectl label --dry-run=server --overwrite ns agent pod-security.kubernetes.io/enforce=baseline` on
+  watch-it-burn-community and watch-it-burn-private: `namespace/agent labeled (server dry run)` with no warning, so
+  every pod running in `agent` on both meets baseline. The same dry-run at `restricted` warned on 12 pods (community)
+  and 7 (private).
+- The escape pod (privileged, hostPath `/`, hostPID, hostNetwork) applied with `--dry-run=server` in `apps`, which
+  enforces baseline, on both: `violates PodSecurity "baseline:latest": host namespaces (hostNetwork=true,
+  hostPID=true), hostPath volumes (volume "host"), privileged (container "shell" must not set
+  securityContext.privileged=true)`.
+- Today agent-sa and workshop-mcp hold no create on pods or Deployments in `agent` on either cluster
+  (`kubectl auth can-i` answers `no`), so the agent-identity dry-run is refused by RBAC first. The label covers the
+  state where the Role grants create again.
+
+**Not yet run on a cluster.** After promotion and Argo CD's sync: `kubectl get ns agent --show-labels` on both
+clusters shows the two labels, and the escape pod applied with `--dry-run=server -n agent` is refused by PodSecurity.
+On the next local-inference cold build, `verify/local-inference-live.py` confirms vLLM reaches Ready without SYS_NICE.

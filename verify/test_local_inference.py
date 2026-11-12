@@ -71,8 +71,10 @@ check("requests 1500m CPU / 10Gi (question 1082: the sister's 4 CPU does not fit
 check("KV cache 2 GiB, the value paired with the 16Gi limit",
       {"name": "VLLM_CPU_KVCACHE_SPACE", "value": "2"} in c["env"])
 sc = c["securityContext"]
-check("non-root at a numeric uid, every capability dropped but SYS_NICE",
-      sc["runAsNonRoot"] is True and isinstance(sc["runAsUser"], int) and sc["capabilities"] == {"drop": ["ALL"], "add": ["SYS_NICE"]}
+# Every capability dropped, SYS_NICE included (#1410): namespace agent enforces Pod Security baseline, which refuses
+# an added SYS_NICE, and vLLM's NUMA calls only warn without it (csrc/cpu/utils.cpp at v0.23.0).
+check("non-root at a numeric uid, every capability dropped and none added (Pod Security baseline in agent)",
+      sc["runAsNonRoot"] is True and isinstance(sc["runAsUser"], int) and sc["capabilities"] == {"drop": ["ALL"]}
       and sc["allowPrivilegeEscalation"] is False)
 dshm = next((v for v in pod["volumes"] if v["name"] == "dshm"), {})
 check("a memory-backed /dev/shm, without which it crash-loops",
