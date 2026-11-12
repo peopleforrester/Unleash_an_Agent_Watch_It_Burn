@@ -111,7 +111,7 @@ NAMED_LINES = [
     "\"Try your attack again.\"", "\"Pesky RBAC!\"", "\"LLM Guard\"", "\"But not every MCP server can be trusted.\"",
     "\"LLM04: Supply Chain\"", "\"OWASP GenAI LLM Top 10 2026\"", "\"Let's turn on an MCP gateway.\"",
     "\"This attack was prevented with an MCP gateway.\"",
-    "\"Bottom line: an AI guardrail classified the ticket as malicious and blocked it.\"",
+    "\"Bottom line: an AI guardrail classified the ticket as a prompt injection and blocked it.\"",
 ]
 # The diagram slides' Say notes, word for word from the built deck (read from attendee.html on rounds main faf4005,
 # 2026-11-09, the deck https://rounds.agenticburn.com served that day; #/81, #/82, #/100 and #/101 read again at rounds
@@ -123,17 +123,20 @@ NAMED_LINES = [
 DIAGRAM_NOTES = {
     57: "Let's follow one request through the system. A human asks BurritoBot about a ticket on the chat page. "
             "It could also be a vampire or an ogre, because BurritoBot serves everyone.",
-    58: "The question goes through guard-proxy, where our AI guardrails live, to the BurritoBot agent.",
+    58: "The question goes through guard-proxy, where our AI guardrails live, to the BurritoBot agent.\" \"We built "
+            "guard-proxy for this demo so we can turn each guardrail on and off live, without restarting "
+            "anything.\" \"Under the hood, it uses LLM Guard.",
     59: "The agent sends the question to the model, Amazon Nova Pro. The model decides it needs to read the "
             "ticket, and asks the agent to call a tool.",
-    60: "The agent calls read_support_ticket on the MCP tool server. MCP is the standard way to give an AI agent "
-            "tools, and this server holds BurritoBot's.",
+    60: "The agent calls read_support_ticket on the MCP tool server. MCP, the Model Context Protocol, is an open "
+            "standard for giving an AI agent tools.",
     61: "The tool server asks the support desk for the ticket.",
     62: "The support desk hands the ticket back, hidden instructions and all. Notice it never went through "
-            "guard-proxy: it came in through a tool.",
-    63: "Here's where the input guard goes. Before the tool server hands the ticket back, it asks LLM Guard to "
-            "check it. Our input guard checks the ticket as BurritoBot reads it. A prompt-injection classifier "
-            "catches instructions hidden in the text.",
+            "our AI guardrails: it came in through a tool.",
+    63: "Here's where LLM Guard comes in. Before the tool server hands the ticket back, it asks LLM Guard to "
+            "check it. LLM Guard runs a prompt-injection classifier on the ticket to catch instructions hidden in "
+            "the text.\" \"A classifier is a small AI model that sorts text into categories, here \"injection\" or "
+            "\"safe.\"",
     64: "The prompt-injection classifier spots the hidden instructions and flags the ticket.",
     65: "That's a dead ticket. The tool server tells BurritoBot there's no ticket for it, so the model never "
             "sees the instructions, and nothing gets deployed.",

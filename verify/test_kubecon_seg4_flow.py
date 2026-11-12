@@ -84,7 +84,7 @@ BEATS = [
     ("the Role (#/54 and #/55)", "Role before and after (#/54 and #/55)"),
     ("LLM Guard (#/56)", "LLM Guard (#/56)"),
     ("the diagram (#/57 to #/65)", "the architecture diagram (#/57 to #/65)"),
-    ("the bottom line (#/66)", '"Bottom line: an AI guardrail classified the ticket as malicious and blocked it." (#/66)'),
+    ("the bottom line (#/66)", '"Bottom line: an AI guardrail classified the ticket as a prompt injection and blocked it." (#/66)'),
 ]
 BEATS5 = [
     ("the title card (#/67)", '"It is time for Challenge 4!" (#/67)'),

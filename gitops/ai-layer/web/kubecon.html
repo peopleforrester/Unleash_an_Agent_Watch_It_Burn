@@ -384,7 +384,7 @@
     <code>guardrails-input-on</code> arms the input classifier, and the ticket never reaches the model. "Try your attack
     again." (#/52), the room's retry on the public bot, which both commands reach (#1132); "Pesky RBAC!" (#/53),
     least privilege and its Role before and after (#/54 and #/55), LLM Guard (#/56), the architecture diagram
-    (#/57 to #/65), and "Bottom line: an AI guardrail classified the ticket as malicious and blocked it." (#/66)
+    (#/57 to #/65), and "Bottom line: an AI guardrail classified the ticket as a prompt injection and blocked it." (#/66)
     before Challenge 4.</p>
     </details>
 
@@ -431,7 +431,7 @@
       Deployments, in red) beside the one <code>guardrails-agency-on</code> applies (<code>get</code> and
       <code>list</code>, in green). #/56 names LLM Guard on screen. #/57 to #/65 follow one request through the
       nine-slide architecture diagram, the ticket coming back through a tool, not through the AI guardrails; #/63
-      adds LLM Guard below the tool server, and #/65 shows the dead ticket the model never sees. The double duty, on the <code>c3-pii</code> seed: a refused
+      adds LLM Guard below the tool server, a prompt-injection classifier on the ticket, and #/65 shows the dead ticket the model never sees. The double duty, on the <code>c3-pii</code> seed: a refused
       prompt reaches no model, so it is in APM's traces, not Agent Observability; type
       <code>app.datadoghq.com/apm/traces</code> and search
       <code>service:burritobot @session.id:wib-stage-c3-pii-&lt;stamp&gt;</code> on Past 7 Days. The input guard keeps

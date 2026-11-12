@@ -56559,3 +56559,17 @@ the `console-src` ConfigMap as before. It still gives the old hand-off once, as 
 **Not yet run on a cluster.** After promotion, the page the private cluster serves carries this change:
 `curl -s https://burritobot-private.burritobot.co/kubecon` contains "Which brings us to challenge three..." and no
 "That covers the Kubernetes guardrails.", and `python3 verify/test_ros_deck_live.py` passes once #1394 and #1395 land.
+
+## 2026-11-12 · #1395 · by hand · the run-of-show and /kubecon quote rounds-agenticburn#178's Challenge 3 notes
+
+Whitney's #1395, worked in the talk-day freeze on top of #1390's renumbering. The run-of-show's `#/56` quote gives the
+four products as #178's list ("Some examples of products that do this are:" then the list, then the
+walk-through line); `#/58` adds "We built guard-proxy for this demo..." and "Under the hood, it uses LLM Guard."; `#/60` defines MCP
+as "the Model Context Protocol, an open standard for giving an AI agent tools"; `#/62` says the ticket "never went
+through our AI guardrails"; `#/63` is "Here's where LLM Guard comes in..." with the classifier line; and `#/66`, its
+row and `/kubecon`'s summary say the guardrail classified the ticket "as a prompt injection". `/kubecon`'s diagram
+summary calls the check LLM Guard's prompt-injection classifier. Slide 1's note is not quoted, so nothing changed there.
+`test_ros_seg4_flow.py`'s diagram notes and named line and `test_kubecon_seg4_flow.py`'s bottom line follow; both pass,
+with `test_ros_reworded_slides.py`, `test_instructor_brief.py` and `test_deck_shift_slide_citations.py`.
+
+Not yet run: `verify/test_ros_deck_live.py` against the live deck.
