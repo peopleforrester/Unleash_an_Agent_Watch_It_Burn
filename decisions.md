@@ -56474,3 +56474,28 @@ prompt is left only in dated history (this file and PROGRESS.md).
 Not yet run on a cluster: the Challenge 4 probe with the new prompt on the private bot (get_weather then
 read_internal_config, with the rate), and the `c4-attack` seed re-run with it. Both need the Kubernetes and MCP
 guardrails off, which they are not until the 12:48 MST pre-talk reset.
+## 2026-11-12 · #1412 · run 20805 · Every agent egress path beside the allowlist is recorded as closed, accepted or filed
+
+The 2026-11-08 audience review (rounds-agenticburn#154) asked what still leaves the `agent` namespace once C1's
+`agent-egress-allowlist` is on, since the deck's #/41 shows that policy as an excerpt. `docs/agent-egress-paths.md`
+is the answer: it lists every egress policy that selects an `agent` pod (the six C1 files, plus
+`platform-console-egress` and the private cluster's `agent-allow-desk-relay-egress`, found by scanning `gitops/`,
+`policies/`, `security/` and `challenges/` for Egress policies in `agent`), with where data can go through each and
+whether it is closed or accepted.
+
+**Accepted.** The VPC, service-CIDR and Pod Identity rules of the allowlist, the OTLP allow, the weather feed, the
+intra-namespace allow, the console and the desk relay. Each reaches our own network, our own collector or a fixed host
+of ours or Open-Meteo's, and the file says why for each.
+
+**Open, and said so.** DNS stays open by design: it is C1 stage 2b, deferred by #116, with the fix in
+`challenges/c1-exfil-s3/fix/` and its live check #728. The kagent allow admits the whole `kagent` namespace on every
+port, and that namespace runs kagent-tools 0.2.1 (bundled by kagent chart 0.10.1), whose upstream source at that tag
+registers a `shell` tool unless read-only, with open egress since no policy here selects a `kagent` pod. #987 kept the
+kagent-tools install unchanged for the talk, so the doc records the path as open for KubeCon NA 2026 and #1414 is filed
+to read it live and close it (narrowing the allow to the controller's 8083 and Postgres's 5432 is the smallest fix).
+The run did not change a policy: a doc-lane run has no cluster, and the narrowing needs its live check.
+
+`challenges/c1-exfil-s3/README.md` loses two stale lines (the allowlist "scoped to the workshop-agent pod", which #108
+widened to the namespace, and "five policies", now six) and links the new doc, as does the DNS-exfil beat note.
+
+**Live check.** Skipped: the change is docs alone, and this doc-lane run has no cluster context.

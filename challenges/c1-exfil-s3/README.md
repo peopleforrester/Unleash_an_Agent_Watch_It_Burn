@@ -52,8 +52,8 @@ apex Caddy router (`apex-agenticburn`); `https://agenticburn.com/beacon` is the 
 is a public host on purpose. Verified live on `watch-it-burn-r3-1` 2026-06-29: beacon DENIED, Bedrock CONNECT.
 
 **Still a real control (kept): the egress wall.** Once the policy is applied, the agent namespace runs default-deny egress
-plus an allow-list scoped to the `workshop-agent` pod (in-VPC `10.0.0.0/16:443` reaches Bedrock via its
-PrivateLink VPC endpoint; DNS; the OTel collector; intra-namespace). **Bedrock works; a push to public-IP
+for every pod in it (since #108) plus an allow-list (in-VPC `10.0.0.0/16:443` reaches Bedrock via its
+PrivateLink VPC endpoint; DNS; the OTel collector; kagent; intra-namespace; the weather feed's 443). **Bedrock works; a push to public-IP
 S3 is denied** (verified 2026-06-26: bedrock `CONNECT 10.0.x.x`, S3 `DENIED(TimeoutError)`). So an agent
 that tried to *exfiltrate* the data over the network is blocked, which is what the student's C1 shows. A
 *screen* leak is the case egress controls do not stop (that is why you also need agency/RBAC scoping).
@@ -61,7 +61,10 @@ that tried to *exfiltrate* the data over the network is blocked, which is what t
 - `policies/network-policies/per-namespace/agent-*.yaml` (default-deny egress + its DNS, OTel, kagent and
   intra-namespace allows). The `network-policies` Argo CD app ships them armed on the `admin` profile only;
   the `full` and `attendee` profiles exclude it (#281) and `burn` never had it. The student applies the
-  same five policies in one manifest, because the default-deny alone would break DNS.
+  same six policies in one manifest, because the default-deny alone would break DNS.
+- `docs/agent-egress-paths.md` lists every egress path the namespace keeps beside the allowlist, and for each one
+  whether it is closed or accepted and why (#1412). Two stay open: DNS (stage 2b below) and the whole `kagent`
+  namespace (#1414).
 
 To prove the
 network block when the agent wanders, run `CONTEXT=<ctx> fallback.kubectl.sh`: it POSTs to the beacon from

@@ -45,6 +45,9 @@ carries data therefore travels from the pod to that server with stage 2's policy
 textbook DNS-tunnel class, and the Kubernetes and Red Hat sources in the references both say NetworkPolicy alone
 does not stop exfiltration.
 
+DNS is one of several allows beside the allowlist. `docs/agent-egress-paths.md` (#1412) lists them all and says,
+for each, whether it is closed or accepted; it records this one as open by design until the beat and its fix run.
+
 The cluster enforces NetworkPolicy through VPC-CNI: `enableNetworkPolicy = "true"` sits in the `vpc-cni` addon
 configuration at `infra/terraform/aws/cluster/main.tf:332`. That engine works at L3/L4 and has no DNS-aware rule
 type.
@@ -157,6 +160,7 @@ the build starts.
 
 - `policies/network-policies/per-namespace/agent-egress-allowlist.yaml`: the L3/L4 allowlist, namespace-wide since #108.
 - `policies/network-policies/per-namespace/agent-allow-dns.yaml`: the port 53 allow to `kube-system`.
+- `docs/agent-egress-paths.md`: every egress path the `agent` namespace keeps beside the allowlist, closed or accepted.
 - `gitops/ai-layer/workshop-mcp-server.py:190`: `get_marketing_intel`.
 - `images/workshop-mcp/Dockerfile`: the tool image, `curl` and `ca-certificates` only.
 - `infra/terraform/aws/cluster/main.tf:332`: VPC-CNI with `enableNetworkPolicy = "true"`.
