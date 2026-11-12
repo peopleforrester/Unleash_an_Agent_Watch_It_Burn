@@ -55320,3 +55320,29 @@ answered 502 or 504 and no new ListenOverflows on the guard-proxy pod, as #1342 
 
 **Tests run**, each once: `test_guard_proxy_backlog.py` (9 of 9), `test_proxy_checksum.py` and
 `test_challenge_fallbacks.py` pass; the three pin tests above fail as described. `scope_tests.py write` changed nothing.
+
+## 2026-11-12 · #1343 · run 20578 · c8599fe is on guard-proxy main now, so run 20321's draft lands as it was
+
+**What changed since run 20321.** guard-proxy-agenticburn's `main` is now `c8599fe` itself: the compare API reads
+`main...c8599fe` as identical (ahead 0, behind 0). That was the one thing holding run 20321's branch. This run
+cherry-picked its two commits onto staging `727597c2`. `prior-drafts.sh` named one drift line, `ca62a619`'s edit to
+`gitops/ai-layer/resources.yaml` (the guard-agency-on Secret rule). That edit is in another part of the file, and the
+cherry-pick merged on its own. Nothing in the draft's design differs: the pin is `c8599fe`, `checksum/proxy-py` is
+`fff00bf9171d`, the proxy container's command is `["python", "/app/proxy.py"]`, and `test_guard_proxy_backlog.py`
+probes the pinned `Server`'s listen backlog in place of reading the command text. Guard-proxy main has not moved past
+`c8599fe`, so no further repin was needed. Between `0a3ca16` and `c8599fe` proxy.py gains the `Server` class and its
+`__main__` builds it; no other test in `verify/` reads the old `__main__` line or the runpy command.
+
+**Live read, both clusters, read-only.** On watch-it-burn-community and watch-it-burn-private the `agent/guard-proxy`
+Deployment still carries `checksum/proxy-py: ef48fb92f4d9` and #1337's `python -c` runpy command, one ready replica
+of one, as expected before promotion. `/proc/sys/net/core/somaxconn` in each proxy container reads 4096, so the kernel
+does not clip the 1024 backlog. Nothing was changed.
+
+**Not yet run on a cluster.** After this change syncs: the proxy container on both clusters runs `python /app/proxy.py`
+at checksum `fff00bf9171d`, and #644's 500-phone replay on watch-it-burn-community has 0 turns answered 502 or 504
+and no new ListenOverflows on the guard-proxy pod, as #1342 ran it for #1337.
+
+**Tests run**, each once and passing: `test_guard_proxy_backlog.py`, `test_proxy_checksum.py`,
+`test_challenge_fallbacks.py`, `test_guard_proxy_pin_on_main.sh` (18 of 18), `test_guard_proxy_pin_1316.py`,
+`test_guard_proxy_pin_1288.py`, `test_beat03_c7.py` and `test_scope_tests.py`. The scoped selection for these three
+paths is 326 offline and 41 tools-tier tests; the rest are left to validation.
