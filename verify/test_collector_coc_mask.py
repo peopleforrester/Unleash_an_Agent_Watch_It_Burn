@@ -85,11 +85,13 @@ check("the ConfigMap names no namespace, so it lands in the Applications' destin
       "namespace" not in yaml.safe_load(COC_MASK_MANIFEST.read_text(encoding="utf-8"))["metadata"])
 
 def feeds_masked(cfg: dict, exporter: str) -> bool:
-    """The exporter sends to this collector's own receiver of the traces pipeline, on localhost (#1336's relay)."""
+    """The exporter sends to this collector's own receiver of the traces pipeline, on the loopback (#1336's relay).
+
+    Any loopback host counts here; test_collector_relay.py holds which one (127.0.0.1 since run 20576)."""
     endpoint = (cfg.get("exporters", {}).get(exporter) or {}).get("endpoint")
     ours = {(cfg["receivers"].get(r, {}).get("protocols") or {}).get("grpc", {}).get("endpoint")
             for r in cfg["service"]["pipelines"]["traces"].get("receivers", [])}
-    return bool(endpoint) and str(endpoint).startswith("localhost:") and endpoint in ours
+    return bool(endpoint) and str(endpoint).startswith(("127.0.0.1:", "localhost:")) and endpoint in ours
 
 
 print("== every profile: the mask is in the traces pipeline, after the content copies, before every exporter ==")
