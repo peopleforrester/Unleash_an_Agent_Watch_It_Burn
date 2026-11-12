@@ -55509,3 +55509,28 @@ collector pod rolls with 0 restarts and logs `Everything is ready` and no `creat
 for them: they change how the loopback connects, not how much work it does.
 
 No dependency was added.
+## 2026-11-12 · #1336 · run 20580 · Why run 20576's tests gate failed: test_collector_coc_mask.py read the relay's host as localhost
+
+**The cause.** Run 20576 moved both ends of the collector's relay loopback from `localhost:4320` to `127.0.0.1:4320`
+(entry above). `verify/test_collector_coc_mask.py` holds that every traces pipeline either runs behind the mask or
+sends all its spans into it. Its `feeds_masked` counted an exporter as that loopback only when its endpoint began
+with `localhost:`. After the move, `traces/intake` read as a pipeline that takes spans of its own and has no lab
+contract, so the test failed on all seven renders. Run 20576 ran only the two relay tests it changed and left the 234
+other tests that read `gitops/otel-collector/values.yaml` to validation, and this was one of them. A `git grep` for
+`localhost` across the tests that name the relay, before changing the words, would have found it.
+
+**The fix.** `feeds_masked` now takes either loopback host, `127.0.0.1:` or `localhost:`, and still requires the
+endpoint to be one the traces pipeline's own receiver listens on. Which host the relay uses stays
+`test_collector_relay.py`'s to hold. No other test reads the relay's host: `test_collector_replay_pace_live.py`
+(#1371) reads the relay exporter's series by its `exporter` label, not `server_address`.
+
+**Tests run**, once and passing: the 26 offline tests that name the relay, `traces/intake`, port 4320 or
+`collector_render.py`, plus every `test_collector_*.py` offline test, through
+`HECATON_TEST_FILES=<those 26> bash verify/run-tests.sh` (`26 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`,
+`exit=0`), `test_collector_coc_mask.py` and `test_collector_relay.py` among them. The other offline tests the change
+selects are left to validation.
+
+**Live check: none this run.** The change is a test's reading of the config. The run 20576 entry's "Not yet run on a
+cluster" still stands for the loopback fixes, and the follow-up filed with it names that check.
+
+No dependency was added.
