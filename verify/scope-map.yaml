@@ -3282,6 +3282,8 @@ reads:
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
+  test_desk_reveal_toggle.py:
+    - gitops/ai-layer/ticket_site.py
   test_desk_ticket_live.py:
     - agent
     - challenges/c3-secret-grep/agent-prompt.txt

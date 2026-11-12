@@ -2886,6 +2886,11 @@ rules:
       - gitops/ai-layer/workshop-mcp-server.py
     tests:
       - verify/test_desk_removed_rows.py
+  - name: test_desk_reveal_toggle.py
+    paths:
+      - gitops/ai-layer/ticket_site.py
+    tests:
+      - verify/test_desk_reveal_toggle.py
   - name: test_desk_ticket_live.py
     paths:
       - agent

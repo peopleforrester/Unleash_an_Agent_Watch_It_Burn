@@ -56374,3 +56374,20 @@ old wording, so none changed. `python3 verify/test_mcp_vetting_handout.py`, whic
 
 **Not yet run on a cluster.** After promotion and Argo CD's sync, watch-it-burn-private's `console-src` ConfigMap in
 `agent` should hold `https://bit.ly/burittobot` in its `kubecon.html` key.
+
+## 2026-11-12 · #1402 · by hand · the support desk's "Show hidden text" toggle
+
+Michael asked on 2026-11-12 for a way to see the white text a ticket can carry, and a light/dark toggle "so that text
+could show up". The form already writes white text (its Black text / White text buttons); the page and the editor are
+white, so neither the writer nor the room could see it. Every desk page (`_shell`) now carries a "Show hidden text"
+button that toggles a `reveal` class on the page. With it on, the page, the editor, each ticket and the visitor box
+turn #767676, where white ink reads at 4.54:1 and black at 4.6:1, so both the complaint and its hidden instruction show
+(a dark page would hide the black text the Black text button writes). It starts off on every load and changes nothing
+stored or anything BurritoBot reads. No colour beyond black and white: white is the one that hides on a white page.
+
+Tests: `verify/test_desk_reveal_toggle.py` (new, offline: the button on the form, HC-666's page and the private desk,
+off at load, the contrast of both inks on the grey, HC-666's stored text unchanged); the desk's other offline tests
+pass unchanged.
+
+Not yet run on a cluster: on support.burritobot.co, file a ticket with white text and press Show hidden text on the form
+and on the ticket's page; open HC-666 and press it.
