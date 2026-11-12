@@ -55408,5 +55408,104 @@ sampler.
 **Tests run**, each once and passing: `test_collector_replay_pace_live_checks.py`, `test_fetch_inventory.py`,
 `test_test_map.py`, `test_scope_tests.py` with `HECATON_BASE_SHA` at the merge base, and the live test above. The other
 tests the change selects are left to validation.
+## 2026-11-12 · #1336 · run 20576 · After the split, the collector ran at up to two cores and caught up within 30 s of a 500-phone replay; the relay loopback is pinned to 127.0.0.1 and waits for its connection
+
+**What this run read.** Hecaton merged run 20574's port into staging as `727597c2` at about 08:08 UTC. Argo CD synced
+the community `otel-collector` Application to it at 08:13:32, and the new pod
+`otel-collector-opentelemetry-collector-agent-9cwwq` logged `Everything is ready` at 08:13:39. Its relay ConfigMap
+held the split: `traces/intake` (`memory_limiter`, `k8s_attributes/intake`, `batch`) into `otlp_grpc/relay`, and
+`traces` behind `otlp/relay` with every processor from `k8s_attributes` and `transform/kagent_service_name` to
+`transform/coc_mask` and `transform/scrub_pii`. This run then ran the replay run 20295 ran before the change, on
+watch-it-burn-community, with the same seed, under the guard lock:
+
+    python3 verify/guard_lease.py hold --context watch-it-burn-community --profile accen-dev -- \
+        python3 verify/load_replay.py attackme.burritobot.co --yes --source catalog --users 500 --seed 1336 --json-out <scratch>
+
+A sampler read the collector's :8888 through `kubectl port-forward pod/<collector> 18889:8888`, the kubelet's stats
+summary and cAdvisor's CFS counters every 13 to 22 s, from 08:14:47 to 08:29:47.
+
+    replay        08:14:57 to 08:17:26 UTC, 149.1 s: 1,500 sent, 354 served, 1,146 refused by guard-proxy's cluster
+                  window, every reply HTTP 200, 0 errors or timeouts
+    spend         /cost $5.1804 before, $8.5765 after: this replay $3.3961, $0.0096 a served turn
+    CPU           153.3 s, 5.8 s at 08:14:35 to 159.1 s at 08:17:36; each kubelet interval 1.57, 1.96, 0.59, 1.50,
+                  1.54, 0.32 and 0.67 CPU, usageNanoCores at most 1.94; 0.00 from 08:17:36 to 08:17:55
+    catching up   idle again 10 to 29 s after the replay's end (run 20295, before the split: 74 to 88 s)
+    throttling    10 of 1,438 CFS periods from 08:14:35 to 08:18:40 (none before the split, when it used one core)
+    restarts      0 at every sample
+    working set   207 MiB at most, of 512 MiB
+
+The collector's own counters, 08:14:47 to 08:19:09:
+
+    otelcol_receiver_accepted_spans{receiver=otlp}                     55 to 8,519: 8,464 spans from the senders
+    otelcol_exporter_sent_spans{exporter=otlp_grpc/relay}              55 to 8,512, equal to otlp/relay's accepted
+    otelcol_receiver_accepted_spans{receiver=otlp/relay}               55 to 8,512; the 7 short were in the intake's batch
+    otelcol_exporter_queue_size{exporter=otlp_grpc/relay}              at most 1,927 (08:15:30), 0 at 08:15:52, 1,604 at
+                                                                       08:16:36, 0 at 08:16:58, 0 from 08:17:42
+    otelcol_receiver_refused_spans, _failed_spans (otlp, otlp/relay)    0 throughout
+    otelcol_exporter_send_failed_spans, _enqueue_failed_spans          no series for any exporter
+
+The senders' logs from 08:13:00 hold no `DeadlineExceeded`, `telemetry data will be lost`, `export timeout`,
+`Queue is full`, `dropped` or `failed to export`: agentgateway (2,516 lines in `agentgateway` and 403 in
+`agentgateway-c7`), workshop-agent (655), guard-proxy (28) and evil-mcp-shim (799). The same search over
+`agentgateway-c7`'s log from 2026-11-11 07:00 finds run 20295's deadlines at 07:04:21 and 07:05:06, so it would have
+found them here; the `agentgateway` container's log from then has rotated out.
+
+**Was a span dropped: no.** The queue filled to 1,927 spans and drained to 0 three times during the replay, nothing
+was refused or failed on either side of the loopback, and no sender gave up an export. The collector ran at up to 1.96
+cores, against one before the split, and finished 10 to 29 s after the last reply. So #1336's second criterion holds on
+the live cluster: the masks run on more than one core and the collector keeps pace, with no restart.
+
+What the reading adds: at its peak the collector now meets its 2-CPU limit, and it was throttled in 10 of 1,438 CFS
+periods, at most 1 s in all. That is the queue's two consumers using what the limit allows. It slowed nothing the
+replay could see.
+
+**Spans still carry their pod.** Read back from Datadog APM for 08:15 to 08:18, all 1,001 spans had
+`k8s.deployment.name`: 430 burritobot-agent from workshop-agent, 361 burritobot from guard-proxy, 170
+burritobot-gateway from agentgateway, 40 burritobot from workshop-agent. `k8s_attributes/intake`'s connection
+address carries the pod across the loopback. `COMMUNITY_CONTEXT=watch-it-burn-community PRIVATE_CONTEXT=watch-it-burn-private
+python3 verify/test_collector_relay_live.py` passed on both clusters, and
+`COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_collector_pii_scrub_live.py` passed: the sent span came
+back scrubbed from APM and Agent Observability, and the 168 h scan read 21,263 APM and 23,794 Agent Observability spans
+with no raw match.
+
+**Two faults in the loopback, fixed.**
+
+- The new pod logged `addrConn.createTransport failed to connect to {Addr: "[::1]:4320"}` 22 times from 08:13:39 to
+  08:38:37, the gaps growing to two minutes. `localhost:4320` makes the receiver bind localhost's IPv4 address alone,
+  while the exporter's gRPC client resolves localhost to `[::1]` as well and keeps trying it. Spans went through on
+  127.0.0.1, so nothing was lost, but the warning would never stop. Both ends are now `127.0.0.1:4320`.
+- With 127.0.0.1 alone, `test_collector_relay_e2e.py` failed: all 600 spans dropped, `otelcol_exporter_send_failed_spans`
+  600, and `Exporting failed. Dropping data`. It failed in the image and in two of three runs on this host with the
+  pinned binary. The collector starts the exporter before the receiver, and the exporter dials the relay at once: in
+  each of the four runs whose log this run read, its first dial landed in the same millisecond as `Starting GRPC server`, and was refused. The connection
+  then backs off for about a second. A request in that second fails at once with UNAVAILABLE, and with no retry its
+  spans are gone. On localhost the dial to `[::1]` went first, which likely gave the IPv4 listener time to start: the
+  test passed for runs 20295 and 20574 and the cluster lost nothing at 08:13:39. The cluster's log has no
+  `Exporting failed`. The relay exporter now sets `wait_for_ready: true`: a request waits for the connection, inside
+  its 60 s timeout, instead of failing. With it the tier test passed five runs out of five on this host and once in
+  the image. Each of those runs still logged the refused first dial, so the test exercises the race every time.
+
+`test_collector_relay.py` holds both: the receiver on 127.0.0.1 with the exporter sending to it, and
+`wait_for_ready` true, each with a mutant (a relay on localhost, and one without `wait_for_ready`) that fails. The tier
+test now takes the relay's host from the rendered config and puts only its own port on it.
+
+**Tests run**, each once and passing: `python3 verify/test_collector_relay.py`, and the tier test alone,
+`bash verify/run-e2e-tools.sh test_collector_relay_e2e.py`: 1 check in 0m10s, `ALL E2E TOOLS TIER CHECKS GREEN`,
+`exit=0`. The host runs above were the debugging. `otelcol-contrib validate` with the pinned binary passed on the burn,
+attendee and instructor configs as `collector_render.py` builds them with the Datadog overlays. The other tests
+`scope_tests.py` selects for `gitops/otel-collector/values.yaml` are left to validation.
+
+**Cluster state.** The replay's C6 asks made the bot deploy `joker-walk-in` and `joker-walk-in-customer` in `agent`
+(08:15:02 and 08:15:06, scaled to 0), which this run deleted. No other `joker-*` Deployment was there after the
+replay. The guard lock was taken and released. The port-forward was stopped. attackme's spend counter read $8.58
+after the replay and $0.00 at 08:40, reset by something other than this run. The replay report, the samples and the
+senders' logs stayed in this run's scratch directory.
+
+**Not yet run on a cluster.** The two loopback fixes (127.0.0.1 and `wait_for_ready`) reach the clusters only after
+hecaton promotes this branch and Argo CD syncs it. Then, on watch-it-burn-community and watch-it-burn-private: the
+collector pod rolls with 0 restarts and logs `Everything is ready` and no `createTransport` warning for
+`[::1]:4320` and no `Exporting failed`; `otelcol_exporter_sent_spans{exporter="otlp_grpc/relay"}` keeps pace with
+`otelcol_receiver_accepted_spans{receiver="otlp"}`; and `test_collector_relay_live.py` passes. No new replay is needed
+for them: they change how the loopback connects, not how much work it does.
 
 No dependency was added.
