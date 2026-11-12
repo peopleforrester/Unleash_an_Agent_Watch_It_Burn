@@ -103,9 +103,10 @@ check(f"{INTAKE} exports to {EXPORTER} and {TRACES} receives {RECEIVER}",
       intake["exporters"] == [EXPORTER] and traces["receivers"] == [RECEIVER], f"{intake} / {traces}")
 http_port, relay_port, metrics_port = free_port(), free_port(), free_port()
 relay = copy.deepcopy(burn["receivers"][RECEIVER])
-relay["protocols"]["grpc"]["endpoint"] = f"localhost:{relay_port}"
+relay_host = relay["protocols"]["grpc"]["endpoint"].rsplit(":", 1)[0]  # the room's own address, 127.0.0.1 (#1336)
+relay["protocols"]["grpc"]["endpoint"] = f"{relay_host}:{relay_port}"
 exporter = copy.deepcopy(burn["exporters"][EXPORTER])
-exporter["endpoint"] = f"localhost:{relay_port}"
+exporter["endpoint"] = f"{exporter['endpoint'].rsplit(':', 1)[0]}:{relay_port}"
 max_size = exporter["sending_queue"]["batch"]["max_size"]
 processors = {p: copy.deepcopy(burn["processors"][p]) for p in intake["processors"] + traces["processors"]}
 processors["batch"]["timeout"] = "200ms"  # the 5 s the room uses only slows the test

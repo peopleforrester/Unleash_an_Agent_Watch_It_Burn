@@ -30,11 +30,14 @@ config:
     # own, so the masks run on as many cores as there are consumers. Before this every processor after `batch` ran
     # on the batch processor's one export goroutine: at the room's ceiling #1334's replay held the collector at one
     # core for 70 s past the last reply, the receiver stopped taking spans, and the senders dropped theirs.
-    # localhost only: nothing outside the pod reaches it, and no containerPort or Service names it.
+    # Loopback only: nothing outside the pod reaches it, and no containerPort or Service names it. 127.0.0.1, not
+    # localhost: the receiver binds localhost's IPv4 address alone, while the exporter's gRPC client resolves
+    # localhost to [::1] as well, was refused there, and logged a connect warning every two minutes on
+    # watch-it-burn-community after the split rolled out (#1336, run 20576).
     otlp/relay:
       protocols:
         grpc:
-          endpoint: localhost:4320
+          endpoint: 127.0.0.1:4320
           # A batch of the conversation's spans is larger than gRPC's default 4 MiB: the agent's model-call span
           # carries the whole request twice over.
           max_recv_msg_size_mib: 64
@@ -687,7 +690,7 @@ config:
     # that fills the pod's memory, and a span the full queue turns away counts in
     # otelcol_exporter_enqueue_failed_spans.
     otlp_grpc/relay:
-      endpoint: localhost:4320
+      endpoint: 127.0.0.1:4320
       tls:
         insecure: true
       compression: none

@@ -8,7 +8,7 @@ was busy, and agentgateway and the agent dropped spans when their 10 s export de
 
   - traces/intake takes the senders' spans on otlp, and runs memory_limiter, k8s_attributes/intake and batch, nothing
     that reads span content, and exports only to otlp_grpc/relay;
-  - otlp_grpc/relay is a queued exporter to this pod's own otlp/relay receiver, on localhost, with at least two
+  - otlp_grpc/relay is a queued exporter to this pod's own otlp/relay receiver, on 127.0.0.1, with at least two
     consumers and no more than the container's CPU limit, requests of at most 512 spans, a timeout of 30 s or more, no
     retry (a retried request would run the masks twice and export its spans twice), and a receive limit above gRPC's
     default 4 MiB;
@@ -17,6 +17,10 @@ was busy, and agentgateway and the agent dropped spans when their 10 s export de
   - otlp/relay feeds the traces pipeline alone, and otlp_grpc/relay is fed by traces/intake alone;
   - k8s_attributes/intake is a passthrough that writes the sender's connection address as k8s.pod.ip, so the chart's
     k8s_attributes, which it prepends to the traces pipeline, still finds each span's pod behind the loopback.
+
+The loopback is 127.0.0.1, not localhost. The receiver binds localhost's IPv4 address alone, and the exporter's gRPC
+client also resolves localhost to [::1], is refused there, and logs a connect warning every two minutes; the community
+collector did that from the split's rollout until run 20576 pinned the address.
 
 A config with `batch` put back into the traces pipeline must fail the checks, so they tell the two shapes apart.
 test_collector_relay_e2e.py runs spans through the real collector over the loopback.
@@ -77,14 +81,14 @@ def problems(cfg: dict, cpus: float) -> list[str]:
     exp = cfg["exporters"].get(EXPORTER, {})
     if set((cfg["receivers"].get(RECEIVER, {}).get("protocols") or {})) != {"grpc"}:
         out.append(f"{RECEIVER} serves {sorted(cfg['receivers'].get(RECEIVER, {}).get('protocols') or {})}, not grpc alone")
-    if not str(grpc.get("endpoint", "")).startswith("localhost:"):
-        out.append(f"{RECEIVER} listens on {grpc.get('endpoint')!r}, not on localhost")
+    if not str(grpc.get("endpoint", "")).startswith("127.0.0.1:"):
+        out.append(f"{RECEIVER} listens on {grpc.get('endpoint')!r}, not on 127.0.0.1")
     if exp.get("endpoint") != grpc.get("endpoint"):
         out.append(f"{EXPORTER} sends to {exp.get('endpoint')!r}, not {RECEIVER}'s {grpc.get('endpoint')!r}")
     if (grpc.get("max_recv_msg_size_mib") or 4) <= 4:
         out.append(f"{RECEIVER} takes gRPC's default 4 MiB message; a batch of model-call spans is larger")
     if not (exp.get("tls") or {}).get("insecure"):
-        out.append(f"{EXPORTER} does not send in the clear to localhost")
+        out.append(f"{EXPORTER} does not send in the clear to the loopback")
     q = exp.get("sending_queue") or {}
     consumers = q.get("num_consumers", 10)
     if not q.get("enabled"):
@@ -133,6 +137,11 @@ check("a retrying relay exporter fails them", any("retries" in p for p in proble
 mutant = copy.deepcopy(cfg)
 mutant["exporters"][EXPORTER]["sending_queue"]["num_consumers"] = 1
 check("one consumer fails them", any("consumers" in p for p in problems(mutant, cpus)))
+mutant = copy.deepcopy(cfg)
+mutant["receivers"][RECEIVER]["protocols"]["grpc"]["endpoint"] = "localhost:4320"
+mutant["exporters"][EXPORTER]["endpoint"] = "localhost:4320"
+check("a relay on localhost, which the exporter also dials as [::1], fails them",
+      any("not on 127.0.0.1" in p for p in problems(mutant, cpus)))
 
 print()
 if failures:
