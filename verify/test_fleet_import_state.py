@@ -19,6 +19,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import os
 import pathlib
 import re
 import subprocess
@@ -544,6 +545,77 @@ if not ng:
 # "aws_eks_cluster_versions" count then fails every `terraform import` (run 17958, 2026-11-06).
 check("the default node group states kubernetes_version = var.kubernetes_version",
       re.search(r"^\s*kubernetes_version\s*=\s*var\.kubernetes_version\s*$", ng.group(1), re.M) is not None)
+
+print("The KubeCon pair's state is written on the state host alone (#1378):")
+# fleet.sh refuses the pair off WIB_STATE_HOST (#1374); a rebuild here is the other way a second copy arises. The
+# fleet directory is a scratch copy holding fleet.sh, so the checkout's own states/ the guard holds is a temp dir,
+# and this host is stubbed, so each check holds on every host, the state host included.
+FLEET_SH = (REPO / "infra/terraform/fleet/fleet.sh").read_text(encoding="utf-8")
+for anchor in ('is_kubecon_pair_name() { [[ "$1" == "watch-it-burn-community" || "$1" == "${SHARED_ADMIN_NAME}" ]]; }',
+               'readonly SHARED_ADMIN_NAME="watch-it-burn-private"',
+               'readonly WIB_STATE_HOST="${WIB_STATE_HOST:-tanjiro-debian}"'):
+    if anchor not in FLEET_SH:
+        sys.exit(f"anchor missing: {anchor!r} is not in infra/terraform/fleet/fleet.sh; the state host checks read it")
+mod = load()
+check("the pair is fleet.sh's is_kubecon_pair_name", mod.KUBECON_PAIR == ("watch-it-burn-community", "watch-it-burn-private"))
+check("the state host is read from fleet.sh's readonly default", mod.setting("WIB_STATE_HOST") == "tanjiro-debian")
+check("this host is `hostname -s`", mod.this_host() == subprocess.run(["hostname", "-s"], capture_output=True,
+                                                                       text=True).stdout.strip())
+
+
+def held(name: str, state_host: str | None, here: str = "netcup-host", extra: tuple = ()):
+    """main() on `here` with WIB_STATE_HOST `state_host` (None: unset, fleet.sh's default) and the checkout's own
+    states/; returns the exit, stderr, the calls made and the files states/ holds after."""
+    mod = load()
+    fake = Fake(world(), NOOP)
+    mod.run, mod.this_host = fake, lambda: here
+    saved = os.environ.pop("WIB_STATE_HOST", None)
+    if state_host is not None:
+        os.environ["WIB_STATE_HOST"] = state_host
+    try:
+        with tempfile.TemporaryDirectory() as t:
+            mod.FLEET = pathlib.Path(t) / "fleet"
+            mod.FLEET.mkdir()
+            (mod.FLEET / "fleet.sh").write_text(FLEET_SH)
+            mod.STATE_DIR = mod.FLEET / "states"
+            for kind in ("boundary", "network", "cluster"):
+                mod.ROOTS[kind] = pathlib.Path(t) / kind
+            err = io.StringIO()
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+                code = mod.main(["cluster", "accen-dev", name, *extra])
+            files = sorted(p.name for p in mod.STATE_DIR.iterdir()) if mod.STATE_DIR.is_dir() else []
+    finally:
+        os.environ.pop("WIB_STATE_HOST", None)
+        if saved is not None:
+            os.environ["WIB_STATE_HOST"] = saved
+    return code, err.getvalue(), fake.calls, files
+
+
+for pair in ("watch-it-burn-community", "watch-it-burn-private"):
+    code, err, calls, files = held(pair, None)
+    check(f"{pair} off the state host exits non-zero", code == 1, f"exit {code}")
+    check(f"{pair}: refused by name, naming fleet.sh's state host and this one",
+          f"REFUSING {pair}: {pair}'s state is written on tanjiro-debian alone and this host is netcup-host" in err, err)
+    check(f"{pair}: before any aws or terraform call", calls == [], f"{calls[:2]}")
+    check(f"{pair}: no state was written", files == [], f"{files}")
+code, err, calls, files = held("watch-it-burn-community", "elsewhere-host", here="tanjiro-debian")
+check("WIB_STATE_HOST from the environment is the state host, as in fleet.sh",
+      code == 1 and "written on elsewhere-host alone and this host is tanjiro-debian" in err and files == [], err)
+code, err, calls, files = held("watch-it-burn-community", None, here="tanjiro-debian")
+check("on the state host it is not refused and goes on to read AWS",
+      "REFUSING" not in err and calls and calls[0][:3] == ["aws", "sts", "get-caller-identity"], err)
+code, err, calls, files = held("watch-it-burn-private", None, extra=("--resolve-only",))
+check("--resolve-only, which writes no state, is not refused off the state host",
+      "REFUSING" not in err and calls and calls[0][0] == "aws", err)
+for other in ("watch-it-burn-community-b01", "watch-it-burn-attendee-001", NAME):
+    code, err, calls, files = held(other, None)
+    check(f"{other} is not held to the state host", "REFUSING" not in err and calls, err)
+mod = load()
+mod.this_host = lambda: "netcup-host"
+with tempfile.TemporaryDirectory() as t:
+    mod.STATE_DIR = pathlib.Path(t) / "states"
+    check("a states/ other than the checkout's own is not held, as fleet.sh's WIB_STATE_DIR",
+          mod.state_host_refusal("watch-it-burn-community") == "")
 
 if failures:
     print(f"\nFAIL: {len(failures)} check(s): " + "; ".join(failures))

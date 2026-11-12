@@ -75,7 +75,10 @@ def main_of(kind: str, name: str, w: dict, register: pathlib.Path | None = None,
     fake = Fake(w)
     mod.run = fake
     out, err = io.StringIO(), io.StringIO()
-    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+    # A scratch states/, as fleet.sh's shim tests set WIB_STATE_DIR: `cluster` refuses the KubeCon pair off the
+    # state host only for the checkout's own states/ (#1378), and every `cluster` case here stops before a write.
+    with tempfile.TemporaryDirectory() as t, contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        mod.STATE_DIR = pathlib.Path(t) / "states"
         code = mod.main([kind, "accen-dev", name, *extra])
     lines = dict(ln.split(": ", 1) for ln in out.getvalue().splitlines()
                  if re.match(r"^(verdict|choice|register|follows): ", ln))

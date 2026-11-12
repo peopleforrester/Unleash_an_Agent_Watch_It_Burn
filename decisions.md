@@ -56067,3 +56067,34 @@ Criterion 1 needs the act above, then the next daily drift report on tanjiro-wsl
 issue.
 
 **Live check.** Skipped: nothing the clusters run changed, and this run wrote only this entry.
+
+## 2026-11-12 · #1378 · run 20625 · import-state.py cluster refuses the KubeCon pair off the state host
+
+#1374 made `fleet.sh up` and `down` refuse watch-it-burn-community and watch-it-burn-private on any host but
+`WIB_STATE_HOST` (tanjiro-debian, tanjiro-wsl2's `hostname -s`). `import-state.py cluster` writes the same
+`fleet/states/<name>.tfstate`, and a rebuild on another host is how a second copy of the pair arose (#979). It now
+refuses them there too, before any AWS or terraform call, with fleet.sh's own wording: `REFUSING <name>: <name>'s state
+is written on <state host> alone and this host is <host>; run it there`.
+
+It mirrors fleet.sh's `state_host_refusal` point for point: the pair is fleet.sh's `is_kubecon_pair_name`, the host
+is `hostname -s` (Python's `socket.gethostname()` up to the first dot), the state host is `WIB_STATE_HOST` from the
+environment or else fleet.sh's `readonly` default (`setting()` now reads a `readonly` line too), and only the
+checkout's own `states/` is held, as fleet.sh exempts a `WIB_STATE_DIR`. Standbys and attendee clusters are not held.
+One choice the issue did not settle: `--resolve-only` is not refused, since it imports nothing and writes no state,
+and finding the import ids from another host does no harm. `test_cluster_provenance.py`'s `cluster` cases, which all
+stop before a write, now run against a scratch `states/`, so they hold on any host. docs/floor.md's "The state host"
+names the refusal.
+
+**Tests.** `verify/test_fleet_import_state.py` gains 18 checks: on a stubbed non-state host each of the pair exits 1,
+names tanjiro-debian and the host, makes no aws or terraform call and leaves `states/` empty; `WIB_STATE_HOST` from
+the environment wins; the state host, `--resolve-only`, a standby, an attendee and a scratch `states/` are not
+refused; and the pair and state host are anchored to fleet.sh's lines. It, `test_cluster_provenance.py`,
+`test_floor_rebuild_state.py`, `test_scope_tests.py` and `test_test_map.py` pass; `scope_tests.py write` changed
+nothing.
+
+**Live check.** Skipped against the clusters: the change is to `infra/terraform/fleet/import-state.py`, which no
+cluster runs. The acceptance command itself was run on this run's host (v2202603344103445992, not the state host):
+`python3 infra/terraform/fleet/import-state.py cluster accen-dev watch-it-burn-community` printed `import-state:
+REFUSING watch-it-burn-community: watch-it-burn-community's state is written on tanjiro-debian alone and this host is
+v2202603344103445992; run it there (docs/floor.md, "The state host")`, exited 1, and no `states/` directory exists
+after it.
