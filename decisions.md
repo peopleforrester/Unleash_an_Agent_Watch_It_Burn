@@ -56588,3 +56588,15 @@ again; `test_ros_seg4_flow.py`, `test_kubecon_seg4_flow.py`, `test_stage_trace_s
 `verify/stage_traces.py` and the probe find no link by its text, so they are unchanged.
 
 Not yet run: `verify/test_ros_deck_live.py` against the live deck.
+
+## 2026-11-12 · #1415 · by hand · segment 5's Challenge 4 diagram notes follow rounds-agenticburn#183
+
+Whitney's #1415 ("Let's clean up apply optimization everywhere", talk-facing scope), worked in the talk-day freeze on top
+of #1390, #1395 and #1400. Segment 5's diagram notes say 14 tools (12 plus 2): `#/81`, `#/82`, `#/100` and `#/101`
+quote #183 word for word, the summary says the agent is offered 14, and no talk-facing line names
+`apply_optimization`. `#/88`, `#/110` and `#/111` say "malicious instruction"; `#/78`, `#/94`, `#/96`, `#/114` and the
+summary say "vampire". Challenge 3's "hidden instructions" and "human" are unchanged. The platform keeps the tool:
+`server.py`, `agent.yaml`, the gateway's rules and `lab.html` are untouched. The dated note at the run-of-show's line 569
+(a model once called `apply_optimization`) stays. `test_ros_seg4_flow.py`'s diagram notes follow; it and the other
+segment tests pass. rounds-agenticburn#184 has since reworded `#/84`, `#/96`, `#/101` and `#/114` again on the live
+deck; #1418 follows it.
