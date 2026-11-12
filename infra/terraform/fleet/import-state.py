@@ -41,6 +41,8 @@ Usage (each root initialised first, `terraform -chdir=<root> init`):
   ... --resume         carries on a rebuild this script stopped, importing only what the state does not hold
 Run boundary and network first: a cluster's plan reads the boundary policy and takes its subnets from the lab VPC
 state. --region defaults to fleet.sh's WIB_REGION; a lab VPC outside the home region is not rebuilt by this script.
+`cluster` refuses watch-it-burn-community and watch-it-burn-private on any host but fleet.sh's WIB_STATE_HOST, naming
+it, as fleet.sh does (#1378); --resolve-only, which writes no state, is not refused.
 """
 from __future__ import annotations
 
@@ -48,8 +50,10 @@ import argparse
 import base64
 import importlib.util
 import json
+import os
 import pathlib
 import re
+import socket
 import subprocess
 import sys
 import tempfile
@@ -97,10 +101,34 @@ def last_line(text: str) -> str:
 def setting(var: str) -> str:
     """fleet.sh's default for one WIB_ setting, as drift-report.py reads it, so both name the same account and region."""
     text = (FLEET / "fleet.sh").read_text(encoding="utf-8")
-    m = re.search(rf'^{var}="\$\{{{var}:-([^}}]*)\}}"$', text, re.M)
+    m = re.search(rf'^(?:readonly )?{var}="\$\{{{var}:-([^}}]*)\}}"$', text, re.M)
     if not m or not m.group(1):
         raise Stop(f"infra/terraform/fleet/fleet.sh has no {var}=\"${{{var}:-...}}\" default to read")
     return m.group(1)
+
+
+# THE STATE HOST (#1374, #1378). fleet.sh writes the KubeCon pair's states on one host alone, WIB_STATE_HOST, and a
+# rebuild run on another host is how a second copy of the pair arises (#979 rebuilt the pair on tanjiro-wsl2 while
+# netcup still held the originals). So `cluster` refuses either of the pair elsewhere, as fleet.sh's
+# state_host_refusal does: the pair is fleet.sh's is_kubecon_pair_name, the host its `hostname -s`, the state host
+# WIB_STATE_HOST from the environment or fleet.sh's default, and only the checkout's own states/ is held.
+# --resolve-only writes no state and is not held to it.
+KUBECON_PAIR = ("watch-it-burn-community", "watch-it-burn-private")
+
+
+def this_host() -> str:
+    return socket.gethostname().split(".")[0]
+
+
+def state_host_refusal(name: str) -> str:
+    """Why this host may not write `name`'s state, or "" when it may."""
+    if name not in KUBECON_PAIR or STATE_DIR.resolve() != (FLEET / "states").resolve():
+        return ""
+    host = os.environ.get("WIB_STATE_HOST") or setting("WIB_STATE_HOST")
+    if this_host() == host:
+        return ""
+    return (f"{name}'s state is written on {host} alone and this host is {this_host()}; run it there "
+            '(docs/floor.md, "The state host")')
 
 
 class AWS:
@@ -792,6 +820,9 @@ def main(argv: list[str]) -> int:
             raise Stop("a cluster name is given with `cluster` or `provenance` and only with them")
         if args.kind == "provenance" and (args.resume or args.resolve_only):
             raise Stop("provenance imports nothing: --resume and --resolve-only are for a rebuild")
+        refusal = state_host_refusal(args.name) if args.kind == "cluster" and not args.resolve_only else ""
+        if refusal:
+            raise Stop(f"REFUSING {args.name}: {refusal}")
         aws = AWS(args.profile, region)
         account = aws("sts", "get-caller-identity")["Account"]
         if not re.fullmatch(r"\d{12}", account):

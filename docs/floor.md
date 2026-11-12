@@ -203,7 +203,8 @@ holds the one copy of each KubeCon cluster state, `infra/terraform/fleet/states/
 and `watch-it-burn-private.tfstate` in `/home/michael/repos/talks/Unleash_an_Agent_Watch_It_Burn`, and every
 account's boundary and audit state and accen-dev's home-region lab VPC state. `fleet.sh up` and `down` refuse
 either KubeCon cluster on any other host, naming the state host, so its state is written there alone
-(`verify/test_fleet_state_host.sh`). On any other host `fleet.sh` and `preflight.sh` read accen-dev's us-west-2
+(`verify/test_fleet_state_host.sh`), and `import-state.py cluster` refuses them there the same way, short of
+`--resolve-only`, which writes no state (#1378, `verify/test_fleet_import_state.py`). On any other host `fleet.sh` and `preflight.sh` read accen-dev's us-west-2
 lab VPC from AWS, by the tags the network root gives it (`Name=watch-it-burn-lab-vpc`, `project=watch-it-burn`),
 with its private subnets in CIDR order so zone a is still the first. They never read a local state of it there,
 and `fleet.sh down-infra` refuses it there, naming the state host (#1377). An apply of the boundary or of that
