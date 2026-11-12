@@ -54986,3 +54986,62 @@ and its relay ConfigMap names no `scrub_pii`, so the check has no private run, b
 22 of 22) are run 20240's, on this same build and pattern; they were not run again.
 
 **Tests.** No code changed. The three live tests above are the test; nothing offline was run.
+
+## 2026-11-12 · #1367 · run 20497 · The run-of-show and /kubecon follow rounds 269c532's reworded Say lines and slide text
+
+**Prior work.** `bash verify/prior-drafts.sh 1367 origin/staging` printed NONE: no earlier draft to port.
+
+**What changed.** rounds-agenticburn#174 (talk-day fixes from the 2026-11-11 mock run) reworded notes and slide text
+on 13 slides at rounds main `269c532`; the deck keeps 127 slides and its numbering. Read from the deck rounds serves
+on 2026-11-12, the run-of-show now follows each one where it quotes or describes the slide:
+
+- Segment 1: the hello as `#/1` gives it, Whitney's line then Michael's; the screenshot's words read out on `#/3` and
+  `#/4` in place of describing them; the optional tour of the chat page on `#/7` is gone, and in its place the
+  presenter points at the Reset button and the saved prompts and says the new line about them.
+- Segment 2: `#/12`'s added sentence, "Excessive agency means the agent can do more than its job needs."
+- Segment 3: `#/19`'s stage directions, "(Wait a minute.)" and "(Show the prompt wall. Wait a minute.)"; `#/23`'s
+  added "A fresh bot forgets it already refused you."; `#/41`'s list, "our private network and the two cluster
+  addresses BurritoBot needs".
+- Segment 4: `#/49`'s "Ticket HC-666 carries a hidden instruction, and it works."; `#/56`'s "it can't create
+  Deployments or Pods"; `#/50`'s "(After the trace demo:)" as "After the trace demo, say".
+- Segment 5: `#/72`'s hint and Say, "Ask BurritoBot about the weather, then look at what else it did.", with its
+  Datadog link on "what else it did" in the step, the segments table's row 5 and the Night Before's link table; the
+  presenter-only solve note follows the new hint; `#/117`'s "My MCP server vetting checklist".
+- Segment 6: `#/120`'s face, "ASI03 Identity and Privilege Abuse, and K08 Cluster To Cloud Lateral Movement.", and its
+  second cite, the OWASP Kubernetes Top 10 2025, so the ASI beat names K08 beside ASI03.
+- The deck's "Presenter:" lines (#/1 Whitney, #/5 Michael, #/8 Whitney, #/42 Michael, #/118 Whitney, #/121 Michael,
+  #/125 both) are in a paragraph under "The segments, in order" and on the steps they open. The Who column and each
+  segment's Owner were left as they are: they name who leads the live beats, and the paragraph says the deck's line
+  says who speaks the slides where they differ. The paragraph gives the close's three by name, not hash, since
+  `verify/test_deck_shift_slide_citations.py` allows `#/43` and above only in segments 4 to 6.
+
+/kubecon (`gitops/ai-layer/web/kubecon.html`) follows the same: segment 1's tour replaced by the Reset and saved-prompts
+line, `#/72`'s hint and its link in segment 5's story and the C7 trace marker, and K08 in the ASI beat.
+
+**Tests that copied the old wording follow it**, each in this commit range, as "Tests own their inputs" asks:
+`verify/test_ros_seg4_flow.py` (the `#/72` hint in BEATS5 and DECK_LINES, and the solve-leak self-check's anchor),
+`verify/test_kubecon_seg4_flow.py` (the `#/72` beat), `verify/test_stage_trace_slides.py` (`#/72`'s link and note,
+and the "After the trace demo, say" cut), `verify/test_ros_seed_step_links.py` and `verify/test_stage_seed_links.py`
+(the link on `#/72` is "what else it did").
+
+**Run.** `verify/test_ros_deck_live.py` against https://rounds.agenticburn.com/attendee.html: before the change it
+failed 3 checks (`#/49`, `#/54` to `#/56`, `#/72` twice, `#/116` to `#/117`, and /kubecon's "tools"); after it, every
+check and self-check PASS on the 127-slide deck. The five changed tests pass, and `test_deck_shift_slide_citations.py`
+and `test_scope_tests.py` pass. Of the offline tests the scoped selector picks that read the run-of-show, /kubecon or
+`gitops/ai-layer/web`, 103 were run. 84 passed on the first run, made under `python3 -I`. Of the 19 others, 17
+read `gitops/ai-layer/guard-proxy/proxy.py` and passed after `git submodule update --init gitops/ai-layer/guard-proxy`,
+`test_event_tag.py` passed once run without `-I`, which had dropped its own directory from the import path, and
+`test_stage_seed_links.py` failed on its `#/72` row expecting "tools" and passed once it was changed (above). The
+prose gate passes. The scoped tools tier selects
+`test_iam_policy_structural.py`, `test_image_version_tags.py` and `test_kyverno_counter_fix_cache.py`, which read no
+line this change touched; they were left to the gate.
+
+**Live check.** The change touches `gitops/`, so it was checked on both clusters, read-only. watch-it-burn-private's
+`agent/console-src-bb56kmmg4h` holds `kubecon.html` with sha256 prefix `b4f692146294f2d0`, byte for byte the base
+commit's file (the old `#/72` hint present, the new one absent); Argo CD's ai-layer is Synced and Healthy at
+`0ace877b`. watch-it-burn-community's `agent/console-src-42dmmhdm8t` has no `kubecon.html`, as the no-kubecon-brief
+component intends, so /kubecon is the private cluster's alone. Nothing was changed on either cluster.
+
+**Not yet run on a cluster.** Once hecaton promotes this change and Argo CD syncs ai-layer, the private cluster's
+console-src `kubecon.html` should hash to `320c9ef2bdd92169` (the file at this change) and carry "then look at what
+else it did."; the next run on the issue, or the Night Before's "The run-of-show still matches the deck" step, reads it.
