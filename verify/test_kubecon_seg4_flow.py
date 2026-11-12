@@ -126,7 +126,7 @@ KEPT = [
                                                      "deployments.burritobot.co"),
     ("the demo ticket takes a presenter number (#1156)", "HC-900 to HC-999, a range the room is never given"),
     ("only presenter numbers on the admin bot", "On the admin bot, read only a presenter number or HC-666"),
-    ("the presenters' path", "localhost:18080/presenter-ticket"),
+    ("#/47 on the desk's form, read on the room's bot (#1380)", "file a funny complaint through the desk's form"),
     ("Kyverno trusts the internal registry", "the internal registry Kyverno trusts"),
     ("the double duty's seed, in APM's traces by its session id",
      "service:burritobot @session.id:wib-stage-c3-pii-<stamp> on Past 7 Days"),

@@ -56474,3 +56474,16 @@ prompt is left only in dated history (this file and PROGRESS.md).
 Not yet run on a cluster: the Challenge 4 probe with the new prompt on the private bot (get_weather then
 read_internal_config, with the rate), and the `c4-attack` seed re-run with it. Both need the Kubernetes and MCP
 guardrails off, which they are not until the 12:48 MST pre-talk reset.
+
+## 2026-11-12 · #1380 · by hand · /kubecon's #/47 files the demo ticket on the desk's form and reads it on the room's bot
+
+Whitney's #1380, handed to this session by hecaton during the talk-day freeze (only Whitney's requests change
+anything). #1381 had already brought the run-of-show's `#/47` bullet and segment 4's row to the desk's form and the
+room's bot, with no port-forward step. `/kubecon` still told the presenters to port-forward `svc/fake-ticket` and
+`curl /presenter-ticket`. Its segment 4 summary now describes filing the Bat Spit complaint on the form, noting the
+four-digit number and asking the room's bot about it; its "if it wanders" note says the same with no terminal step.
+The admin-bot sentence (only a presenter number or HC-666) is kept. `/presenter-ticket`, the HC-900 to HC-999 range and
+their code and tests are unchanged. `test_kubecon_seg4_flow.py` keeps the form step in place of the presenters' path;
+it, `test_kubecon_probe.py`, `test_presenter_ticket_live.py` and `test_ros_seg4_flow.py` pass.
+
+Not yet run on a cluster: a ticket filed on the desk's form, read back by the room's bot (owed at the run-through).
