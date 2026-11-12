@@ -56137,3 +56137,34 @@ cluster runs. The acceptance command itself was run on this run's host (v2202603
 REFUSING watch-it-burn-community: watch-it-burn-community's state is written on tanjiro-debian alone and this host is
 v2202603344103445992; run it there (docs/floor.md, "The state host")`, exited 1, and no `states/` directory exists
 after it.
+## 2026-11-12 · #1381 · run 20596 · Run-of-show segment 4: `#/47` files the demo ticket on the desk's form and reads it on the room's bot
+
+**What changed.** Segment 4's ticket step, `#/47`, now follows the deck's Do note from
+rounds-agenticburn#175 (Whitney, 2026-11-12: the demo shows the room what it can do). The presenter files a funny
+complaint through the desk's form at `https://support.burritobot.co`, quoting the Bat Spit ticket word for word, notes
+the four-digit room number the form gives, switches to the room's BurritoBot at `https://attackme.burritobot.co` and
+asks "What's the status of my support ticket [number]?". The `kubectl port-forward` and `curl` block, the port-forward
+started ahead of the segment, the HC-900 question on the admin bot, the 403 sentence and the closing HC-900 sentence
+are gone. The Say and Then say lines are unchanged, and so is the paragraph above the steps that reserves HC-900 to
+HC-999 and limits the admin bot to a presenter number or HC-666. Segment 4's row in the segments table says the same
+of `#/47`. No other step in the run-of-show started the `svc/fake-ticket` port-forward for this demo, so nothing else
+was removed.
+
+**Tests.** `verify/test_ros_seg4_flow.py` adds two checks on the `#/47` step (it names the desk's form, the Bat Spit
+ticket, the room number, `attackme.burritobot.co`, the question and both Say lines; it has no port-forward, curl,
+`/presenter-ticket`, `fake-ticket`, HC-900, admin bot or salsa) and a row 4 clause, each shown failing on a copy with
+the old step or the old clause put back. `verify/test_support_desk_named.py` drops its three checks of the old step
+(the presenters' path, the 403 sentence, the admin bot reading the demo ticket by a presenter number) for two checks
+that the step files the room's way and names no port-forward, curl, route, admin bot or presenter number, each shown
+failing on the old step. Its check that the admin bot reads no room ticket stays. Both pass.
+
+**One file the issue kept out of scope had to change.** `verify/test_presenter_ticket_live.py` section 1 exited
+`ANCHOR MISSING` on the new step: it required segment 4 to hold the old `kubectl ... port-forward svc/fake-ticket`
+line, the `curl ... /presenter-ticket` line and the HC-900 question. The issue lists that file as unchanged, but its
+anchor is the `#/47` step this issue rewrites, and the repo's rule is that a test reading changed words changes with
+them. It changes in its own commit: section 1 no longer reads the run-of-show and keeps its three checks of the live
+check's own flow. Sections 2 to 4, `presenter_ticket_live.py`, `ticket_site.py`, `console.conf`, the range and its
+other tests are untouched. The run report asks whether to keep that commit.
+
+**Live check.** Skipped: this changes only a document under `facilitation/` and tests under `verify/` that no cluster
+runs. Owed at the run-through: a ticket filed on the desk's form is read back by the room's bot.

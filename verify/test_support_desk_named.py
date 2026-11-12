@@ -17,8 +17,13 @@ Since #1145 (Michael, 2026-11-08) both clusters' bots read one desk, `support.bu
 `deployments.burritobot.co` (#1158), and presenter tickets take HC-900 to HC-999, a range the room is never given
 (#1156). #1160 put that in segment 4. This fails when support_desk_hosts.py lists a desk per cluster again, when
 segment 4 stops naming the one desk and page for both clusters, names the admin cluster's own desk or deployments
-host, drops the presenters' path or its range, or has the admin bot read any number but a presenter one or HC-666:
-the rule Michael added, so a ticket the room wrote never runs on the presenters' bot.
+host, drops the presenters' range, or has the admin bot read any number but a presenter one or HC-666: the rule
+Michael added, so a ticket the room wrote never runs on the presenters' bot.
+
+Since #1381 (rounds-agenticburn#175, Whitney, 2026-11-12) the `#/47` demo ticket is filed the room's way: through the
+desk's form, read back on the room's bot, `https://attackme.burritobot.co`, by the four-digit number the form gives. This
+fails when that step files through the presenters' path again (`kubectl port-forward`, `curl`, `/presenter-ticket`) or
+asks the admin bot for it. The presenters' range and its route stay, held by verify/test_presenter_ticket_range.py.
 """
 from __future__ import annotations
 
@@ -65,7 +70,7 @@ check("segment 4 names neither of the admin cluster's own desk hosts", not named
 check("and that check fails on a segment 4 that sends the presenters to the private desk again",
       bool([h for h in sd.PRIVATE_DESK_HOSTS if h in SEG + f" File it on `https://{sd.PRIVATE_DESK_HOSTS[0]}`."]))
 
-print("== the presenters file in their range and read only it, or HC-666, on the admin bot ==")
+print("== the presenters keep their range, read only it or HC-666 on the admin bot, and file #/47 the room's way ==")
 nums = sd.presenter_numbers()
 first, last = f"HC-{nums.start}", f"HC-{nums.stop - 1}"
 check(f"segment 4 names the presenters' range, {first} to {last}, as ticket_site.py's PRESENTER_NUMBERS",
@@ -73,11 +78,49 @@ check(f"segment 4 names the presenters' range, {first} to {last}, as ticket_site
 check(f"segment 4 tells the presenters to read only {first} to {last} or {', '.join(sd.ADMIN_FIXED)} on the admin bot",
       f"On the admin bot, read only a presenter number, {first} to {last}, or {sd.ADMIN_FIXED[0]}" in SEG
       and "Never read a four-digit number there: that is a room ticket" in SEG)
-check("the demo ticket is filed through the presenters' path on watch-it-burn-community, not the desk's form",
-      "kubectl --context watch-it-burn-community -n agent port-forward svc/fake-ticket 18080:8080" in SEG
-      and "curl -s -X POST localhost:18080/presenter-ticket" in SEG and "not the desk's form" in SEG)
-check(f"segment 4 says `/presenter-ticket` answers 403 from outside, on `{community}`",
-      f"from outside, `https://{community}/presenter-ticket` answers 403" in SEG)
+STEP47 = "**\"Let's file a ticket.\" (`#/47`).**"
+if STEP47 not in SEG:
+    sys.exit(f"ANCHOR MISSING: {STEP47!r} is not in segment 4 of {sd.RUN_OF_SHOW}; the demo ticket checks read that step")
+
+
+def step47(seg: str) -> str:
+    """`#/47`'s step in the flattened segment 4, from its bold lead to the next step's."""
+    return seg.split(STEP47, 1)[1].split(" - **", 1)[0]
+
+
+attackme = sd.BOT_HOSTS["watch-it-burn-community"]
+
+
+def files_the_room_way(step: str) -> bool:
+    """The demo ticket is filed through the desk's form and read on the room's bot by the number the form gives."""
+    return (f"`https://{community}`" in step and "through the desk's form, the same way the room can" in step
+            and "The form gives the ticket a four-digit room number" in step
+            and f"switches to the room's BurritoBot, `https://{attackme}`," in step
+            and "\"What's the status of my support ticket [number]?\" with the number the form gave" in step)
+
+
+def presenters_path(step: str) -> list[str]:
+    """What in the step files or reads the demo ticket the presenters' way: the port-forward, curl, the route, the
+    admin bot or a presenter number."""
+    return ([w for w in ("port-forward", "svc/fake-ticket", "curl", "/presenter-ticket", "admin bot") if w in step]
+            + sorted({f"HC-{n}" for n in re.findall(r"\bHC-(\d+)\b", step) if int(n) in nums}))
+
+
+S47 = step47(SEG)
+OLD47 = (STEP47 + " The presenter files a short, ordinary complaint (\"My burrito came without salsa\") through the "
+         "presenters' path, not the desk's form, from a laptop terminal with kubectl on watch-it-burn-community and the "
+         "port-forward started ahead of the segment: kubectl --context watch-it-burn-community -n agent port-forward "
+         "svc/fake-ticket 18080:8080 curl -s -X POST localhost:18080/presenter-ticket -H 'Content-Type: "
+         "application/json' -d '{\"body\": \"My burrito came without salsa\"}' The desk answers with the ticket and a "
+         f"presenter number, the lowest one free: HC-900. From outside, `https://{community}/presenter-ticket` answers "
+         "403. The presenter notes the number, then switches to the admin bot and asks \"What's the status of my "
+         "support ticket HC-900?\" (the number the desk gave), and BurritoBot reads the ticket back.")
+check(f"the demo ticket is filed through the desk's form and read on the room's bot, `https://{attackme}` (#1381)",
+      files_the_room_way(S47), S47[:200])
+check("and that check fails on the old #/47 step, filed through the presenters' path", not files_the_room_way(OLD47))
+check("the #/47 step has no port-forward, curl, /presenter-ticket, admin bot or presenter number (#1381)",
+      not presenters_path(S47), str(presenters_path(S47)))
+check("and that check fails on the old #/47 step", len(presenters_path(OLD47)) == 6, str(presenters_path(OLD47)))
 
 
 def admin_reads(seg: str) -> list[str]:
@@ -95,9 +138,6 @@ def admin_reads(seg: str) -> list[str]:
     return bad
 
 
-asks = re.findall(r"support ticket (HC-\d+)", SEG)
-check("segment 4 has the admin bot read the demo ticket by a presenter number",
-      any(int(t[3:]) in nums for t in asks), str(asks))
 check("segment 4 has the admin bot read no room ticket", not admin_reads(SEG), str(admin_reads(SEG)))
 check("and that check fails on a segment 4 that has the admin bot read a four-digit room number",
       admin_reads(SEG + " Then switch to the admin bot and ask \"What's the status of my support ticket HC-2038?\"")
@@ -121,7 +161,6 @@ check("segment 4 writes the desk as #1077 leaves it: filed and looked up by numb
 
 print("== segment 4 warns that the bot hosts serve no /support ==")
 check("segment 4 says neither bot host serves `/support`", "neither bot host serves `/support`" in SEG)
-attackme = sd.BOT_HOSTS["watch-it-burn-community"]
 check(f"segment 4 says `https://{attackme}/support` answers 404 (#931)",
       f"`https://{attackme}/support` answers 404 (#931)" in SEG)
 check("segment 4 tells the presenters to give the room the desk's name, never a path on the bot's",
