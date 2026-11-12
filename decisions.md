@@ -56353,3 +56353,24 @@ on a host that needs the tier.
 
 **Tests and live check.** This entry is the only change, so no test changed and none was run; the prose gate was run
 on it. No cluster check: the change touches neither what the clusters run nor `verify/` code.
+## 2026-11-12 · #1399 · run 20699 · The take-home QR code encodes `https://bit.ly/burittobot`
+
+Michael, 2026-11-12: the QR code on the deck's take-home slide is `https://bit.ly/burittobot`, spelled exactly that
+way, with the rounds deck filed alongside. `facilitation/kubecon-na-2026-run-of-show.md` now names
+`https://bit.ly/burittobot` in the segments table's row 6 and, in the "Take home, and the feedback ask" step, as the
+link the QR code encodes, which 301s to `https://michaelrishiforrester.com/burritobot/`; the step cites #1399.
+`gitops/ai-layer/web/kubecon.html` names and links `https://bit.ly/burittobot` where #1394 put
+`michaelrishiforrester.com/burritobot`, and says it 301s there. The #1394 entry above keeps the earlier label as
+history.
+
+Read by this run, 2026-11-12: `https://bit.ly/burittobot` answered 301 with Location
+`https://michaelrishiforrester.com/burritobot/`, and that page answered 200.
+
+**Tests.** No test or script under `verify/` or `scripts/` reads `michaelrishiforrester.com/burritobot` or the step's
+old wording, so none changed. `python3 verify/test_mcp_vetting_handout.py`, which reads the take-home step and the
+/kubecon close, passes.
+
+**Live check.** This doc-lane run has no cluster context, so it read neither cluster.
+
+**Not yet run on a cluster.** After promotion and Argo CD's sync, watch-it-burn-private's `console-src` ConfigMap in
+`agent` should hold `https://bit.ly/burittobot` in its `kubecon.html` key.
