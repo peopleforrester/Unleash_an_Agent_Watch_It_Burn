@@ -17,7 +17,8 @@ fails naming each slide the run-of-show no longer matches:
   4. The steps of segments 4 and 5 cite the deck from `#/42` without a gap, and segment 6 opens on the next slide and
      runs to the deck's last.
   5. Every `"..." (#/N)` on `/kubecon` (`gitops/ai-layer/web/kubecon.html`) is on slide N.
-  6. Each line verify/test_ros_reworded_slides.py pins from rounds `269c532` (#1368) is on its slide's face or notes as
+  6. Each line verify/test_ros_reworded_slides.py pins from rounds `269c532` and `c6b1b0e` (#1368, #1392) is on its
+     slide's face or notes as
      the pin says, and each of its Presenter lines ends its slide's notes. That test holds the run-of-show to the pin,
      segments 1 to 3 and the ASI beat included, so the two together hold those lines to the deck rounds serves.
 
@@ -49,8 +50,9 @@ SEGMENTS, ABSTRACT = "## The segments, in order", "## Abstract points to segment
 SEG4, SEG5, SEG6 = "### Segment 4:", "### Segment 5:", "### Segment 6:"
 ROWS = ("| 4 | 7 |", "| 5 | 5 |", "| 6 | 5 |")
 PAGE_SEG4, PAGE_SEG6 = "<!-- SEGMENT 4:", "<!-- SEGMENT 6:"
-FIRST = 42  # segment 4's first slide, Challenge 3's title card: #/43 at rounds 8f53ce2 (rounds-agenticburn#170), #/42
-# since rounds 4627d95 moved the desk slide from #/8 into Challenge 3 (rounds-agenticburn#172, #1348)
+FIRST = 42  # segment 4's first slide: "AI guardrails", then Challenge 3's title card on #/43, since rounds c6b1b0e
+# swapped them (rounds-agenticburn#176, #1392). The card was #/43 at rounds 8f53ce2 (rounds-agenticburn#170) and #/42
+# from rounds 4627d95, which moved the desk slide from #/8 into Challenge 3 (rounds-agenticburn#172, #1348).
 # The checks, by name, so a self-check names the one it expects to fail.
 COUNTED = "every \"the deck has N slides\" gives the deck's count"
 NOTED = "each diagram note the run-of-show quotes is the slide's Say note, word for word"
@@ -257,19 +259,19 @@ def main() -> int:
     need(ros, lit, ROS_PATH)
     fails("a step's Say quote reworded in the run-of-show", STEPPED,
           ros_=ros.replace(lit, lit.replace("So why", "Why"), 1))
-    lit = "(`#/118` to `#/126`)"
+    lit = "(`#/117` to `#/125`)"
     need(ros, lit, ROS_PATH)
-    fails("segment 6 opened a slide late", RANGED, ros_=ros.replace(lit, "(`#/119` to `#/126`)", 1))
-    lit = '"Try your attack again." (#/75)'
+    fails("segment 6 opened a slide late", RANGED, ros_=ros.replace(lit, "(`#/118` to `#/125`)", 1))
+    lit = '"Try your attack again." (#/74)'
     need(plain(page), lit, PAGE_PATH)
-    fails("a /kubecon quote cited on the wrong slide", PAGED, page_=page.replace("(#/75)", "(#/76)", 1))
+    fails("a /kubecon quote cited on the wrong slide", PAGED, page_=page.replace("(#/74)", "(#/75)", 1))
 
     reworded_deck = list(deck)
-    reworded_deck[23] = (deck[23][0], deck[23][1].replace("A fresh bot", "A new bot", 1))
+    reworded_deck[23] = (deck[23][0], deck[23][1].replace("Then hit reset", "Then press reset", 1))
     fails("#/23's note reworded in the deck", PINNED, deck_=reworded_deck)
     swapped = list(deck)
-    swapped[42] = (deck[42][0], deck[42][1].replace("Presenter: Michael", "Presenter: Whitney", 1))
-    fails("#/42's Presenter line changed in the deck", PINNED, deck_=swapped)
+    swapped[43] = (deck[43][0], deck[43][1].replace("Presenter: Michael", "Presenter: Whitney", 1))
+    fails("#/43's Presenter line changed in the deck", PINNED, deck_=swapped)
 
     if failures:
         print(f"\nFAILED: {len(failures)} check(s)")

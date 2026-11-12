@@ -56487,3 +56487,75 @@ their code and tests are unchanged. `test_kubecon_seg4_flow.py` keeps the form s
 it, `test_kubecon_probe.py`, `test_presenter_ticket_live.py` and `test_ros_seg4_flow.py` pass.
 
 Not yet run on a cluster: a ticket filed on the desk's form, read back by the room's bot (owed at the run-through).
+## 2026-11-12 · #1392 · run 20657 · Run-of-show and /kubecon follow rounds-agenticburn#176: 126 slides, "AI guardrails" before the Challenge 3 card, the desk slide cut
+
+**Gate.** rounds-agenticburn#176 was closed and on rounds `main` as `c6b1b0e` when the run started (main has since moved
+to `2e91e80`), so the run went ahead on staging `c7ae5181`. `bash verify/prior-drafts.sh 1392 origin/staging` printed
+NONE: there was no earlier draft to port.
+
+**Renumbering.** One pass of `python3 verify/deck_renumber.py --preset 1390` over the run-of-show, `/kubecon` and the
+twelve tests the issue names rewrote 671 hashes on 389 lines. The tool's default rule holds a line as history when it
+names a commit SHA. Most of the lines it held that way were not history: they describe today's deck and also name a
+commit. These were renumbered by hand: run-of-show segment 4's diagram range (`#/57` to `#/65`), the Timing
+paragraph's `#/47` and `#/48`, segment 5's card (`#/67`, twice) and diagrams (`#/77` to `#/114`), segment 6's range
+(`#/117` to `#/125`) and its `#/121`, `#/122` and `#/123`. In the tests: `test_stage_seed_links.py`'s Challenge 4 row
+(`#/71`), `test_ros_seg4_flow.py`'s diagram comment and `test_ros_seed_step_links.py`'s docstring. The tool also
+moved a line that is not a citation: the numbering example "slide 44 is `#/43`" on run-of-show line 956 counts from 1
+against the hash, so it was put back.
+
+**Left as dated history, by file and line.** The run-of-show's segment 4 Timing paragraph, lines 1679 to 1681, keeps
+the 127-slide deck's numbers: `8f53ce2` "adds a line on `#/48` and `#/61`", and `4627d95` "adds the lines on `#/45` and
+`#/67`" and drops a line from `#/46`. The paragraph now says these are the 127-slide deck's numbers. Two tests keep
+their hashes as history and were not renumbered: `verify/test_deck_do_note_switch_map_comment.py` (the deck at
+`4627d95` as decisions.md's #1352 entry and the comment on rounds-agenticburn#171 give it: `#/27`, `#/52`, `#/74`,
+`#/121`; a comment now gives today's `#/27`, `#/51`, `#/73`, `#/120`), and `verify/test_deck_shift_slide_citations.py`,
+whose prose records the 2026-11-07 shift and what other tests held. `test_kubecon_seg4_flow.py` lines 8 and 10 and
+`test_ros_deck_live.py`'s FIRST comment record earlier decks and keep their numbers. No line in `/kubecon` was held as
+history. The passages "Read from rounds main `faf4005` on 2026-11-09" carry no hash and are unchanged.
+
+**The swap and the cut.** Segment 4 now opens on "AI guardrails" (`#/42`), Whitney's hand-off, then the card
+(`#/43`), whose quoted note is "Which brings us to challenge three...". That is also segment 3's Hand-off line in both
+files, replacing "That covers the Kubernetes guardrails. It is time for Challenge 3.". The segment 4 bullet, its row
+and `/kubecon`'s summary for "You've got access to a support desk." are gone, and the Support button is introduced
+on the QR slide (`#/45`) with "Scan this to open it, or tap Support at the top of the chat page.". Segment 4 spans
+`#/42` to `#/66` and the deck has 126 slides, in the segments table, segment 4's opening and the "Over the slot"
+paragraph.
+
+**Reworded quotes.** `#/47` drops "File a ticket of your own...", `#/48` opens "Ticket HC-666 is a prompt injection
+attack that works.", slide 8's line ends "model API keys.", slide 20's note opens "...Run an image off the public
+internet...", slide 23's ends "...exploit the system.", and slide 41's note is #176's four sentences. Slide 7's tour is
+"Point out:" the witch name, Reset button, saved prompts, menu and Feedback button, in step 7 and row 1, and on
+`/kubecon`. Slide 12 opens `genai.owasp.org/llm-top-10/` with its "2026 version" line to GitHub's `2026/final`, in
+segment 2 and row 2 and on `/kubecon`. The close's own citation of the 2026 resource page is left: #176 put it out of
+scope.
+
+**#1380, #1384 and #1389.** None of them has text in these files on staging beyond #1381's `#/46` step, which is kept
+and renumbered. `/kubecon`'s `#/46` note still gives the presenters' path, which is #1380's open work and is not
+applied here. #1384's hidden Support button is not described.
+
+**Tests.** `test_ros_seg4_flow.py`, `test_kubecon_seg4_flow.py` and `test_ros_reworded_slides.py` follow the new
+order, the cut and #176's wording, and each gains a check, with a self-check that it fails, that the cut and reworded
+lines are gone. `test_instructor_brief.py` holds the new hand-off in both files and the OWASP link with its 2026
+version. `test_deck_shift_slide_citations.py` now admits `#/43` outside segment 4, because the card's note is segment
+3's hand-off and "Who presents which slides" names it. `test_stage_trace_slides.py`'s labels were stale at base
+(`#/48`, `#/68` for slides then on `#/50` and `#/72`) and now read `#/49` and `#/71`. Each was run alone, and all exit
+0: the ten offline tests the issue names, `test_deck_do_note_switch_map_comment.py` (reads gh, 19 PASS),
+`test_scope_tests.py`, `test_test_map.py`, `test_lint.py` and `test_fetch_inventory.py`. The prose gate passes. Of the
+other offline tests that read the run-of-show or `/kubecon`, nine exit 1 in this worktree only because the guard-proxy
+submodule is not checked out (`gitops/ai-layer/guard-proxy/proxy.py` missing).
+
+**The live deck.** `test_ros_deck_live.py` run on rounds `c6b1b0e`'s `attendee.html`, the deck as #176 left it:
+126 slides, 18 PASS, exit 0. Run against the deck rounds serves now, it fails three checks, all on slides that rounds
+changed after #176: `e236fa6` (the take-home URL, `#/123`, issue #1394) and `5171304` (rounds-agenticburn#178,
+Challenge 3's notes on `#/56`, `#/58`, `#/60`, `#/62`, `#/63` and `#/66`, issue #1395). Those slides are not this
+issue's to change.
+
+**Live check.** `gitops/ai-layer/web/kubecon.html` is under `gitops/`, so it was run, read-only, on 2026-11-12:
+`https://burritobot-private.burritobot.co/kubecon` answered 200, and the page it served has the same SHA-256 as
+staging's `kubecon.html` (`ffb8a1cbf527a706...` for both), so the page reaches the private cluster from staging through
+the `console-src` ConfigMap as before. It still gives the old hand-off once, as staging does.
+`https://attackme.burritobot.co/kubecon` answered 404, as #909 intends. Nothing on either cluster was changed.
+
+**Not yet run on a cluster.** After promotion, the page the private cluster serves carries this change:
+`curl -s https://burritobot-private.burritobot.co/kubecon` contains "Which brings us to challenge three..." and no
+"That covers the Kubernetes guardrails.", and `python3 verify/test_ros_deck_live.py` passes once #1394 and #1395 land.

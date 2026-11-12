@@ -5,8 +5,8 @@ spans that trace must carry. This test holds the four attack seeds to the slides
 
     #/11  "Ophelia Thorn"              c1-attack  the Secret read: get_vault_entry
     #/26  the presenter opens Datadog  c2-attack  run_shell
-    #/48  "Let's look at the trace."   c3-attack  read_support_ticket, then deploy_app
-    #/68  "what else it did"           c4-attack  get_weather, then read_internal_config
+    #/49  "Let's look at the trace."   c3-attack  read_support_ticket, then deploy_app
+    #/71  "what else it did"           c4-attack  get_weather, then read_internal_config
 
 Each slide's note is quoted below word for word from the deck (rounds-agenticburn attendee.html at 9c80fb7a, read
 2026-11-08, and Challenge 4's link as rounds 269c532 moved it from "tools" to "what else it did", #1367; slide numbers
@@ -47,11 +47,11 @@ SLIDES = (
     ("#/26", "the presenter opens Datadog", "c2-attack",
      "Then open Datadog and show the pre-seeded Challenge 2 trace: the run_shell call that reads the recipe.",
      ("run_shell",), ("show the pre-seeded Challenge 2 trace", "The live attack and the seed")),
-    ("#/48", "Let's look at the trace.", "c3-attack",
+    ("#/49", "Let's look at the trace.", "c3-attack",
      "Click Let's look at the trace. to open Datadog and show the pre-seeded Challenge 3 trace: the "
      "read_support_ticket span, then the deploy_app span.",
      ("read_support_ticket", "deploy_app"), ("Show the pre-seeded Challenge 3 trace", "After the trace demo, say")),
-    ("#/68", "what else it did", "c4-attack",
+    ("#/71", "what else it did", "c4-attack",
      "After \"Let's look at the trace to see the agent's reasoning,\" click what else it did to open Datadog and show the "
      "pre-seeded Challenge 4 trace: get_weather, then a call to read_internal_config that nobody asked for.",
      ("get_weather", "read_internal_config"), ("show the pre-seeded Challenge 4 trace", "After the trace demo, say")),

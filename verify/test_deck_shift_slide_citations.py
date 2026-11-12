@@ -1,5 +1,5 @@
 # ABOUTME: Holds #1099: the run-of-show says its slides count from 1 and the deck's URL hash is one less, and no file
-# ABOUTME: under facilitation/, challenges/ or verify/ cites slides 44 to 64 or hash #/43 on outside segment 4's own text.
+# ABOUTME: under facilitation/, challenges/ or verify/ cites slides 44 to 64 or hash #/44 on outside segment 4's own text.
 """The 14-place deck shift of 2026-11-07, held across the run-of-show and the three directories (#1099, from #1076).
 
 rounds-agenticburn#82 and #93 replaced the old seven Challenge 3 slides with twenty-one, so every slide from live
@@ -13,14 +13,16 @@ the old Challenge 4 and close 51 on. This test holds:
      line saying slide numbers count from 1 and the deck's URL hash is one less.
   2. Every file git tracks or would track under `facilitation/`, `challenges/` and `verify/`, read with backticks
      and `*` blanked and whitespace flattened, cites no slide number in 44 to 64 after "slide" or "slides" (each
-     number of a list or range: "slides 20 and 25 to 27") and no hash `#/N` with N of 43 or more, except in the
+     number of a list or range: "slides 20 and 25 to 27") and no hash `#/N` with N of 44 or more, except in the
      run-of-show's segments 4 to 6 (`### Segment 4:` to `## Abstract points to segments`) and its segments-table rows
      4 to 6, which cite the deck by hash (#1141; segment 6 and row 6 since #1270), in the Night Before
      step "Seed the stage's Datadog traces", which names the slide that opens each challenge's trace (#1139), and in SEG4_READERS,
      the tests that hold segment 4 to the deck, and the numbering line itself. Numbers of 65 or more after "slide" pass: they are the shifted ones.
      This test's own docstring and fixtures name the forms it bans, so it is the one file the search leaves out.
 
-Numbers up to 43 point at segments 1 to 3, which the shift did not move, and pass. The self-checks show a stale
+Numbers up to 43 point at segments 1 to 3, which the shift did not move, and pass. Since rounds `c6b1b0e`
+(rounds-agenticburn#176, #1392) Challenge 3's title card is `#/43`: its note is segment 3's hand-off and its Presenter
+line is named in "Who presents which slides", so a hash of `#/43` passes too; `#/42`, "AI guardrails", comes before it. The self-checks show a stale
 citation planted in segment 5, in another file and in a hash is found, and the current wording passes.
 """
 from __future__ import annotations
@@ -56,14 +58,15 @@ ROW6, AFTER_SEGMENTS = "| 6 | 5 |", "## Abstract points to segments"
 # note on Challenge 3's title card, #/43, which rounds 8f53ce2 put before the "AI guardrails" heading, now #/44 (#1327);
 # and the one that holds rounds-agenticburn#171's map of the deck's DO notes, read from rounds 4627d95, which quotes
 # the current deck's hashes #/52, #/74 and #/121 (#1365); and the one that holds the run-of-show to rounds 269c532's
-# reworded slides and Presenter lines, which pins the current deck's #/49 to #/120 and the close's #/118 to #/126 (#1368).
+# reworded slides and Presenter lines, which pinned the deck's #/49 to #/120 and the close's #/118 to #/126 (#1368)
+# and since rounds c6b1b0e pins them one lower (#1392).
 SEG4_READERS = {"verify/test_instructor_brief.py", "verify/test_ros_seg4_flow.py", "verify/test_kubecon_seg4_flow.py", "verify/test_stage_trace_slides.py",
                 "verify/test_support_desk_named.py", "verify/test_ros_seed_step_links.py",
                 "verify/test_stage_seed_links.py", "verify/test_ros_deck_live.py",
                 "verify/test_ros_over_slot_seg5.py", "verify/test_deck_do_note_switch_map_comment.py",
                 "verify/test_ros_reworded_slides.py"}
 LOW, HIGH = 44, 64  # the new Challenge 3, which the old deck's Challenge 3, Challenge 4 and close numbers land in
-HASH_FROM = 43      # #/43 is slide 44
+HASH_FROM = 44      # #/43, Challenge 3's card since rounds c6b1b0e, carries segment 3's hand-off (#1392)
 # The Night Before step that names each challenge's Datadog link by hash, #/48 and #/68 among them (#1139), from its
 # first words to the next step's.
 SEED_STEP, NEXT_STEP = "- [ ] **Seed the stage's Datadog traces", "\n- [ ] **"
@@ -181,7 +184,7 @@ texts = {f: t for f in files if (t := read_text(f)) is not None}
 found = scan(texts, me)
 for f in found:
     print("  " + f)
-check("no slide number 44 to 64 and no hash #/43 or more outside segments 4 to 6 and their readers", not found)
+check("no slide number 44 to 64 and no hash #/44 or more outside segments 4 to 6 and their readers", not found)
 check("segments 4 to 6 cite the new deck by hash, so cutting them is what makes the run-of-show pass",
       bool(hits(ros)) and not hits(ros_outside_seg4(ros)))
 
@@ -206,13 +209,14 @@ stale = {
     "a pre-shift close slide": f"the close {S} (see {S} 58) links the vetting guide",
     "a number in a list": f"{S}s 20 and 55",
     "an old Challenge 4 hash": "open the deck at #/50 for Challenge 4",
+    "a hash of the support desk, #/44, outside segment 4": "the desk's slide, #/44, opens Challenge 3's desk steps",
     "a bolded, wrapped citation": f"**{S.capitalize()}\n  52**",
 }
 for name, text in stale.items():
     check(f"{name} is flagged", bool(scan({"facilitation/x.md": text}, me)))
 current = {
     "segment 3's guardrail sets": f"one set per guardrail on {S}s 30 to 42",
-    "segment 3's hand-off": f"{S} #/42's note, said on its one heading",
+    "segment 3's hand-off": f"{S} #/43's note, said on the card",
     "AI guardrails": f"so \"AI guardrails\" is {S} 43",
     "a shifted Challenge 4 number": f"Challenge 4 opens on {S} 65",
 }
