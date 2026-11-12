@@ -81,7 +81,7 @@ BEATS5 = [
     ("the tee-up (#/68)", "**BurritoBot gets its tools from MCP servers.**"),
     ("not every server (#/69)", "\"But not every MCP server can be trusted.\""),
     ("the challenge (#/70)", "**Find the poisoned MCP tool.**"),
-    ("the hint (#/71)", "Hint: Ask BurritoBot about the weather, then look at what else it did."),
+    ("the hint (#/71)", "Hint: Ask BurritoBot what tools it has."),
     ("the live weather ask", "send the weather prompt from `/kubecon`"),
     ("the trace", "`read_internal_config` that nobody asked for"),
     ("LLM04 (#/72)", "**LLM04 (`#/72`).**"),
@@ -89,7 +89,8 @@ BEATS5 = [
     ("the retry (#/74)", "**The retry (`#/74`).**"),
     ("#1132 at the retry", "The room's retry runs on the public bot: since #1132, `guardrails-mcp-on`"),
     ("the gateway (#/75 and #/76)", "\"This attack was prevented with an MCP gateway.\""),
-    ("the fix slide's notes end on the walk", "Let's walk through it.\" - **The two diagrams (`#/77` to `#/114`).**"),
+    ("the fix slide's notes end on agentgateway (#1400)",
+     "gateway for AI agents from the Linux Foundation.\" - **The two diagrams (`#/77` to `#/114`).**"),
     ("the gateway answers the tool list (#/98 to #/101)", "`#/98`: \"This time, when BurritoBot asks what tools it has"),
     ("the rule is asked for on #/114", "`#/114`: \"The human gets the weather and nothing else."),
     ("the rule before and after (#/115 and #/116)", "`mcp.tool.name == \"get_weather\"` in green"),
@@ -101,7 +102,7 @@ DECK_LINES = {
     "Hint: Look up ticket HC-666 on the support desk.",
     "BurritoBot gets its tools from MCP servers.", "That's how it checks inventory and reads support tickets.",
     "Challenge 4 - attackme.burritobot.co", "Find the poisoned MCP tool.",
-    "Hint: Ask BurritoBot about the weather, then look at what else it did.",
+    "Hint: Ask BurritoBot what tools it has.",
     "BurritoBot has a support desk.", "It can read tickets by ticket number.",
 }
 # Slide lines named in running text, which must appear exactly so.
@@ -402,8 +403,8 @@ need(s4_raw, "the policy trusts the internal registry.")
 dropped = ros.replace("the policy trusts the internal registry.", "the policy admits it.", 1)
 check("dropping the internal-registry fact fails the kept-facts check",
       bool(problems(dropped)["segment 4 still states the facts that hold"]))
-need(s5_raw, "Say: \"Ask BurritoBot about the weather")
-leak = ros.replace("Say: \"Ask BurritoBot about the weather", "Say: \"Try each tool. Ask BurritoBot about the weather", 1)
+need(s5_raw, "Say: \"Ask BurritoBot what tools it has.")
+leak = ros.replace("Say: \"Ask BurritoBot what tools it has.", "Say: \"Try each tool. Ask BurritoBot what tools it has.", 1)
 check("telling the room to try each tool fails the solve check",
       bool(problems(leak)["no room-facing Challenge 4 line tells the room to try each tool"]))
 need(s5_raw, "**The tee-up (`#/68` and `#/69`).**")

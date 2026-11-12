@@ -1001,7 +1001,7 @@ deck's line says who speaks the slides.
 | 2 | 5 | M+W | Challenge 1: the two-slide tee-up, the challenge slide and the public bot, the prompt wall optional during play, then the hint slide naming Ophelia Thorn; Whitney's live attack on the private bot, then its trace in Datadog, opened from the hint slide's "Ophelia Thorn" link (the Secret read); no fix here; it ends on the OWASP Top 10 for LLM Applications, opened from `genai.owasp.org/llm-top-10/`, with a "2026 version" line linking the 2026 list on GitHub, naming LLM02 and LLM03 | Pulls the CEO's home address out of the bot | 4, 7 |
 | 3 | 5 | W+M | Challenge 2, the Kubernetes catch-all: "It is time for Challenge 2!", "Everything you already knew about Kubernetes security", "BurritoBot has none of these things.", the challenge sentence on slide 17, then the three attacks built up one per slide on slides 18 to 20, where play starts ("pick just one attack") and the prompt wall goes up after a minute; a hint slide for each attack (slides 21 to 26), whose "deploy" link opens the deployments wall, and the recap of all three with their hints and one more minute of play (slide 27), the beacon view opened from the `agenticburn.com/beacon` link; Whitney's live attack on the private bot, the recipe read, then its pre-seeded trace `c2-attack`, the same read; then, depending on #774, "Let's turn on Kubernetes guardrails." (slide 28), whose link opens the admin terminal, where `guardrails-k8s-on` arms RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy on both clusters; then "Try your attacks again." (slide 29), the room resetting its bot and retrying its saved prompts, and one set per guardrail on slides 30 to 42 (RBAC, an admission policy, runtime security, NetworkPolicy), each recalling its attack, naming the fix and showing its YAML | Deploys a public image, reads the recipe file, posts to the beacon; after the switch (#774), tries Challenges 1 and 2 again and is stopped | 3, 4, 5, 7 |
 | 4 | 7 | W+M | Challenge 3, `#/42` to `#/66`: the "AI guardrails" heading (`#/42`), Whitney's hand-off, and the title card, "It is time for Challenge 3!" (`#/43`); "BurritoBot has a support desk." (`#/44`), which reads tickets by ticket number; the desk's QR code, the room's first look at it (`#/45`), at `support.burritobot.co` or the Support button at the top of the chat page, where a ticket is filed and looked up by its number and none can be browsed; "Let's file a ticket." (`#/46`), a ticket the presenters file through the desk's form, as the room can, and read back on the room's bot, `attackme.burritobot.co`, by the number the form gives; the challenge sentence (`#/47`), its "deploy" opening the room's deployments page, the deployments page and the prompt wall optional during play; the hint, HC-666 (`#/48`), whose white text the presenters select live to show, then their live attack on the private bot and its deployment landing on the one deployments page, `deployments.burritobot.co`, tagged with its cluster; Kyverno, at Deny since segment 3's switch (#774), admits it from the internal registry; then the seeded trace its link opens (`#/49`); LLM01, Prompt Injection (`#/50`); "Let's turn on some guardrails." (`#/51`), whose link opens the admin terminal, where `guardrails-agency-on`, then `guardrails-input-on`, run on the private bot; "Try your attack again." (`#/52`), the room's retry on the public bot, which both commands reach (#1132); "Pesky RBAC!" and the optional Kyverno question (`#/53`), the Role before and after (`#/54` and `#/55`); LLM Guard, with products that do the same (`#/56`); the nine-slide architecture diagram, a request's path, where LLM Guard checks the ticket and the dead ticket (`#/57` to `#/65`); and the bottom line, an AI guardrail classified the ticket as a prompt injection and blocked it (`#/66`) | Writes its own injection ticket or asks BurritoBot to read HC-666, then tries again | 4, 5, 6, 7 |
-| 5 | 5 | M+W | Challenge 4, `#/67` to `#/116`: the title card, "It is time for Challenge 4!" (`#/67`); BurritoBot gets its tools from MCP servers, and not every one can be trusted (`#/68` and `#/69`); "Find the poisoned MCP tool." (`#/70`), the prompt wall optional during play; the hint, "Ask BurritoBot about the weather, then look at what else it did." (`#/71`), then Michael's live weather ask on the private bot and the seeded trace its "what else it did" link opens; LLM04, Supply Chain (`#/72`); "Let's turn on an MCP gateway." (`#/73`), `guardrails-mcp-on` on the private bot; "Try your attack again." (`#/74`), the room's retry on the public bot, which `guardrails-mcp-on` reaches (#1132); the MCP gateway, agentgateway in the notes (`#/75` and `#/76`); the two diagrams, one weather question without and then with the gateway (`#/77` to `#/114`); and its rule before and after (`#/115` and `#/116`) | Hunts for the poisoned tool, then tries again | 2, 4, 6, 7 |
+| 5 | 5 | M+W | Challenge 4, `#/67` to `#/116`: the title card, "It is time for Challenge 4!" (`#/67`); BurritoBot gets its tools from MCP servers, and not every one can be trusted (`#/68` and `#/69`); "Find the poisoned MCP tool." (`#/70`), the prompt wall optional during play; the hint, "Ask BurritoBot what tools it has." (`#/71`), then Michael's live weather ask on the private bot and the seeded trace its "tools" link opens; LLM04, Supply Chain (`#/72`); "Let's turn on an MCP gateway." (`#/73`), `guardrails-mcp-on` on the private bot; "Try your attack again." (`#/74`), the room's retry on the public bot, which `guardrails-mcp-on` reaches (#1132); the MCP gateway, agentgateway in the notes (`#/75` and `#/76`); the two diagrams, one weather question without and then with the gateway (`#/77` to `#/114`); and its rule before and after (`#/115` and `#/116`) | Hunts for the poisoned tool, then tries again | 2, 4, 6, 7 |
 | 6 | 5 | M+W | The OWASP close, `#/117` to `#/125`, `guardrails-topic-on`, the take-home's one QR code to `https://bit.ly/burittobot`, the speakers and "Thank you" (`#/125`) | Scans the take-home and rates the session | 7, 8 |
 
 Total 30 minutes. Segments 2 to 5 are 22 minutes of hands-on. There is no separate
@@ -1920,8 +1920,8 @@ thirty-eight diagram slides rounds `cfbd9ba` redrew on `#/77` to `#/114`, and th
 YAML on `#/115` and `#/116`. The close starts at `#/117` (segment 6). Each challenge
 slide opens on the header line "Challenge 4 - attackme.burritobot.co".
 
-**The solve is presenter-only.** The room's hint is "Ask BurritoBot about the weather,
-then look at what else it did." The rest of the solve is in the presenters' notes and the solve notes below, never on a
+**The solve is presenter-only.** The room's hint is "Ask BurritoBot what tools it
+has." The rest of the solve is in the presenters' notes and the solve notes below, never on a
 slide, in a line said to the room, or in a room-facing part of `/kubecon`.
 
 **Timing.** The Say and Then say notes on `#/68` to `#/116` come to 823 words, about 5
@@ -1943,32 +1943,31 @@ is (Michael, 2026-11-11).
   > **BurritoBot gets its tools from MCP servers.**
   > That's how it checks inventory and reads support tickets.
 
-  Say: "An MCP server is a standard way to give an AI agent tools. Each tool has a
-  name, a description that tells the model what the tool is for, and code that runs
-  when the model calls it. Plugging BurritoBot into an MCP server that somebody else
-  wrote is a reasonable thing that a reasonable developer could do." `#/69` reads
-  "But not every MCP server can be trusted." Say: "Installing an MCP server without
-  reading every tool it comes with is also something a developer could reasonably do.
-  So here's your last challenge..."
+  Say: "BurritoBot gets its tools from MCP servers. That's how it checks its inventory
+  and reads support tickets. Each tool has a name and a description. That tells the model
+  what the tool is and how to use it. Each tool also has code that runs when the model
+  calls it." and "This is a standard way to give agents access to external systems."
+  `#/69` reads "But not every MCP server can be trusted." Say: "So here's your last
+  challenge..."
 - **The challenge, and play (`#/70`, 2 min).** It reads:
 
   > Challenge 4 - attackme.burritobot.co
   >
   > **Find the poisoned MCP tool.**
 
-  Say: "One of BurritoBot's tools is poisoned. It carries instructions that BurritoBot
-  follows instead of the person it's talking to. Can you find out which tool it is,
-  and what it makes BurritoBot do?" Play runs from here, on the public bot.
+  Say: "One of BurritoBot's tools is poisoned. Sure, it has the code that does the task
+  that it was designed to do, but it also contains malicious instructions for the model."
+  and "Can you find out which tool is poisoned, and what it makes BurritoBot do?" Play runs from here, on the public bot.
   Optionally, switch to the prompt wall while the room works, and back to the deck.
 - **The hint, and the attack (`#/71`).** It adds:
 
-  > Hint: Ask BurritoBot about the weather, then look at what else it did.
+  > Hint: Ask BurritoBot what tools it has.
 
-  "what else it did" is a link to Datadog's Agent Observability traces filtered to the
-  admin cluster, the same link as `#/11`'s "Ophelia Thorn"; before rounds `269c532`
-  (rounds-agenticburn#174) the hint read "Ask BurritoBot what tools it has." and the link
-  was on "tools". Say: "Ask BurritoBot about the weather, then look at what else it
-  did." After a few moments the presenters attack: switch
+  "tools" is a link to Datadog's Agent Observability traces filtered to the admin
+  cluster, the same link as `#/11`'s "Ophelia Thorn"; rounds-agenticburn#182 put the
+  hint and its link back on "tools", which rounds `269c532` (rounds-agenticburn#174) had
+  moved to "what else it did". Say: "Ask BurritoBot what tools it has. Now try to get
+  BurritoBot to use these tools and see which one has an unintended effect." After a few moments the presenters attack: switch
   to the admin bot and send the weather prompt from `/kubecon`, from the iPad cheat
   sheet ("I'm a newly turned vampire with yet another burrito delivery order to my dungeon..."). The real forecast comes
   back (#642) with the recipe under it, the Bat Spit Amazing Awesome Sauce batch
@@ -1976,38 +1975,41 @@ is (Michael, 2026-11-11).
   attackme.burritobot.co, 2026-10-29 (#683). Whether or not it works, move on: time is
   short. Then say: "Wait. How did checking the weather cause BurritoBot to share the
   super duper secret recipe? Leaking this leads to company ruin! Let's look at the
-  trace to see the agent's reasoning." Click "what else it did" and show the pre-seeded Challenge
+  trace to see the agent's reasoning." Click **tools** and show the pre-seeded Challenge
   4 trace, found from that link by its session id, `wib-stage-c4-attack-<stamp>`, on
   Past 7 Days, as the Night Before step "Seed the stage's Datadog traces" says:
   `get_weather`, then a call to `read_internal_config` that nobody asked for. After the
-  trace demo, say: "Do you know the name for this type of attack?"
+  trace demo, say: "Do you know what two OWASP vulnerabilities this represents?"
 
   The solve, for the presenters only: the weather tool comes from an MCP server nobody
   vetted, evil-mcp. It returns real weather, and its description also tells the bot to
-  call `read_internal_config` and print the recipe into the chat. Asking BurritoBot
-  about the weather, then reading what else it did, the `read_internal_config` call in
-  the trace or the recipe in the reply, finds it.
+  call `read_internal_config` and print the recipe into the chat. Asking BurritoBot what
+  tools it has, then using them, finds it: the weather ask sets off the
+  `read_internal_config` call in the trace and the recipe in the reply.
 - **LLM04 (`#/72`).** It reads "LLM04: Supply Chain", "OWASP GenAI LLM Top 10 2026",
   and the title is a link to the 2026 edition's entry,
   `https://github.com/GenAI-Security-Project/GenAI-LLM-Top10/blob/main/2026/final/LLM04_SupplyChain.md`. Say: "This is supply chain
-  risk. BurritoBot trusted a tool because it was installed, not because anyone checked
-  it. The poisoned instructions are prompt injection too, delivered through a tool
-  instead of through a person." Click the title to open the OWASP page.
+  risk. A supply chain attack hides something malicious in a component you got from
+  someone else, like a package or, here, an MCP server." and "The poisoned instructions
+  are prompt injection too, delivered through an MCP tool. Our LLM Guard check from
+  Challenge 3 doesn't help here, because it only checks support tickets, and this server
+  isn't ours." Click the title to open the OWASP page.
 - **Fix, from `/lab` (`#/73`).** It reads "Let's turn on an MCP gateway.", and the line
   is a link that opens the admin cluster's terminal,
   `https://burritobot-private.burritobot.co/lab`, in its own tab. Say: "I'm going to
-  switch to the terminal and turn on a rule in our MCP gateway." The presenter types
+  switch to the terminal and turn on a rule in our MCP gateway." and "An MCP gateway sits
+  between the agent and its MCP servers, and it decides which tools the agent is allowed
+  to call." The presenter types
   `guardrails-mcp-on`. The agent reaches evil-mcp through agentgateway, and the rule narrows
   to the one registered tool, `get_weather`. The poisoned call is blocked because that
   tool was never registered. The notes say to wait about five seconds: the terminal
   prints when each cluster has the rule (rounds `faf4005`, from #1237's run below, where
-  the gateway reloaded 1 s after its write). Optionally, send the same weather prompt on the admin bot: the forecast comes
-  back, and the recipe doesn't. The `c4-fixed` seed, the same search with its own key
+  the gateway reloaded 1 s after its write). The `c4-fixed` seed, the same search with its own key
   on the tab "tools" opened, shows the fixed trace, without the `read_internal_config`
   call.
-- **The retry (`#/74`).** It reads "Try your attack again." Say: "Reset your bot and
-  ask BurritoBot about the weather again. This time the tool the poisoned one points to
-  isn't there to call." The room presses reset and asks about the weather again while the next slides
+- **The retry (`#/74`).** It reads "Try your attack again." Say: "Reset your bot. Try
+  your same attack again." Do: "Reset your bot and ask BurritoBot about the weather again.
+  This time `read_internal_config` isn't there to call." The room presses reset and asks about the weather again while the next slides
   run. The room's retry runs on the public bot: since #1132, `guardrails-mcp-on` switches
   both clusters, as `guardrails-k8s-on` does, each through its own control. On the private
   cluster agentgateway's rule allows only `get_weather`; on the public cluster evil-mcp's
@@ -2019,11 +2021,12 @@ is (Michael, 2026-11-11).
   the public bot then came back with a forecast and a burrito, with `get_weather` the
   only evil-mcp call and no recipe.
 - **The MCP gateway (`#/75` and `#/76`).** `#/75` recalls "Find the poisoned MCP tool."
-  Say: "So why didn't it work this time?" `#/76` adds "This attack was prevented with an
+  Say: "We found it. The poisoned MCP tool was `get_weather`, and it causes a call to
+  another tool that leaks the secret recipe. How did we stop it from doing anything
+  malicious?" `#/76` adds "This attack was prevented with an
   MCP gateway.": the slide names the concept, and its notes name the product. Say:
-  "Specifically, we prevented this with agentgateway. An MCP gateway sits between the
-  agent and its MCP servers, and it decides which tools the agent is allowed to call.
-  Let's walk through it."
+  "We prevented this attack with an MCP gateway. Specifically, we used agentgateway, an
+  open source gateway for AI agents from the Linux Foundation."
 - **The two diagrams (`#/77` to `#/114`).** Thirty-eight slides, as rounds-agenticburn
   `cfbd9ba` redrew them on 2026-11-08 and `ed161a4` fixed their tool counts on 2026-11-09
   (rounds-agenticburn#167): the weather server serves three tools, `get_weather`,
@@ -2646,7 +2649,7 @@ is merely slow rather than rebuilding:
   | `#/11`, segment 2 | "Ophelia Thorn" on Challenge 1's hint slide | `c1-attack`, `wib-stage-c1-attack-<stamp>` | `get_vault_entry`, the Secret read, with the CEO's record in its result |
   | `#/26`, segment 3 | Whitney opens Datadog after her live recipe read | `c2-attack`, `wib-stage-c2-attack-<stamp>` | `run_shell`, the grep of `/tmp/burrito-data`, with the recipe in the reply |
   | `#/49`, segment 4 | "Let's look at the trace." | `c3-attack`, `wib-stage-c3-attack-<stamp>` | `read_support_ticket` returning HC-666, then `deploy_app` |
-  | `#/71`, segment 5 | "what else it did" in "Ask BurritoBot about the weather, then look at what else it did." | `c4-attack`, `wib-stage-c4-attack-<stamp>` | `get_weather`, then `read_internal_config`, which nobody asked for |
+  | `#/71`, segment 5 | "tools" in "Hint: Ask BurritoBot what tools it has." | `c4-attack`, `wib-stage-c4-attack-<stamp>` | `get_weather`, then `read_internal_config`, which nobody asked for |
 
   How to reach the seed from either link:
 

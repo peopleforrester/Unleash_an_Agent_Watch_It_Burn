@@ -255,10 +255,10 @@ def main() -> int:
     fails(f"a slide inserted at #/{FIRST + 3}", STEPPED, deck_=inserted)
     fails(f"a slide inserted at #/{FIRST + 3}", HASHED, deck_=inserted)
     fails("a slide added after the close", RANGED, deck_=deck + [("Appendix", "")])
-    lit = "Say: \"So why didn't it work this time?\""
+    lit = "Say: \"We found it. The poisoned MCP tool was"
     need(ros, lit, ROS_PATH)
     fails("a step's Say quote reworded in the run-of-show", STEPPED,
-          ros_=ros.replace(lit, lit.replace("So why", "Why"), 1))
+          ros_=ros.replace(lit, lit.replace("We found it", "Found it"), 1))
     lit = "(`#/117` to `#/125`)"
     need(ros, lit, ROS_PATH)
     fails("segment 6 opened a slide late", RANGED, ros_=ros.replace(lit, "(`#/118` to `#/125`)", 1))

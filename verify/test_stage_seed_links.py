@@ -48,7 +48,7 @@ LINKS = (
     ("#/11", "segment 2", '"Ophelia Thorn"', "Challenge 1"),
     ("#/26", "segment 3", "Whitney opens Datadog", "Challenge 2"),
     ("#/49", "segment 4", "\"Let's look at the trace.\"", "Challenge 3"),
-    ("#/71", "segment 5", '"what else it did"', "Challenge 4"),  # "tools" until rounds 269c532 (#1367)
+    ("#/71", "segment 5", '"tools"', "Challenge 4"),  # "what else it did" from rounds 269c532 (#1367) to #182 (#1400)
 )
 TOOL = re.compile(r"\b[a-z]+(?:_[a-z]+)+\b")
 CODE = re.compile(r"`([^`]+)`")

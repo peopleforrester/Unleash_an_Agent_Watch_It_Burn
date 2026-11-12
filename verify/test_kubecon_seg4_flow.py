@@ -90,7 +90,7 @@ BEATS5 = [
     ("the title card (#/67)", '"It is time for Challenge 4!" (#/67)'),
     ("the tee-up (#/68 and #/69)", '"But not every MCP server can be trusted." (#/68 and #/69)'),
     ("the challenge (#/70)", '(#/70), "Find the poisoned MCP tool."'),
-    ("the hint (#/71)", '(#/71), "Ask BurritoBot about the weather, then look at what else it did."'),
+    ("the hint (#/71)", '(#/71), "Ask BurritoBot what tools it has."'),
     ("the attack and its trace", "Michael's live weather ask on the private bot"),
     ("LLM04 (#/72)", '"LLM04: Supply Chain" (#/72)'),
     ("guardrails-mcp-on (#/73)", "(#/73): guardrails-mcp-on"),

@@ -56573,3 +56573,18 @@ summary calls the check LLM Guard's prompt-injection classifier. Slide 1's note 
 with `test_ros_reworded_slides.py`, `test_instructor_brief.py` and `test_deck_shift_slide_citations.py`.
 
 Not yet run: `verify/test_ros_deck_live.py` against the live deck.
+
+## 2026-11-12 · #1400 · by hand · segment 5 and /kubecon follow rounds-agenticburn#182's Challenge 4 first half
+
+Whitney's #1400, worked in the talk-day freeze on top of #1390 and #1395. The hint is "Ask BurritoBot what tools it
+has." again, with "tools" as its Datadog link, in the hint step, the presenter-only paragraph, the solve notes, segment
+5's row, the seeded-trace table and `/kubecon`'s summary and trace note; the Say adds "Now try to get BurritoBot to use
+these tools and see which one has an unintended effect." The question after the trace is "Do you know what two OWASP
+vulnerabilities this represents?" `#/68` to `#/70`, `#/72` and `#/74` to `#/76` quote #182's Say notes; `#/73` adds the
+gateway sentence and drops the optional same-prompt step. The deck's `#/71` note was read from rounds main
+(94feae9). `test_ros_reworded_slides.py` no longer counts the "what tools it has" hint as stale, since the deck carries it
+again; `test_ros_seg4_flow.py`, `test_kubecon_seg4_flow.py`, `test_stage_trace_slides.py`,
+`test_ros_seed_step_links.py`, `test_stage_seed_links.py` and `test_ros_deck_live.py`'s offline case follow; all pass.
+`verify/stage_traces.py` and the probe find no link by its text, so they are unchanged.
+
+Not yet run: `verify/test_ros_deck_live.py` against the live deck.

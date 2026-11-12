@@ -48,7 +48,7 @@ LINKS = (
     ("#/11", 2, '"Ophelia Thorn"', "c1-attack"),
     ("#/26", 3, "opens Datadog", "c2-attack"),
     ("#/49", 4, '"Let\'s look at the trace."', "c3-attack"),
-    ("#/71", 5, '"what else it did"', "c4-attack"),
+    ("#/71", 5, '"tools"', "c4-attack"),
 )
 MUST = {key: must for key, _c, _what, must, _not in st.SEEDS}
 HASH = re.compile(r"#/\d+")

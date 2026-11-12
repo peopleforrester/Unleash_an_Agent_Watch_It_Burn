@@ -94,13 +94,14 @@ PINNED: list[tuple[int, str, str, str, str | None]] = [
     (49, "note", "(After the trace demo:) Do you know the name for this type of attack?", "segment 4",
      "After the trace demo, say: \"Do you know the name for this type of attack?\""),
     (55, "note", "So even if a ticket tricks it, it can't create Deployments or Pods.", "segment 4", None),
-    (71, "face", "Hint: Ask BurritoBot about the weather, then look at what else it did.", "segment 5",
-     "> Hint: Ask BurritoBot about the weather, then look at what else it did."),
-    (71, "note", "Say: Ask BurritoBot about the weather, then look at what else it did.", "segment 5",
-     "Say: \"Ask BurritoBot about the weather, then look at what else it did.\""),
-    (71, "note", "click what else it did to open Datadog", "segment 5", "Click \"what else it did\" and show"),
-    (71, "note", "(After the trace demo:) Do you know the name for this type of attack?", "segment 5",
-     "After the trace demo, say: \"Do you know the name for this type of attack?\""),
+    (71, "face", "Hint: Ask BurritoBot what tools it has.", "segment 5", "> Hint: Ask BurritoBot what tools it has."),
+    (71, "note", "Say: Ask BurritoBot what tools it has. Now try to get BurritoBot to use these tools and see which one "
+     "has an unintended effect.", "segment 5",
+     "Say: \"Ask BurritoBot what tools it has. Now try to get BurritoBot to use these tools and see which one has an "
+     "unintended effect.\""),
+    (71, "note", "click tools to open Datadog", "segment 5", "Click **tools** and show"),
+    (71, "note", "(After the trace demo:) Do you know what two OWASP vulnerabilities this represents?", "segment 5",
+     "After the trace demo, say: \"Do you know what two OWASP vulnerabilities this represents?\""),
     (116, "note", "My MCP server vetting checklist is on the take-home slide.", "segment 5", None),
     (119, "face", "And the blast radius that leaves the cluster", "the ASI beat", None),
     (119, "face", "ASI03 Identity and Privilege Abuse, and K08 Cluster To Cloud Lateral Movement.", "the ASI beat", None),
@@ -138,10 +139,8 @@ STALE: list[tuple[int, str]] = [
     (48, "carries a hidden instruction"),
     (49, "After the trace, say"),
     (55, "it has nothing to deploy with"),
-    (71, "> Hint: Ask BurritoBot what tools it has."),
-    (71, "Say: \"Ask BurritoBot what tools it has."),
-    (71, "The room's hint is \"Ask BurritoBot what tools it has.\""),
-    (71, "Click \"tools\""),
+    # #/71's "Ask BurritoBot what tools it has." hint and its "tools" link are the deck's again since
+    # rounds-agenticburn#182 (#1400), so they are no longer stale.
     (116, "Michael's MCP server vetting checklist"),
 ]
 
