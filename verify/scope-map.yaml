@@ -114,6 +114,7 @@ always:
   test_chat_witch_name.py: it runs git ls-tree, which reads the tree or history as a whole
   test_claude_md_live_check_scope.py: line 138 builds a path under the repo root from a value it finds at run time; line 103 builds a path under the repo root from a value it finds at run time
   test_claude_md_run_test_scope.py: 'verify/scope_tests.py: it runs git archive, blame, cat-file, diff, diff-tree, grep, log, ls-files, ls-tree, rev-list, shortlog, show, whatchanged, which reads the tree or history as a whole; verify/scope_tests.py: it runs grep -r'
+  test_collector_replay_pace_live_checks.py: 'verify/load_replay.py: line 111 globs a pattern built at run time'
   test_compile_design_doc.py: 'line 44 builds a path under the repo root from a value it finds at run time; scripts/compile-design-doc.py: line 62 builds a path under the repo root from a value it finds at run time'
   test_cost_gauge_unchanged.py: it runs git ls-tree, show, which reads the tree or history as a whole
   test_deck_shift_slide_citations.py: it runs git ls-files, which reads the tree or history as a whole; line 118 builds a path under the repo root from a value it finds at run time; line 114 builds a path under the repo root from a value it finds at run time

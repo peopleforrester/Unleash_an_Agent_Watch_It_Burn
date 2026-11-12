@@ -107,6 +107,7 @@ rules:
       - verify/test_chat_witch_name.py
       - verify/test_claude_md_live_check_scope.py
       - verify/test_claude_md_run_test_scope.py
+      - verify/test_collector_replay_pace_live_checks.py
       - verify/test_compile_design_doc.py
       - verify/test_cost_gauge_unchanged.py
       - verify/test_deck_shift_slide_citations.py

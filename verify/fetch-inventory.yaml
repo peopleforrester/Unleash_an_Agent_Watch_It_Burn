@@ -1227,6 +1227,12 @@ sites:
     lines: 2
     class: loopback
     why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_collector_replay_pace_live.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: cluster
+    target: the collector's :8888 metrics on watch-it-burn-community, reached through a kubectl port-forward on 127.0.0.1
   verify/test_console_no_toggle_live.py:
   - match: localhost:8080
     lines: 1
