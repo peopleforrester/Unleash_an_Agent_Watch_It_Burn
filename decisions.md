@@ -56102,3 +56102,22 @@ already carries rounds-agenticburn#175's `#/47` note, so the step's Bat Spit quo
 
 **Live check.** Skipped: this changes only a document under `facilitation/` and tests under `verify/` that no cluster
 runs. Owed at the run-through: a ticket filed on the desk's form is read back by the room's bot.
+
+## 2026-11-12 · #1381 · run 20622 · question 1203: keep the edit to verify/test_presenter_ticket_live.py
+
+**Question.** Should the run keep its small edit to `verify/test_presenter_ticket_live.py`, which the issue listed as
+a file not to change?
+
+**Answer.** Keep the edit. Decided by hecaton's research under Michael's standing rules, not by Michael. The research
+read the parent issue #1380's out-of-scope note: the `/presenter-ticket` route, the HC-900 to HC-999 range and their
+tests stay because rehearsals and other steps may use them, and only the `#/47` demo stops using them. Section 1 of
+the test, the part removed, required the `#/47` demo to use them.
+
+**What it changes.** Commit e874a76c stays on the branch as run 20596 left it: section 1 of
+`verify/test_presenter_ticket_live.py` no longer anchors on the run-of-show's `#/47` step, and its checks of the live
+check's own flow, the range and the route are unchanged. The issue's third criterion is read as met in that sense:
+the route, the range, `ticket_site.py`, `console.conf`, `presenter_ticket_live.py`, `test_presenter_ticket_range.py`
+and `test_desk_coc.py` are unchanged, and the one test edit is the one this decision kept. Run 20622 resumed run
+20596's workspace; staging moved to 956505e1 since its base f49ef2d8 without editing any file the branch changes
+except this append-only record, so nothing was ported again. Live check skipped, as in run 20596's entry: a document
+and tests only.
