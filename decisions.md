@@ -56293,3 +56293,33 @@ listed 6 rows, 5 with `"witch": ""` and no `stand_in` key; the page's script car
 `fake-ticket` pod (its ConfigMap name carries the content hash). Then `CONTEXT=watch-it-burn-community python3
 verify/test_deployments_page_live.py` and a read of `https://deployments.burritobot.co/deployments.json` (every row's
 `witch` a name, none "Someone") are owed by the next run on the issue.
+Not yet run on a cluster: `verify/test_deployments_page_live.py` once Argo CD rolls the desk, and a read of
+https://deployments.burritobot.co/ showing no "Someone".
+
+## 2026-11-12 · #1384, #1386, #1389 · by hand · Support waits for guardrails-k8s-on, and the header bar refits when it shows
+
+Michael, 2026-11-12: "All right go ahead and do the rest" (these were held from hecaton and worked in this session).
+Whitney, 2026-11-12: "The fact that we have a support desk is a reveal". #1385 already took the BurritoBot button off.
+
+The `/controls` field is `infra.kyverno`. `guardrails-k8s-on` sets Kyverno to Deny and `guardrails-k8s-off` sets it
+back, and `guardrails-agency-on` (which also changes the Role, so `rbac_scoped` moves with it) never touches Kyverno.
+The 2-hour lab's `guardrails-admission-on` also arms Kyverno; the KubeCon stage never runs it, and in the lab a desk
+button after the admission fix gives nothing away. Measured live on watch-it-burn-private at the start state:
+`{"networkpolicy": false, "kyverno": false, "kubearmor": false, "falco": true, "tool_allowlist": false,
+"rbac_scoped": false, "agency_scoped": false}`.
+
+The page's init no longer shows `#supbtn`: it keeps event.js's https `supportUrl` in `window.wibSupportUrl`, and
+`applyControls` shows the button with that link only while `c.infra.kyverno === true`. No answer, a failed poll, the
+older `/guards` shape (no `infra` object) and an event with no `supportUrl` all leave it hidden. It hides with the
+`hidden` attribute, which `header a.hb[hidden]` turns into no box, so the bar keeps no gap. When its visibility changes,
+and only then, `applyControls` fires `wib-header-buttons`, which the `hbfit` script refits on. The badges, the private
+banner and the liveness poll are unchanged.
+
+Tests: `test_audience_page_e2e.py` runs the page's own init and `applyControls` in node through none, off, on, on, off,
+off (hidden, hidden, shown, shown, hidden, hidden; one refit per change), plus the private host, the `/guards` shape,
+agency-only fields and the workshop event. `test_mobile_titles_e2e.py` renders the bar with Support hidden (five
+buttons) and after `applyControls` reports Kyverno on (six, icons below 760px), at every width including 390px, with
+and without wide fonts: all green. `test_chat_no_desk_link.py` holds the markup and code. All three run green.
+
+Not yet run on a cluster: on watch-it-burn-community and watch-it-burn-private, no Support at the start state, Support
+after `guardrails-k8s-on` within one poll, hidden again after `guardrails-k8s-off`, and a one-row bar on a phone (#1388).

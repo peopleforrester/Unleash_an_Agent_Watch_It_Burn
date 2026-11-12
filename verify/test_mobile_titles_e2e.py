@@ -6,7 +6,9 @@
 
 At each width the page is loaded from the file with every network request aborted (only layout is under
 test), so no witch name shows, and every header button the event names does: as shipped that is the private bot's
-six (Terminal, Datadog, the room's Deployments, Support and Beacon of #1347, and Feedback), and on a copy whose
+five (Terminal, Datadog, the room's Deployments and Beacon of #1347, and Feedback), since Support waits for a /controls
+answer with Kyverno on (#1384); with the page's own applyControls fed that answer it is six, Support included, and the
+bar must fit again on the event the page fires (#1389); and on a copy whose
 event.js sets those three URLs to "", as the 2-hour workshop does, the three it had before. The chat page's own
 BurritoBot button, which linked to the page itself, is gone since #1385. These must hold:
 
@@ -143,18 +145,24 @@ JS = '''() => {
 }'''
 with sync_playwright() as p:
     b = p.chromium.launch()
-    for label, page_url in pages:
+    for label, page_url, switch_on in pages:
         for w in widths:
             pg = b.new_page(viewport={'width': w, 'height': 844})
             pg.route('http*://**', lambda r: r.abort())
             pg.goto(page_url)
+            if switch_on:
+                # guardrails-k8s-on, as the page's /controls poll would report it: Support shows and the bar refits.
+                pg.evaluate("applyControls({ai: {}, infra: {kyverno: true}})")
+                pg.wait_for_timeout(50)
             print(json.dumps({'page': label, 'w': w, **pg.evaluate(JS)}))
             pg.close()
     b.close()
 """
-PAGES = [["as shipped", PAGE.as_uri()], ["wide fonts", WIDE.as_uri()],
-         ["workshop", WORKSHOP.as_uri()], ["workshop, wide fonts", WORKSHOP_WIDE.as_uri()]]
-COUNT = {"as shipped": 6, "wide fonts": 6, "workshop": 3, "workshop, wide fonts": 3}
+PAGES = [["as shipped", PAGE.as_uri(), False], ["wide fonts", WIDE.as_uri(), False],
+         ["switch on", PAGE.as_uri(), True], ["switch on, wide fonts", WIDE.as_uri(), True],
+         ["workshop", WORKSHOP.as_uri(), False], ["workshop, wide fonts", WORKSHOP_WIDE.as_uri(), False]]
+COUNT = {"as shipped": 5, "wide fonts": 5, "switch on": 6, "switch on, wide fonts": 6, "workshop": 3,
+         "workshop, wide fonts": 3}
 run = subprocess.run([*UV, "python", "-I", "-c", MEASURE, json.dumps(PAGES), json.dumps(WIDTHS)],
                      capture_output=True, text=True)
 shutil.rmtree(scratch, ignore_errors=True)
@@ -195,7 +203,7 @@ for m in map(json.loads, run.stdout.splitlines()):
         if label == "workshop":
             check(f"{tag}: three buttons show {'labels' if w >= 500 else 'icons'} at this width",
                   m["icons"] == (w < 500), f"icons {m['icons']}")
-        if label == "as shipped" and w < 760:
+        if label == "switch on" and w < 760:
             check(f"{tag}: six buttons show icons at this width", m["icons"], f"icons {m['icons']}")
         check(f"{tag}: avatar, chat title, ⓘ and Reset share a row",
               m["about"] is not None and all(same_row(m["avatar"], x) for x in (m["h2"], m["about"], m["reset"])),

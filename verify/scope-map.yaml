@@ -917,6 +917,7 @@ reads:
     - gitops/ai-layer/web/event.js
     - images/llm-guard
     - images/workshop-mcp/Dockerfile
+    - infra
     - scripts/audience-qr.py
     - verify/artifact-cache.sh
     - verify/artifact_cache.py
@@ -3208,6 +3209,8 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
   test_deployments_private_banner.py:
+    - gitops/ai-layer/ticket_site.py
+  test_deployments_stand_in_name.py:
     - gitops/ai-layer/ticket_site.py
   test_deployments_witch_line_e2e.py:
     - facilitation/kubecon-na-2026-audience-qr.svg

@@ -52,14 +52,27 @@ check("the header has a Support button", tag is not None and 'aria-label="Suppor
       and PAGE.find('id="supbtn"') < PAGE.find("</header>"))
 check("it ships hidden, with no href of its own", tag is not None and " hidden" in tag.group(0)
       and "href=" not in tag.group(0))
-check("it is the only element that names the support desk", len(re.findall(r'id="supbtn"', PAGE)) == 1
-      and "supportUrl" in VISIBLE and VISIBLE.count("supportUrl") == 1)
+check("it is the only element that names the support desk: the init's loop key and its three reads of the event",
+      len(re.findall(r'id="supbtn"', PAGE)) == 1 and VISIBLE.count("supportUrl") == 4
+      and VISIBLE.count("['supbtn','supportUrl']") == 1 and VISIBLE.count("ev.supportUrl") == 3)
 init = PAGE[PAGE.find("(function init(){"):PAGE.find("loadSaved();", PAGE.find("(function init(){"))]
-check("the page's init shows it with the event's supportUrl, and only an https one",
-      "['supbtn','supportUrl']" in init and r"/^https:\/\//.test(u)" in init and "b.hidden=false" in init)
+check("the page's init reads the event's supportUrl, and only an https one",
+      "['supbtn','supportUrl']" in init and r"/^https:\/\//.test(u)" in init
+      and r"/^https:\/\//.test(ev.supportUrl)" in init)
 m = re.search(r'^\s*supportUrl:\s*"([^"]*)"', EVENT, re.M)
 check("event.js sends it to the one desk both bots read (#1145)", m is not None
       and m.group(1) == "https://support.burritobot.co/")
+print("== Support waits for guardrails-k8s-on (#1384, #1386; Whitney 2026-11-12: the desk is a reveal) ==")
+check("the init gives Support only the event's desk link and never shows it",
+      "p[0]!=='supbtn'" in init and "window.wibSupportUrl" in init)
+ac = PAGE[PAGE.find("function applyControls(c){"):PAGE.find("// Back-compat alias")]
+check("applyControls shows it only while /controls measures infra.kyverno on, with the event's link",
+      "c.infra && c.infra.kyverno === true" in ac and "window.wibSupportUrl &&" in ac)
+check("it hides with the hidden attribute, never visibility or opacity, so it leaves no gap (#1389)",
+      "sup.hidden = !showSup" in ac and "visibility" not in ac and "opacity" not in ac)
+check("the header fit re-runs on the page's own event, fired only when Support changes (#1389)",
+      "if(sup.hidden === showSup)" in ac and "new Event('wib-header-buttons')" in ac
+      and "document.addEventListener('wib-header-buttons', fitAll);" in PAGE)
 
 print("== no header button leads back to the chat page itself (#1385) ==")
 # The BurritoBot button went to `/`, this page, and init rewrote it to `/?cluster=..`; Whitney had it taken off on
