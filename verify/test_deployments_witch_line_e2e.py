@@ -1,6 +1,7 @@
 # ABOUTME: Holds #995 end to end: a deploy_app tools/call on a request carrying X-Witch-Name is credited to that witch with no
-# ABOUTME: requested_by, and deployments-<cluster>'s own script renders "<witch> deployed <image> at <time>" or "Someone deployed",
-# ABOUTME: and a row a cluster read reports gone as "..., removed at <time>", greyed (#1049).
+# ABOUTME: requested_by, and deployments-<cluster>'s own script renders "<witch> deployed <image> at <time>", a nameless row
+# ABOUTME: under its stand-in name and never "Someone" (#1397), and a row a cluster read reports gone as "..., removed at <time>",
+# ABOUTME: greyed (#1049).
 # SUITE: e2e
 # E2E TIER: tools (no cluster, no AWS: uv for mcp 1.29.1 and pyyaml 6.0.2 as the image pins them; node runs the page's script)
 """The executed half of the #995 checks in verify/test_public_images.py.
@@ -15,7 +16,9 @@
 2. The deployments page's own script, served by that desk under deployments-<cluster>, runs in node against those
    rows with stub elements, and each line's text and hover text are read off what it built. Before it runs, a cluster
    read report that omits the probe's Deployment is posted to the desk's /cluster-read (#1049), so the probe's line is
-   the removed one: it reads "..., removed at <time>" and carries the class the page greys.
+   the removed one: it reads "..., removed at <time>" and carries the class the page greys. The probe carries no witch
+   name, so its line reads the stand-in name /deployments.json gives it (#1397), whatever name that is: each check pairs
+   a line with its row, never with a name it guesses.
 
 Needs uv and the network to fetch mcp, and node. A missing tool or a failed fetch is a failure, not a skip. No cluster.
 """
@@ -174,8 +177,12 @@ check("the chat deploy, with no requested_by in the tool call, is credited to th
       by_name.get("tron-lightcycle-game", {}).get("witch") == EDGAR, str(by_name.get("tron-lightcycle-game")))
 check("the request's witch name wins over a requested_by naming someone else",
       by_name.get("told", {}).get("witch") == EDGAR, str(by_name.get("told")))
-check("the probe's deploy, with no header and no requested_by, has no witch name",
-      by_name.get("probe-redis", {}).get("witch") == "", str(by_name.get("probe-redis")))
+check("the probe's deploy, with no header and no requested_by, has no witch name: it reads a stand-in (#1397)",
+      by_name.get("probe-redis", {}).get("stand_in") is True
+      and re.fullmatch(r"[A-Z][a-z]+ the [A-Z][a-z]+", by_name.get("probe-redis", {}).get("witch", "")) is not None,
+      str(by_name.get("probe-redis")))
+check("and only the probe's row is a stand-in",
+      [n for n, r in by_name.items() if r.get("stand_in")] == ["probe-redis"], str(by_name))
 check("each row carries the kind deploy_app created, sent over /landed (#1049)",
       all(by_name.get(n, {}).get("kind") == "Deployment" for n in ("tron-lightcycle-game", "told", "probe-redis")),
       str(by_name))
@@ -227,12 +234,14 @@ if n.returncode != 0 or not n.stdout.startswith("["):
     finish()
 lines = json.loads(n.stdout)
 texts = [x["text"] for x in lines]
-at = {row["name"]: row["at"] for row in rows()}
+shown = rows()
+at = {row["name"]: row["at"] for row in shown}
+stand_in = next((row["witch"] for row in shown if row["name"] == "probe-redis"), "")
 want_chat = f"{EDGAR} deployed tron-lightcycle-game at {at.get('tron-lightcycle-game')}"
 check(f"the chat deploy's line reads {want_chat!r}", want_chat in texts, str(texts))
 chat = next((x for x in lines if x["text"] == want_chat), {})
 check("its hover text is the full image", chat.get("hover") == ["ghcr.io/someone/tron-lightcycle-game:2"], str(chat))
-want_probe = f"Someone deployed redis at {at.get('probe-redis')}, removed at {removed_at}"
+want_probe = f"{stand_in} deployed redis at {at.get('probe-redis')}, removed at {removed_at}"
 check(f"the probe's line reads {want_probe!r}", want_probe in texts, str(texts))
 probe = next((x for x in lines if x["text"] == want_probe), {})
 check("its hover text is the full image, Docker Hub's redis as written (#991 applies it unchanged)",
@@ -240,13 +249,15 @@ check("its hover text is the full image, Docker Hub's redis as written (#991 app
 check("the removed line carries the class the page greys, and only it does",
       probe.get("cls") == "removed" and "li.removed,li.removed b{color:" in page
       and [x["cls"] for x in lines].count("removed") == 1, str(lines))
-check("every line reads '<witch name or Someone> deployed <short name> at <HH:MM:SS>[, removed at <HH:MM:SS>]', "
+check("every line reads '<witch name> deployed <short name> at <HH:MM:SS>[, removed at <HH:MM:SS>]', "
       "and none 'deployed by'",
-      len(lines) == 3 and all(re.fullmatch(r"(Someone|[A-Z][a-z]+ the [A-Z][a-z]+) deployed [a-z0-9._-]+ at "
+      len(lines) == 3 and all(re.fullmatch(r"[A-Z][a-z]+ the [A-Z][a-z]+ deployed [a-z0-9._-]+ at "
                                            r"\d\d:\d\d:\d\d(, removed at \d\d:\d\d:\d\d)?", t) for t in texts), str(texts))
 check("no line names a Deployment in parentheses", not any("(" in t for t in texts), str(texts))
-check("both deploys from the chat request read the witch name, and only the probe's reads 'Someone'",
-      sum(t.startswith(EDGAR + " deployed ") for t in texts) == 2 and sum(t.startswith("Someone ") for t in texts) == 1,
-      str(texts))
+check("each line, in the rows' order, starts with its own row's witch: Edgar for both chat deploys, the probe's stand-in "
+      "for the probe",
+      len(lines) == len(shown) and all(t.startswith(row["witch"] + " deployed ") for t, row in zip(texts, shown))
+      and [row["witch"] for row in shown if row["name"] != "probe-redis"] == [EDGAR, EDGAR], str(texts))
+check("no line reads 'Someone' (#1397)", not any("Someone" in t for t in texts), str(texts))
 desk.shutdown()
 finish()

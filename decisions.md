@@ -56210,3 +56210,42 @@ and tests only.
 reader of the inventory), `test_scope_tests.py`, `test_test_map.py` and `test_lint.py`: all exit 0. The scope map and
 test map needed no change. Question 1203's entry above stands as written. Live check skipped: tests and a
 `verify/` inventory only.
+
+## 2026-11-12 · #1397 · run 20659 · A nameless deploy reads a stand-in witch name, never "Someone"
+
+**Ask.** Michael, 2026-11-12: the deployments page cannot say "Someone"; a deploy with no witch name behind it must
+read a made-up name. Live that morning, deployments.burritobot.co showed five `joker-walk-in-customer` rows from
+attackme with `"witch": ""`, each rendered "Someone deployed maintenance-shell".
+
+**Change.** `gitops/ai-layer/ticket_site.py` gains `stand_in_name(row)`: a name from the desk's own vocabulary
+(`NAME_SPACE`, "<First> the <Creature>"), picked by the SHA-256 of the row's cluster, name, landing time and clock
+time, so the same row reads the same name on every read and five rows of one name read different names. It is never
+written on the row and never added to `_taken`, the set of names handed to visitors. `/deployments.json` sets a nameless
+row's `witch` to it and adds `stand_in` (true for such a row), and the page's script drops its `||'Someone'`
+fallback. A visitor's `?witch=<slug>` view still filters on the stored name, so it never lists a stand-in row. The
+issue's own spec settled the shape; no draft existed (`prior-drafts.sh` printed NONE).
+
+**Known limit.** A stand-in can be a name the desk later hands a visitor (768 names, a room of up to 300), so a
+student can see "their" name on a pre-seeded row. Keeping each row's name fixed, as the issue asks, rules out moving
+off a name once it is handed out; the `stand_in` flag in the JSON marks such rows.
+
+**Tests.** `verify/test_public_images.py` (offline) holds the stand-in: a name the vocabulary makes, equal to
+`stand_in_name` of the landed row, the same on three reads, not stored, `_taken` unchanged, absent from every
+`?witch=` view, and the page has no "Someone"; exit 0. `verify/test_deployments_witch_line_e2e.py` (tools tier) now
+pairs each rendered line with its own row instead of counting a guessed name, since the probe's stand-in turns on its
+landing time: `bash verify/run-e2e-tools.sh test_deployments_witch_line_e2e.py`, 1 check in 0m15s, ALL GREEN, exit 0
+(the probe read "Mabel the Warlock deployed redis at 15:09:50, removed at 15:09:51").
+`verify/test_private_chat_deployments.py` takes `stand_in` into its key set; exit 0. Also run once, unchanged, exit 0:
+`test_desk_removed_rows.py`, `test_deployments_private_banner.py`, `test_witch_name_vocab.py`, `test_room_jokers.py`,
+`test_support_desk.py`, `test_ros_deployments_removed_row.py`. The three live tests that expected "Someone"
+(`test_deployments_page_live.py`, `test_deployments_removed_live.py`, `test_private_removed_row_live.py`) now expect
+each row's own stand-in.
+
+**Live check (read only, watch-it-burn-community).** Before the change: `https://deployments.burritobot.co/deployments.json`
+listed 6 rows, 5 with `"witch": ""` and no `stand_in` key; the page's script carried `x.witch||'Someone'`; Argo CD's
+`ai-layer` Application read Synced at c7ae5181 (this run's base). Nothing on the cluster was changed.
+
+**Not yet run on a cluster.** The desk takes the change only once hecaton promotes it and Argo CD rolls the
+`fake-ticket` pod (its ConfigMap name carries the content hash). Then `CONTEXT=watch-it-burn-community python3
+verify/test_deployments_page_live.py` and a read of `https://deployments.burritobot.co/deployments.json` (every row's
+`witch` a name, none "Someone") are owed by the next run on the issue.

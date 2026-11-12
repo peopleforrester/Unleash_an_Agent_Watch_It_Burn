@@ -29,9 +29,10 @@ In order, this:
    the public Deployment is gone, and that in that same read the internal Deployment is still there and its row
    unmarked;
 8. reads the page the room sees, https://deployments-<public host>/, and its /deployments.json through the console,
-   and runs the page's own script in node against those rows: the public line reads "Someone deployed nginx at <t>,
-   removed at <t> <cluster>" with the class the page greys, the internal line reads "Someone deployed maintenance-shell
-   at <t> <cluster>" with no class, <cluster> being the cluster the desk labels the row with (#1157);
+   and runs the page's own script in node against those rows: the public line reads "<stand-in> deployed nginx at <t>,
+   removed at <t> <cluster>" with the class the page greys, the internal line reads "<stand-in> deployed
+   maintenance-shell at <t> <cluster>" with no class, <cluster> being the cluster the desk labels the row with (#1157)
+   and <stand-in> the made-up witch name /deployments.json gives a row deployed with no name (#1397);
 9. always puts both policies back to the actions it read, deletes both Deployments, removes its two rows from the
    page with the desk's /desk-forget, and checks the policies, the names of every Deployment, StatefulSet, DaemonSet,
    Job and CronJob in agent, and the page's rows are as it found them: /deployments.json lists no row of its names.
@@ -354,9 +355,13 @@ def run_checks() -> None:
                 lines, err = page_lines(page, [r for r in public_rows if r.get("name") in (GONE, KEPT)])
                 # Since #1157 the page ends each line with the cluster its row names, as the page's script does.
                 label = {n: f" {seen[n]['cluster']}" if seen[n].get("cluster") else "" for n in (GONE, KEPT)}
-                want_gone = (f"Someone deployed nginx at {seen[GONE]['at']}, removed at {seen[GONE]['removed_at']}"
-                             f"{label[GONE]}")
-                want_kept = f"Someone deployed maintenance-shell at {seen[KEPT]['at']}{label[KEPT]}"
+                # Neither row carries a witch name, so each reads the stand-in /deployments.json gives it (#1397).
+                check("both rows, deployed with no name, read a stand-in witch name and never 'Someone'",
+                      all(seen[n].get("stand_in") is True and seen[n].get("witch") for n in (GONE, KEPT)),
+                      json.dumps({n: seen[n] for n in (GONE, KEPT)}))
+                want_gone = (f"{seen[GONE].get('witch')} deployed nginx at {seen[GONE]['at']}, removed at "
+                             f"{seen[GONE]['removed_at']}{label[GONE]}")
+                want_kept = f"{seen[KEPT].get('witch')} deployed maintenance-shell at {seen[KEPT]['at']}{label[KEPT]}"
                 by_text = {x["text"]: x["cls"] for x in lines}
                 check(f"the page's script renders the public line {want_gone!r}, with the class it greys",
                       by_text.get(want_gone) == "removed" and "li.removed,li.removed b{color:" in page,
