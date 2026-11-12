@@ -56210,3 +56210,25 @@ and tests only.
 reader of the inventory), `test_scope_tests.py`, `test_test_map.py` and `test_lint.py`: all exit 0. The scope map and
 test map needed no change. Question 1203's entry above stands as written. Live check skipped: tests and a
 `verify/` inventory only.
+
+## 2026-11-12 · #1396 · run 20640 · scope_tests.py write gives the same Test map for a new file before and after `git add`
+
+`widen()` in `verify/scope_tests.py` writes a literal entry as itself and, unless the entry is a file, as
+`<entry>/**` too. `test_map()` passed it only the tracked files, so `python3 verify/scope_tests.py write` run before
+`git add` of a new tool wrote the tool as a directory as well. Run 20624 on #1391 wrote
+`verify/deck_renumber.py/**` that way, and `verify/test_test_map.py` failed on it once the tool was tracked. Of the
+two fixes the issue offered, this takes the first: `Tree.untracked()` lists what `git ls-files --others
+--exclude-standard` prints, the files git would add (as `changed_paths()` already reads them), and `test_map()`
+counts those as files. The order of `write` and `git add` no longer matters, so the AGENTS.md wording stays as it is.
+An ignored file is not counted, so a host's ignored files cannot change the map, and a new directory still takes
+`<dir>/**`. The scope map side already read a new file from disk (`(root / c).is_file()`), which is why
+`verify/scope-map.yaml` was right in #1391 and only the Test map was wrong.
+
+**Tests.** `verify/test_test_map.py` gains point 4: a scratch git repo under the run's TMPDIR holds a tracked test, a
+new tool, a new directory and an ignored file; the Test map written with the tool untracked equals the one written
+after `git add`, the tool has no `/**` line, and the directory and the ignored file keep theirs. With `test_map()`
+put back to the tracked files alone the equality check fails on exactly `verify/tool.py/**`; with the change all of
+`test_test_map.py` passes. `scope_tests.py write` changed nothing in either map.
+
+**Live check.** Skipped: the change touches only `verify/scope_tests.py` and `verify/test_test_map.py`, which no
+cluster runs.
