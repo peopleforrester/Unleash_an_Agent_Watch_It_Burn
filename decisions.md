@@ -55082,3 +55082,12 @@ line changed) included. `test_scope_tests.py`, `test_test_map.py` and `test_test
 tier selects `test_ros_deck_live.py` (run above) and tests that read the two maps, left to the gate.
 
 **Live check.** None: the change touches only files under `verify/` that no cluster runs, and `decisions.md`.
+
+**Resumed in run 20506, after run 20504 failed its tests gate.** The gate ran the whole offline suite, since
+`verify/scope-map.yaml` changed, and `verify/test_deck_shift_slide_citations.py` failed: it bans a hash of `#/43` or
+more in any file under `verify/` outside its SEG4_READERS, the tests that hold segments 4 to 6 to the deck, and
+`test_ros_reworded_slides.py` pins the current deck's `#/49` to `#/126`. Those are the deck's hashes today, and that test
+guards against the old deck's numbering, so the new test joins SEG4_READERS with a comment, as #1365's reader did. Run
+20504's scoped selection had not picked that test, and the run did not run it. `python3
+verify/test_deck_shift_slide_citations.py` now passes, as do `test_scope_tests.py` and `test_ros_reworded_slides.py`;
+`scope_tests.py write` added nothing.
