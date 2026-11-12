@@ -79,6 +79,7 @@ WATCH_FROM_HOURS = 17      # an hour after the night-before wave starts, once it
 WATCH_UNTIL_MINUTES = 90   # after the session start: the 30-minute session and an hour's margin
 DOWN_AFTER_MINUTES = 120
 WATCH_RESTART_MINUTES = 5  # cron re-runs `watch` this often across its window; the lock keeps it to one
+CONVERGE_SETTLE = "600"    # seconds the converge after a build waits for Argo CD's syncs in flight (#1383)
 CRON_TAG = "# wib-backups (#643)"
 PROBE_MARKER = "[[wib-probe]]"   # guard-proxy answers it normally and keeps it out of the feed the room sees
 CHAT_PROMPT = f"{PROBE_MARKER} name one salsa"
@@ -671,8 +672,12 @@ def region_steps(x: Ctx, region: str, cs: list[Cluster], verb: str, apply: bool 
     if verb == "up":
         # WIB_NO_LINK: a standby is linked to the other KubeCon cluster when it takes a hostname (Watcher.relink,
         # #985), not at its build, which would re-link the roster pair over a link the watcher made.
+        # WIB_CONVERGE_SETTLE: the converge right after a build meets a cluster whose Argo CD is still working through
+        # its sync waves. It waits up to that long for the syncs in flight to end before it judges the apps (#1383):
+        # the 2026-11-12 night-before wave's private standbys, 40 apps, were judged mid-sync and failed at 38/40.
         return [({**env, "WIB_NO_VERIFY": "1", "WIB_NO_LINK": "1"}, [str(FLEET), "instructors", "up", "all"]),
-                ({"WIB_REGION": region}, [str(FLEET), "converge"] + [c.name for c in cs])]
+                ({"WIB_REGION": region, "WIB_CONVERGE_SETTLE": CONVERGE_SETTLE},
+                 [str(FLEET), "converge"] + [c.name for c in cs])]
     return [({**env, **({"WIB_APPLY": "1"} if apply else {})}, [str(FLEET), "instructors", "down", "all"])]
 
 

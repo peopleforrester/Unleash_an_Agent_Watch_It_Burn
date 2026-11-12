@@ -1561,6 +1561,16 @@ _write_profile_models() {
         || log "  ${name}: the collector restart failed; it reads monitoring/${PROFILE_MODELS_CM} on its next start"
 }
 
+# How long a pin waits for Argo CD to create the Bedrock ModelConfigs, one deadline shared by all of them, in seconds.
+# They are in ai-layer's wave 0, which Argo CD applies only once the wave -1 kubearmor-gate Job has seen KubeArmor's
+# DaemonSet, controller and webhook ready (gitops/ai-layer/kubearmor-ordering-gate.yaml). On the kubecon-private
+# profile that took 8 to 10 minutes after the bootstrap: the 2026-11-12 night-before standbys, read from Datadog
+# (#1383), had ai-layer's wave 0 up about 8 (b01), 9 (b02) and 10 (b03) minutes after lab-bootstrap's first sync, b03's
+# gate passing 10m07s after it, so the 300 s this used to be missed bedrock-haiku on all three. 900 s covers the slowest of them with five minutes to
+# spare, and the gate's own bound (90 s for the namespace, 420 s for KubeArmor, the Job's activeDeadlineSeconds 600)
+# started three or four minutes in. A converge pass on a running cluster finds them at once and does not wait.
+modelconfig_wait() { echo "${WIB_MODELCONFIG_WAIT:-900}"; }
+
 pin_bedrock_profiles() {
     local name="$1" kcfg="$2" map targets gateway kind target model label arn live region bad=0 deadline profiles='{}'
     map="$(terraform -chdir="${CLUSTER_DIR}" output -state="${STATE_DIR}/${name}.tfstate" \
@@ -1579,6 +1589,9 @@ pin_bedrock_profiles() {
         log "  ${name}: no bedrock backend read from agentgateway-config in gitops/ai-layer/agentgateway.yaml"
         record_fail "${name}:bedrock-profiles"; return 1
     fi
+    # Argo creates the ModelConfigs minutes into a bootstrap; wait for them rather than fail. One deadline for the
+    # whole pass: they arrive together, so one that is still missing when it ends is not waited for again.
+    deadline=$(( SECONDS + $(modelconfig_wait) ))
     while read -r kind target model; do
         if [[ "${kind}" == modelconfig ]]; then label="ModelConfig ${target}"; else label="agentgateway's ${target}"; fi
         if [[ "${target}" == "-" ]]; then
@@ -1594,8 +1607,6 @@ pin_bedrock_profiles() {
             log "  ${name}: ${label} pins ${model}, which has no application profile on this cluster"
             bad=1; continue
         fi
-        # Argo creates the ModelConfigs a few minutes into a bootstrap; wait for them rather than fail.
-        deadline=$(( SECONDS + ${WIB_MODELCONFIG_WAIT:-300} ))
         live="$(_live_bedrock_model "${kcfg}" "${kind}" "${target}")"
         while [[ -z "${live}" ]] && (( SECONDS < deadline )); do
             sleep "${WIB_MODELCONFIG_POLL:-10}"
@@ -1680,8 +1691,10 @@ repair_one() {
     repair_step repair_agent_injection "${name}" "${kcfg}"
     repair_step repair_agent_tools "${name}" "${kcfg}"
     repair_step repair_env_order "${name}" "${kcfg}"
-    # Not a step: it records its own ledger line when it fails, and a step would record a second one.
-    pin_bedrock_profiles "${name}" "${kcfg}" || true
+    # Not a step: it records its own ledger line when it fails, and a step would record a second one. Converge waits
+    # 300 s a round for the ModelConfigs, not the build's 900: by now Argo CD has made them, and a converge that
+    # fails every round must stay inside the admin console runner's 2700 s (docs/admin-console.md).
+    WIB_MODELCONFIG_WAIT="${WIB_MODELCONFIG_WAIT:-300}" pin_bedrock_profiles "${name}" "${kcfg}" || true
     pin_coc_guardrail "${name}" "${kcfg}" || true
     repair_step repair_stuck_pods "${name}" "${kcfg}"
     repair_step repair_datadog "${name}" "${kcfg}" "${acct}"
@@ -3837,6 +3850,46 @@ converge_endpoint() {
 
 # Nudge a degraded cluster instead of rebuilding it. A hard refresh is what clears the common case (an
 # Application that gave up on a transient sync), and it is safe to run against a healthy cluster.
+# The Argo CD Applications in $1 (their JSON) whose sync operation is still Running and younger than
+# WIB_STUCK_SYNC_MIN, one name a line. An older one is not in flight but stuck, and repair_stuck_syncs ends it.
+argo_syncs_in_flight() {
+    local a started
+    while IFS=$'\t' read -r a started; do
+        [[ -n "${a}" ]] || continue
+        if [[ "$(age_minutes "${started}")" -lt "${WIB_STUCK_SYNC_MIN:-15}" ]]; then echo "${a}"; fi
+    done < <(jq -r '.items[] | select(.status.operationState.phase=="Running")
+        | [.metadata.name, (.status.operationState.startedAt // "")] | @tsv' <<<"$1" 2>/dev/null)
+    return 0
+}
+
+# Wait, until the epoch WIB_CONVERGE_SETTLE_UNTIL (cmd_converge sets it from WIB_CONVERGE_SETTLE seconds), while Argo
+# CD still has syncs in flight on this cluster, so a cluster still working through its sync waves is judged once they
+# end rather than in the middle. The 2026-11-12 night-before wave's private standbys (#1383) were judged 9 to 11
+# minutes after their bootstrap, with kubearmor, kyverno, cert-manager and prometheus still waiting in their syncs on
+# their CRDs' health and ai-layer on its kubearmor-gate Job (their Argo CD logs in Datadog), and the three rounds 30 s
+# apart ended about 4.5 minutes later at apps 38/40 and 39/40. The community standbys, 24 apps, had settled by then.
+# A running cluster has nothing in flight, so this returns at once; and with WIB_CONVERGE_SETTLE unset (0) it never waits.
+await_argo_settled() {
+    local name="$1" kcfg="$2" apps busy said=0 until="${WIB_CONVERGE_SETTLE_UNTIL:-0}"
+    while :; do
+        apps="$(read_argo_apps "${kcfg}")" || return 0
+        busy="$(argo_syncs_in_flight "${apps}" | paste -sd, - | sed 's/,/, /g')"
+        if [[ -z "${busy}" ]]; then
+            [[ "${said}" -eq 0 ]] || log "  ${name}: Argo CD's syncs have settled"
+            return 0
+        fi
+        if [[ "$(date +%s)" -ge "${until}" ]]; then
+            [[ "${said}" -eq 0 && "${until}" -eq 0 ]] || log "  ${name}: still mid-sync when the settle wait ended: ${busy}; judging it as it stands"
+            return 0
+        fi
+        if [[ "${said}" -eq 0 ]]; then
+            log "  ${name}: waiting up to $(( until - $(date +%s) ))s for Argo CD's syncs in flight: ${busy}"
+            said=1
+        fi
+        sleep "${WIB_CONVERGE_SETTLE_POLL:-15}"
+    done
+}
+
 converge_one() {
     local name="$1"; assert_ours "${name}"
     local acct_profile="${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
@@ -3844,6 +3897,7 @@ converge_one() {
     if ! provider_write_kubeconfig "${name}" "${kcfg}" "${acct_profile}"; then
         log "  ${name}: UNREACHABLE (no kubeconfig)"; record_fail "${name}:unreachable"; rm -f "${kcfg}"; return
     fi
+    await_argo_settled "${name}" "${kcfg}"
     local apps total healthy bad a floor
     if ! apps="$(read_argo_apps "${kcfg}")"; then
         log "  ${name}: NO ArgoCD applications (${apps}); converge cannot help, this needs a bootstrap"
@@ -4020,6 +4074,16 @@ cmd_converge() {
     require_tools
     mkdir -p "${LOG_DIR}"
     prune_empty_states
+    # One settle budget for the whole converge, not one a round (await_argo_settled). 0, the default, never waits,
+    # so a converge that fails every round keeps inside the admin console runner's 2700 s (docs/admin-console.md);
+    # backups.py sets it for the converge after a standby build, the one run on a cluster still syncing (#1383).
+    local settle="${WIB_CONVERGE_SETTLE:-0}"
+    [[ "${settle}" =~ ^[0-9]+$ ]] || { log "WIB_CONVERGE_SETTLE is a number of seconds, not '${settle}'"; exit 2; }
+    if [[ "${settle}" -gt 0 ]]; then
+        export WIB_CONVERGE_SETTLE_UNTIL=$(( $(date +%s) + settle ))
+    else
+        export WIB_CONVERGE_SETTLE_UNTIL=0
+    fi
 
     local total="${#all[@]}" round=1 remaining=("${all[@]}") still name a
     while [[ "${round}" -le "${CONVERGE_ROUNDS}" && "${#remaining[@]}" -gt 0 ]]; do

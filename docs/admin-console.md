@@ -114,7 +114,10 @@ long `converge` the queue waits and the report ages while the runner is alive. T
 runner is busy: <action> on <cluster>, requested by <who>, has run N s", and how long the oldest queued
 action has waited behind it. The longest action is a `converge` that fails every round: at the default
 waits, 3 rounds (`WIB_CONVERGE_ROUNDS`) of `WIB_MODELCONFIG_WAIT` 300 s, `WIB_CONVERGE_LB_WAIT` 180 s and
-`WIB_CONVERGE_DNS_WAIT` 300 s, with 30 s between rounds, about 2400 s; 2700 s leaves margin. A claim older
+`WIB_CONVERGE_DNS_WAIT` 300 s, with 30 s between rounds, about 2400 s; 2700 s leaves margin. Converge waits
+300 s a round for the ModelConfigs; the 900 s default (#1383) is the build's alone. `WIB_CONVERGE_SETTLE`, the
+wait for Argo CD syncs in flight, is 0 unless set, and only `backups.py` sets it, for the converge after a
+standby build. A claim older
 than that proves nothing, because the runner may have died mid-action and left it claimed, so the two
 alarms apply again. Raising `WIB_CONVERGE_ROUNDS` or those waits past about 2700 s in total needs a
 matching raise of `RUNNING_ALIVE_SECONDS` in the app, or the page calls a busy runner down. The runner

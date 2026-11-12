@@ -57164,3 +57164,79 @@ exited 0. `git check-ignore -v tmp/x` named `.gitignore:14:/tmp/`. `bash verify/
 printed NONE. No code changed, so this entry is the run's only commit.
 
 **Live check.** Skipped: only decisions.md changed, nothing the clusters run.
+## 2026-11-12 · #1383 · run 20656 · The private standbys were judged mid-sync and pinned before ai-layer's wave 0 existed; the build waits 900 s for the ModelConfigs and converge waits for Argo CD's syncs in flight
+
+**Context.** The 2026-11-12 night-before wave's three private standbys failed `bedrock-profiles` in the build
+(`ModelConfig bedrock-haiku never appeared`) and `fleet.sh converge` at apps 38/40 (b01) and 39/40 (b02, b03). The
+wave ran from netcup's checkout at 7783f256, whose converge names no app, and no wave has run since from a checkout
+holding main. `bash verify/prior-drafts.sh 1383 origin/staging` printed NONE and the issue had no comments.
+
+**Where the record is.** The run's role has no access entry on a standby (`aws eks list-access-entries` on
+watch-it-burn-private-b01 lists the EKS service role, the node role, nwuser and wib-private-b01). The standbys ship
+to the instructor Datadog org under the same `kube_cluster_name:burritobot-private` as the live private cluster, and
+the org's metrics and Kubernetes events carry `orch_cluster_id` (each cluster's kube-system UID) and its logs the node
+instance id (`i-0464c9983381af31c` b01, `i-038464ab56e80cdbd` b02, `i-0be83569be900c055` b03, from EC2). Read with
+the live private cluster's own datadog-secret, as `verify/test_tool_audit_live.py` reads it. The standbys' logs stop
+about ten minutes after each build (b03's last argocd line is 04:16Z), so the converge's own minutes are not in them.
+Netcup's `backups-night-before.log` and the three `watch-it-burn-private-b0N.bootstrap.log` were read through
+`sources repo-cat`.
+
+**Why the ModelConfigs came late.** They are in ai-layer's wave 0, which Argo CD applies only once the wave -1
+`kubearmor-gate-d92910c4` Job has seen KubeArmor's DaemonSet, controller and webhook ready. On each private standby
+the kubearmor Application's sync waited minutes on its CRD's health before it applied the KubeArmorConfig that makes
+the operator deploy (b03: `waiting for healthy state of ... kubearmorconfigs.operator.kubearmor.com` from 04:08:19 to
+past 04:12:32). Measured from lab-bootstrap's first sync to ai-layer's wave 0:
+
+| standby | lab-bootstrap synced | gate Job applied | kubearmor-controller up | wave 0 (workshop-mcp) up |
+|---|---|---|---|---|
+| b01 (us-east-2) | 03:04:55Z | 03:07:26Z | 03:12Z | 03:13Z, about 8 min |
+| b02 (us-east-1) | 03:35:23Z | (no log) | 03:42Z | 03:44Z, about 9 min |
+| b03 (us-west-2) | 04:06:05Z | 04:09:47Z | 04:15Z | gate passed 04:16:12Z, 10m07s |
+
+The pin started right after the bootstrap and gave each ModelConfig its own 300 s, so haiku, read first, used up the
+wait, and the other three were there by the time it ended.
+
+**Why converge did not settle.** Converge began 9 to 11 minutes after each bootstrap (b01 03:13:59Z, b03 04:16:44Z)
+and its three rounds, 30 s apart, ended about 4.5 minutes later. At b03's last log lines, five Applications still had
+sync operations Running: kubearmor (waiting on its CRD, 04:12:32), kyverno (04:12:48), cert-manager (its CRDs,
+04:15:13), prometheus (its CRDs, 04:15:14) and ai-layer (its gate Job, 04:16:13). b01's at 03:13 were the same five,
+plus gateway-api Degraded since 03:07:44 and eso-resources' first sync Failed on a webhook not yet serving. Every
+Deployment, DaemonSet and StatefulSet on the three was available by about 12 minutes after its bootstrap (Datadog's
+`kubernetes_state` metrics by `orch_cluster_id`), so the pods were not the problem; Argo CD's operations were still in
+flight when converge judged them. Which one or two remained at round 3 is not in any record: the old converge printed
+no names, and the logs stop before it. The community standbys, 24 apps with no istio, falco, prometheus or backstage,
+settled within the converge's first round.
+
+**Changes.**
+- `fleet.sh`: `pin_bedrock_profiles` has one deadline for the whole pass, `modelconfig_wait`, 900 s unless
+  `WIB_MODELCONFIG_WAIT` is set: the slowest measured standby plus five minutes, and past the gate's own bound (90 s,
+  420 s, then the Job's 600 s deadline) from where the gate starts. A missing ModelConfig after the first is not
+  waited for again. `repair_one` keeps converge at 300 s a round, so the admin console runner's 2700 s
+  (`docs/admin-console.md`) still holds.
+- `fleet.sh`: `converge_one` first runs `await_argo_settled`: while any Application's sync operation is Running and
+  younger than `WIB_STUCK_SYNC_MIN` (an older one is stuck, and `repair_stuck_syncs` ends it), it waits, naming them,
+  until `WIB_CONVERGE_SETTLE_UNTIL`, one budget for the whole converge that `cmd_converge` sets from
+  `WIB_CONVERGE_SETTLE` seconds (0 unless set, so the runner's converge and a hand run never wait). When the budget
+  ends it names what is still in flight and judges the cluster as it stands.
+- `backups.py`: the converge after a standby build runs with `WIB_CONVERGE_SETTLE=600`.
+
+**Tests.** `bash verify/test_fleet_converge_repairs.sh` (90 passed; new: a converge waits while prometheus and
+ai-layer are mid-sync and CONVERGES once they end, a budget that runs out names them and fails at 10/12 with both
+listed, 0 never waits, a sync Running 40 minutes is not waited for, a non-numeric budget is refused; five of these fail
+on staging's fleet.sh), `bash verify/test_pin_bedrock_profiles.sh` (77 passed; new: the default is 900 and the
+variable still sets it, ModelConfigs that appear six reads late are all pinned, four missing ones share one wait,
+converge's pin keeps 300; four fail on staging's fleet.sh) and `python3 verify/test_backups.py` (ALL PASS; the dry
+run's three converges carry `WIB_CONVERGE_SETTLE=600`). Also run once: `test_fleet_standbys.sh`,
+`test_platform_floor.sh`, `test_docs_current.py`, `test_backups_floor.py`, `test_scope_tests.py`, `test_test_map.py`,
+all passing. `test_fleet_contract.py` fails here before and after this change on a missing
+`gitops/ai-layer/guard-proxy/proxy.py`: the submodule is not checked out in this clone. shellcheck finds nothing new in
+fleet.sh. The scope map needed no change.
+
+**Live check, read only.** On watch-it-burn-private (40 apps, no sync Running), this branch's `argo_syncs_in_flight`
+named none, `await_argo_settled` with a 60 s budget returned after its one read (4 s), and `modelconfig_wait` printed
+900. The standby record above was read from Datadog, EC2 and netcup's logs; nothing on any cluster or in AWS changed.
+
+**Not yet run on a cluster.** A private standby build and converge from a checkout holding this change: the next
+wave's `backups-<wave>.log` should show every ModelConfig pinned in `instructors up` and the converge either
+CONVERGED or naming its unhealthy apps (`unhealthy=[...]`, #1375). Netcup's checkout moves after 23:30Z (#1376), and
+no wave is scheduled after today's.
