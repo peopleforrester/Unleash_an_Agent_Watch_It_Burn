@@ -56232,3 +56232,26 @@ put back to the tracked files alone the equality check fails on exactly `verify/
 
 **Live check.** Skipped: the change touches only `verify/scope_tests.py` and `verify/test_test_map.py`, which no
 cluster runs.
+## 2026-11-12 · #1394 · run 20630 · Run-of-show and /kubecon: the take-home URL is `michaelrishiforrester.com/burritobot`
+
+Michael asked on the day of the talk for the take-home page to move from `/unleashed` to `/burritobot` (MRF-website#175,
+with the deck in rounds filed alongside). `facilitation/kubecon-na-2026-run-of-show.md` now names
+`michaelrishiforrester.com/burritobot` in the segments table's row 6 and in the "Take home, and the feedback ask" step,
+whose encoded URL is `https://michaelrishiforrester.com/burritobot/`; that step cites #1394 and says MRF-website#175
+moved the page. `gitops/ai-layer/web/kubecon.html` line 554 labels and links the same URL and cites #1394. Neither
+file names `michaelrishiforrester.com/unleashed` any more. The #1369 entry above keeps the old URL as history.
+
+**Tests.** No test or script under `verify/` or `scripts/` reads `michaelrishiforrester.com/unleashed`, the
+`MRF-website#171` citation or the step's bold lead, so none changed. `python3 verify/test_ros_deck_live.py` fails 9
+checks at this run, none on the take-home: the deck at https://rounds.agenticburn.com/attendee.html now has 126 slides
+after rounds-agenticburn#176, which #1390 and #1392 carry. The deck itself still labels slide 124
+`michaelrishiforrester.com/unleashed` as this run reads it, and `https://michaelrishiforrester.com/burritobot/` answered
+404 while `/unleashed/` answered 200, so the page and the deck land through MRF-website#175 and its rounds issue. The
+prose gate's scanner passes on the three changed files, read against base 2cd44069.
+
+**Live check.** This doc-lane run has no cluster context, so it read neither cluster.
+
+**Not yet run on a cluster.** After promotion and Argo CD's sync, watch-it-burn-private's `console-src` ConfigMap in
+`agent` should hold `michaelrishiforrester.com/burritobot` in its `kubecon.html` key and no
+`michaelrishiforrester.com/unleashed`: `kubectl --context watch-it-burn-private -n agent get cm -o name | grep
+console-src`, then read that key.
