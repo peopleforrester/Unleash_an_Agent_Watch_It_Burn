@@ -55238,3 +55238,51 @@ spans in Datadog still carry `k8s.deployment.name`; and
 `COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_collector_pii_scrub_live.py` passes.
 
 No dependency was added.
+## 2026-11-12 · #1336 · run 20574 · Run 20295's split ported to staging, with the two tests that failed its gate brought along
+
+**What this run took over.** Run 20295's four commits (the split, its two tests, `collector_render.py` in the map's
+`full` list and the entry above) never reached staging: its tests gate failed and the comment on #1336 did not quote
+why. `bash verify/prior-drafts.sh 1336 origin/staging` read its branch as three edits in place (decisions.md and the
+two maps); this run cherry-picked it onto 9146dda7 and wrote `scope-map.yaml` and `test-map.yaml` again with
+`python3 verify/scope_tests.py write`, keeping staging's entries for `test_collector_pods_ready_live_checks.py` and
+`test_collector_relay_live_checks.py`. The pipeline change and the reading in the entry above are the draft's,
+unchanged.
+
+**Why the gate failed.** Listing `collector_render.py` in `full` makes the change run every offline test. Run over the
+tests the change's own paths select, two failed, and this run fixed both:
+
+- `test_service_naming.py` held `transform/kagent_service_name` right after `memory_limiter` in `traces`. After the
+  split `traces` has no `memory_limiter`; its spans come over `otlp/relay` from `traces/intake`. The test now holds what
+  the order is for: in `metrics` the rename still follows `memory_limiter`, `traces/intake` runs only
+  `memory_limiter`, `k8s_attributes/intake` and `batch`, and in `traces` the rename is the first processor behind
+  `otlp/relay`.
+- `test_fetch_inventory.py` found `test_collector_relay_e2e.py`'s two `urlopen` calls unlisted. `fetch-inventory.yaml`
+  classes them as loopback, as for the other collector tier tests.
+
+A third fault came from staging moving on. #1360 removed `verify/fetch-e2e-tools.sh`, and the tier test still read its
+binary only from `verify/.tools/bin` and named that script when it was missing. It now reads `OTELCOL_CONTRIB` first,
+the image's copy inside wib-e2e-tools, as `test_collector_pii_scrub_e2e.py` does, and its map entry names
+`run-e2e-tools.sh` where it named the removed script.
+
+**Tests run**, each once and passing: the 168 offline tests that the draft's own paths select (`scope_tests.py select
+offline` on 9146dda7..eb5afad7, before the `full` edit), the collector tests and `test_bootstrap_chart.py` alone and
+the rest through `run-tests.sh` with `HECATON_TEST_FILES`; that run failed on the two tests above, and each was then
+rerun alone and passed. `test_scope_tests.py` and `test_test_map.py` with `HECATON_BASE_SHA=9146dda7`. The tier test
+alone, `bash verify/run-e2e-tools.sh test_collector_relay_e2e.py`: 1 check in 0m10s, `ALL E2E TOOLS TIER CHECKS
+GREEN`, `exit=0`. Because the change edits `full`, the gate runs every offline test; the ones that read none of the
+change's paths are left to it.
+
+**Live check, read-only.** Neither cluster runs the change yet. On both, the collector runs
+`opentelemetry-collector-contrib:0.160.0-5b66b0dc6921`, the version the tier test pins (v0.160.0), and
+`COMMUNITY_CONTEXT=watch-it-burn-community PRIVATE_CONTEXT=watch-it-burn-private python3
+verify/test_collector_relay_live.py` passed on both (26,210 and 24,498 bytes). The community collector pod
+`otel-collector-opentelemetry-collector-agent-9zznp` had 0 restarts after 25 h, and its relay's traces pipeline still
+takes `otlp` with `batch` fifth, the layout before the split. Nothing was changed on either cluster.
+
+**Not yet run on a cluster.** The replay reading after the change, as the entry above names it: once hecaton promotes
+this branch and Argo CD syncs it, the same 500-phone replay and sampler on watch-it-burn-community, with the collector
+above one core or idle within about 15 s of the replay's end, no `DeadlineExceeded` or `export timeout` in the
+senders' logs, `otelcol_exporter_enqueue_failed_spans` and `otelcol_exporter_send_failed_spans` for
+`otlp_grpc/relay` at 0, no restart, and `test_collector_relay_live.py` and `test_collector_pii_scrub_live.py` passing.
+
+No dependency was added.
