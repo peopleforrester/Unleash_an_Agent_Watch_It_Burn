@@ -55716,3 +55716,53 @@ verify/test_drift_rebuilt_states.py`, `test_drift_floor.py`, `test_floor_rebuild
 and `bash verify/test_fleet_settle_after_apply.sh`, all passing. `verify/scope-map.yaml` and `verify/test-map.yaml`
 gain the new test's entry. The prose gate passes. No dependency was added; rsync and ssh were already on
 tanjiro-wsl2.
+
+## 2026-11-12 · #1379 · run 20592 · `#/47` files the demo ticket through the desk's form and reads it on the room's bot
+
+rounds-agenticburn#175 (Whitney, 2026-11-12) changed `#/47`'s Do note: the presenter files a funny complaint through
+the desk's form, the same way the room can, and asks the room's BurritoBot, `https://attackme.burritobot.co`, about
+it by its number. "We're supposed to show the audience what they're able to do." The run-of-show and `/kubecon`
+follow it.
+
+- Segment 4's `#/47` step now has the presenter click the line, file through the desk's form (the deck's Bat Spit
+  example), note the four-digit number, then switch to the room's bot and ask "What's the status of my support
+  ticket <number>?". The Say and Then say lines are unchanged, word for word. The step no longer names the
+  port-forward, `/presenter-ticket`, HC-900 or the admin bot, except to say the ticket is never read there.
+- The segments table's row 4 says the same in one clause.
+- The presenters' path (the port-forward, the `curl` to `/presenter-ticket`, HC-900 to HC-999 and the admin bot's
+  read) moved out of the step into a paragraph of its own in segment 4, "The presenters' path, for rehearsals",
+  after the one-desk paragraph, which keeps the admin-bot rule as it was. `verify/presenter_ticket_live.py` checks
+  that path and still finds its literals there.
+- `/kubecon`'s segment 4 story and its `#/47` note say the same; the note keeps the rehearsal commands.
+- `verify/test_support_desk_named.py` now holds the rehearsal path in segment 4 and the `#/47` step itself: filed
+  through the desk's form, the same way the room can, `https://attackme.burritobot.co` named, and the bot it
+  switches to matched with rounds' own `STEP_SWITCH` pattern, which must find only `room`. A copy that switches to
+  the admin bot again fails it. `verify/test_presenter_ticket_live.py` and `presenter_ticket_live.py` reword their
+  docstrings and labels to say the path is the rehearsal one.
+
+rounds' `tests/e2e_runofshow_slide46.py` was read through `gh api` and its checks were run by hand on the new step:
+the step quotes `Let's file a ticket.`, its Say and Then say lines are the two the issue gives, its one link sentence
+names `support.burritobot.co`, and `STEP_SWITCH` finds `['room']`. The deck rounds serves already says "Switch to the
+room's BurritoBot, https://attackme.burritobot.co" on that slide, so the check reads `['room']` on both sides once
+this reaches staging.
+
+**Live check, watch-it-burn-community.** A one-off script (in the run's scratch, built on
+`presenter_ticket_live.py`'s `PresenterTicket`, with `file()` posting the desk's public form) ran the new flow once:
+
+    PASS  identity kube-context and https://attackme.burritobot.co are the same cluster
+    PASS  filed    POST https://support.burritobot.co/submit answered 200, ticket HC-1288, a four-digit room number outside HC-900 to HC-999
+    PASS  on desk  https://support.burritobot.co/ticket/HC-1288 answered 200 with the ticket's text
+    PASS  read     read_support_ticket(HC-1288); the reply: 'The status of your support ticket HC-1288 is currently open. ...'
+    PASS  cleanup  /desk-forget removed HC-1288 from the one desk
+    PASS  gone     https://support.burritobot.co/ticket/HC-1288 answers 404: the number is free again
+
+One model call, with the probe marker, so the ask stayed off the room's prompt feed; the ticket was removed, and
+nothing else on the desk or the cluster changed.
+
+**Not yet run on a cluster.** The `/kubecon` page's new wording serves once Argo CD syncs this from staging; nothing
+in it changes how the page works. The issue's own live item, the ticket filed on the form and read back at the
+run-through, is the presenters' at the run-through.
+
+**Tests.** Run once each: `python3 verify/test_support_desk_named.py`, `test_presenter_ticket_live.py`,
+`test_kubecon_seg4_flow.py`, `test_ros_seg4_flow.py` and `test_ros_deck_live.py` (against the deck rounds serves),
+all passing. `python3 verify/scope_tests.py write` changed nothing. The prose gate passes.

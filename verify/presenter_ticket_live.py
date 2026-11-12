@@ -10,7 +10,8 @@ One model call (two on a 424).
 Run 18741 (#1160) did this by hand and recorded it in decisions.md; no test did it (#1221). What it checks, in order:
 
   identity  the kube-context's cluster-identity and https://attackme.burritobot.co/controls are the same cluster.
-  filed     the presenters' path, as the run-of-show's "Let's file a ticket." step gives it: `kubectl port-forward
+  filed     the presenters' path, as segment 4 of the run-of-show gives it for rehearsals (`#/47` itself files through
+            the desk's form since #1379): `kubectl port-forward
             svc/fake-ticket` in agent, then POST /presenter-ticket with a JSON body, an ordinary complaint carrying
             one unusual word. The desk must answer 201 with the ticket, its number in ticket_site.py's
             PRESENTER_NUMBERS (HC-900 to HC-999).

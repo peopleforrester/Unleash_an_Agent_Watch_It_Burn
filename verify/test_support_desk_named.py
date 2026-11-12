@@ -19,6 +19,11 @@ Since #1145 (Michael, 2026-11-08) both clusters' bots read one desk, `support.bu
 segment 4 stops naming the one desk and page for both clusters, names the admin cluster's own desk or deployments
 host, drops the presenters' path or its range, or has the admin bot read any number but a presenter one or HC-666:
 the rule Michael added, so a ticket the room wrote never runs on the presenters' bot.
+
+Since rounds-agenticburn#175 (Whitney, 2026-11-12; #1379) `#/47` files its ticket through the desk's form, the same way
+the room can, and reads it back on the room's bot, so the step shows the room what it can do. The presenters' path
+stays in segment 4 for rehearsals. This fails when the `#/47` step goes back to the port-forward, `/presenter-ticket`
+or the admin bot, stops switching to the room's bot as the deck's Do note does, or when the rehearsal path leaves.
 """
 from __future__ import annotations
 
@@ -73,9 +78,47 @@ check(f"segment 4 names the presenters' range, {first} to {last}, as ticket_site
 check(f"segment 4 tells the presenters to read only {first} to {last} or {', '.join(sd.ADMIN_FIXED)} on the admin bot",
       f"On the admin bot, read only a presenter number, {first} to {last}, or {sd.ADMIN_FIXED[0]}" in SEG
       and "Never read a four-digit number there: that is a room ticket" in SEG)
-check("the demo ticket is filed through the presenters' path on watch-it-burn-community, not the desk's form",
-      "kubectl --context watch-it-burn-community -n agent port-forward svc/fake-ticket 18080:8080" in SEG
-      and "curl -s -X POST localhost:18080/presenter-ticket" in SEG and "not the desk's form" in SEG)
+check("segment 4 keeps the presenters' path on watch-it-burn-community for rehearsals, not the desk's form",
+      "**The presenters' path, for rehearsals.**" in SEG
+      and "kubectl --context watch-it-burn-community -n agent port-forward svc/fake-ticket 18080:8080" in SEG
+      and "curl -s -X POST localhost:18080/presenter-ticket" in SEG and "not through the desk's form" in SEG)
+
+# The `#/47` step, its bullet up to the next one. rounds-agenticburn's tests/e2e_runofshow_slide46.py reads the same
+# bullet and matches the bot it switches to with this pattern, against the deck's "Switch to the room's BurritoBot".
+STEP47_OPEN = "- **\"Let's file a ticket.\" (`#/47`).**"
+STEP_SWITCH = re.compile(r"switch(?:es)? to the (\w+)(?:'s)? (?:bot|BurritoBot)\b")
+if STEP47_OPEN not in SEG:
+    sys.exit(f"ANCHOR MISSING: {STEP47_OPEN!r} is not in segment 4 of {sd.RUN_OF_SHOW}; the #/47 checks read that step")
+
+
+def step47_problems(seg: str) -> list[str]:
+    """How segment 4's `#/47` step strays from the deck's Do note (rounds-agenticburn#175): empty when the ticket is
+    filed through the desk's form and read back on the room's bot, and nothing of the presenters' path is in it."""
+    start = seg.index(STEP47_OPEN)
+    end = seg.find(" - **", start + len(STEP47_OPEN))
+    step = seg[start:end if end >= 0 else len(seg)]
+    problems = []
+    if "through the desk's form, the same way the room can" not in step:
+        problems.append("the ticket is not filed through the desk's form, the same way the room can")
+    if STEP_SWITCH.findall(step) != ["room"]:
+        problems.append(f"it switches to {STEP_SWITCH.findall(step)}, not only to the room's bot")
+    if "`https://attackme.burritobot.co`" not in step:
+        problems.append("it does not name the room's bot, `https://attackme.burritobot.co`")
+    for old in ("port-forward", "/presenter-ticket", "HC-900", "switches to the admin bot"):
+        if old in step:
+            problems.append(f"it still carries the presenters' path: {old!r}")
+    return problems
+
+
+check("#/47 files the demo ticket through the desk's form and reads it on the room's bot (rounds-agenticburn#175)",
+      not step47_problems(SEG), str(step47_problems(SEG)))
+_old47 = SEG.replace("switches to the room's bot, `https://attackme.burritobot.co`,",
+                     "switches to the admin bot, `https://burritobot-private.burritobot.co`,")
+if _old47 == SEG:
+    sys.exit(f"ANCHOR MISSING: \"switches to the room's bot, `https://attackme.burritobot.co`,\" is not in segment 4 "
+             f"of {sd.RUN_OF_SHOW}; the #/47 check's refusal case swaps it")
+check("and that check fails on a #/47 step that reads the ticket back on the admin bot again",
+      "it switches to ['admin'], not only to the room's bot" in step47_problems(_old47), str(step47_problems(_old47)))
 check(f"segment 4 says `/presenter-ticket` answers 403 from outside, on `{community}`",
       f"from outside, `https://{community}/presenter-ticket` answers 403" in SEG)
 
