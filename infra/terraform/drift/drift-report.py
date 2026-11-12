@@ -27,6 +27,13 @@ Three questions, each answered from the account itself rather than from memory:
    outside it; the trail is multi-region, so CloudTrail still names who made it. An account with no recorder
    and no permissions boundary is told to apply the boundary root first, because the audit root needs it.
 
+**Whose states.** The states are local files, and two hosts apply them: the state host (tanjiro-wsl2) keeps the
+KubeCon pair, the boundary, audit and home-region lab VPC states, and the backup schedule applies the standbys and
+the regional lab VPCs from netcup's checkout (#1374). So the report reads this checkout's states and, with --remote
+(scheduled-drift.sh names netcup), a copy of each other host's, made with rsync for the run and removed after it.
+A state two hosts hold for the same account root or EKS cluster is planned once, from this checkout's copy, and
+the other copy is a finding: the two diverge with every apply.
+
 Every AWS call carries --profile and --region, and every plan carries -var profile/region, so nothing here
 reads a shared default another session may have changed (CLAUDE.md, rule 6). The account list and the default
 account are read from fleet.sh, so the report covers the accounts the fleet builds in.
@@ -36,13 +43,14 @@ read). Incomplete is a failure, never a pass: a drift check that could not look 
 
 Usage:
   python3 infra/terraform/drift/drift-report.py [--accounts p1,p2] [--region us-west-2] [--out report.md]
-                                                [--backups fleet/backups.tsv]
+                                                [--backups fleet/backups.tsv] [--remote host=src ...]
                                                 [--post] [--repo owner/name] [--parallel 4]
 """
 from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import contextlib
 import dataclasses
 import datetime
 import fnmatch
@@ -50,6 +58,7 @@ import json
 import os
 import pathlib
 import re
+import socket
 import subprocess
 import sys
 import tempfile
@@ -229,6 +238,8 @@ class Report:
         self.config: dict[str, str] = {}   # account -> "ok: ..." or the problem
         self.config_ok: dict[str, bool] = {}
         self.notes: list[str] = []
+        self.hosts: list[str] = []         # the hosts whose states were read, this one first
+        self.copies: list[str] = []        # a state that two hosts hold, each a finding (#1374)
 
     @property
     def drifted(self) -> list[Plan]:
@@ -236,7 +247,8 @@ class Report:
 
     @property
     def findings(self) -> int:
-        return len(self.drifted) + len(self.unmanaged) + sum(1 for ok in self.config_ok.values() if not ok)
+        return (len(self.drifted) + len(self.unmanaged) + len(self.copies)
+                + sum(1 for ok in self.config_ok.values() if not ok))
 
     def exit_code(self) -> int:
         if self.errors:
@@ -244,11 +256,63 @@ class Report:
         return 2 if self.findings else 0
 
 
-def collect_plans(rep: Report, tf_dir: pathlib.Path, org_dir: pathlib.Path, fleet_states: pathlib.Path,
+@dataclasses.dataclass
+class Tree:
+    """One checkout's states: this one's, or a copy of another host's, fetched by fetch_tree. Every plan still runs in
+    this checkout's roots; a tree only says where each state file is."""
+    host: str             # the host that holds these states, as the report names it
+    tf: pathlib.Path      # its infra/terraform: aws/network, aws/audit/states
+    org: pathlib.Path     # its infra/org: boundary/states
+    fleet_states: pathlib.Path
+    remote: bool = False
+
+
+def fetch_tree(host: str, src: str, dest: pathlib.Path) -> Tree:
+    """Copy the state files of the checkout at `src` (an rsync source: `netcup:repos/...` over ssh, or a directory)
+    into `dest`, and return them as a tree. Only *.tfstate and the clusters' *.account files are copied, never a
+    .backup or a provider. The backup schedule applies the standbys and the regional lab VPCs from netcup's
+    checkout (#1374), so their states are there and nowhere else. A copy that fails makes the report incomplete."""
+    if not src:
+        raise Incomplete(f"--remote {host}=: no checkout named to read {host}'s states from")
+    tf_rel = TF_DIR.relative_to(TF_DIR.parents[1])  # infra/terraform, the same in every checkout
+    infra = tf_rel.parts[0]
+    (dest / infra).mkdir(parents=True, exist_ok=True)
+    p = run(["rsync", "-a", "--prune-empty-dirs", "-e", "ssh -o BatchMode=yes -o ConnectTimeout=20",
+             "--exclude=.terraform/", "--include=*/", "--include=*.tfstate", "--include=*.account", "--exclude=*",
+             f"{src.rstrip('/')}/{infra}/", f"{dest}/{infra}/"])
+    if p.returncode != 0:
+        # rsync's last line is its own exit code; the line that says why (ssh's, or a missing path) comes first.
+        why = " / ".join(ln.strip() for ln in p.stderr.strip().splitlines()[:3] if ln.strip()) or "(no output)"
+        raise Incomplete(f"the states on {host} ({src}) could not be copied: rsync: {why}")
+    tf = dest / tf_rel
+    return Tree(host, tf, dest / infra / "org", tf / "fleet/states", remote=True)
+
+
+def remotes_arg(text: str | None) -> list[tuple[str, str]]:
+    """`host=src[,host=src...]`, as --remote and WIB_DRIFT_REMOTES give it."""
+    out = []
+    for item in (text or "").split(","):
+        if not item.strip():
+            continue
+        host, sep, src = item.strip().partition("=")
+        if not sep or not host:
+            raise SystemExit(f"--remote {item!r}: expected host=<rsync source of that host's checkout>")
+        out.append((host, src))
+    return out
+
+
+def lineage(state: dict) -> str:
+    return f"serial {state.get('serial', '?')}, lineage {str(state.get('lineage', '?'))[:8]}"
+
+
+def collect_plans(rep: Report, tf_dir: pathlib.Path, org_dir: pathlib.Path, trees: list[Tree],
                   default_account: str, ids: dict[str, str], managed_names: dict[str, set[tuple[str, str]]]) -> None:
-    """Find every state, work out which account it is in, and record what it manages."""
+    """Find every state in every tree, work out which account it is in, and record what it manages. The first tree
+    is this checkout's. A state that a later tree holds too, for the same account root or the same EKS cluster, is
+    planned from the first copy only, and the second copy is a finding: two states of one thing diverge."""
     network, cluster, audit, boundary = tf_dir / "aws/network", tf_dir / "aws/cluster", tf_dir / "aws/audit", org_dir / "boundary"
     profile_of = {acct_id: prof for prof, acct_id in ids.items()}
+    held: dict[tuple[str, str], tuple[str, dict]] = {}  # what a state is of -> (the host planned, its state)
 
     def remember(profile: str, state: dict) -> None:
         for rtype, attrs in managed(state):
@@ -257,76 +321,105 @@ def collect_plans(rep: Report, tf_dir: pathlib.Path, org_dir: pathlib.Path, flee
             elif rtype == "aws_eks_cluster" and attrs.get("name"):
                 managed_names[profile].add(("eks-cluster", attrs["name"]))
 
-    def account_root(label: str, root: pathlib.Path, st: pathlib.Path, prof: str, region: str) -> dict:
+    def first_copy(tree: Tree, key: tuple[str, str], label: str, state: dict) -> bool:
+        """True when this is the copy to plan. A remote copy that manages nothing is a note, not a second state."""
+        if tree.remote and not any(True for _ in managed(state)):
+            rep.notes.append(f"{label}: {tree.host} holds an empty state ({lineage(state)}), nothing to plan")
+            return False
+        if key in held:
+            host, kept = held[key]
+            rep.copies.append(f"`{label}`: {host} holds the copy planned ({lineage(kept)}) and {tree.host} holds "
+                              f"another ({lineage(state)})")
+            return False
+        held[key] = (tree.host, state)
+        return True
+
+    def suffix(tree: Tree) -> str:
+        return f" on {tree.host}" if tree.remote else ""
+
+    def account_root(tree: Tree, label: str, root: pathlib.Path, st: pathlib.Path, prof: str, region: str) -> dict | None:
         state = load_state(st)
         remember(prof, state)
-        rep.plans.append(Plan(f"{label} {prof}", root, st, prof, [
+        if not first_copy(tree, (label, prof), f"{label} {prof}", state):
+            return None
+        rep.plans.append(Plan(f"{label} {prof}{suffix(tree)}", root, st, prof, [
             ("profile", prof), ("region", region), ("event", state_tag(state, "event", f"{label} {prof}"))]))
         return state
 
     vpc: dict[tuple[str, str], dict] = {}  # (profile, region) -> the lab VPC state's outputs
-    for prof in rep.accounts:
-        st = network / ("terraform.tfstate" if prof == default_account else f"states/{prof}.tfstate")
-        if st.is_file():
-            vpc[(prof, rep.region)] = outputs(account_root("lab VPC", network, st, prof, rep.region))
-        else:
-            rep.notes.append(f"{prof}: no lab VPC state ({st}), so no clusters can be built there")
-        # Outside the home region every account, the default one included, keeps one lab VPC state per region
-        # (fleet.sh lab_vpc_state_for, #643).
-        for st in sorted((network / "states").glob(f"{prof}.*.tfstate")):
-            region = st.name[len(prof) + 1:-len(".tfstate")]
-            if not REGION_RE.match(region):
-                raise Incomplete(f"lab VPC state {st.name}: {region!r} is not a region")
-            vpc[(prof, region)] = outputs(account_root(f"lab VPC {region}", network, st, prof, region))
-            rep.regions.add(region)
-        for label, root in (("boundary", boundary), ("audit", audit)):
-            st = root / f"states/{prof}.tfstate"
+    for tree in trees:
+        tnet = tree.tf / "aws/network"
+        for prof in rep.accounts:
+            st = tnet / ("terraform.tfstate" if prof == default_account else f"states/{prof}.tfstate")
             if st.is_file():
-                account_root(label, root, st, prof, rep.region)
-            else:
-                rep.notes.append(f"{prof}: {label} root not applied from here ({st} missing)")
+                state = account_root(tree, "lab VPC", network, st, prof, rep.region)
+                if state is not None:
+                    vpc[(prof, rep.region)] = outputs(state)
+            elif not tree.remote:
+                rep.notes.append(f"{prof}: no lab VPC state ({st}), so no clusters can be built there")
+            # Outside the home region every account, the default one included, keeps one lab VPC state per region
+            # (fleet.sh lab_vpc_state_for, #643).
+            for st in sorted((tnet / "states").glob(f"{prof}.*.tfstate")):
+                region = st.name[len(prof) + 1:-len(".tfstate")]
+                if not REGION_RE.match(region):
+                    raise Incomplete(f"lab VPC state {st.name}{suffix(tree)}: {region!r} is not a region")
+                state = account_root(tree, f"lab VPC {region}", network, st, prof, region)
+                if state is not None:
+                    vpc[(prof, region)] = outputs(state)
+                    rep.regions.add(region)
+            for label, root, sdir in (("boundary", boundary, tree.org / "boundary/states"),
+                                      ("audit", audit, tree.tf / "aws/audit/states")):
+                st = sdir / f"{prof}.tfstate"
+                if st.is_file():
+                    account_root(tree, label, root, st, prof, rep.region)
+                elif not tree.remote:
+                    rep.notes.append(f"{prof}: {label} root not applied from here ({st} missing)")
 
-    for st in sorted(fleet_states.glob("*.tfstate")):
-        name = st.stem
-        state = load_state(st)
-        arns = [a.get("arn", "") for t, a in managed(state) if t == "aws_eks_cluster"]
-        if not arns:
-            rep.notes.append(f"cluster {name}: state holds no EKS cluster (an emptied state), nothing to plan")
-            continue
-        m = re.match(r"arn:[^:]+:eks:([^:]+):(\d+):cluster/", arns[0])
-        if not m:
-            raise Incomplete(f"cluster {name}: cannot parse the EKS ARN in its state: {arns[0]!r}")
-        region, acct_id = m.groups()
-        prof = profile_of.get(acct_id)
-        if prof is None:
-            raise Incomplete(f"cluster {name}: its state is in account {acct_id}, which none of the profiles "
-                             f"{','.join(rep.accounts)} reaches; pass that account's profile in --accounts")
-        recorded = st.with_suffix(".account")  # fleet.sh's record_membership
-        if recorded.is_file() and recorded.read_text().strip() not in ("", prof):
-            raise Incomplete(f"cluster {name}: {recorded.name} says {recorded.read_text().strip()} but its state "
-                             f"is in {prof} ({acct_id})")
-        rep.regions.add(region)
-        # A standby (#643) is planned against its own region's lab VPC, never the home region's.
-        lab = vpc.get((prof, region))
-        if lab is None:
-            raise Incomplete(f"cluster {name} is in {prof} {region}, which has no lab VPC state to read vpc_id from")
-        subnets = lab.get("private_subnet_ids")
-        if not lab.get("vpc_id") or not subnets:
-            raise Incomplete(f"lab VPC state for {prof} {region} has no vpc_id / private_subnet_ids outputs")
-        remember(prof, state)
-        variables = [("name", name), ("profile", prof), ("region", region),
-                     ("vpc_id", lab["vpc_id"]), ("private_subnet_ids", json.dumps(subnets))]
-        variables += [(k, state_tag(state, k, f"cluster {name}", "aws_eks_cluster")) for k in CLUSTER_TAG_VARS
-                      if k != "role"]
-        role, from_roster = cluster_role(state, name, tf_dir / "fleet/roster.tsv")
-        variables.append(("role", role))
-        if from_roster:
-            rep.notes.append(f"cluster {name}: no `role` tag in its state (built before #636), so it is planned with "
-                             f"its roster.tsv role, {role}; its next apply adds the tag")
-        hop = hop_limit(state)
-        if hop:
-            variables.append(("imds_hop_limit", hop))
-        rep.plans.append(Plan(f"cluster {name}", cluster, st, prof, variables))
+    for tree in trees:
+        for st in sorted(tree.fleet_states.glob("*.tfstate")):
+            name = st.stem
+            where = f"cluster {name}{suffix(tree)}"
+            state = load_state(st)
+            arns = [a.get("arn", "") for t, a in managed(state) if t == "aws_eks_cluster"]
+            if not arns:
+                rep.notes.append(f"{where}: state holds no EKS cluster (an emptied state), nothing to plan")
+                continue
+            m = re.match(r"arn:[^:]+:eks:([^:]+):(\d+):cluster/", arns[0])
+            if not m:
+                raise Incomplete(f"{where}: cannot parse the EKS ARN in its state: {arns[0]!r}")
+            region, acct_id = m.groups()
+            prof = profile_of.get(acct_id)
+            if prof is None:
+                raise Incomplete(f"{where}: its state is in account {acct_id}, which none of the profiles "
+                                 f"{','.join(rep.accounts)} reaches; pass that account's profile in --accounts")
+            recorded = st.with_suffix(".account")  # fleet.sh's record_membership
+            if recorded.is_file() and recorded.read_text().strip() not in ("", prof):
+                raise Incomplete(f"{where}: {recorded.name} says {recorded.read_text().strip()} but its state "
+                                 f"is in {prof} ({acct_id})")
+            remember(prof, state)
+            if not first_copy(tree, ("cluster", arns[0]), f"cluster {name}", state):
+                continue
+            rep.regions.add(region)
+            # A standby (#643) is planned against its own region's lab VPC, never the home region's.
+            lab = vpc.get((prof, region))
+            if lab is None:
+                raise Incomplete(f"{where} is in {prof} {region}, which has no lab VPC state to read vpc_id from")
+            subnets = lab.get("private_subnet_ids")
+            if not lab.get("vpc_id") or not subnets:
+                raise Incomplete(f"lab VPC state for {prof} {region} has no vpc_id / private_subnet_ids outputs")
+            variables = [("name", name), ("profile", prof), ("region", region),
+                         ("vpc_id", lab["vpc_id"]), ("private_subnet_ids", json.dumps(subnets))]
+            variables += [(k, state_tag(state, k, f"cluster {name}", "aws_eks_cluster")) for k in CLUSTER_TAG_VARS
+                          if k != "role"]
+            role, from_roster = cluster_role(state, name, tf_dir / "fleet/roster.tsv")
+            variables.append(("role", role))
+            if from_roster:
+                rep.notes.append(f"cluster {name}: no `role` tag in its state (built before #636), so it is planned "
+                                 f"with its roster.tsv role, {role}; its next apply adds the tag")
+            hop = hop_limit(state)
+            if hop:
+                variables.append(("imds_hop_limit", hop))
+            rep.plans.append(Plan(where, cluster, st, prof, variables))
 
 
 def run_plan(p: Plan) -> Plan:
@@ -521,12 +614,13 @@ def render(rep: Report, now: str) -> str:
            f"{', '.join(sorted(rep.regions - {rep.region})) or 'no other region'}). "
            "Plan-only: `terraform plan -refresh-only`, "
            "nothing applied. Written by `infra/terraform/drift/drift-report.py`; how to read it is in "
-           "`docs/floor.md`.", ""]
+           "`docs/floor.md`." + (f" States read on: {', '.join(rep.hosts)}." if rep.hosts else ""), ""]
     if rep.errors:
         out += ["## INCOMPLETE: these could not be read, so this report proves nothing about them", ""]
         out += [f"- {e}" for e in rep.errors] + [""]
     out += [f"**{rep.findings} finding(s)**: {len(rep.drifted)} drifted state(s), {len(rep.unmanaged)} unmanaged "
-            f"resource(s), {sum(1 for ok in rep.config_ok.values() if not ok)} account(s) without a Config record.", ""]
+            f"resource(s), {len(rep.copies)} state(s) held on two hosts, "
+            f"{sum(1 for ok in rep.config_ok.values() if not ok)} account(s) without a Config record.", ""]
 
     out += ["## Terraform drift", ""]
     if rep.drifted:
@@ -536,6 +630,12 @@ def render(rep: Report, now: str) -> str:
     else:
         out += ["No state has drifted." if not rep.errors else "No drift in the states that could be planned.", ""]
 
+    if rep.copies:
+        out += ["## Held on two hosts: one thing, two states", ""]
+        out += [f"- {c}" for c in rep.copies]
+        out += ["", "Only the first copy is planned. Each apply moves one copy and leaves the other behind, so the "
+                "copy the host that applies it does not keep is moved aside there (`docs/floor.md`, \"The state "
+                "host\").", ""]
     out += ["## Unmanaged: in the account, in no Terraform state, not in the register", ""]
     if rep.unmanaged:
         out += ["| account | kind | name | created | created by (CloudTrail) | AWS Config |", "|---|---|---|---|---|---|"]
@@ -590,6 +690,12 @@ def main(argv: list[str]) -> int:
                     help="the infra/org tree, which holds the boundary root (default: <tf-dir>/../org)")
     ap.add_argument("--states", type=pathlib.Path, default=None,
                     help="cluster states (default: $WIB_STATE_DIR or <tf-dir>/fleet/states, as fleet.sh)")
+    ap.add_argument("--host", default=os.environ.get("WIB_DRIFT_HOST") or socket.gethostname().split(".")[0],
+                    help="what the report calls this host, whose checkout's states it reads first")
+    ap.add_argument("--remote", action="append", default=None, metavar="HOST=SRC",
+                    help="also plan the states of another host's checkout, copied with rsync from SRC "
+                         "(e.g. netcup=netcup:repos/talks/<repo>); repeatable (default: $WIB_DRIFT_REMOTES, "
+                         "comma-separated)")
     ap.add_argument("--register", type=pathlib.Path, default=None,
                     help="default: <tf-dir>/drift/known-unmanaged.yaml")
     ap.add_argument("--backups", type=pathlib.Path, default=None,
@@ -605,6 +711,8 @@ def main(argv: list[str]) -> int:
     register_path = args.register or args.tf_dir / "drift/known-unmanaged.yaml"
     now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
     rep = Report([], args.region)
+    remotes = remotes_arg(",".join(args.remote) if args.remote is not None else os.environ.get("WIB_DRIFT_REMOTES"))
+    copies = contextlib.ExitStack()
 
     try:
         fleet_sh = args.tf_dir / "fleet/fleet.sh"
@@ -619,8 +727,14 @@ def main(argv: list[str]) -> int:
             if not ids[prof]:
                 raise Incomplete(f"sts get-caller-identity ({prof}) returned no account")
         managed_names: dict[str, set] = {prof: set() for prof in rep.accounts}
-        collect_plans(rep, args.tf_dir, org_dir, states, default_account, ids, managed_names)
+        trees = [Tree(args.host, args.tf_dir, org_dir, states)]
+        for host, src in remotes:
+            dest = pathlib.Path(copies.enter_context(tempfile.TemporaryDirectory(prefix="wib-drift-states-")))
+            trees.append(fetch_tree(host, src, dest))
+        rep.hosts = [t.host for t in trees]
+        collect_plans(rep, args.tf_dir, org_dir, trees, default_account, ids, managed_names)
     except Incomplete as e:
+        copies.close()
         # Without the account map or the state inventory nothing below means anything. Not posted: the issue
         # records the fleet's drift, and this run never reached the fleet. The exit code and the copy say so.
         rep.errors.append(str(e))
@@ -639,6 +753,7 @@ def main(argv: list[str]) -> int:
         with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.parallel)) as pool:
             list(pool.map(run_plan, rep.plans))
         rep.errors += [f"plan {p.label}: {p.excerpt}" for p in rep.plans if p.result == "error"]
+    copies.close()  # the other hosts' states are copies made for the plans; none outlives the run
 
     for prof in rep.accounts:
         try:

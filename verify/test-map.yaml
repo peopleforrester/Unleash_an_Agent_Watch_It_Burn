@@ -3908,6 +3908,13 @@ rules:
       - verify/no-cloud.sh
     tests:
       - verify/test_fleet_start_check.sh
+  - name: test_fleet_state_host.sh
+    paths:
+      - infra/terraform/fleet
+      - infra/terraform/fleet/**
+      - verify/no-cloud.sh
+    tests:
+      - verify/test_fleet_state_host.sh
   - name: test_fleet_teardown_hooks.sh
     paths:
       - agent

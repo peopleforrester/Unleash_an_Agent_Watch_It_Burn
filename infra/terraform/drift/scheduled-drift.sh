@@ -2,7 +2,7 @@
 # ABOUTME: Daily, unattended run of the plan-only drift report: supplies the environment cron does not, refuses
 # ABOUTME: to run without its tools, keeps a dated copy, and posts the result to the "Fleet drift report" issue.
 #
-# Install once on the machine that holds the fleet's state files (the states are local, see docs/floor.md):
+# Install once on the state host, tanjiro-wsl2 (the states are local, see docs/floor.md, "The state host"):
 #
 #   ( crontab -l 2>/dev/null; echo '17 6 * * * <repo>/infra/terraform/drift/scheduled-drift.sh # wib-drift' ) | crontab -
 #
@@ -22,8 +22,15 @@ log() { printf '%s  %s\n' "$(date -u +%FT%TZ)" "$*"; }
 export PATH="${PATH:-/usr/bin:/bin}:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${HOME:-/home/michael}/.local/bin:/usr/local/bin:/usr/bin:/bin"
 export HOME="${HOME:-/home/michael}"
 
+# The backup schedule applies the standbys and the regional lab VPCs from netcup's checkout (#1374), so the report
+# also plans the states there, copied over ssh for the run and removed after it. Unset, it is netcup's checkout;
+# WIB_DRIFT_REMOTES="" reads this checkout alone, and host=<rsync source> pairs, comma-separated, name others.
+export WIB_DRIFT_REMOTES="${WIB_DRIFT_REMOTES-netcup=netcup:repos/talks/Unleash_an_Agent_Watch_It_Burn}"
+
 missing=()
-for b in terraform aws gh python3; do
+tools=(terraform aws gh python3)
+[[ -n "${WIB_DRIFT_REMOTES}" ]] && tools+=(rsync ssh)
+for b in "${tools[@]}"; do
     command -v "${b}" >/dev/null 2>&1 || missing+=("${b}")
 done
 python3 -c 'import yaml' 2>/dev/null || missing+=("PyYAML for python3")

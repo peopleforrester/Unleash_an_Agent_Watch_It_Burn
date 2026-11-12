@@ -79,11 +79,13 @@ def verdict(text: str, code: int) -> dict:
     unmanaged = next((v for k, v in secs.items() if k.startswith("Unmanaged")), None)
     clean_key = next((k for k in secs if k.startswith("Clean states")), None)
     clean = [s.strip() for s in secs[clean_key][0].split(",")] if clean_key and secs[clean_key] else []
+    # Since #1374 the line also counts the states two hosts hold; a report from before it has no such count.
     m = re.search(r"\*\*(\d+) finding\(s\)\*\*: (\d+) drifted state\(s\), (\d+) unmanaged resource\(s\), "
-                  r"(\d+) account\(s\) without a Config record\.", text)
+                  r"(?:(\d+) state\(s\) held on two hosts, )?(\d+) account\(s\) without a Config record\.", text)
     return {"exit": code,
             "incomplete": any(k.startswith("INCOMPLETE") for k in secs),
-            "findings": tuple(int(g) for g in m.groups()) if m else None,
+            "findings": tuple(int(m.group(i)) for i in (1, 2, 3, 5)) if m else None,
+            "copies": int(m.group(4) or 0) if m else None,
             "unmanaged": unmanaged,
             "drift": secs.get("Terraform drift"),
             "clean_count": int(re.search(r"\((\d+)\)", clean_key).group(1)) if clean_key else None,
@@ -100,6 +102,8 @@ def judge(text: str, code: int) -> list[str]:
         bad.append("the report calls itself INCOMPLETE")
     if v["findings"] != (0, 0, 0, 0):
         bad.append(f"findings line {v['findings']}, not 0 findings with 0 drifted, 0 unmanaged, 0 without Config")
+    if v["copies"] != 0:
+        bad.append(f"{v['copies']} state(s) held on two hosts, not 0")
     if v["unmanaged"] != ["None."]:
         bad.append(f"the Unmanaged table is {v['unmanaged']}, not `None.`")
     if v["drift"] != ["No state has drifted."]:
@@ -312,6 +316,8 @@ broken = {
     "an INCOMPLETE report": (GOOD.replace("## Terraform drift", "## INCOMPLETE: x\n- y\n## Terraform drift"), 0),
     "a clean count that is not the list": (GOOD.replace("(5)", "(6)"), 0),
     "no findings line": (GOOD.replace("**0 finding(s)**", "0 finding(s)"), 0),
+    "a state held on two hosts": (GOOD.replace("**0 finding(s)**", "**1 finding(s)**").replace(
+        "0 unmanaged resource(s), ", "0 unmanaged resource(s), 1 state(s) held on two hosts, "), 0),
 }
 check(f"the good report passes ({judge(GOOD, 0)})", judge(GOOD, 0) == [])
 for why, (text, code) in broken.items():

@@ -8,7 +8,9 @@ own regional lab VPC and an orphaned cluster left in us-east-2, a region only ba
 hand-made bucket, is `hand-made-by-hand`: it must come out of the report as unmanaged, with who made it and
 whether Config has it. The tree is a scratch copy holding the real fleet.sh, so the accounts the report covers
 by default are the ones the fleet builds in, and the real backups.tsv, so the regions it sweeps are the
-standbys'.
+standbys'. A second scratch checkout stands in for netcup's (#1374): the backup schedule applies standbys and
+regional lab VPCs there, and it holds its own copy of a cluster state this checkout holds too. rsync is a shim that
+copies a local directory with the real rsync and answers a host:path source as an unreachable host.
 """
 from __future__ import annotations
 
@@ -27,7 +29,10 @@ REGISTER = REPO / "infra/terraform/drift/known-unmanaged.yaml"
 FLEET = REPO / "infra/terraform/fleet/fleet.sh"
 BACKUPS = REPO / "infra/terraform/fleet/backups.tsv"
 ROSTER = REPO / "infra/terraform/fleet/roster.tsv"
+REAL_RSYNC = shutil.which("rsync") or ""
 failures: list[str] = []
+if not REAL_RSYNC:
+    sys.exit("FAIL: rsync is not on PATH; the report copies another host's states with it, and this test runs it")
 
 
 def check(name: str, cond: bool) -> None:
@@ -133,6 +138,19 @@ json.dump({"format_version": "1.2", "resource_drift": drift}, open(out, "w"))
 sys.exit(0)
 '''
 
+FAKE_RSYNC = r'''#!/usr/bin/env python3
+import json, os, sys
+a = sys.argv[1:]
+with open(os.environ["FAKE_LOG"], "a") as f:
+    f.write("rsync " + json.dumps(a) + "\n")
+src = a[-2]
+if ":" in src.split("/", 1)[0]:
+    sys.stderr.write("ssh: Could not resolve hostname netcup: Name or service not known\n"
+                     "rsync error: unexplained error (code 255) at io.c(232) [Receiver=3.2.7]\n")
+    sys.exit(255)
+os.execv(os.environ["REAL_RSYNC"], ["rsync", *a])
+'''
+
 FAKE_GH = r'''#!/usr/bin/env python3
 import json, os, sys
 a = sys.argv[1:]
@@ -232,9 +250,12 @@ class Env:
         self.fixture = root / "aws.json"
         self.body = root / "gh-body.md"
         self.bin.mkdir()
+        # The report's scratch (its plans, and the copies of another host's states) goes here, never the system's.
+        self.tmp = root / "tmp"
+        self.tmp.mkdir()
         # Only these tools are on PATH: whatever a real machine has in /usr/bin cannot leak into a test.
         python_shim(self.bin)
-        for name, src in (("aws", FAKE_AWS), ("terraform", FAKE_TF), ("gh", FAKE_GH)):
+        for name, src in (("aws", FAKE_AWS), ("terraform", FAKE_TF), ("gh", FAKE_GH), ("rsync", FAKE_RSYNC)):
             (self.bin / name).write_text(src)
             (self.bin / name).chmod(0o755)
         for d in ("aws/network/states", "aws/cluster", "aws/audit/states", "fleet/states", "drift"):
@@ -268,7 +289,8 @@ class Env:
         self.fixture.write_text(json.dumps(self.fx))
         self.log.write_text("")
         e = {"PATH": path or str(self.bin), "FAKE_LOG": str(self.log), "FAKE_AWS": str(self.fixture),
-             "FAKE_GH_BODY": str(self.body), "HOME": str(self.root), **env}
+             "FAKE_GH_BODY": str(self.body), "HOME": str(self.root), "REAL_RSYNC": REAL_RSYNC,
+             "WIB_DRIFT_HOST": "tanjiro-debian", "TMPDIR": str(self.tmp), **env}
         acc = ["--accounts", accounts] if accounts else []
         p = subprocess.run([sys.executable, str(REPORT), "--tf-dir", str(self.tf), *acc, *args],
                            capture_output=True, text=True, env=e)
@@ -332,8 +354,11 @@ with tempfile.TemporaryDirectory(prefix="drift-test-") as tmp:
           "aws1-student31: NO recorder in us-west-2: apply infra/terraform/aws/audit for this account" in config
           and "infra/org/boundary" not in config)
     check("an account recording S3 and EKS is ok", "accen-dev: ok: recorder watch-it-burn is recording" in config)
-    check("the count adds up: 1 drifted state, 4 unmanaged, 1 account without Config",
-          "**6 finding(s)**: 1 drifted state(s), 4 unmanaged resource(s), 1 account(s)" in out)
+    check("the count adds up: 1 drifted state, 4 unmanaged, no state on two hosts, 1 account without Config",
+          "**6 finding(s)**: 1 drifted state(s), 4 unmanaged resource(s), 0 state(s) held on two hosts, "
+          "1 account(s)" in out)
+    check("the header names the one host whose states were read", "States read on: tanjiro-debian." in out)
+    check("and no rsync ran without a --remote", not env.calls("rsync"))
     notes = section(out, "## Notes")
     check("an account root not applied from here is a note, not a silent gap",
           "aws1-student31: audit root not applied from here" in notes
@@ -501,6 +526,79 @@ with tempfile.TemporaryDirectory(prefix="drift-test-") as tmp:
     check(f"a register entry with neither name nor tag is exit 1 (got {rc})",
           rc == 1 and "exactly one of name or tag" in out)
 
+    print("== another host's checkout: its standbys and regional lab VPCs are planned, a second copy is a finding (#1374) ==")
+    # netcup's checkout, as on 2026-11-12: a standby and its region's lab VPC applied there by the backup schedule,
+    # its own older copy of a cluster state this checkout holds (another lineage), and an empty audit state.
+    nc = env.root / "netcup-checkout"
+    nct = nc / "infra/terraform"
+    for d in ("fleet/states", "aws/network/states", "aws/audit/states", "aws/network/.terraform/providers"):
+        (nct / d).mkdir(parents=True)
+    (nc / "infra/org/boundary/states").mkdir(parents=True)
+    B01 = "watch-it-burn-community-b01"
+    (nct / f"fleet/states/{B01}.tfstate").write_text(json.dumps(cluster_state(
+        B01, "222222222222", "burn.agenticburn.com", role="community", region="us-east-2")))
+    (nct / f"fleet/states/{B01}.account").write_text("aws1-student31\n")
+    (nct / f"fleet/states/{B01}.tfstate.backup").write_text("{}")
+    (nct / "aws/network/states/aws1-student31.us-east-2.tfstate").write_text(json.dumps(vpc_state("vpc-s31-use2")))
+    old = cluster_state("watch-it-burn-attendee-001", "111111111111", "bane-sabrina.agenticburn.com")
+    (nct / "fleet/states/watch-it-burn-attendee-001.tfstate").write_text(json.dumps(
+        {**old, "serial": 118, "lineage": "62a548e7-old"}))
+    (nct / "aws/audit/states/accen-dev.tfstate").write_text(json.dumps({"version": 4, "serial": 28, "resources": []}))
+    (nct / "aws/network/.terraform/providers/provider.tfstate").write_text("{}")
+    here = json.loads((env.tf / "fleet/states/watch-it-burn-attendee-001.tfstate").read_text())
+    env.write("fleet/states/watch-it-burn-attendee-001.tfstate", {**here, "serial": 110, "lineage": "fe0877ee-new"})
+    env.fx["aws1-student31"]["clusters"][B01] = {"region": "us-east-2"}
+    rc, out = env.run("--remote", f"netcup={nc}")
+    check(f"returns findings, not incomplete (got {rc})", rc == 2 and "INCOMPLETE" not in out)
+    check("the header names both hosts, this one first", "States read on: tanjiro-debian, netcup." in out)
+    rs = env.calls("rsync")
+    check("netcup's states are copied once, from its checkout's infra/, over ssh in batch mode",
+          len(rs) == 1 and rs[0][-2] == f"{nc}/infra/" and "ssh -o BatchMode=yes -o ConnectTimeout=20" in rs[0])
+    check("and only the state and .account files: never a .backup, never a provider",
+          {"--include=*.tfstate", "--include=*.account", "--exclude=*", "--exclude=.terraform/"} <= set(rs[0]))
+    plans = [c for c in env.calls("terraform") if "plan" in c]
+    pb = next((c for c in plans if any(x.endswith(f"{B01}.tfstate") for x in c)), [])
+    check("the standby built from netcup is planned, in its region, against netcup's lab VPC for that region",
+          "region=us-east-2" in pb and "profile=aws1-student31" in pb and "vpc_id=vpc-s31-use2" in pb)
+    check("from the copy, in this checkout's cluster root",
+          pb and pb[0] == f"-chdir={env.tf / 'aws/cluster'}" and not any(str(nc) in x for x in pb))
+    pr = next((c for c in plans if any(x.endswith("aws1-student31.us-east-2.tfstate") for x in c)), [])
+    check("netcup's regional lab VPC is planned in its region", "region=us-east-2" in pr)
+    clean = section(out, "## Clean states")
+    check("both are named as netcup's in the clean states",
+          f"cluster {B01} on netcup" in clean and "lab VPC us-east-2 aws1-student31 on netcup" in clean)
+    unmanaged = section(out, "## Unmanaged")
+    check("the standby is no longer unmanaged: it is in netcup's state", f"`{B01}`" not in unmanaged)
+    check("and us-east-2 is swept from netcup's states as well", "us-east-2" in out.split("\n")[2])
+    copies = section(out, "## Held on two hosts")
+    check("the cluster state both hosts hold is a finding, with each copy's serial and lineage",
+          "`cluster watch-it-burn-attendee-001`: tanjiro-debian holds the copy planned (serial 110, lineage "
+          "fe0877ee) and netcup holds another (serial 118, lineage 62a548e7)" in copies)
+    check("planned once, from this checkout's copy",
+          len([c for c in plans if any(x.endswith("watch-it-burn-attendee-001.tfstate") for x in c)]) == 1
+          and not any(str(nc) in x for c in plans for x in c if "attendee-001" in x))
+    check("an empty copy is a note, not a second state",
+          "audit accen-dev: netcup holds an empty state (serial 28" in section(out, "## Notes")
+          and "audit accen-dev`" not in copies)
+    check("the count adds up: 1 drifted, 4 unmanaged, 1 state on two hosts, 1 account without Config",
+          "**7 finding(s)**: 1 drifted state(s), 4 unmanaged resource(s), 1 state(s) held on two hosts, "
+          "1 account(s)" in out)
+    check("no copy of netcup's states is left on disk after the run", not list(env.tmp.iterdir()))
+    rc, out = env.run(WIB_DRIFT_REMOTES=f"netcup={nc}")
+    check(f"WIB_DRIFT_REMOTES names the remote when --remote does not (got {rc})",
+          rc == 2 and "States read on: tanjiro-debian, netcup." in out)
+    rc, out = env.run("--remote", "netcup=netcup:repos/talks/Unleash_an_Agent_Watch_It_Burn")
+    check(f"a host whose states cannot be copied makes the report incomplete, exit 1, naming it (got {rc})",
+          rc == 1 and "the states on netcup (netcup:repos/talks/Unleash_an_Agent_Watch_It_Burn) could not be copied"
+          in out and "Could not resolve hostname" in out and not [c for c in env.calls("terraform") if "plan" in c])
+    rc, out = env.run("--remote", f"netcup={env.root / 'no-such-checkout'}")
+    check(f"so does a checkout that is not there (got {rc})", rc == 1 and "could not be copied" in out)
+    for f in (f"fleet/states/{B01}.tfstate", f"fleet/states/{B01}.account"):
+        (nct / f).unlink()
+    (nct / "fleet/states/watch-it-burn-attendee-001.tfstate").unlink()
+    env.write("fleet/states/watch-it-burn-attendee-001.tfstate", here)
+    del env.fx["aws1-student31"]["clusters"][B01]
+
     print("== --post keeps one running issue ==")
     env.fx = json.loads(json.dumps(FIXTURE))
     rc, out = env.run("--post")
@@ -522,12 +620,23 @@ with tempfile.TemporaryDirectory(prefix="drift-test-") as tmp:
     print("== the cron wrapper ==")
     logs = env.root / "logs"
     e = {"PATH": f"{env.bin}:/usr/bin:/bin", "FAKE_LOG": str(env.log), "FAKE_AWS": str(env.fixture),
-         "FAKE_GH_BODY": str(env.body), "HOME": str(env.root), "WIB_DRIFT_LOG_DIR": str(logs)}
+         "FAKE_GH_BODY": str(env.body), "HOME": str(env.root), "WIB_DRIFT_LOG_DIR": str(logs),
+         "REAL_RSYNC": REAL_RSYNC, "WIB_DRIFT_REMOTES": "", "TMPDIR": str(env.tmp)}
     p = subprocess.run(["bash", str(SCHED), "--tf-dir", str(env.tf), "--accounts", "accen-dev"],
                        capture_output=True, text=True, env=e)
     check(f"passes a clean report's exit code through (got {p.returncode})", p.returncode == 0)
     check("keeps a dated copy", len(list(logs.glob("drift-*.md"))) == 1)
     check("and posts (the wrapper always runs with --post)", any(c[:2] == ["issue", "list"] for c in env.calls("gh")))
+    check("WIB_DRIFT_REMOTES set empty reads this checkout alone", not env.calls("rsync"))
+    env.log.write_text("")
+    no_remote = {k: v for k, v in e.items() if k != "WIB_DRIFT_REMOTES"}
+    p = subprocess.run(["bash", str(SCHED), "--tf-dir", str(env.tf), "--accounts", "accen-dev"],
+                       capture_output=True, text=True, env=no_remote)
+    rs = env.calls("rsync")
+    check(f"unset, it copies netcup's checkout's states, where the backup schedule applies (#1374) (got {rs})",
+          len(rs) == 1 and rs[0][-2] == "netcup:repos/talks/Unleash_an_Agent_Watch_It_Burn/infra/")
+    check(f"and a netcup it cannot reach is an incomplete report, exit 1, not a clean one (got {p.returncode})",
+          p.returncode == 1 and "the states on netcup" in p.stdout and "INCOMPLETE (exit 1)" in p.stdout)
     # A missing report, not a missing tool: the wrapper appends linuxbrew to PATH on purpose, so on the machine
     # it is written for a real terraform or gh would be found and the case could not be staged.
     env.log.write_text("")

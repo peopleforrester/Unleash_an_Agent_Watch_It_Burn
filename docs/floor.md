@@ -188,15 +188,47 @@ writes a state. Each run covers three things:
    there that night, in that order (#1036).
 
 The accounts are `WIB_ATTENDEE_ACCOUNTS`, read from `fleet.sh` when the environment does not set it, so
-the report covers the accounts the fleet builds in. Run it on the machine that holds the states. Anywhere
-else every cluster `fleet.sh` built is in no state the report can read, so each one is listed as
-unmanaged: run from the hecaton host on 2026-11-05, it listed both KubeCon clusters that way. Their states,
-and accen-dev's lab VPC and boundary states, were on no machine at all, and are rebuilt from AWS as
-"Rebuilding a lost state" below says (#979). Exit codes: 0 means clean, 2 means findings, 1 means
-the report is incomplete. An incomplete report is a failure: if the report could not look at something,
+the report covers the accounts the fleet builds in. Run it on the state host (below). Anywhere else every
+cluster `fleet.sh` built there is in no state the report can read, so each one is listed as unmanaged: run
+from the hecaton host on 2026-11-05, it listed both KubeCon clusters that way, and their states and
+accen-dev's lab VPC and boundary states were then rebuilt from AWS on tanjiro-wsl2 as "Rebuilding a lost
+state" below says (#979). The originals were in fact in netcup's checkout all along (#1374). Exit codes: 0
+means clean, 2 means findings, 1 means the report is incomplete. An incomplete report is a failure: if the report could not look at something,
 it has not shown that thing is free of drift.
 
-**The schedule.** The schedule is a daily cron job on the machine that holds the fleet's state files:
+**The state host.** The states are local files, so the host that applies a root keeps its state, and a second
+host that applies the same root keeps a second state of the same resources. The two then diverge with every
+apply. The state host is tanjiro-wsl2 (its `hostname -s` is `tanjiro-debian`, `fleet.sh`'s `WIB_STATE_HOST`). It
+holds the one copy of each KubeCon cluster state, `infra/terraform/fleet/states/watch-it-burn-community.tfstate`
+and `watch-it-burn-private.tfstate` in `/home/michael/repos/talks/Unleash_an_Agent_Watch_It_Burn`, and every
+account's boundary and audit state and accen-dev's home-region lab VPC state. `fleet.sh up` and `down` refuse
+either KubeCon cluster on any other host, naming the state host, so its state is written there alone
+(`verify/test_fleet_state_host.sh`).
+
+The backup schedule is the one thing applied elsewhere. `backups.py schedule` runs from Michael's checkout on
+netcup, `~/repos/talks/Unleash_an_Agent_Watch_It_Burn`, so #643's standbys and the lab VPCs of us-east-1 and
+us-east-2 are applied there, and their states are in that checkout's `infra/terraform/fleet/states/` and
+`aws/network/states/`. The report reads them too: `scheduled-drift.sh` copies that checkout's state files over
+ssh (`WIB_DRIFT_REMOTES`, netcup's checkout unless set) for the run and removes the copy after it, and each is
+planned in its own region, labelled `on netcup`. A copy that fails makes the report incomplete. So a standby is
+planned for drift while its wave is up, and is not in the Unmanaged table. The first report, 2026-11-12T11:17Z,
+listed the night-before wave there because it read tanjiro's states alone (#1373). A standby still in the report
+after the schedule's teardown line has run is a leak: `backups.py down all --apply` on netcup removes it, and
+then its region's `audit-zero`.
+
+A state that both hosts hold, for the same account root or the same EKS cluster, is planned once, from the
+state host's copy, and the other copy is a finding under "Held on two hosts", with each copy's serial and
+lineage. On 2026-11-12 netcup's checkout held its own copies of both KubeCon states (the 2026-10-28 build's
+lineage, with the private node group replaced since and no Bedrock guardrail), of accen-dev's boundary and of
+accen-dev's home-region lab VPC, beside tanjiro-wsl2's rebuilt ones, which match AWS. The KubeCon copies on
+netcup are moved aside there, to `<name>.tfstate.stale-1374`, so that no apply plans against them. After that,
+`fleet.sh` on netcup names neither cluster in a selector that reads the states (`instructors`, `all`), and its
+routes shrink guard refuses a router table that would drop their rows: the pair's verbs run on tanjiro-wsl2. The
+boundary and lab VPC copies stay while the backup schedule's us-west-2 standbys take their subnets from that lab
+VPC state, and are listed until then. A root whose state on netcup is empty, such as its accen-dev audit state,
+is a note.
+
+**The schedule.** The schedule is a daily cron job on the state host:
 
 ```bash
 ( crontab -l 2>/dev/null; echo '17 6 * * * <repo>/infra/terraform/drift/scheduled-drift.sh # wib-drift' ) | crontab -
@@ -204,27 +236,18 @@ it has not shown that thing is free of drift.
 
 The machine is tanjiro-wsl2, with `<repo>` as `/home/michael/repos/talks/Unleash_an_Agent_Watch_It_Burn` (#955,
 2026-11-06). It is the operator machine runs reach: it has terraform, aws with every fleet profile, gh signed in,
-PyYAML and a running cron. megumi-wsl2 does not answer ssh. The states the report plans go there. The line is
+PyYAML, rsync, an ssh login to netcup and a running cron. megumi-wsl2 does not answer ssh. The line is
 installed there, and the accen-dev audit state was rebuilt there with `import-state.sh` (both 2026-11-06, #955).
 accen-dev's boundary, lab VPC and both KubeCon cluster states were rebuilt there with "Rebuilding a lost state"
 below, by the operator's own AWS identity, `nwuser` (2026-11-07, #1041). The report reads the states of the checkout
 it runs from, so that checkout is moved forward with `git checkout --detach origin/main`, which leaves the
 guard-proxy submodule as it stands; it was at ec03eb5f until then.
 
-**The standbys are not in tanjiro's states.** `backups.py schedule` runs from the checkout on netcup, so #643's
-standbys and the lab VPCs of us-east-1 and us-east-2 are applied there, and their states are in that checkout's
-`infra/terraform/fleet/states/` and `aws/network/states/`. The report on tanjiro-wsl2 cannot read them. So while a
-wave is up, each of its standbys is in the report's Unmanaged table, made by `user/nwuser` with Terraform's user
-agent from netcup's address. The first report to show this was 2026-11-12T11:17Z, with the night-before wave
-(#1373). `import-state.py provenance accen-dev <standby> --region <region>` shows the root built it, and the
-register must not list it: it is in a state. A standby still in the report after the schedule's teardown line
-has run is a leak: `backups.py down all --apply` on netcup removes it, and then its region's `audit-zero`.
-
 `scheduled-drift.sh` supplies the PATH that cron does not have, keeps a dated copy of each report, and
 posts the result to a single open GitHub issue titled "Fleet drift report". It comments if that issue
 is already open and opens it if not. A clean day is posted only when the issue is open.
 
-Why cron and not a GitHub Actions workflow: the states are local files on the operator's machine,
+Why cron and not a GitHub Actions workflow: the states are local files on the state host and netcup,
 gitignored under `states/`. There is no remote backend, so a CI runner has nothing to plan against.
 `.github/workflows/plan-policy.yml` plans against a local AWS mock (#200), which is right for a policy
 check and useless for drift. A scheduled workflow needs the state move tracked on #201 and a CI
@@ -239,8 +262,9 @@ The states are local files, so a state lives only on the machine that applied it
 lost, or a worktree that is retired, takes its states with it. The KubeCon clusters watch-it-burn-community
 and watch-it-burn-private were built from `infra/terraform/aws/cluster` by `fleet.sh` on 2026-10-28 (their
 `ManagedBy=terraform`, `Purpose=attendee-cluster` and `attendee` tags and their module-named roles say so),
-and on 2026-11-06 no machine held their states or accen-dev's lab VPC and boundary states (#979). They
-are rebuilt from AWS on the machine that is to keep them, the boundary and lab VPC first, since a cluster's
+and on 2026-11-06 their states and accen-dev's lab VPC and boundary states were found on no machine searched
+(#979), though netcup's checkout held the originals (#1374). So before a rebuild, look in both checkouts that
+apply, tanjiro-wsl2's and netcup's. A lost state is rebuilt from AWS on the state host, the boundary and lab VPC first, since a cluster's
 plan reads the boundary policy and takes its subnets from the lab VPC state:
 
 ```bash

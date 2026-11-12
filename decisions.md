@@ -55642,3 +55642,77 @@ the standbys and whether the bucket is now covered.
 **Tests.** `python3 verify/test_drift_floor.py` (`All drift-floor checks passed.`) and `python3
 verify/test_drift_report.py` (`All drift-report checks passed.`), each run once. The prose gate was run on the two
 changed Markdown files. No dependency was added.
+
+## 2026-11-12 · #1374 · run 20586 · The drift report also plans netcup's states, and fleet.sh writes the KubeCon pair's states on tanjiro-wsl2 alone
+
+**Context.** The daily drift report runs from cron on tanjiro-wsl2 and planned only that checkout's states, while
+`backups.py schedule` applies #643's standbys and the us-east-1 and us-east-2 lab VPCs from Michael's checkout on
+netcup. `bash verify/prior-drafts.sh 1374 origin/staging` printed NONE and the issue had no comments.
+
+**What the two checkouts held, read at about 11:50Z.** Netcup's checkout through `sources repo-ls` and `repo-cat`
+(only serial, lineage and a few ARNs were printed), tanjiro-wsl2's through the fleet verb:
+- Netcup: the six standby states (`watch-it-burn-{community,private}-b0{1,2,3}`), the two regional lab VPC states,
+  and its own copies of `watch-it-burn-community.tfstate` (serial 118, lineage 62a548e7, 78 resources) and
+  `watch-it-burn-private.tfstate` (serial 73, lineage 4c56acdb), of accen-dev's boundary (lineage 6e926986) and
+  home-region lab VPC (serial 1148, lineage 02c0c252), plus empty states for accen-dev's audit root and the four
+  aws1-student lab VPCs.
+- Tanjiro-wsl2: the KubeCon pair (serial 110, lineage fe0877ee, and serial 126, lineage d3a8d599, 89 resources
+  each), all five boundary and audit states, and accen-dev's home-region lab VPC (lineage 005d8893).
+- AWS (`eks describe-nodegroup`): private's node group is `default-e40c409a...` with launch template version 2,
+  and community's template is at version 3. Tanjiro's states match both; netcup's private state still names the
+  replaced `default-aedde2b7...` group and neither netcup copy holds the Bedrock guardrail. So the two copies had
+  already diverged, and netcup's are the stale ones. #979's search on 2026-11-06 found no state of the pair, but
+  netcup's checkout held the 2026-10-28 originals.
+
+**Choice.** Criterion 1 asks for every state planned wherever it was applied, so the report reads both hosts rather
+than moving the schedule. `drift-report.py --remote host=src` (or `WIB_DRIFT_REMOTES`) copies another checkout's
+`*.tfstate` and `*.account` files with rsync over ssh into a temporary directory, plans each in this checkout's
+roots and its own region, labelled `on <host>`, and removes the copy after the run. A failed copy makes the report
+incomplete. `scheduled-drift.sh` names netcup's checkout by default (`netcup=netcup:repos/talks/...`) and checks
+for rsync and ssh. A state both hosts hold for the same account root or EKS cluster ARN is planned from the first
+(local) copy only, and the other copy is a new finding, "Held on two hosts", with each copy's serial and lineage. A
+remote state that manages nothing is a note. The findings line gains "N state(s) held on two hosts";
+`verify/test_drift_rebuilt_states.py` reads that line and now reads the new count too.
+
+Criterion 2: `fleet.sh` gets `WIB_STATE_HOST` (default `tanjiro-debian`, tanjiro-wsl2's `hostname -s`), and `up_one`
+and `down_one` refuse `watch-it-burn-community` and `watch-it-burn-private` on any other host, recording a failure
+by name. Only the checkout's own `states/` is held, since the shim tests point `WIB_STATE_DIR` at scratch
+directories. Standbys and attendee clusters are not held, as the backup schedule builds standbys on netcup. A
+shared backend (#201) would also settle this, but question 899 holds #201 until a live fleet event is confirmed,
+so it was not started. fleet.sh does not spell the doc's path, so the tests that read fleet.sh do not now also read
+docs/floor.md. docs/floor.md gets "The state host", naming tanjiro-wsl2 and the checkout path.
+
+**Live check.** This branch's `drift-report.py`, copied to a scratch directory on tanjiro-wsl2 and run against that
+host's checkout with `--remote netcup=netcup:repos/talks/Unleash_an_Agent_Watch_It_Burn`, plan-only and without
+`--post`, at 12:01Z: `States read on: tanjiro-debian, netcup.` and
+`**11 finding(s)**: 6 drifted state(s), 1 unmanaged resource(s), 4 state(s) held on two hosts, 0 account(s) without a Config record.`
+- Held on two hosts: `lab VPC accen-dev`, `boundary accen-dev`, `cluster watch-it-burn-community` and `cluster
+  watch-it-burn-private`, each with tanjiro-debian's copy planned and netcup's serial and lineage as above.
+- Clean (15): every boundary and audit state, `lab VPC accen-dev`, `lab VPC us-east-1 accen-dev on netcup`,
+  `lab VPC us-east-2 accen-dev on netcup` and both KubeCon clusters.
+- Drifted: the six standbys, `on netcup`. Their changes are the fresh-state shapes #956 settles (`+ tags = {}`,
+  `attachment_count = 0 -> 1`, an access scope's `namespaces = []`): netcup's `fleet.sh` has no
+  `apply -refresh-only` line, so that checkout predates #956 and never settled the standbys it built. The report
+  names this correctly. The standbys come down at 22:50Z, and new ones are settled once netcup's checkout holds
+  #956.
+- Unmanaged: only `er-v3-tfstate-shared-...` in aws1-student34, which tanjiro's checkout (84545b01, before #1373's
+  register entry) does not yet register. No standby is listed.
+- The scratch directory's copy of netcup's states was empty after the run. Removing the scratch directory itself
+  (`~/.cache/wib-1374-run20586`, the script, its report and log) was refused to the run and is in its escalation.
+
+Nothing in AWS or on either cluster changed. The fleet.sh guard was not run on a host: it refuses on any host but
+tanjiro-wsl2, and the shim test holds it.
+
+**Not yet run on a cluster.** Nothing a cluster runs changed. What remains is on the hosts: tanjiro-wsl2's checkout
+moves forward to a main holding this change (`git checkout --detach origin/main`), so the cron runs the new report.
+Netcup's checkout takes it too, so its fleet.sh refuses the pair, and netcup's two stale KubeCon states are moved
+aside to `<name>.tfstate.stale-1374`. The next scheduled report then shows the pair once, from tanjiro-wsl2, with
+the boundary and lab VPC duplicates still listed.
+
+**Tests.** Run once each: `bash verify/test_fleet_state_host.sh` (19 passed; 11 of them fail with the guard
+disabled), `python3 verify/test_drift_report.py` (All drift-report checks passed), `python3
+verify/test_drift_rebuilt_states.py`, `test_drift_floor.py`, `test_floor_rebuild_state.py`, `test_drift_settle.py`,
+`test_cluster_provenance.py`, `test_audit_import_state.py`, `test_ai_layer_gates.py`, `test_drift_selfheal_ops.py`
+and `bash verify/test_fleet_settle_after_apply.sh`, all passing. `verify/scope-map.yaml` and `verify/test-map.yaml`
+gain the new test's entry. The prose gate passes. No dependency was added; rsync and ssh were already on
+tanjiro-wsl2.

@@ -121,6 +121,24 @@ is_presenter_name() { [[ "$1" == "${SHARED_ADMIN_NAME}" || "$1" =~ ^watch-it-bur
 # role's hostname from the start, so its cluster identity is already right the moment it is promoted.
 readonly WIB_BACKUPS_FILE="${WIB_BACKUPS_FILE:-${SCRIPT_DIR}/backups.tsv}"
 is_standby_name() { [[ "$1" =~ ^watch-it-burn-(community|private)-b[0-9][0-9]$ ]]; }
+# THE STATE HOST (#1374). The states are local files, so a second checkout that applies the KubeCon pair keeps a
+# second state of the same two clusters, and the two diverge: on 2026-11-12 netcup held the pair's states of
+# 2026-10-28 (an old private node group, no guardrail) beside tanjiro-wsl2's, rebuilt on 2026-11-07 and applied
+# since. So the pair's states are written on one host alone, named here by `hostname -s` (tanjiro-wsl2 answers
+# tanjiro-debian), and up_one and down_one refuse either cluster anywhere else. Standbys and attendee clusters are
+# not held to it: backups.py builds the standbys on netcup, and the drift report reads netcup's states as well
+# (the floor doc's "The state host"). Only this checkout's states/ is held; the shim tests set WIB_STATE_DIR.
+readonly WIB_STATE_HOST="${WIB_STATE_HOST:-tanjiro-debian}"
+is_kubecon_pair_name() { [[ "$1" == "watch-it-burn-community" || "$1" == "${SHARED_ADMIN_NAME}" ]]; }
+# Prints why this host may not write $1's state, or nothing when it may. ALWAYS exits 0.
+state_host_refusal() {
+    is_kubecon_pair_name "$1" || return 0
+    [[ "${STATE_DIR}" == "${SCRIPT_DIR}/states" ]] || return 0
+    local here; here="$(hostname -s 2>/dev/null || hostname)"
+    [[ "${here}" == "${WIB_STATE_HOST}" ]] && return 0
+    printf "%s's state is written on %s alone and this host is %s; run it there (the floor doc, \"The state host\")" \
+        "$1" "${WIB_STATE_HOST}" "${here}"
+}
 # The cluster holding each role's hostname, when backups.py has promoted a standby: "<role>\t<name>" lines.
 # No line for a role means its roster cluster holds it. cmd_routes reads it, so a later `routes roster` keeps
 # the promotion instead of handing the hostname back to the cluster that failed.
@@ -2136,6 +2154,10 @@ up_one() {
         log "  DRY-RUN ${name}: apply -state=${name}.tfstate -var event=${WIB_EVENT} -var hostname=${host} -var role=${role} -var imds_hop_limit=${hop} -var max_pods=${maxpods} ${prof[*]} ${pids[*]} ${it[*]} ${ns[*]} ${dk[*]} ${zn[*]} [tier=${TF_TIER:-<gitops default>}]"
         return 0
     fi
+    local refusal; refusal="$(state_host_refusal "${name}")"
+    if [[ -n "${refusal}" ]]; then
+        log "  REFUSING ${name}: ${refusal}"; record_fail "${name}"; return 0
+    fi
     if [[ -n "${zone}" ]]; then
         local nsub
         if ! nsub="$(node_subnets_for "${name}" "${SUBNETS_JSON}")" || [[ -z "${nsub}" ]]; then
@@ -2722,6 +2744,10 @@ recheck_sg_leaks() {
 down_one() {
     local name="$1"; assert_ours "${name}"
     [[ -f "${STATE_DIR}/${name}.tfstate" ]] || { log "  no state for ${name}, skipping"; return 0; }
+    local refusal; refusal="$(state_host_refusal "${name}")"
+    if [[ -n "${refusal}" ]]; then
+        log "  REFUSING ${name}: ${refusal}"; record_fail "${name}"; return 0
+    fi
     assert_membership_matches "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}" || return 0
     drain_cluster_lbs "${name}"
     local prof=(); [[ -n "${TF_PROFILE}" ]] && prof=(-var "profile=${TF_PROFILE}" -var "region=${WIB_REGION}")

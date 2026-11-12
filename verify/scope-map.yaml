@@ -4428,6 +4428,9 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/no-cloud.sh
+  test_fleet_state_host.sh:
+    - infra/terraform/fleet
+    - verify/no-cloud.sh
   test_fleet_teardown_hooks.sh:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
