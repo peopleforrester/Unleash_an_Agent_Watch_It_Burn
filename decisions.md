@@ -56637,3 +56637,17 @@ public bot still hides the button. `test_audience_page_e2e.py` runs the page's i
 hosts; it passes, with the chat page's other tests.
 
 Not yet run on a cluster: press Datadog on https://burritobot-private.burritobot.co while signed in.
+
+## 2026-11-12 · #1419 · run 20905 · segment 5 already follows rounds-agenticburn#184
+
+#1419's changes were already on staging in Michael's 6776cbb7 (#1418), on top of #1392's renumbering (e9090057),
+#1395's (f010f39c), #1400's (00b45aab) and #1415's (4ebcfdd4). rounds-agenticburn#184 is closed and on rounds main
+(b1ad3aa, then 94feae9). On base 8432b1ab: segment 5 quotes no "Nothing stopped it.", `#/101` reads "But the gateway
+passes along only 13 of the 14 tools. read_internal_config isn't on its list, so BurritoBot never gets it.", the fix
+slide's quote (`#/116`) ends "Michael's MCP server vetting checklist is on the take-home slide." with no "The rule
+covers the weather server only", and `git grep -n Lakera` finds nothing in the run-of-show or `/kubecon`.
+`python3 verify/test_ros_deck_live.py` against the live deck (124 slides) passed every check and self-check, the
+diagram notes word for word included. The run's one change: `verify/test_ros_seg4_flow.py` pinned 124 slides
+but its header, docstring and closing line still said 126 at rounds `c6b1b0e`; they now say 124 at `94feae9`.
+`test_ros_seg4_flow.py`, `test_kubecon_seg4_flow.py` and `test_ros_over_slot_seg5.py` pass. Live check skipped: the
+change touches only `decisions.md` and a test no cluster runs.

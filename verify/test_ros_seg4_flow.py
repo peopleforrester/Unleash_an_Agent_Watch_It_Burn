@@ -1,6 +1,6 @@
 # ABOUTME: Holds the KubeCon run-of-show's segments 4 and 5 (Challenges 3 and 4) and their segments-table rows to
-# ABOUTME: the 126-slide deck at rounds main c6b1b0e: each slide cited by hash in order, quoted lines and notes, kept facts.
-"""Segments 4 and 5 of `facilitation/kubecon-na-2026-run-of-show.md` follow the deck at rounds main `c6b1b0e` (#1392).
+# ABOUTME: the 124-slide deck at rounds main 94feae9: each slide cited by hash in order, quoted lines and notes, kept facts.
+"""Segments 4 and 5 of `facilitation/kubecon-na-2026-run-of-show.md` follow the deck at rounds main `94feae9` (#1392, #1418).
 
 rounds-agenticburn#102, built 2026-11-08 from Whitney's third walkthrough, cut two Challenge 3 slides and redrafted
 Challenge 4; #112 redrew Challenge 3's diagram as nine slides (#1196). Rounds `cfbd9ba` then redrew Challenge 4's
@@ -10,12 +10,12 @@ the deck had 129 slides (#1327). Rounds `4627d95` (rounds-agenticburn#172, from 
 that slide back into Challenge 3, after "AI guardrails", added the slide giving the room the desk and the bottom line
 before Challenge 4, and took the CNCF-floor and three break-it slides out of the close, so the deck had 127
 slides (#1348). Rounds `c6b1b0e` (rounds-agenticburn#176, Whitney's drift review of 2026-11-12) put "AI guardrails"
-before Challenge 3's card and cut the slide giving the room the desk, so the deck has 126 slides: Challenge 3 on `#/42`
-to `#/66`, from "AI guardrails", Challenge 4 on `#/67` to `#/116`, from its card, the close from `#/117` (#1392). Segments 4 and 5 cite each slide by that URL hash, `#/N`; the rest of the file keeps its own count from 1 (#1099's note). This is the copy of the deck the offline
+before Challenge 3's card and cut the slide giving the room the desk, so the deck had 126 slides: Challenge 3 on `#/42`
+to `#/66`, from "AI guardrails", Challenge 4 on `#/67` to `#/116`, from its card, the close from `#/117` (#1392). Rounds `b1ad3aa` (rounds-agenticburn#184, Whitney's final walkthrough) cut two slides from the close, so the deck at `94feae9` has 124, with the same ranges (#1418). Segments 4 and 5 cite each slide by that URL hash, `#/N`; the rest of the file keeps its own count from 1 (#1099's note). This is the copy of the deck the offline
 suite holds; verify/test_ros_deck_live.py holds the same file to the deck rounds serves, read live. This test holds:
 
   1. Segment 4's steps, its `- **...**` bullets, cite `#/42` to `#/66`, and segment 5's cite `#/67` to `#/116`, each
-     slide once, in ascending order, and every "the deck has N slides" says 126.
+     slide once, in ascending order, and every "the deck has N slides" says 124.
   2. The beats come in the deck's order, in each segment.
   3. Every line the segments quote from a slide is the deck's text, word for word, as rounds-agenticburn#102's body
      gives it (DECK_LINES below, copied from that issue and checked against the built attendee.html on 2026-11-08),
@@ -478,4 +478,4 @@ check("row 4's old #/46 clause put back fails the row check",
 if failures:
     print(f"\n{len(failures)} check(s) failed")
     sys.exit(1)
-print("\nsegments 4 and 5 and their rows follow the 126-slide deck at rounds main c6b1b0e")
+print("\nsegments 4 and 5 and their rows follow the 124-slide deck at rounds main 94feae9")
