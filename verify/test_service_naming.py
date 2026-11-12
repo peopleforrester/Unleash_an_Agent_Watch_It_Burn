@@ -55,14 +55,23 @@ want = f'set(attributes["service.name"], "burritobot-agent") where attributes["s
 for signal in ("trace_statements", "metric_statements"):
     stmts = [s for blk in rename.get(signal, []) if blk.get("context") == "resource" for s in blk["statements"]]
     check(f"{signal}: the collector maps kagent's own name {kagent_name!r} to burritobot-agent", stmts == [want])
-# Right after memory_limiter on every profile, with and without datadog-secret: every filter and transform after
-# it matches burritobot-agent, and silently matches nothing if the rename comes later.
+# Ahead of every filter and transform on every profile, with and without datadog-secret: every one after it matches
+# burritobot-agent, and silently matches nothing if the rename comes later. In metrics it runs right after
+# memory_limiter. Traces arrive through traces/intake (#1336), which runs no filter or transform and hands its batches
+# over the otlp/relay loopback to traces, where the rename is the first processor.
+INTAKE_ONLY = {"memory_limiter", "k8s_attributes/intake", "batch"}
 for profile in collector_render.PROFILE_APP:
     for secret in (False, True):
         pipes = collector_render.collector_config(profile, secret)["service"]["pipelines"]
-        for p in ("traces", "metrics"):
-            check(f"{profile} (datadog-secret {secret}) {p}: transform/kagent_service_name runs right after memory_limiter",
-                  pipes[p]["processors"][:2] == ["memory_limiter", "transform/kagent_service_name"])
+        label = f"{profile} (datadog-secret {secret})"
+        check(f"{label} metrics: transform/kagent_service_name runs right after memory_limiter",
+              pipes["metrics"]["processors"][:2] == ["memory_limiter", "transform/kagent_service_name"])
+        intake = pipes.get("traces/intake", {}).get("processors", [])
+        check(f"{label} traces/intake runs no filter or transform ahead of the rename: {intake}",
+              set(intake) <= INTAKE_ONLY)
+        check(f"{label} traces: transform/kagent_service_name is the first processor behind otlp/relay",
+              pipes["traces"]["receivers"] == ["otlp/relay"]
+              and pipes["traces"]["processors"][:1] == ["transform/kagent_service_name"])
 referenced = set(re.findall(r'service\.name"\]\s*==\s*"([A-Za-z0-9_.-]+)"', vals)) - {kagent_name}
 referenced |= {n for grp in re.findall(r'IsMatch\(resource\.attributes\["service\.name"\],\s*"\^\(([^)]+)\)\$"', vals) for n in grp.split("|")}
 check(f"collector matches only known services {sorted(referenced)}", referenced <= (emitted | LEGACY))

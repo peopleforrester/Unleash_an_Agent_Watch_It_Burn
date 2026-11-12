@@ -1222,6 +1222,11 @@ sites:
     lines: 1
     class: loopback
     why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_collector_relay_e2e.py:
+  - match: urlopen
+    lines: 2
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
   verify/test_console_no_toggle_live.py:
   - match: localhost:8080
     lines: 1
