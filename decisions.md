@@ -55534,3 +55534,53 @@ selects are left to validation.
 cluster" still stands for the loopback fixes, and the follow-up filed with it names that check.
 
 No dependency was added.
+## 2026-11-12 · #1372 · run 20584 · The relay loopback on 127.0.0.1 with wait_for_ready runs clean on both KubeCon clusters
+
+**What was checked.** Run 20576 (#1336) moved both ends of the collector's relay loopback to `127.0.0.1:4320` and set
+`wait_for_ready: true` on the `otlp_grpc/relay` exporter (1a1edc05, 8aa185ac). Its entry left the cluster check under
+"Not yet run on a cluster". This run did that check. Nothing was changed on either cluster: kubectl gets, logs and a
+port-forward to the collector's `:8888`, which was stopped after each read.
+
+**The sync.** On both clusters the `otel-collector` Application read Synced and Healthy at staging 5e0d71ef, which
+holds 1a1edc05 (`.status.sync.revisions`: chart 0.173.1, then 5e0d71ef twice). The operation finished at 09:39:38Z on
+watch-it-burn-community and 09:39:43Z on watch-it-burn-private. The relay ConfigMap on each has the exporter at
+`127.0.0.1:4320` with `wait_for_ready: true` and `tls.insecure: true`, and the `otlp/relay` receiver on
+`127.0.0.1:4320`.
+
+**The pods, read at 09:51:26Z, about 12 minutes after they started.**
+
+| Cluster | Pod | Started | Restarts | `Everything is ready` | `[::1]` lines | `createTransport` | `Exporting failed` | error lines |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| community | `...-agent-8ckmz` | 09:39:39Z | 0 | 1 (09:39:45.585Z) | 0 | 1 | 0 | 0 |
+| private | `...-agent-kdjq8` | 09:39:46Z | 0 | 1 (09:40:07.428Z) | 0 | 1 | 0 | 0 |
+
+The one `createTransport` line on each is the exporter's first dial at startup, to `127.0.0.1:4320`, refused 3 ms
+before `Everything is ready` (09:39:45.582Z on community, 09:40:07.425Z on private). That is the race run 20576 named
+and `wait_for_ready` answers: no request failed on it (no `Exporting failed`, no send-failed series), and the line did
+not come back. On localhost the old pod had logged 22 warnings for `[::1]:4320` in 25 minutes, the gaps growing to two
+minutes. These pods logged none in 12 minutes, six of those intervals. The other warn lines are config deprecations
+(`service.telemetry.resource` inline map on both; on private, the `prometheusremotewrite` alias and
+`resource_to_telemetry_conversion`), none of them about the relay.
+
+**The counters**, read through `kubectl port-forward pod/<pod> <port>:8888`, two reads 10 s apart on each cluster:
+
+| Cluster | Read | `accepted_spans{receiver="otlp"}` | `sent_spans{exporter="otlp_grpc/relay"}` | `accepted_spans{receiver="otlp/relay"}` | relay queue |
+| --- | --- | --- | --- | --- | --- |
+| community | 09:51:51Z | 606 | 606 | 606 | 0 |
+| community | 09:52:01Z | 606 | 606 | 606 | 0 |
+| private | 09:52:07Z | 600 | 600 | 600 | 0 |
+| private | 09:52:17Z | 607 | 607 | 607 | 0 |
+
+Neither cluster had a `send_failed_spans` or `enqueue_failed_spans` series for the relay exporter, and the receivers'
+refused and failed counts were 0. A first read at 09:41:37Z, two minutes after the start, showed private at 92
+accepted and 85 sent: the seven were in the intake `batch` processor (5 s timeout), as its `k8s_attributes/intake`
+outgoing count of 92 and the relay's empty queue showed, and later reads caught up.
+
+**The live test.** `COMMUNITY_CONTEXT=watch-it-burn-community PRIVATE_CONTEXT=watch-it-burn-private python3
+verify/test_collector_relay_live.py`: every check PASS on both clusters, the relay ConfigMap at 27,038 bytes on
+community and 25,326 on private, `exit=0`.
+
+**Tests run.** No test or code changed; this entry is the change. The prose gate was run on it. Nothing was left
+for a later run on a cluster.
+
+No dependency was added.
