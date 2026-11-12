@@ -8491,7 +8491,10 @@ reads:
   test_ros_deck_live.py:
     - facilitation/kubecon-na-2026-run-of-show.md
     - gitops/ai-layer/web/kubecon.html
+    - verify/test_ros_reworded_slides.py
   test_ros_over_slot_seg5.py:
+    - facilitation/kubecon-na-2026-run-of-show.md
+  test_ros_reworded_slides.py:
     - facilitation/kubecon-na-2026-run-of-show.md
   test_ros_seed_step_links.py:
     - agent

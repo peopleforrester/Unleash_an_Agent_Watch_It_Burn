@@ -17,6 +17,9 @@ fails naming each slide the run-of-show no longer matches:
   4. The steps of segments 4 and 5 cite the deck from `#/42` without a gap, and segment 6 opens on the next slide and
      runs to the deck's last.
   5. Every `"..." (#/N)` on `/kubecon` (`gitops/ai-layer/web/kubecon.html`) is on slide N.
+  6. Each line verify/test_ros_reworded_slides.py pins from rounds `269c532` (#1368) is on its slide's face or notes as
+     the pin says, and each of its Presenter lines ends its slide's notes. That test holds the run-of-show to the pin,
+     segments 1 to 3 and the ASI beat included, so the two together hold those lines to the deck rounds serves.
 
 A slide is its `<section>` in `attendee.html`, counted from 0 as the URL hash counts; its face is the text outside its
 `<aside class="notes">`, and its Say note is the notes' text after "Say:", up to a "Do:" when there is one. Quotes are
@@ -33,6 +36,9 @@ import re
 import sys
 import urllib.error
 import urllib.request
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import test_ros_reworded_slides as reworded  # noqa: E402  the lines rounds 269c532 reworded, pinned (#1368)
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 ROS_PATH = REPO / "facilitation/kubecon-na-2026-run-of-show.md"
@@ -52,6 +58,7 @@ STEPPED = "every quote in a step is on a slide its bold lead cites"
 HASHED = "every \"...\" (#/N) in segments 4 to 6 and the segments table is on slide N"
 RANGED = "segments 4 and 5 cite the deck from #/42 without a gap, and segment 6 runs from the next slide to the last"
 PAGED = "every \"...\" (#/N) on /kubecon's glance rows and segments 4 and 5 is on slide N"
+PINNED = "each line test_ros_reworded_slides.py pins is on its slide, and each Presenter line ends its slide's notes"
 
 BLOCK_TAG = re.compile(r"<(?=/?(?:p|div|li|br|h[1-6]|tr|td|th|text|pre|section)\b)", re.I)
 NOTES = re.compile(r'<aside class="notes">(.*?)</aside>', re.S)
@@ -191,6 +198,15 @@ def problems(ros: str, page: str, deck: list[tuple[str, str]]) -> dict[str, list
         if not on(deck, flat(m.group(1)), list(range(lo, hi + 1))):
             bad.append(f"#/{lo}" + (f" to #/{hi}" if hi != lo else "") + f": {m.group(1)!r} is not there")
     out[PAGED] = bad
+
+    bad = []
+    for n, part, words, _, _ in reworded.PINNED:
+        if n >= len(deck) or flat(words) not in deck[n][0 if part == "face" else 1]:
+            bad.append(f"#/{n}: the slide's {part} no longer has {flat(words)!r}")
+    for n, name, _ in reworded.PRESENTERS:
+        if n >= len(deck) or not deck[n][1].endswith(f"Presenter: {name}"):
+            bad.append(f"#/{n}: the notes do not end \"Presenter: {name}\"")
+    out[PINNED] = bad
     return out
 
 
@@ -247,6 +263,13 @@ def main() -> int:
     lit = '"Try your attack again." (#/75)'
     need(plain(page), lit, PAGE_PATH)
     fails("a /kubecon quote cited on the wrong slide", PAGED, page_=page.replace("(#/75)", "(#/76)", 1))
+
+    reworded_deck = list(deck)
+    reworded_deck[23] = (deck[23][0], deck[23][1].replace("A fresh bot", "A new bot", 1))
+    fails("#/23's note reworded in the deck", PINNED, deck_=reworded_deck)
+    swapped = list(deck)
+    swapped[42] = (deck[42][0], deck[42][1].replace("Presenter: Michael", "Presenter: Whitney", 1))
+    fails("#/42's Presenter line changed in the deck", PINNED, deck_=swapped)
 
     if failures:
         print(f"\nFAILED: {len(failures)} check(s)")

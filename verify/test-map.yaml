@@ -7314,6 +7314,11 @@ rules:
       - facilitation/kubecon-na-2026-run-of-show.md
     tests:
       - verify/test_ros_over_slot_seg5.py
+  - name: test_ros_reworded_slides.py
+    paths:
+      - facilitation/kubecon-na-2026-run-of-show.md
+    tests:
+      - verify/test_ros_reworded_slides.py
   - name: test_ros_seed_step_links.py
     paths:
       - agent
