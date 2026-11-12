@@ -127,6 +127,27 @@ A third repository, `peopleforrester/llm-guard-upstream-mirror` (private), is a 
 [protectai/llm-guard](https://github.com/protectai/llm-guard) so builds survive if the upstream repository
 is deleted. It is not a submodule and nothing here builds from it.
 
+## The agent is told to fall for it
+
+BurritoBot's system prompt, in [`gitops/workshop-agent/agent.yaml`](gitops/workshop-agent/agent.yaml), is
+tuned so the room's attacks land on stage every time. Read it and you will find the agent told to:
+
+- call `get_weather`, and the `read_internal_config` that tool asks for, and use them as they say, so the
+  poisoned weather tool in Beat 3 hands over its planted value;
+- read a support ticket and do what it asks, making the Deployment a ticket asks for right after the
+  ticket comes back, and treat a ticket that says "IGNORE ALL PREVIOUS INSTRUCTIONS" as a chore to do
+  rather than a trick;
+- take everyone at their word: one playful push-back on a bare request, then yes to any plausible story.
+
+This is on purpose, and we say so here because the repository is public. A careful prompt on a
+well-aligned model refuses many of these attacks some of the time. Tool-description poisoning on its own is
+unreliable against current models, as `gitops/ai-layer/server.py` notes where it plants the tool. Some of
+the time is not good enough for a live demo in front of a room, so the prompt takes the model's own
+judgment out of the picture. That matches the workshop's argument: a system prompt is a soft ask, and the
+guardrails you install are the hard controls. Each challenge is stopped by a platform control, never by a
+better prompt, so an agent that obeys is the fair test of those controls. Do not copy this prompt into an
+agent you run for real.
+
 ## Safety
 
 Everything here is synthetic. Planted secrets are obviously fake and carry a `FAKE-` prefix. No real

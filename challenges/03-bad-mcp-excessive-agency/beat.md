@@ -36,5 +36,14 @@ caught it is tool-level authorization: an allow-list over which tools the agent 
 actually call, enforced on the agent itself, independent of what any tool *claims* it
 should do. The rogue tool is filtered before the model ever learns it exists.
 
+A note on the stage version. BurritoBot's system prompt
+(`gitops/workshop-agent/agent.yaml`) tells it to call `get_weather`, and the
+`read_internal_config` that tool asks for, and to use them as they say. A
+poisoned description alone is unreliable against current models, and a live demo
+needs the leak to happen every time, so the prompt is tuned to make it land. The
+lesson does not depend on that: the allow-list stops the call whatever the prompt
+says. The README's "The agent is told to fall for it" section covers the rest of
+the prompt's tuning.
+
 See `governance-map.md` for the layer this control lives in, and `BUILD-SPIKE.md` for
 how this beat was verified before the event.

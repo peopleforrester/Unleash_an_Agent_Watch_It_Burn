@@ -7911,6 +7911,10 @@ reads:
   test_promo_villains_public.py:
     - verify/ghcr_pull.py
     - verify/promo_villains.py
+  test_prompt_tuning_disclosed.py:
+    - README.md
+    - challenges/03-bad-mcp-excessive-agency/beat.md
+    - gitops/workshop-agent/agent.yaml
   test_prompt_wall_redaction.py:
     - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/resources.yaml

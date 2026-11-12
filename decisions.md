@@ -56391,3 +56391,27 @@ pass unchanged.
 
 Not yet run on a cluster: on support.burritobot.co, file a ticket with white text and press Show hidden text on the form
 and on the ticket's page; open HC-666 and press it.
+
+## 2026-11-12 · #1411 · run 20804 · the public repo says the agent's prompt is tuned for the stage
+
+rounds-agenticburn#153 (the 2026-11-08 audience review) found that BurritoBot's system prompt,
+`gitops/workshop-agent/agent.yaml`, tells the agent to call get_weather and the read_internal_config it asks for
+and use them as they say, and to do what a support ticket asks, even one written "IGNORE ALL PREVIOUS
+INSTRUCTIONS", while `gitops/ai-layer/server.py` says tool-description poisoning alone is unreliable. The repo is
+public and the take-home page links it. The issue asked for one of two things: say so in the repo, or change the
+prompt.
+
+**Decision: say so, and leave the prompt as it is.** The tuning is what makes each attack land on stage every
+time; the 2026-07-03 live reruns in `docs/DECISION-LOG.md` show the model refusing whole beats, once breaking
+character to lecture on prompt injection, when the prompt left it room to. Changing it would put the live beats back on a coin toss, and the workshop's argument (a prompt is a
+soft ask, the guardrails are the hard controls) does not need a stubborn agent: every challenge is stopped by a
+platform control, never by the prompt. So the repo now says it plainly. The README has a section, "The agent is
+told to fall for it", naming the prompt file, the weather and ticket lines and the credulous persona, and why;
+the Beat 3 attendee doc (`challenges/03-bad-mcp-excessive-agency/beat.md`) says the same for the poisoned weather
+tool. `verify/test_prompt_tuning_disclosed.py` (new, offline) reads each tuning line from the prompt and the
+section from the README and the note from beat.md, and fails naming the line when the prompt drops one, so a
+prompt change brings the README with it. A by-hand mutation (the README's "This is on purpose" reworded) fails
+it; the scope and test maps carry its entry.
+
+**Live check.** Skipped: the change touches the README, a challenge doc and a test under `verify/` that no
+cluster runs; the prompt itself is unchanged.
