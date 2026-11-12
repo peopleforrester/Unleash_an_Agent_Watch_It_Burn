@@ -2645,6 +2645,12 @@ rules:
       - verify/dd_traces.py
     tests:
       - verify/test_dd_traces_record.py
+  - name: test_deck_renumber.py
+    paths:
+      - verify/deck_renumber.py
+      - verify/deck_renumber.py/**
+    tests:
+      - verify/test_deck_renumber.py
   - name: test_delivered_tags.py
     paths:
       - verify/delivered_tags.py

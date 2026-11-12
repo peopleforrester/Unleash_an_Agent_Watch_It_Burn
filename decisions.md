@@ -56067,3 +56067,34 @@ Criterion 1 needs the act above, then the next daily drift report on tanjiro-wsl
 issue.
 
 **Live check.** Skipped: nothing the clusters run changed, and this run wrote only this entry.
+## 2026-11-12 · #1391 · run 20624 · verify/deck_renumber.py moves the deck's `#/N` citations from a slide map in one pass
+
+**What.** `verify/deck_renumber.py` takes a map from old hash to new hash, as `--preset 1390` (#1390's map, built in
+code: `#/0` to `#/41` and `#/44` stay, `#/42` and `#/43` swap, `#/45` is cut, `#/46` to `#/126` become `#/45` to
+`#/125`) or as `--map FILE`, a JSON object whose null values mark cut slides. Each line is rewritten by one regex
+substitution that looks every hash up once against its old number, so the swap holds and `#/46` lands on `#/45`
+without being cut as a 45. It rewrites only `#/N`; bare integers stay for the apply run. It leaves and prints with
+file and line: CUT (a cited slide maps to null; the line's other hashes still move), HISTORY (the line matches a
+`--history` pattern, or names a commit SHA under the default rule, 7 to 40 hex digits with a digit and a letter,
+not after `#` or a word character; `--no-default-history` drops it) and UNMAPPED (a hash the map does not name).
+`--dry-run` prints each changed line old and new and writes nothing. A map that sends two old hashes to one new hash
+is refused with exit 2. Files are read and written with their own line endings.
+
+**Choices.** The preset lives in code, not a data file, and neither the tool nor its test spells a hash of 43 or
+more: `verify/test_deck_shift_slide_citations.py` reads every file under `verify/` and fails on such a literal, so
+the test builds its fixtures with a helper and checks both sources for it. The history rule reads one physical line,
+so a wrapped line that holds a current citation and a SHA (run-of-show lines 1630 and 2107 at this base) is held
+whole and listed; the apply run moves those by hand from the HISTORY list. Paths are reported as the caller gave
+them.
+
+**Dry run on staging 956505e1.** `python3 verify/deck_renumber.py --preset 1390 --dry-run
+facilitation/kubecon-na-2026-run-of-show.md gitops/ai-layer/web/kubecon.html` exited 0 and printed: would rewrite
+256 hashes on 156 lines in 2 files; 4 cut lines (run-of-show 1003, 1633, 1688; kubecon.html 361, each citing
+`#/45`); 9 history lines left (run-of-show 1630, 1663, 1668, 1913, 1915, 1928, 1964, 2107, 2111); 0 unmapped.
+`sha256sum -c` on both files before and after: unchanged.
+
+**Tests.** Offline, each passing: `python3 verify/test_deck_renumber.py` (the new test, on fixtures and its own
+source), `python3 verify/test_scope_tests.py`, `python3 verify/test_test_map.py` and
+`python3 verify/test_deck_shift_slide_citations.py`. `verify/scope-map.yaml` and `verify/test-map.yaml` carry the
+new test, from `python3 verify/scope_tests.py write`. No live check: the change touches only files under `verify/`
+that no cluster runs.

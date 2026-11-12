@@ -3046,6 +3046,8 @@ reads:
     - verify/charts.lock
     - verify/charts_lock.py
     - verify/gh_comments.py
+  test_deck_renumber.py:
+    - verify/deck_renumber.py
   test_delivered_tags.py:
     - verify/delivered_tags.py
   test_delivered_tags_github_e2e.py:
