@@ -14,13 +14,19 @@ the map carries what verify/scope-map.yaml knows of each test, written by `pytho
    common kind under each path the map covers, the rules give at least the offline tests scope_tests.select() runs for
    a change to that path alone, and the whole suite wherever select() runs it for the map's full list.
 3. Only offline tests are named, as run-tests.sh sets a `# SUITE: e2e` file aside.
+4. A new file gives the same map before and after its `git add` (#1396): test_map() counts the untracked files git
+   would add as files, so `write` run before the add does not write the file as a directory too.
 """
 from __future__ import annotations
 
+import difflib
 import glob
+import os
 import pathlib
 import re
+import subprocess
 import sys
+import tempfile
 
 import yaml
 
@@ -126,6 +132,44 @@ check(f"select() scopes a change to most of the {len(probes)} paths probed ({sel
 check(f"for each of them the rules add every offline test select() runs ({len(missed)} short)", not missed,
       "\n        ".join(missed[:15]))
 check(f"a path in the map's full list runs everything ({len(not_full)} do not)", not not_full, str(not_full[:10]))
+
+print()
+print("== a new file gives the same map before and after its git add (#1396) ==")
+# Run 20624 (#1391) ran `write` before `git add` of a new tool, and widen() wrote it as a directory too
+# (`verify/deck_renumber.py/**`), which this file then failed on once the tool was tracked. A scratch repo, under the
+# run's own TMPDIR, holds a tracked test, a new tool, a new directory and an ignored file; the map is written with the
+# tool untracked and again with it added, and the two must be equal.
+with tempfile.TemporaryDirectory() as t:
+    root = pathlib.Path(t)
+
+    def git(*args: str) -> None:
+        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, text=True,
+                       env={**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull})
+
+    git("init", "-q")
+    (root / "verify" / "newdir").mkdir(parents=True)
+    (root / "verify" / "test_tool.py").write_text("# reads the tool\n", encoding="utf-8")
+    (root / ".gitignore").write_text("verify/ignored.py\n", encoding="utf-8")
+    git("add", "-A")
+    (root / "verify" / "tool.py").write_text("# a new tool\n", encoding="utf-8")
+    (root / "verify" / "newdir" / "a.py").write_text("# a new directory's file\n", encoding="utf-8")
+    (root / "verify" / "ignored.py").write_text("# ignored\n", encoding="utf-8")
+    scratch = {"full": [], "always": {}, "unread": [],
+               "reads": {"test_tool.py": ["verify/tool.py", "verify/newdir", "verify/ignored.py"]}}
+    one = {"test_tool.py": "offline"}
+    before_tree = st.Tree(root)
+    check("the scratch repo's tool is untracked and on disk, and its ignored file is not untracked",
+          "verify/tool.py" not in before_tree.files and "verify/tool.py" in before_tree.untracked()
+          and "verify/ignored.py" not in before_tree.untracked(), str(sorted(before_tree.untracked())))
+    before = st.render_test_map(st.test_map(scratch, before_tree, one))
+    git("add", "verify/tool.py", "verify/newdir/a.py")
+    after = st.render_test_map(st.test_map(scratch, st.Tree(root), one))
+    check("the map written before `git add` of a new file is the map written after it", before == after,
+          "".join(difflib.unified_diff(before.splitlines(True), after.splitlines(True), "before", "after")))
+    check("the new file is written as a file, with no /** glob under it",
+          "verify/tool.py/**" not in after and "      - verify/tool.py\n" in after, after)
+    check("a new directory and an ignored file still take everything under them",
+          "verify/newdir/**" in before and "verify/ignored.py/**" in before, before)
 
 print()
 if failures:

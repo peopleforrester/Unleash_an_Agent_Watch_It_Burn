@@ -88,6 +88,12 @@ class Tree:
         self.top = {p.split("/")[0] for p in self.files | self.submodules}
         self.all = sorted(self.files | self.submodules)
 
+    def untracked(self) -> set[str]:
+        """The files on disk git would add (untracked and not ignored): a new file before its `git add`."""
+        out = subprocess.run(["git", "-C", str(self.root), "ls-files", "--others", "--exclude-standard"],
+                             capture_output=True, text=True, check=True)
+        return {p for p in out.stdout.splitlines() if p}
+
     def known(self, p: str) -> str | None:
         """p as a map entry when it names a tracked file, directory or submodule (or a path inside one)."""
         if p in self.files or p in self.dirs or p in self.submodules:
@@ -1185,8 +1191,8 @@ def _last(seg: str) -> str:
 
 
 def widen(entry: str, files: set[str] | frozenset[str] = frozenset()) -> list[str]:
-    """full_match globs that match every path covers(entry, path) does. A literal entry is itself and, unless it is a
-    tracked file, everything under it. A glob keeps the literal directories before its first wildcard, then any depth,
+    """full_match globs that match every path covers(entry, path) does. A literal entry is itself and, unless it is in
+    files (the tracked files and, from test_map(), the untracked ones git would add), everything under it. A glob keeps the literal directories before its first wildcard, then any depth,
     then a last segment _last() gives, and everything under such a path, as covers() adds."""
     if not WILD.search(entry):
         return [entry] if entry in files else [entry, f"{entry}/**"]
@@ -1208,8 +1214,9 @@ def covered_roots(doc: dict, tests: dict[str, str]) -> list[str]:
 
 
 def test_map(doc: dict, tree: Tree, tests: dict[str, str]) -> list[dict]:
-    """The Test map's rules for the offline suite, from the committed scope map."""
-    files = tree.files
+    """The Test map's rules for the offline suite, from the committed scope map. A new file not yet added counts as a
+    file, as git will track it, so `write` gives the same map before and after its `git add` (#1396)."""
+    files = tree.files | tree.untracked()
     offline = sorted(n for n, sv in tests.items() if sv == "offline")
     roots = covered_roots(doc, tests)
     covered = [g for r in roots for g in widen(r, files)]
