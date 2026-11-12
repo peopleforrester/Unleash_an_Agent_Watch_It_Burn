@@ -20,7 +20,9 @@ was busy, and agentgateway and the agent dropped spans when their 10 s export de
 
 The loopback is 127.0.0.1, not localhost. The receiver binds localhost's IPv4 address alone, and the exporter's gRPC
 client also resolves localhost to [::1], is refused there, and logs a connect warning every two minutes; the community
-collector did that from the split's rollout until run 20576 pinned the address.
+collector did that from the split's rollout until run 20576 pinned the address. The exporter waits for its connection
+(wait_for_ready): it dials as the collector starts, often before otlp/relay listens, and a request that fails fast
+on that refused first connection is not retried, so its spans are lost.
 
 A config with `batch` put back into the traces pipeline must fail the checks, so they tell the two shapes apart.
 test_collector_relay_e2e.py runs spans through the real collector over the loopback.
@@ -87,6 +89,8 @@ def problems(cfg: dict, cpus: float) -> list[str]:
         out.append(f"{EXPORTER} sends to {exp.get('endpoint')!r}, not {RECEIVER}'s {grpc.get('endpoint')!r}")
     if (grpc.get("max_recv_msg_size_mib") or 4) <= 4:
         out.append(f"{RECEIVER} takes gRPC's default 4 MiB message; a batch of model-call spans is larger")
+    if exp.get("wait_for_ready") is not True:
+        out.append(f"{EXPORTER} has no wait_for_ready, so a request sent before its first connection drops its spans")
     if not (exp.get("tls") or {}).get("insecure"):
         out.append(f"{EXPORTER} does not send in the clear to the loopback")
     q = exp.get("sending_queue") or {}
@@ -142,6 +146,10 @@ mutant["receivers"][RECEIVER]["protocols"]["grpc"]["endpoint"] = "localhost:4320
 mutant["exporters"][EXPORTER]["endpoint"] = "localhost:4320"
 check("a relay on localhost, which the exporter also dials as [::1], fails them",
       any("not on 127.0.0.1" in p for p in problems(mutant, cpus)))
+mutant = copy.deepcopy(cfg)
+del mutant["exporters"][EXPORTER]["wait_for_ready"]
+check("a relay exporter that fails fast before its first connection fails them",
+      any("wait_for_ready" in p for p in problems(mutant, cpus)))
 
 print()
 if failures:

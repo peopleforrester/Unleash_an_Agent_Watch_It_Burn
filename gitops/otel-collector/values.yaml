@@ -689,8 +689,14 @@ config:
     # about two and a half minutes of the room's ceiling; memory_limiter at the intake refuses new spans before
     # that fills the pod's memory, and a span the full queue turns away counts in
     # otelcol_exporter_enqueue_failed_spans.
+    # wait_for_ready: the exporter dials the relay as the collector starts, often before otlp/relay listens. Refused,
+    # the connection backs off about a second, and without wait_for_ready a request in that second fails at once
+    # with UNAVAILABLE and, with no retry, its spans are dropped; with it the request waits for the connection,
+    # inside the 60 s timeout. test_collector_relay_e2e.py lost its first 600 spans that way in two of three runs
+    # on the pinned collector until this was set (run 20576).
     otlp_grpc/relay:
       endpoint: 127.0.0.1:4320
+      wait_for_ready: true
       tls:
         insecure: true
       compression: none
