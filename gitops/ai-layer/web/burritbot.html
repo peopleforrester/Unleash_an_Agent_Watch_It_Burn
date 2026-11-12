@@ -418,6 +418,7 @@
       function fitAll(){ fit(); fitWitchLine(); }
       fit();
       window.addEventListener('resize', fitAll);
+      document.addEventListener('wib-header-buttons', fitAll);
       document.addEventListener('DOMContentLoaded', fitAll);
       document.addEventListener('click', function(e){ if(e.target.closest && e.target.closest('.chathead .newwitch')) fitWitchLine(); });
       if(document.fonts && document.fonts.ready) document.fonts.ready.then(fitAll);
@@ -591,6 +592,17 @@
     // cluster match no host rule here and show no banner at all (#761).
     var ban=document.getElementById('privatebanner');
     if(ban){ ban.hidden = !(c && typeof c.host === 'string' && /^burritobot-private\./.test(c.host)); }
+    window.wibLastControls = c;
+    // Support (#1384, #1386): shown only while /controls measures Kyverno on, which guardrails-k8s-on sets to Deny and
+    // guardrails-k8s-off sets back (guardrails-agency-on, which also changes the Role, never touches it), and only when
+    // event.js names the desk. No answer, a failed poll or the older /guards shape (no infra object) keeps it hidden.
+    // It hides with the hidden attribute, so it leaves no gap, and the header fit re-runs only when it changes (#1389).
+    var sup=document.getElementById('supbtn');
+    if(sup){
+      var showSup = !!(window.wibSupportUrl && c && c.infra && c.infra.kyverno === true);
+      if(showSup) sup.href = window.wibSupportUrl;
+      if(sup.hidden === showSup){ sup.hidden = !showSup; document.dispatchEvent(new Event('wib-header-buttons')); }
+    }
     var strip=document.getElementById('badges'); if(!strip) return;
     var ai    = (c && c.ai)    ? c.ai    : (c || {});
     var infra = (c && c.infra) ? c.infra : {};
@@ -988,8 +1000,12 @@
     // there verbatim, with no cluster or user, as the event's Feedback form does.
     [['depbtn','deploymentsUrl'],['supbtn','supportUrl'],['bcnbtn','beaconUrl']].forEach(function(p){
       var b=document.getElementById(p[0]), u=ev[p[1]];
-      if(b && typeof u==='string' && /^https:\/\//.test(u)){ b.href=u; b.hidden=false; }
+      if(b && p[0]!=='supbtn' && typeof u==='string' && /^https:\/\//.test(u)){ b.href=u; b.hidden=false; }
     });
+    // Support waits for the Kubernetes guardrails switch (#1384, #1386; Whitney, 2026-11-12: "The fact that we have a
+    // support desk is a reveal"): the init only gives it the event's desk link, and applyControls shows it.
+    window.wibSupportUrl = (typeof ev.supportUrl==='string' && /^https:\/\//.test(ev.supportUrl)) ? ev.supportUrl : '';
+    if(window.wibLastControls) applyControls(window.wibLastControls);
     if(nq.length){
       var vt=document.getElementById('vttbtn'); if(vt)vt.href='/lab?'+nq.join('&');
       // Join with & when the href already carries a query string (#364). A bare '?' on a URL that

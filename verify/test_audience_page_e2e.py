@@ -9,7 +9,9 @@
    out is what a phone would get. With the event set it must be the talk form's URL exactly (#1162), with no cluster
    or user. Without it, it must be the workshop's /quick form carrying both. On the public bot's hosts the
    Terminal button (#645) and the Datadog button (#647) are hidden; elsewhere both stay. On every host the event's
-   Deployments, Support and Beacon buttons (#1347) show with the event's URLs, and with no event none of them does.
+   Deployments and Beacon buttons (#1347) show with the event's URLs, and with no event none of them does. Support
+   (#1384, #1386) is hidden by the init alone; the page's own applyControls, fed /controls answers, shows it with the
+   event's supportUrl only while infra.kyverno is true (guardrails-k8s-on), and the header refit fires once per change.
 2. scripts/audience-qr.py --check re-renders the QR from event.js with segno 1.6.6 (the package cache's segno
    environment, so nothing is installed globally) and fails if the committed SVG differs by one byte.
 
@@ -53,12 +55,18 @@ if start < 0 or end < 0:
     print("FAILED: no (function init(){ ... })(); block in burritbot.html to execute")
     sys.exit(1)
 INIT = PAGE[start:end + len("})();")]
+ac_start = PAGE.find("function applyControls(c){")
+ac_end = PAGE.find("// Back-compat alias", ac_start)
+if ac_start < 0 or ac_end < 0:
+    print("FAILED: no 'function applyControls(c){' ... '// Back-compat alias' in burritbot.html to execute")
+    sys.exit(1)
+APPLY = PAGE[ac_start:ac_end]
 
 # The stub DOM: just the elements init touches, with href as a plain string. Everything init calls that
 # talks to the network (checkBackend, setInterval) is a no-op, because only the links are under test.
 HARNESS = r"""
 const vm = require('vm');
-const [eventSrc, initSrc, search, host, quick] = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+const [eventSrc, initSrc, search, host, quick, applySrc, answers] = JSON.parse(require('fs').readFileSync(0, 'utf8'));
 const els = {};
 for (const id of ['vttbtn', 'ddbtn', 'fbbtn', 'clusterid', 'clusterfoot']) els[id] = { href: '', textContent: '', title: '', hidden: false };
 // The room's buttons (#1347) ship hidden with no href, as the markup has them.
@@ -68,21 +76,30 @@ const window = {};
 const ctx = {
   window, URLSearchParams, URL, encodeURIComponent, JSON,
   location: { search, hostname: host },
-  document: { getElementById: (id) => els[id] || null },
+  document: { getElementById: (id) => els[id] || null, dispatchEvent(e) { refits.push(e.type); } },
+  Event: class { constructor(type) { this.type = type; } },
   localStorage: { getItem: () => null },
   loadSaved() {}, setBackendUp() {}, checkBackend() {}, setInterval() {},
 };
+const refits = [];
 vm.createContext(ctx);
 if (eventSrc) vm.runInContext(eventSrc, ctx);
 vm.runInContext(initSrc, ctx);
-process.stdout.write(JSON.stringify({ fb: els.fbbtn.href, terminalHidden: els.vttbtn.hidden === true,
+vm.runInContext(applySrc, ctx);
+const steps = [];
+for (const a of (answers || [])) {
+  if (a !== 'none') vm.runInContext('applyControls(' + JSON.stringify(a) + ')', ctx);
+  steps.push([els.supbtn.hidden, els.supbtn.href, refits.length]);
+}
+process.stdout.write(JSON.stringify({ steps, fb: els.fbbtn.href, terminalHidden: els.vttbtn.hidden === true,
                                        datadogHidden: els.ddbtn.hidden === true,
                                        room: ['depbtn', 'supbtn', 'bcnbtn'].map(id => [els[id].hidden, els[id].href]) }));
 """
 
 
-def run_init(event_src: str, host: str = "attackme.agenticburn.com") -> dict:
-    payload = json.dumps([event_src, INIT, "?cluster=watch-it-burn-community&user=a%40b.example", host, QUICK])
+def run_init(event_src: str, host: str = "attackme.agenticburn.com", answers: list | None = None) -> dict:
+    payload = json.dumps([event_src, INIT, "?cluster=watch-it-burn-community&user=a%40b.example", host, QUICK, APPLY,
+                          answers or []])
     r = subprocess.run(["node", "-e", HARNESS], input=payload, capture_output=True, text=True)
     if r.returncode != 0:
         return {"fb": f"<node failed: {r.stderr.strip()}>", "terminalHidden": None, "datadogHidden": None}
@@ -128,15 +145,15 @@ check("with no event set (the workshop) it stays, even on attackme", run_init(""
 check("hiding the Terminal alone leaves the Datadog button, so each knob is its own",
       run_init('window.WIB_EVENT = { hideTerminalOnPublic: true, publicHosts: ["attackme.agenticburn.com"] };')
       == {"fb": QUICK + "&cluster=watch-it-burn-community&user=a%40b.example", "terminalHidden": True,
-          "datadogHidden": False, "room": [[True, ""]] * 3})
+          "datadogHidden": False, "room": [[True, ""]] * 3, "steps": []})
 
 print("== the room's own pages are a button each, on the public and the private bot alike (#1347) ==")
-ROOM = [[False, "https://deployments.burritobot.co/"], [False, "https://support.burritobot.co/"],
+ROOM = [[False, "https://deployments.burritobot.co/"], [True, ""],
         [False, "https://beacon.burritobot.co/beacon/view"]]
 for host in ("attackme.burritobot.co", "attackme.agenticburn.com", "burritobot-private.burritobot.co",
              "burritobot-private.agenticburn.com"):
     got = run_init(EVENT_JS, host)
-    check(f"on {host}, Deployments, Support and Beacon show, each going to the event's page verbatim",
+    check(f"on {host}, Deployments and Beacon show, each going to the event's page verbatim, and Support waits",
           got.get("room") == ROOM, repr(got.get("room")))
 got = run_init(EVENT_JS, "attackme.burritobot.co")
 check("on the public bot the Terminal and Datadog buttons stay hidden beside them",
@@ -150,8 +167,31 @@ got = run_init('window.WIB_EVENT = { supportUrl: "javascript:alert(1)", deployme
                ' beaconUrl: "" };')
 check("a URL that is not https leaves its button hidden", got.get("room") == [[True, ""]] * 3, repr(got.get("room")))
 got = run_init('window.WIB_EVENT = { supportUrl: "https://support.burritobot.co/" };')
-check("each button is its own knob: Support alone shows Support alone",
-      got.get("room") == [[True, ""], [False, "https://support.burritobot.co/"], [True, ""]], repr(got.get("room")))
+check("each button is its own knob: Support alone shows nothing until the switch",
+      got.get("room") == [[True, ""]] * 3, repr(got.get("room")))
+
+print("== Support shows only while guardrails-k8s-on holds Kyverno on (#1384, #1386), with one refit per change (#1389) ==")
+SUP = "https://support.burritobot.co/"
+OFF = {"ai": {}, "infra": {"kyverno": False, "rbac_scoped": True, "falco": True}}
+ON = {"ai": {}, "infra": {"kyverno": True}}
+got = run_init(EVENT_JS, "attackme.burritobot.co", ["none", OFF, ON, ON, OFF, OFF])
+check("hidden before the poll answers, hidden with Kyverno off, shown on, kept on, hidden off again",
+      [st[0] for st in got.get("steps", [])] == [True, True, False, False, True, True], repr(got.get("steps")))
+check("shown, it goes to the event's supportUrl verbatim", got.get("steps", [[0, ""]] * 3)[2][1] == SUP,
+      repr(got.get("steps")))
+check("the header refit fires once per change, not on every poll",
+      [st[2] for st in got.get("steps", [])] == [0, 0, 1, 1, 2, 2], repr(got.get("steps")))
+check("Deployments and Beacon show throughout", got.get("room", [])[0::2] == [ROOM[0], ROOM[2]], repr(got.get("room")))
+got = run_init(EVENT_JS, "burritobot-private.burritobot.co", [ON])
+check("the private bot follows the same switch", got.get("steps") == [[False, SUP, 1]], repr(got.get("steps")))
+got = run_init(EVENT_JS, "attackme.burritobot.co", [{"output": True, "kyverno": True}])
+check("the older /guards shape, with no infra object, keeps it hidden", got.get("steps") == [[True, "", 0]],
+      repr(got.get("steps")))
+got = run_init(EVENT_JS, "attackme.burritobot.co", [{"ai": {}, "infra": {"rbac_scoped": True, "agency_scoped": True}}])
+check("guardrails-agency-on's fields alone keep it hidden", got.get("steps") == [[True, "", 0]], repr(got.get("steps")))
+got = run_init("", "attackme.burritobot.co", [ON])
+check("with Kyverno on but no supportUrl in the event (the workshop), it stays hidden",
+      got.get("steps") == [[True, "", 0]], repr(got.get("steps")))
 
 print("== the committed QR is exactly segno's rendering of publicUrl ==")
 r = subprocess.run([*package_cache.run_cmd("segno"), "python", "-I",

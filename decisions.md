@@ -56365,3 +56365,84 @@ listed 6 rows, 5 with `"witch": ""` and no `stand_in` key; the page's script car
 `fake-ticket` pod (its ConfigMap name carries the content hash). Then `CONTEXT=watch-it-burn-community python3
 verify/test_deployments_page_live.py` and a read of `https://deployments.burritobot.co/deployments.json` (every row's
 `witch` a name, none "Someone") are owed by the next run on the issue.
+Not yet run on a cluster: `verify/test_deployments_page_live.py` once Argo CD rolls the desk, and a read of
+https://deployments.burritobot.co/ showing no "Someone".
+
+## 2026-11-12 · #1384, #1386, #1389 · by hand · Support waits for guardrails-k8s-on, and the header bar refits when it shows
+
+Michael, 2026-11-12: "All right go ahead and do the rest" (these were held from hecaton and worked in this session).
+Whitney, 2026-11-12: "The fact that we have a support desk is a reveal". #1385 already took the BurritoBot button off.
+
+The `/controls` field is `infra.kyverno`. `guardrails-k8s-on` sets Kyverno to Deny and `guardrails-k8s-off` sets it
+back, and `guardrails-agency-on` (which also changes the Role, so `rbac_scoped` moves with it) never touches Kyverno.
+The 2-hour lab's `guardrails-admission-on` also arms Kyverno; the KubeCon stage never runs it, and in the lab a desk
+button after the admission fix gives nothing away. Measured live on watch-it-burn-private at the start state:
+`{"networkpolicy": false, "kyverno": false, "kubearmor": false, "falco": true, "tool_allowlist": false,
+"rbac_scoped": false, "agency_scoped": false}`.
+
+The page's init no longer shows `#supbtn`: it keeps event.js's https `supportUrl` in `window.wibSupportUrl`, and
+`applyControls` shows the button with that link only while `c.infra.kyverno === true`. No answer, a failed poll, the
+older `/guards` shape (no `infra` object) and an event with no `supportUrl` all leave it hidden. It hides with the
+`hidden` attribute, which `header a.hb[hidden]` turns into no box, so the bar keeps no gap. When its visibility changes,
+and only then, `applyControls` fires `wib-header-buttons`, which the `hbfit` script refits on. The badges, the private
+banner and the liveness poll are unchanged.
+
+Tests: `test_audience_page_e2e.py` runs the page's own init and `applyControls` in node through none, off, on, on, off,
+off (hidden, hidden, shown, shown, hidden, hidden; one refit per change), plus the private host, the `/guards` shape,
+agency-only fields and the workshop event. `test_mobile_titles_e2e.py` renders the bar with Support hidden (five
+buttons) and after `applyControls` reports Kyverno on (six, icons below 760px), at every width including 390px, with
+and without wide fonts: all green. `test_chat_no_desk_link.py` holds the markup and code. All three run green.
+
+Not yet run on a cluster: on watch-it-burn-community and watch-it-burn-private, no Support at the start state, Support
+after `guardrails-k8s-on` within one poll, hidden again after `guardrails-k8s-off`, and a one-row bar on a phone (#1388).
+
+## 2026-11-12 · #1355 · run 20710 · build-e2e-tools-image builds, checks and pushes the current tag with docker, and it pulls anonymously
+
+**Runs on GitHub since the fix.** Run 20429's one-runtime fix reached staging as 905c5ccc. Since then
+`build-e2e-tools-image` ran four times on staging and once on main, and each run's six steps all ended success:
+43052897996 (staging 905c5ccc), 43063675248 (staging 5a3ab270), 43073875031 (staging 6d4db3b3), 43089914524 (staging
+ab98c7e1) and 43100710834 (main b6a0edb9). The first three built `51ec299b51b3558f-65501e27`. From ab98c7e1 on the
+build inputs hash to `51ec299b51b3558f-6970efce`, which is what `python3 verify/e2e_image.py ref` prints at this run's
+base, 14681fe2. No build input changed between ab98c7e1 and 14681fe2.
+
+**The job log of run 43089914524** (job 130763935266, read with `gh api --allow-escape-sequences
+repos/<repo>/actions/jobs/130763935266/logs`) shows one runtime throughout. Every step's environment carries
+`WIB_CONTAINER_RUNTIME: docker`. The Build step's output is BuildKit's (`#5 [ 1/20] FROM ...`, `#25 naming to
+ghcr.io/peopleforrester/wib-e2e-tools:51ec299b51b3558f-6970efce done`), not podman's `STEP 1/24`, and ends
+`built ghcr.io/peopleforrester/wib-e2e-tools:51ec299b51b3558f-6970efce`. The check ran
+`"${WIB_CONTAINER_RUNTIME}" run --rm --pull=never ... "${REF}"` and printed `v24.22.2` and `uv 0.13.7`. The push
+step printed `Login Succeeded`, then `51ec299b51b3558f-6970efce: digest:
+sha256:332a41e16b252cb92af623fb45115bcb80c498876a49f3d9cfbc0990eceec6e1`, and `scripts/ghcr_version_tag.py` ended
+`pushed ghcr.io/peopleforrester/wib-e2e-tools:51ec299b51b3558f-6970efce`.
+
+**Anonymous pull.** On 2026-11-12, with no login, an anonymous token from `https://ghcr.io/token?scope=repository:peopleforrester/wib-e2e-tools:pull`
+read the manifest of `51ec299b51b3558f-6970efce` with HTTP 200: an OCI index whose digest is the
+`sha256:332a41e1...` the push printed, with a linux/amd64 manifest of 24 layers (985340955 bytes). The same token
+fetched that manifest's config blob, whose `io.github.peopleforrester.watch-it-burn.source-tree` label reads
+`51ec299b51b3558f-6970efce`. The older tag `51ec299b51b3558f-65501e27` also answered 200. So the package is public,
+and no visibility step is left for Michael. The 1 GB of layers was not downloaded here; `e2e-image.sh run` pulls them
+on a host that needs the tier.
+
+**Tests and live check.** This entry is the only change, so no test changed and none was run; the prose gate was run
+on it. No cluster check: the change touches neither what the clusters run nor `verify/` code.
+## 2026-11-12 · #1399 · run 20699 · The take-home QR code encodes `https://bit.ly/burittobot`
+
+Michael, 2026-11-12: the QR code on the deck's take-home slide is `https://bit.ly/burittobot`, spelled exactly that
+way, with the rounds deck filed alongside. `facilitation/kubecon-na-2026-run-of-show.md` now names
+`https://bit.ly/burittobot` in the segments table's row 6 and, in the "Take home, and the feedback ask" step, as the
+link the QR code encodes, which 301s to `https://michaelrishiforrester.com/burritobot/`; the step cites #1399.
+`gitops/ai-layer/web/kubecon.html` names and links `https://bit.ly/burittobot` where #1394 put
+`michaelrishiforrester.com/burritobot`, and says it 301s there. The #1394 entry above keeps the earlier label as
+history.
+
+Read by this run, 2026-11-12: `https://bit.ly/burittobot` answered 301 with Location
+`https://michaelrishiforrester.com/burritobot/`, and that page answered 200.
+
+**Tests.** No test or script under `verify/` or `scripts/` reads `michaelrishiforrester.com/burritobot` or the step's
+old wording, so none changed. `python3 verify/test_mcp_vetting_handout.py`, which reads the take-home step and the
+/kubecon close, passes.
+
+**Live check.** This doc-lane run has no cluster context, so it read neither cluster.
+
+**Not yet run on a cluster.** After promotion and Argo CD's sync, watch-it-burn-private's `console-src` ConfigMap in
+`agent` should hold `https://bit.ly/burittobot` in its `kubecon.html` key.

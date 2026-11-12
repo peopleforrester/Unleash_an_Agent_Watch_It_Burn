@@ -917,6 +917,7 @@ reads:
     - gitops/ai-layer/web/event.js
     - images/llm-guard
     - images/workshop-mcp/Dockerfile
+    - infra
     - scripts/audience-qr.py
     - verify/artifact-cache.sh
     - verify/artifact_cache.py
