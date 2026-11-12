@@ -55810,13 +55810,32 @@ cluster and user.
   init builds no `'/?'` link, so a self-link under another id fails as well. It fails on staging's page.
 - `verify/test_mobile_titles.py`: the header buttons in order are `vttbtn ddbtn depbtn supbtn bcnbtn fbbtn`.
 - `verify/test_mobile_titles_e2e.py`: the shown header buttons are six as shipped (was seven) and three on the
-  workshop copy (was four), with the docstring and check names to match.
+  workshop copy (was four). Two layout checks moved with the count. Run alone with the extra widths 430 to 920px,
+  it measured where each bar takes its labels on the tier's fonts: six buttons between 720 and 740px, three between
+  430 and 460px, and the three-button wide-font copy between 550 and 580px. So at 680px the wide copy now keeps its
+  labels, and the check that the fit ran (plain bar keeps labels, wide copy falls to icons) moves to a new 500px
+  width; the workshop bar must show labels from 500px up and icons at 430px and below. Six labels fit at 760px on
+  these fonts, so "six buttons show icons" now holds below 760px and either passes at 760px.
 - `verify/test_audience_page_e2e.py` and `verify/test_audience_feedback_live.py`: the stub DOM no longer names
   `bbbtn`.
 - `verify/scope-map.yaml` and `verify/test-map.yaml` carry the new test, from `python3 verify/scope_tests.py write`.
 
-**Live check.** None run in this run: the change is to a page the clusters serve, so the check needs it promoted
-and synced first.
+**Tests.** Offline, each passing: `python3 verify/test_chat_no_burritobot_button.py`,
+`python3 verify/test_chat_no_desk_link.py`, `python3 verify/test_mobile_titles.py`,
+`python3 verify/test_scope_tests.py` and `python3 verify/test_test_map.py`. Tier tests, each alone in the
+wib-e2e-tools image: `bash verify/run-e2e-tools.sh test_mobile_titles_e2e.py test_audience_page_e2e.py` first
+failed two checks in test_mobile_titles_e2e.py (760px six buttons showed labels; at 680px the three-button wide
+copy kept its labels) with test_audience_page_e2e.py passing; after the change above,
+`bash verify/run-e2e-tools.sh test_mobile_titles_e2e.py` passed 490 checks with none failed, and
+`bash verify/run-e2e-tools.sh test_chat_wide_font_e2e.py`, which runs it again on DejaVu fonts with and without
+colour emoji, passed. The rest of the scoped tier selection (test_iam_policy_structural.py,
+test_image_version_tags.py, test_kyverno_counter_fix_cache.py, test_wib_digests_signed.py, picked because they read
+the scope and test maps) is left to the gate's scoped run.
+
+**Live check.** Read only. `verify/test_audience_feedback_live.py` with
+`COMMUNITY_CONTEXT=watch-it-burn-community` passed every check against the page served today, which still has
+the button: a `curl` of https://attackme.burritobot.co/ and https://burritobot-private.burritobot.co/ finds one
+`id="bbbtn"` on each. Nothing was changed on either cluster.
 
 **Not yet run on a cluster.** On watch-it-burn-community (https://attackme.burritobot.co/) and
 watch-it-burn-private (https://burritobot-private.burritobot.co/), once Argo CD has synced this change: the served

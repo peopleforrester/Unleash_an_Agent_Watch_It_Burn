@@ -12,8 +12,9 @@ BurritoBot button, which linked to the page itself, is gone since #1385. These m
 
 - the title "BurritoBot" is one line;
 - below 760px the bar is one row (#1214): every header button sits on the title's row, none clipped, none past
-  the right edge, all at one font size; with three buttons a phone shows their icons and 680px and up their
-  labels, and with six every width up to 760px shows their icons;
+  the right edge, all at one font size; with three buttons a phone (430px and narrower) shows their icons and
+  500px and up their labels, and with six every width below 760px shows their icons (at 760px six labels fit on
+  some hosts' fonts and not others, so either passes there);
 - in the chat card, the avatar, "BurritoBot", the ⓘ toggle and Reset share one row, the title and Reset are one
   line each, and the tagline is folded;
 - nothing makes the page scroll sideways.
@@ -26,8 +27,11 @@ CI runner). So the page measures the bar and drops its domain, falls back to ico
 smaller font (#1253), then halves the buttons' padding (#1347), rather than resting on the host's fonts, and this
 test does not rest on them to prove it. It renders each of the two bars twice: as it is, and as a copy whose header
 buttons carry 4px of letter-spacing, about 40px wider per label than any font the host could pick. That copy must
-still pass every check, and at 680px, where the three-button bar keeps its labels, its wide copy must show icons, so
-the fit is shown to work on the widest fonts, not only on the ones this host happens to have.
+still pass every check, and at 500px, where the three-button bar keeps its labels, its wide copy must show icons, so
+the fit is shown to work on the widest fonts, not only on the ones this host happens to have. 500px sits between the
+widths where the three-button bar takes its labels on this host's fonts (430 to 460px) and where its wide copy does
+(550 to 580px), as run 20599 measured them for #1385; 680px, the width this check used with four buttons, now fits
+the wide copy's labels too.
 
 Needs uv and network on a cold host: the playwright pinned in verify/python.lock comes from the host artifact cache
 through verify/package_cache.py (#1121), and `playwright install chromium` fetches a browser only when one is missing, because it locks the browsers
@@ -50,7 +54,7 @@ from playwright_browsers import UV, ensure  # noqa: E402
 REPO = pathlib.Path(__file__).resolve().parent.parent
 PAGE = REPO / "gitops/ai-layer/web/burritbot.html"
 EVENT_JS = PAGE.parent / "event.js"
-WIDTHS = [320, 359, 360, 390, 412, 430, 680, 760, 1280]
+WIDTHS = [320, 359, 360, 390, 412, 430, 500, 680, 760, 1280]
 # The copy's widening: inserted before the page's one </head>, after its own stylesheet, so it wins.
 HEAD_END = "</head>"
 WIDEN = "<style>header a.hb{letter-spacing:4px}</style>"
@@ -189,9 +193,9 @@ for m in map(json.loads, run.stdout.splitlines()):
               f"tagline {m['sub']}, toggle {m['about']}")
     else:
         if label == "workshop":
-            check(f"{tag}: three buttons show {'labels' if w >= 680 else 'icons'} at this width",
-                  m["icons"] == (w < 680), f"icons {m['icons']}")
-        if label == "as shipped":
+            check(f"{tag}: three buttons show {'labels' if w >= 500 else 'icons'} at this width",
+                  m["icons"] == (w < 500), f"icons {m['icons']}")
+        if label == "as shipped" and w < 760:
             check(f"{tag}: six buttons show icons at this width", m["icons"], f"icons {m['icons']}")
         check(f"{tag}: avatar, chat title, ⓘ and Reset share a row",
               m["about"] is not None and all(same_row(m["avatar"], x) for x in (m["h2"], m["about"], m["reset"])),
@@ -201,7 +205,7 @@ for m in map(json.loads, run.stdout.splitlines()):
         check(f"{tag}: the tagline is folded", not m["sub"])
 
 print("== the fit engaged on the wide-font copy ==")
-for w in (680,):
+for w in (500,):
     check(f"at {w}px the three-button bar keeps its labels and its wide-font copy falls back to icons, so the fit ran "
           "and was measured", icons.get(("workshop", w)) is False and icons.get(("workshop, wide fonts", w)) is True,
           f"workshop icons {icons.get(('workshop', w))}, wide-font icons {icons.get(('workshop, wide fonts', w))}")
