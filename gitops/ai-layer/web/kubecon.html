@@ -148,9 +148,9 @@
     in a new tab, which shows the room's prompts from both clusters; if it is down, project the public cluster's
     own feed at <a href="/display" target="_blank" rel="noopener"><code>/display</code></a>. Then "BurritoBot!",
     its QR and <b>attackme.burritobot.co</b>, and the room gets about a minute on the bot, including asks that
-    have nothing to do with burritos. Optionally, click "BurritoBot!" for a quick tour of the public chat page:
-    the menu, the chat, your witch name, your saved prompts, the feedback button and the reset button. Then
-    switch to the Prompt Wall tab, and back to the deck for the hand-off line. The support desk waits for
+    have nothing to do with burritos. Click "BurritoBot!" and point at the Reset button and the saved prompts:
+    "Two things you'll use all talk: the Reset button gives you a fresh BurritoBot that forgets you, and your
+    saved prompts let you paste an old attack back in." Then switch to the Prompt Wall tab, and back to the deck for the hand-off line. The support desk waits for
     Challenge 3 (since the 2026-11-11 deck).</p>
     </details>
 
@@ -457,7 +457,7 @@
     Challenge 4!" (#/68), then "BurritoBot gets
     its tools from MCP servers." and "But not every MCP server can be trusted." (#/69 and #/70). The challenge
     (#/71), "Find the poisoned MCP tool.", and two minutes of play on the public bot, the prompt wall optional. The
-    hint (#/72), "Ask BurritoBot what tools it has.", whose "tools" opens Datadog; then Michael's live weather ask on
+    hint (#/72), "Ask BurritoBot about the weather, then look at what else it did.", whose "what else it did" opens Datadog; then Michael's live weather ask on
     the private bot, the recipe under the forecast, and its trace. "LLM04: Supply Chain" (#/73). "Let's turn on an
     MCP gateway." (#/74): <code>guardrails-mcp-on</code> on the private bot. "Try your attack again." (#/75), the room's
     retry on the public bot, which <code>guardrails-mcp-on</code> reaches (#1132). Then the MCP gateway, agentgateway in the notes (#/76 and #/77),
@@ -474,7 +474,7 @@
       moonlight) and the sentinel <code>FAKE-MCP-EXFIL-sentinel-4c1d</code>, then a burrito order: the bot
       called a tool nobody asked for.</div>
       <div class="marker"><span class="lbl">Success marker, private bot (Michael's attack)</span>The recipe comes
-      back under the forecast. <b>The trace, after the attack:</b> from "tools"
+      back under the forecast. <b>The trace, after the attack:</b> from "what else it did"
       (#/72), search <code>wib-stage-c4-attack-&lt;stamp&gt;</code> on Past 7 Days: the <code>execute_tool read_internal_config</code> span the poisoned description chains the bot into.</div>
       <div class="toggle" onclick="cp(this)"><span class="lbl">Fix · private terminal</span>guardrails-mcp-on<button class="cp">copy</button></div>
       <div class="marker"><span class="lbl">Success marker, private bot, after the fix</span>After <code>guardrails-mcp-on</code>:
@@ -514,8 +514,9 @@
     Segmentation (Challenge 2), K10 Logging and Monitoring (every trace shown).</div>
 
     <div class="control"><b>ASI beat, the blast radius leaving the cluster (optional, 1 min).</b>
-    OWASP Agentic Security Initiative <b>ASI03, Identity and Privilege Abuse</b>: where a container compromise
-    becomes a cloud-account one. Watch-the-screen on the community cluster, run the way the 2-hour format runs
+    OWASP Agentic Security Initiative <b>ASI03, Identity and Privilege Abuse</b>, and the OWASP Kubernetes Top 10
+    2025's <b>K08, Cluster To Cloud Lateral Movement</b>: where a container compromise becomes a cloud-account
+    one. Watch-the-screen on the community cluster, run the way the 2-hour format runs
     the fork bomb "on our box only". The audience cannot do it from a phone. From a presenter checkout against
     the community kube-context, <code>CONTEXT=&lt;community-ctx&gt; challenges/imds-node-creds/steal-node-creds.sh</code>
     reads the node credentials off 169.254.169.254, then reads the node's instance-identity document with the

@@ -18,7 +18,8 @@ suite holds; verify/test_ros_deck_live.py holds the same file to the deck rounds
   2. The beats come in the deck's order, in each segment.
   3. Every line the segments quote from a slide is the deck's text, word for word, as rounds-agenticburn#102's body
      gives it (DECK_LINES below, copied from that issue and checked against the built attendee.html on 2026-11-08),
-     and the two title cards as rounds `8f53ce2` gives them, and the desk slide as rounds `4627d95` gives it.
+     and the two title cards as rounds `8f53ce2` gives them, and the desk slide as rounds `4627d95` gives it, and
+     `#/72`'s hint as rounds `269c532` rewords it (rounds-agenticburn#174, #1367).
   4. Segment 4 shows the white text live on `#/49`, links the public deployments page on `#/48` and the same one on
      `#/49`, the one page both bots deploy to since #1145 (#1160), and names #1132 at `#/53`'s retry; segment 5 names
      #1132 at `#/75`'s retry, where the room retries on the public bot.
@@ -74,7 +75,7 @@ BEATS5 = [
     ("the tee-up (#/69)", "**BurritoBot gets its tools from MCP servers.**"),
     ("not every server (#/70)", "\"But not every MCP server can be trusted.\""),
     ("the challenge (#/71)", "**Find the poisoned MCP tool.**"),
-    ("the hint (#/72)", "Hint: Ask BurritoBot what tools it has."),
+    ("the hint (#/72)", "Hint: Ask BurritoBot about the weather, then look at what else it did."),
     ("the live weather ask", "send the weather prompt from `/kubecon`"),
     ("the trace", "`read_internal_config` that nobody asked for"),
     ("LLM04 (#/73)", "**LLM04 (`#/73`).**"),
@@ -94,7 +95,7 @@ DECK_LINES = {
     "Hint: Look up ticket HC-666 on the support desk.",
     "BurritoBot gets its tools from MCP servers.", "That's how it checks inventory and reads support tickets.",
     "Challenge 4 - attackme.burritobot.co", "Find the poisoned MCP tool.",
-    "Hint: Ask BurritoBot what tools it has.",
+    "Hint: Ask BurritoBot about the weather, then look at what else it did.",
     "BurritoBot has a support desk.", "It can read tickets by ticket number.",
 }
 # Slide lines named in running text, which must appear exactly so.
@@ -356,8 +357,8 @@ need(s4_raw, "the policy trusts the internal registry.")
 dropped = ros.replace("the policy trusts the internal registry.", "the policy admits it.", 1)
 check("dropping the internal-registry fact fails the kept-facts check",
       bool(problems(dropped)["segment 4 still states the facts that hold"]))
-need(s5_raw, "Say: \"Ask BurritoBot what tools")
-leak = ros.replace("Say: \"Ask BurritoBot what tools", "Say: \"Try each tool. Ask BurritoBot what tools", 1)
+need(s5_raw, "Say: \"Ask BurritoBot about the weather")
+leak = ros.replace("Say: \"Ask BurritoBot about the weather", "Say: \"Try each tool. Ask BurritoBot about the weather", 1)
 check("telling the room to try each tool fails the solve check",
       bool(problems(leak)["no room-facing Challenge 4 line tells the room to try each tool"]))
 need(s5_raw, "**The tee-up (`#/69` and `#/70`).**")

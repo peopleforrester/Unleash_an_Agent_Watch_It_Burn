@@ -9,7 +9,7 @@ fails when any of these stops holding:
 
   1. The step has its "The four Datadog links" paragraph and says the deck opens Datadog once per challenge.
   2. Its table has one row per link, and the rows are `#/11`, `#/26`, `#/50` and `#/72`, in that order. The issue
-     named slides 11, 26, 48 and 65; Challenge 4's link is `#/72`, the "tools" hint, since the deck grew
+     named slides 11, 26, 48 and 65; Challenge 4's link is `#/72`, the hint's "what else it did" ("tools" until rounds `269c532`, #1367), since the deck grew
      (rounds-agenticburn#118; #1138 and #1139 in decisions.md, 2026-11-08). Rounds `8f53ce2` moved the desk's first
      slide to `#/8` and added title cards on `#/43` and `#/66` (rounds-agenticburn#170, #1327), so the four links
      moved from `#/11`, `#/26`, `#/48` and `#/68` to `#/12`, `#/27`, `#/49` and `#/70`. Rounds `4627d95` moved the
@@ -48,7 +48,7 @@ LINKS = (
     ("#/11", 2, '"Ophelia Thorn"', "c1-attack"),
     ("#/26", 3, "opens Datadog", "c2-attack"),
     ("#/50", 4, '"Let\'s look at the trace."', "c3-attack"),
-    ("#/72", 5, '"tools"', "c4-attack"),
+    ("#/72", 5, '"what else it did"', "c4-attack"),
 )
 MUST = {key: must for key, _c, _what, must, _not in st.SEEDS}
 HASH = re.compile(r"#/\d+")
