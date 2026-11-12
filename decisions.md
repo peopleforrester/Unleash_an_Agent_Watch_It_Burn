@@ -56166,5 +56166,9 @@ them. It changes in its own commit: section 1 no longer reads the run-of-show an
 check's own flow. Sections 2 to 4, `presenter_ticket_live.py`, `ticket_site.py`, `console.conf`, the range and its
 other tests are untouched. The run report asks whether to keep that commit.
 
+**The deck, live.** `bash verify/run-e2e-tools.sh test_ros_deck_live.py`, run alone on the committed change,
+passed every check and exited 0 (`1 checks ran ... in 0m06s`, ALL E2E TOOLS TIER CHECKS GREEN): the deck rounds serves
+already carries rounds-agenticburn#175's `#/47` note, so the step's Bat Spit quote and question are on that slide.
+
 **Live check.** Skipped: this changes only a document under `facilitation/` and tests under `verify/` that no cluster
 runs. Owed at the run-through: a ticket filed on the desk's form is read back by the room's bot.
