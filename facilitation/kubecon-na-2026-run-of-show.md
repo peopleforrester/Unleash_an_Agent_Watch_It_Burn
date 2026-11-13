@@ -1267,8 +1267,12 @@ real-looking home address to chat.
   after that switch. The output guard is still not a fix for Challenge 1 (Michael,
   2026-10-31).
 - **OWASP Top 10 for LLM Applications, to end the segment:** after the trace, the
-  presenters bridge with "Awesome. We just hacked BurritoBot. Now, before we go any
-  further, I want to introduce you to..." The deck's next slide reads:
+  presenters bridge with "This is a trace: a recording of every step BurritoBot took,
+  each tool it called and what came back. Awesome. We just hacked BurritoBot. Now,
+  before we go any further, I want to introduce you to..." The trace line explains the
+  word "trace", which an audience review found the deck showed repeatedly and never
+  explained; the deck's Challenge 1 hint slide (#/11, "Ophelia Thorn") opens its Then say line with it since rounds `bb45ab7`
+  (rounds-agenticburn#125). The deck's next slide reads:
 
   > **OWASP Top 10 LLM Vulnerabilities**
   > Open Worldwide Application Security Project

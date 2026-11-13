@@ -56651,3 +56651,13 @@ diagram notes word for word included. The run's one change: `verify/test_ros_seg
 but its header, docstring and closing line still said 126 at rounds `c6b1b0e`; they now say 124 at `94feae9`.
 `test_ros_seg4_flow.py`, `test_kubecon_seg4_flow.py` and `test_ros_over_slot_seg5.py` pass. Live check skipped: the
 change touches only `decisions.md` and a test no cluster runs.
+
+## 2026-11-13 · #1422 · run 21464 · Challenge 1's bridge opens with the deck's trace line
+
+rounds-agenticburn#125, an audience review finding that the deck shows the word "trace" repeatedly and never explains
+it, was fixed in rounds `bb45ab7`: the Challenge 1 hint slide's Then say line (#/11, "Ophelia Thorn") now opens "This
+is a trace: a recording of every step BurritoBot took, each tool it called and what came back." Segment 2's "OWASP
+Top 10 for LLM Applications, to end the segment" bullet in the KubeCon run of show quoted only the old bridge, and the
+deck's notes are synced from the run of show, so it now quotes the trace line ahead of "Awesome. We just hacked
+BurritoBot." and names the rounds commit. No test reads the bridge's words. The gate's own scanner reads no added
+dash or AI-ism in the change. Live check skipped: the change touches only `facilitation/` and `decisions.md`.
