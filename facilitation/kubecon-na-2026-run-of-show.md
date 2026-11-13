@@ -184,8 +184,8 @@ Since #1109 each call is judged in its own chat, and all four passed on 2026-11-
 
 | | Run-through 1 | Run-through 2 | Delivered |
 |---|---|---|---|
-| Date | not yet run | not yet run | not yet run |
-| Presenters | | | |
+| Date | not yet run | not yet run | 2026-11-12, 13:50 MST |
+| Presenters | | | Whitney Lee and Michael Forrester (`transcripts/2026-11-12-kubecon-na-talk-burritobot-said-lets-dance.txt`) |
 | Platform (clusters on stage, brought up with `fleet.sh` that session?) | | | |
 | Deck (rounds-agenticburn commit) | | | |
 | Community bot reset first (`reset-bot` read `$0.0000 over 0 requests`?) | | | |

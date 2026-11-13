@@ -1,6 +1,6 @@
 # Project State: Unleash_an_Agent_Watch_It_Burn
 
-Phase: 1.2 Plan (PRD #412 amended 2026-11-01, #736, pending re-approval; M0 to M2, M4 and M5 done; M3 decided 2026-11-02, a separate hop after KubeCon; M6 and M7 after 2026-11-12)
+Phase: 1.2 Plan (PRD #412 amended 2026-11-01, #736, pending re-approval; M0 to M2, M4 and M5 done; M3 decided 2026-11-02, a separate hop after KubeCon; M6 dropped, none owed (#615, #760); M7 delivered 2026-11-12 with Whitney Lee, #616)
 Approved: pending re-approval. The 2026-10-10T23:36:09Z seal (sha256:3a5aa82f1a71) is superseded by the amendment · PRD #412 guard-proxy Go rewrite
 
 ## Bootstrap handed to lab-platform (#609)

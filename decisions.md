@@ -56661,3 +56661,21 @@ Top 10 for LLM Applications, to end the segment" bullet in the KubeCon run of sh
 deck's notes are synced from the run of show, so it now quotes the trace line ahead of "Awesome. We just hacked
 BurritoBot." and names the rounds commit. No test reads the bridge's words. The gate's own scanner reads no added
 dash or AI-ism in the change. Live check skipped: the change touches only `facilitation/` and `decisions.md`.
+
+## 2026-11-14 · #616 · run 24601 · M7: the KubeCon NA 2026 breakout was delivered on 2026-11-12
+
+Milestone M7 of spec talks/burritobot/001 (the breakout ready by 2026-11-08 and delivered on 2026-11-12) is met. The
+record is this repo's transcript of the session recording, `transcripts/2026-11-12-kubecon-na-talk-burritobot-said-lets-dance.txt`
+(Michael's 6aaaf09a, 2026-11-12): Whitney Lee and Michael open the session in Grand Ballroom BDF, send the room to
+attackme.burritobot.co, run the challenges through Challenge 4 and close with the take-home links. hecaton#699 counts the
+room's play (attackme took 1,380 requests; 29 attendees won Challenge 3), and conference-knowledge's registry entry
+`kubecon-na-2026` reads delivered (conference-knowledge#229). personal-knowledge `okr/okrs.yaml` already reads KR
+`kubecon-na-burritobot` done on this record (personal-knowledge#241), so the closing reading is
+`kubecon-na-burritobot = 1`, its evidence the transcript at 6aaaf09a. The two timed run-throughs (M6) were not run:
+Michael dropped them on 2026-11-01 (#615) and ruled on 2026-11-08 that none is owed (#760).
+
+The run-of-show's Run-through record now fills the Delivered column's Date and Presenters rows; its other rows stay
+blank, since no record says which deck commit or pre-show checks the session used. PROJECT_STATE.md's phase line says
+M7 was delivered. The attempt before this run stopped on hecaton's side before any work (it read run 24547's manifest,
+which was gone), so there was no draft to port. Live check skipped: the change
+touches only `facilitation/`, `PROJECT_STATE.md` and `decisions.md`.
