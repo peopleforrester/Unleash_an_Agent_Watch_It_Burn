@@ -56720,3 +56720,34 @@ live check remain for a cluster-capable, non-doc-lane run once the #447 hold lif
 Tests: `python3 verify/test_docs_current.py` reads the new note and this entry. Prose: both changed files were
 read with the gate's own scanner (`aiisms.py`) and add no dash or AI-ism. Live check skipped: the change
 touches only `docs/research/` and `decisions.md`, which no cluster reads.
+
+## 2026-11-14 · #1462 · run 25298 · the C7 rug-pull note's precedents and spec claims, read against their sources
+
+Run 25142 wrote the C7 rug-pull design note (#117) from web-search summaries and left two "Confirmation owed"
+blocks. This run read each claim against its primary source and replaced both blocks in
+`docs/research/2026-11-14-c7-rug-pull-beat.md` with what the sources say, each with its link.
+
+The 2026-07-28 authorization claims, read against the revision post, its changelog and its Authorization page:
+RFC 9207 issuer validation and DCR deprecated for CIMD are new in 2026-07-28, confirmed (the RFC 9207 mandate
+is the client's check of a present `iss`; the server sending it is a SHOULD). OAuth 2.1 resource-server
+semantics, RFC 9728 and RFC 8707 are in the revision but came in with 2025-06-18 (PRs #338 and #734), and the
+2026-07-28 post does not mention them, so the note now credits them to 2025-06-18. #117's text credits all
+five to 2026-07-28; the note names that as the correction. The revision's Tools page defines no signature,
+hash or attestation of a tool definition, which keeps the asymmetry the note draws.
+
+postmark-mcp, read against Snyk's post, Koi Security's (the finder's, now only on the Wayback Machine since
+koi.ai redirects to Palo Alto Networks), OSV and NVD: benign through 1.0.15 and the BCC in 1.0.16, confirmed.
+Snyk dates no single release; it puts 1.0.16 inside "2025-09-15 to 2025-09-17" (UTC+3), 1.0.18 on 2025-09-17,
+and the package gone from npm on 2025-09-25, so 2025-09-25 is disclosure, not release, and the note says so.
+Snyk gives no download or organisation count. Both are Koi's weekly estimates, 1,500 downloads a week and
+"about 300 organizations" taken as 20% of them, so the note corrects "1,500 downloads across 300
+organisations" to that. No CVE is confirmed (NVD has none; OSV tracks it as MAL-2025-47604 with no CVE alias),
+but no source gives the reason the note had, so the note marks that reason as ours.
+
+GTG-1002, read against Anthropic's news post and full report: published 2025-11-13, not 2025-11-14 as #117 and
+the note had it; built on MCP, confirmed in the report's own words; roughly 30 targets and 80-90% of tactical
+operations by AI, as the report states them.
+
+Tests: `python3 verify/test_docs_current.py` reads the note and this entry; the prose gate was run with the
+gate's own scanner. Live check skipped: doc-only change to `docs/research/` and `decisions.md`, which no
+cluster reads.
