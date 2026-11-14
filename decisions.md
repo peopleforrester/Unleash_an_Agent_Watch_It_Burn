@@ -56678,9 +56678,12 @@ row and PROJECT_STATE.md say the session was delivered on 2026-11-12.
 
 The closing reading: `kubecon-na-burritobot = 1`, evidence
 https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/blob/6aaaf09aab531c20087271c9f3ae88bbb1f923eb/transcripts/2026-11-12-kubecon-na-talk-burritobot-said-lets-dance.txt.
-personal-knowledge already marks that KR done on the same record, so the run's report carries the reading in its
-criteria and summary rather than as a `readings` entry: the previous attempt's report put it under `readings` and
-the report-schema gate refused it ("KR kubecon-na-burritobot is done").
+personal-knowledge already marks that KR done on the same record, and hecaton's report gate cannot close the
+milestone on it. The previous attempt listed the reading under `readings` and the gate refused it ("KR
+kubecon-na-burritobot is done"). A done report with no reading is refused too (`report_errors` in hecaton's
+`loops/milestones.py`). This run filed hecaton#803 for the gate fix, carries the reading in its report's criteria and
+summary, and ends partial with a wait on hecaton#803. The next run on #616 reports done with the reading once the
+gate accepts it.
 
 `verify/test_seg3_timing.py` read any run-through Date cell other than the literal "not yet run" as a run on record
 and then required segment 3's beat times, so the dropped run-throughs' "not run" note failed it. It now also takes
