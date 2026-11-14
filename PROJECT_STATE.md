@@ -1,6 +1,6 @@
 # Project State: Unleash_an_Agent_Watch_It_Burn
 
-Phase: 1.2 Plan (PRD #412 amended 2026-11-01, #736, pending re-approval; M0 to M2, M4 and M5 done; M3 decided 2026-11-02, a separate hop after KubeCon; M6 and M7 after 2026-11-12)
+Phase: 1.2 Plan (PRD #412 amended 2026-11-01, #736, pending re-approval; M0 to M2, M4 and M5 done; M3 decided 2026-11-02, a separate hop after KubeCon; M6 dropped 2026-11-01, #615; M7 delivered 2026-11-12, #616)
 Approved: pending re-approval. The 2026-10-10T23:36:09Z seal (sha256:3a5aa82f1a71) is superseded by the amendment · PRD #412 guard-proxy Go rewrite
 
 ## Bootstrap handed to lab-platform (#609)
@@ -81,6 +81,13 @@ The breakout's dates and the run-through record are in `facilitation/kubecon-na-
 section "Dates to hold (#447)". Build order with no forecast dates; for people: the cold read once the
 platform is live, two timed run-throughs by 2026-11-08, delivery 2026-11-12. Slot and room:
 conference-knowledge `kubecon-na-2026`.
+
+Delivered 2026-11-12 with Whitney Lee (M7, #616). The record is the session transcript,
+`transcripts/2026-11-12-kubecon-na-talk-burritobot-said-lets-dance.txt` (6aaaf09a): both presenters open the
+session, send the room to attackme.burritobot.co, run the challenges through Challenge 4 and close with the
+take-home links. The room's activity is on hecaton#699 (attackme took 1,380 requests; 29 attendees won
+Challenge 3), and conference-knowledge `kubecon-na-2026` reads delivered (conference-knowledge#229). The two
+timed run-throughs were not run (#615). The run-of-show's Run-through record carries the Delivered column.
 
 ## KubeCon delivery identity (#454)
 

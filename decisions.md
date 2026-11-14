@@ -57253,3 +57253,24 @@ them and touches none of them, so either can land first.
 **Live check.** Skipped: only docs and decisions.md changed, nothing the clusters run, and the step needs an
 attendee pool that does not exist. Tests: no test reads the checklist (`git grep GO-LIVE-CHECKLIST -- verify scripts`
 finds none); the prose gate, `python3 verify/prose_gate.py` against origin/staging, passes.
+## 2026-11-14 · #616 · run 24631 · M7: the KubeCon NA 2026 breakout was delivered on 2026-11-12
+
+Milestone M7 of spec talks/burritobot/001 (#447) closes. The breakout with Whitney Lee ran on 2026-11-12. Its record
+in this repo is the session transcript, `transcripts/2026-11-12-kubecon-na-talk-burritobot-said-lets-dance.txt`,
+committed in 6aaaf09a: both presenters open the session, send the room to attackme.burritobot.co, run the challenges
+through Challenge 4 and close with the take-home links. hecaton#699 gives the room's activity (attackme took 1,380
+requests; 29 attendees won Challenge 3), and conference-knowledge's `kubecon-na-2026` entry reads delivered
+(conference-knowledge#229). Michael posted this source on #616 on 2026-11-13, from personal-knowledge#241.
+
+The run-of-show's Run-through record now fills its Delivered column (date, presenters, the platform the room
+played, the findings row) and marks both run-throughs not run, since Michael dropped them on 2026-11-01 (#615).
+The transcript has no timestamps, so the timing rows stay empty and the column says so. The Dates table's Delivered
+row and PROJECT_STATE.md say the session was delivered on 2026-11-12.
+
+The closing reading: `kubecon-na-burritobot = 1`, evidence
+https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/blob/6aaaf09aab531c20087271c9f3ae88bbb1f923eb/transcripts/2026-11-12-kubecon-na-talk-burritobot-said-lets-dance.txt.
+personal-knowledge already marks that KR done on the same record, so the run's report carries the reading in its
+criteria and summary rather than as a `readings` entry: the previous attempt's report put it under `readings` and
+the report-schema gate refused it ("KR kubecon-na-burritobot is done").
+
+Live check skipped: the change touches only `facilitation/`, `PROJECT_STATE.md` and `decisions.md`.
