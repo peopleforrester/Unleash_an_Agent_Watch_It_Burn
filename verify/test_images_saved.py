@@ -1,11 +1,11 @@
-# ABOUTME: Save half of #603 (#836): every images.lock row that owes a tarball, laiyer/llm-guard-api:0.3.16 first, is
+# ABOUTME: Save half of #603 (#836): every images.lock row that owes a tarball, llm-guard-api:0.3.16 first, is
 # ABOUTME: dated and held in the image archive at its current digest by a file that hashes to what save recorded.
 # SUITE: e2e (needs the image archive mirror-images.sh save writes, ~/repos/private/image-archive on netcup)
 """Why this exists (#836, from #603).
 
 #603 asks to record the digests of the images this workshop depends on and to save them, starting with
-laiyer/llm-guard-api:0.3.16. test_images_lock.py holds the digests and accepts - in the saved column, and
-test_images_lock_render.py leaves save to mirror-images.sh, so until this nothing failed when no image had been
+laiyer/llm-guard-api:0.3.16, whose row is our fork's ghcr.io copy at the same digest since #1460. test_images_lock.py
+holds the digests and accepts - in the saved column, and test_images_lock_render.py leaves save to mirror-images.sh, so until this nothing failed when no image had been
 saved, or when a digest moved past the copy that was.
 
 This reads images.lock and the archive llm-coding-workflow's scripts/mirror-images.sh `save .` writes (its
@@ -29,7 +29,7 @@ from images_saved import default_archive, lock_rows, manifest_lines, owes_save, 
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 LOCK = REPO / "images.lock"
-FIRST = "laiyer/llm-guard-api:0.3.16"
+FIRST = "ghcr.io/peopleforrester/llm-guard-api:0.3.16@sha256:bea3efb1220ad18149b73de625c55e6d835bf8b45023a089a3762012a86550ba"
 
 failures: list[str] = []
 

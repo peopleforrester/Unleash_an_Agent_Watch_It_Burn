@@ -56661,3 +56661,29 @@ Top 10 for LLM Applications, to end the segment" bullet in the KubeCon run of sh
 deck's notes are synced from the run of show, so it now quotes the trace line ahead of "Awesome. We just hacked
 BurritoBot." and names the rounds commit. No test reads the bridge's words. The gate's own scanner reads no added
 dash or AI-ism in the change. Live check skipped: the change touches only `facilitation/` and `decisions.md`.
+
+## 2026-11-14 · #1460 · run 25150 · images.lock takes the 2026-11-13 netcup sweep: llm-guard-api at our fork, web-terminal dated
+
+The declared `laiyer/llm-guard-api:0.3.16` row (upstream protectai/llm-guard, archived July 2026) is replaced by the
+issue's row: `ghcr.io/peopleforrester/llm-guard-api:0.3.16@sha256:bea3efb1…50ba`, source
+`repo:peopleforrester/llm-guard-cpu-offline`, saved 2026-11-13. The digest is unchanged, so nothing that runs changes.
+VERSIONS.lock's llm-guard-api entry names the same ghcr.io reference, since `verify/test_images_lock.py` holds the
+declared row to the digest that entry pins. That test now looks for the fork's reference and its `repo:` source, and
+fails on any `laiyer/llm-guard-api` row. `test_images_saved.py` and `test_images_saved_judge.py` take the fork's
+reference as the row they name first.
+
+The issue's three dateless rows (`node:24.22.2-trixie-slim@sha256:54f84b…`, `debian:bookworm-slim`, the internal Joker
+at `sha256:0dbe92d4…`) are not in the current lock. #714 moved node and debian to lab-platform#353's ghcr.io copies
+and rebuilt the internal Joker at `793db299…`, and all three successor rows already carry 2026-11-06, so they keep it.
+The sweep evidently read an older lock.
+
+`mirror-images.sh check .`, read from llm-coding-workflow main through `sources repo-cat`, first exited 1 on one row:
+web-terminal-ttyd-1.7.7-8 (#1276, on staging since 2026-11-09) had saved `-`. Line 350 of the archive's manifest.tsv
+records it saved on 2026-11-13 from this repo at `sha256:b81d336c…`, so the row now carries that date. After that,
+check prints "25 references, 59 declared, 0 problems" and exits 0. The archive's manifest records the fork image only
+under `ghcr.io/peopleforrester/llm-guard-api:0.3.16` with no inline digest, saved from packt-agentic-devops and the
+Packt repo. The by-hand `test_images_saved.py` matches on the exact ref, so it needs a line for this repo's ref. One
+`mirror-images.sh save .` on netcup writes that line, finds the tarball already there, and keeps the row's date.
+
+`test_images_lock.py` and `test_images_saved_judge.py` pass. Live check skipped: the change touches only images.lock,
+VERSIONS.lock, decisions.md and tests no cluster runs.

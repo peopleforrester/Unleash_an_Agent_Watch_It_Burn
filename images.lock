@@ -35,7 +35,9 @@
 # Challenge 2's four games below on 2026-11-06. The 2048 game's row is the image the first save already holds, at the
 # same ref and digest, so run 18555 copied its 2026-11-04 date (#897). The fourth save, on 2026-11-09 with Docker Hub
 # pulled anonymously, saved Tron, Infinite Mario and Tetris (#1168) and Kyverno's three counter-fix builds (#1015);
-# run 19425 copied those dates the same way.
+# run 19425 copied those dates the same way. The fifth, netcup's image sweep of 2026-11-13 (llm-coding-workflow#484),
+# saved the llm-guard-api row at our fork's ghcr.io name in place of laiyer's, and web-terminal-ttyd-1.7.7-8 (#1276);
+# run 25150 dated that row from the sweep's manifest.tsv line (#1460).
 # verify/test_images_lock.py holds every reference to a row here.
 ghcr.io/peopleforrester/lab-platform/mirror/library/node:24.22.2-trixie-slim-e053394f1551@sha256:e053394f15519046270b637f0655c284d2fc844e013451fcb36e02dcfba29280 sha256:e053394f15519046270b637f0655c284d2fc844e013451fcb36e02dcfba29280 upstream:https://github.com/nodejs/docker-node 2026-11-06
 ghcr.io/peopleforrester/lab-platform/mirror/library/debian:bookworm-slim-a3bba7dc7dbc@sha256:a3bba7dc7dbcc1f37c2856c51fc9a7fac96608f50cb87b1b4e4d8b8c85ae988e sha256:a3bba7dc7dbcc1f37c2856c51fc9a7fac96608f50cb87b1b4e4d8b8c85ae988e upstream:https://github.com/debuerreotype/docker-debian-artifacts 2026-11-06
@@ -52,7 +54,7 @@ ghcr.io/peopleforrester/watch-it-burn:busybox-1.36@sha256:73aaf090f3d85aa34ee199
 ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e upstream:https://github.com/docker-library/python 2026-11-04
 llm-guard ghcr.io/peopleforrester/lab-platform/llm-guard@sha256:46b3d20203147d36d2e023c01bfd889f27f1c3900246777abe48cb16d0f3881a repo:peopleforrester/lab-platform/deploy/images 2026-11-06
 ghcr.io/peopleforrester/watch-it-burn:workshop-mcp-mcp-1.29.1@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/workshop-mcp 2026-11-04
-ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-1.7.7-8@sha256:b81d336c6a71cf98889ab6815269af7b0cb9cb1e7b3a3e0464435dcdcbc77386 sha256:b81d336c6a71cf98889ab6815269af7b0cb9cb1e7b3a3e0464435dcdcbc77386 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/web-terminal -
+ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-1.7.7-8@sha256:b81d336c6a71cf98889ab6815269af7b0cb9cb1e7b3a3e0464435dcdcbc77386 sha256:b81d336c6a71cf98889ab6815269af7b0cb9cb1e7b3a3e0464435dcdcbc77386 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/web-terminal 2026-11-13
 ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0 sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0 upstream:https://github.com/nginx/docker-nginx 2026-11-04
 {{.Values.imageRegistry}}/mirror/kubearmor/kubearmor:stable-bf867783eb30 ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor@sha256:bf867783eb30368db13e6244e5cf42689997406d7f4fc11ef06479154fe00388 upstream:https://github.com/kubearmor/KubeArmor 2026-11-04
 {{.Values.imageRegistry}}/mirror/kubearmor/kubearmor-init:stable-cdc3763f302d ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor-init@sha256:cdc3763f302de555cb093238bb4a7d93dee64423e96459318ebfbf94c018c22d upstream:https://github.com/kubearmor/KubeArmor 2026-11-04
@@ -65,9 +67,11 @@ postgres ghcr.io/peopleforrester/lab-platform/mirror/library/postgres@sha256:dd5
 ghcr.io/distribution/distribution:3.1.2@sha256:d106962e6fe3fa69c178cec77eeeee5edb626b8df6535b7bd6b95e658a0a5ca9 sha256:d106962e6fe3fa69c178cec77eeeee5edb626b8df6535b7bd6b95e658a0a5ca9 upstream:https://github.com/distribution/distribution 2026-11-04
 ghcr.io/regclient/regctl:v0.11.7-alpine@sha256:e9e208e2420fbf9fd47ae24ad4dd4ac40089bd4ead05c1ecd763c43e24fd55b5 sha256:e9e208e2420fbf9fd47ae24ad4dd4ac40089bd4ead05c1ecd763c43e24fd55b5 upstream:https://github.com/regclient/regclient 2026-11-04
 # Declared: images no tracked file names as an image: key or FROM line.
-# The upstream image the deployed llm-guard replaced (VERSIONS.lock); protectai/llm-guard was archived in July 2026,
-# and peopleforrester/llm-guard-upstream-mirror holds a private copy of its source.
-laiyer/llm-guard-api:0.3.16 sha256:bea3efb1220ad18149b73de625c55e6d835bf8b45023a089a3762012a86550ba upstream:https://github.com/protectai/llm-guard 2026-11-05
+# The image the deployed llm-guard replaced (VERSIONS.lock): LLM Guard's v0.3.16 API, at our fork's ghcr.io copy
+# (#1460, llm-coding-workflow#484). It is the digest laiyer/llm-guard-api:0.3.16 served, whose upstream protectai/llm-guard
+# was archived in July 2026; peopleforrester/llm-guard-cpu-offline (the images/llm-guard submodule) holds its API source
+# and Dockerfile. netcup's 2026-11-13 sweep saved it.
+ghcr.io/peopleforrester/llm-guard-api:0.3.16@sha256:bea3efb1220ad18149b73de625c55e6d835bf8b45023a089a3762012a86550ba sha256:bea3efb1220ad18149b73de625c55e6d835bf8b45023a089a3762012a86550ba repo:peopleforrester/llm-guard-cpu-offline 2026-11-13
 # llm-guard-cpu-offline's images as that repo reported them on #719, each digest read anonymously from ghcr.io on
 # 2026-11-02: cpu.4 (PromptInjection only), cpu.5 (PromptInjection and BanTopics, signed with the workshop key on
 # 2026-11-01; the deployed llm-guard from question 1041 to #895), and the zero-shot weights' scratch image that

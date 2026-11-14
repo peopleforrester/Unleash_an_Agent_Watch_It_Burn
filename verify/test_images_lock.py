@@ -15,7 +15,7 @@ a known source kind, a build: path that exists, a sha256 digest or name@sha256 w
 agrees with the one pinned in the reference, and saved either a date or the - it carries before save runs. It
 does not require the date: that is the netcup step, and test_images_saved.py (SUITE: e2e, #836) is the check that
 owes it, against the archive the save writes.
-The declared llm-guard-api row must also carry the digest VERSIONS.lock pins.
+The declared llm-guard-api row, our fork's ghcr.io copy since #1460, must also carry the digest VERSIONS.lock pins.
 """
 from __future__ import annotations
 
@@ -26,6 +26,7 @@ import sys
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 LOCK = REPO / "images.lock"
+LLM_GUARD_API = "ghcr.io/peopleforrester/llm-guard-api:0.3.16"
 SHA = re.compile(r"^sha256:[0-9a-f]{64}$")
 NAMED_SHA = re.compile(r"^[^@\s]+@sha256:[0-9a-f]{64}$")
 DATE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
@@ -184,13 +185,15 @@ for r, p in problem_rows:
 check(f"no row with a problem ({len(problem_rows)} with one)", not problem_rows)
 
 print("== the declared llm-guard-api row agrees with VERSIONS.lock ==")
-pinned = re.search(r"llm-guard-api\s+laiyer/llm-guard-api:0\.3\.16.*?\n\s+digest: (sha256:[0-9a-f]{64})",
+pinned = re.search(r"llm-guard-api\s+ghcr\.io/peopleforrester/llm-guard-api:0\.3\.16.*?\n\s+digest: (sha256:[0-9a-f]{64})",
                    (REPO / "VERSIONS.lock").read_text(encoding="utf-8"))
-check("VERSIONS.lock pins a digest for laiyer/llm-guard-api:0.3.16", pinned is not None)
-row = rows.get("laiyer/llm-guard-api:0.3.16")
-check("images.lock declares laiyer/llm-guard-api:0.3.16 with that digest and its archived upstream",
+check(f"VERSIONS.lock pins a digest for {LLM_GUARD_API}", pinned is not None)
+row = next((rows[r] for r in rows if r.split("@", 1)[0] == LLM_GUARD_API), None)
+check(f"images.lock declares {LLM_GUARD_API} with that digest and our fork as its repo: source (#1460)",
       row is not None and pinned is not None and row[0] == pinned.group(1)
-      and row[1] == "upstream:https://github.com/protectai/llm-guard")
+      and row[1] == "repo:peopleforrester/llm-guard-cpu-offline")
+check("images.lock has no laiyer/llm-guard-api row, whose upstream was archived (#1460)",
+      not any(r.startswith("laiyer/llm-guard-api") for r in rows))
 
 if failures:
     print(f"\nFAILED: {len(failures)} check(s)")

@@ -43,16 +43,17 @@ agentgateway           OSS v1.7.0  (released 2026-10-27, GitHub releases agentga
                        config.session.key: disabled, since v1.7.0 standalone would write a generated key into a read-only ConfigMap
                        chart ref: oci://cr.agentgateway.dev/charts/agentgateway (CONFIRMED reachable 2026-06-16)
                        mcpAuthorization rules are a bare CEL string (an allow rule) or {allow|deny|require}, implicit deny, no `action` field (schema/config.json RuleSerde, v1.3.0 to v1.7.0, #697); MCP config nests under mcp.{targets,policies} — research/14 §2
-llm-guard-api          laiyer/llm-guard-api:0.3.16  (verdict envelope field is `scanners`, not `scores`)
+llm-guard-api          ghcr.io/peopleforrester/llm-guard-api:0.3.16  (verdict envelope field is `scanners`, not `scores`)
                        digest: sha256:bea3efb1220ad18149b73de625c55e6d835bf8b45023a089a3762012a86550ba (OCI index: linux/amd64 + linux/arm64;
-                       resolved from Docker Hub 2026-10-25 and checked against the body's sha256, #603; upstream protectai/llm-guard archived July 2026)
+                       resolved from Docker Hub 2026-10-25 and checked against the body's sha256, #603; upstream protectai/llm-guard archived July 2026;
+                       laiyer/llm-guard-api:0.3.16 served it, and our fork's ghcr.io copy, source peopleforrester/llm-guard-cpu-offline, is the same digest, #1460)
                        deployed image is not this one: lab-platform's ghcr.io/peopleforrester/lab-platform/llm-guard:v1 as rebuilt
                        under lab-platform#341, with the prompt-injection and BanTopics zero-shot models baked in and OpenTelemetry past
                        GHSA-xcq7-p3pf-p88h (digest sha256:46b3d202..., signed 2026-11-05, set by kustomize.images in
                        gitops/bootstrap/apps/ai-layer.yaml, #895); it replaced llm-guard-cpu-offline's llm-guard-0.3.16-cpu.5
                        (sha256:4c66fd0f..., #719 question 1041), which had replaced v1 before the rebuild (sha256:6cdbf3a2..., #652, #730);
                        all have images.lock rows by digest (#603); netcup's image archive holds the old v1 (2026-11-04),
-                       laiyer/llm-guard-api (2026-11-05), and the rebuild and cpu.5 (2026-11-06)
+                       laiyer/llm-guard-api (2026-11-05), the rebuild and cpu.5 (2026-11-06), and the fork's llm-guard-api (2026-11-13)
 
 ## LIVE-VALIDATED (authoritative): Terraform cluster watch-it-burn-attendee-001 (2026-06-22)
 ## Supersedes the 2026-06-17 eksctl test-cluster snapshot (torn down). Full record: PROJECT_STATE.md.

@@ -32,7 +32,7 @@ def check(name: str, cond: bool, why: str = "") -> None:
 
 D1 = "sha256:" + "1" * 64
 D2 = "sha256:" + "2" * 64
-FIRST = "laiyer/llm-guard-api:0.3.16"
+FIRST = "ghcr.io/peopleforrester/llm-guard-api:0.3.16@sha256:bea3efb1220ad18149b73de625c55e6d835bf8b45023a089a3762012a86550ba"
 
 
 def archive_with(root: pathlib.Path, entries: list[tuple[str, str, str, bytes | None, str | None]]) -> pathlib.Path:
@@ -140,7 +140,7 @@ try:
         shutil.copy(HERE / name, fake / "verify" / name)
     (fake / "images.lock").write_text(
         "# fixture\n"
-        f"{FIRST} {D1} upstream:https://github.com/protectai/llm-guard 2026-11-04\n"
+        f"{FIRST} {D1} repo:peopleforrester/llm-guard-cpu-offline 2026-11-04\n"
         f"llm-guard ghcr.io/o/llm-guard@{D2} repo:o/r/deploy/images 2026-11-04\n"
         "${{parameters.image}} - not-an-image:a-parameter -\n"
         "ghcr.io/o/tool-pin:1 - build:images/tool-pin -\n")
