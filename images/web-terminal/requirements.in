@@ -8,7 +8,7 @@
 # Python 3.11 is bookworm's python3, which the Dockerfile's Debian snapshot installs. Wheels only, so no build backend
 # is fetched unhashed at build time. jupyterlab and jupyter-collaboration are held where the Dockerfile's comment says
 # (collaboration 5.x needs jupyterlab>=4.6); the rest took the latest release that resolved on 2026-11-09.
-jupyterlab==4.6.3
+jupyterlab==4.6.4
 jupyter-collaboration==5.0.1
 jupyter-resource-usage
 jupyterlab-git
