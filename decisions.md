@@ -56792,3 +56792,15 @@ changed `server.py` running, which reaches a cluster only once the branch is pro
 never deploys. So the live `tools/list` in the chaining and benign states, on `watch-it-burn-community` or
 `watch-it-burn-private`, leaving the cluster as found, is owed by the next run on the issue, one that holds the
 cluster session and runs after promotion.
+
+Run 25558 resumed this after run 25299 failed the tests gate, which ran the whole suite because the scope map
+changed. Two tests failed, both from this change. `test_round_names_retired.py` sweeps non-markdown files for the
+retired round wording, and the new comments in `server.py` and `resources.yaml` and the new test's docstring named
+the C7 leak and fix as R1 and R3; they now say "the C7 leak and fix". `test_tool_pin.py` read each `@mcp.tool`
+description with `ast.literal_eval`, which cannot read the call to the switch's selector; it now resolves a constant
+or a selector call to the description served at the default, the selector's else branch. The #480 spike's
+`baseline.json` pins the chaining description, which is still the default, so the pin needed no change. Both pass,
+with `test_get_weather_rugpull_switch.py`, `test_c7_teaching.py`, `test_poisoned_server_one_copy.py`,
+`test_weather_tool_scope.py`, `test_c7_output_guard.py`, `test_beat03_c7.py`, `test_evil_tools_by_name.py` and
+`test_scope_tests.py`. This run was again handed no cluster session (no `HECATON_CLUSTER_ENV`, no kubeconfig or AWS
+session in its run directory), so the live `tools/list` in each switch state is still owed, as above.

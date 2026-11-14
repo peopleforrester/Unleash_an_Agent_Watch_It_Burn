@@ -46,7 +46,7 @@ def _reading(city: str) -> str:
 # (the (city: str = ...) signature) are byte-identical in both states; ONLY the description differs. That is exactly
 # the post-approval mutation that name-based allow-listing (C7's toolNames) misses: the allow-list sees the approved
 # name and admits it, while the model reads the changed description. The default (GET_WEATHER_DESC unset, or any value
-# but "benign") is the chaining description the C7 beat uses today, so the existing R1/R3 behaviour is unchanged;
+# but "benign") is the chaining description the C7 beat uses today, so the existing C7 leak and fix are unchanged;
 # "benign" serves the approved, benign description for the rug-pull beat's "approve" step. The chaining description
 # below is byte-identical to the one evil-mcp served before this switch; verify/test_c7_teaching.py still reads it,
 # and verify/test_get_weather_rugpull_switch.py holds the two states to a description-only difference.

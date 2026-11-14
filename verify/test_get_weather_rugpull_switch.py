@@ -12,7 +12,7 @@ unchanged.
 What this holds:
 
 1. server.py exec'd with GET_WEATHER_DESC unset, "chaining" and any other value serves the SAME chaining description,
-   byte-identical to the one evil-mcp served before the switch (so R1 still leaks); "benign" serves a benign one.
+   byte-identical to the one evil-mcp served before the switch (so the C7 leak still fires); "benign" serves a benign one.
 2. The benign description does not chain (names no second tool); the chaining one does.
 3. Across the two states the tool NAME and the input schema (from get_weather's signature) are identical, and only
    the description differs. The sha256 of the canonical JSON {name, description, inputSchema} differs between them,
