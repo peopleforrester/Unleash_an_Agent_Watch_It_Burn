@@ -56800,3 +56800,14 @@ in the design note ("Validation owed on a cluster": benign, rug-pull with pin of
 strip mode, badge) and `bash verify/run-e2e.sh` are owed on `watch-it-burn-community` or
 `watch-it-burn-private` by the next run on the issue, once the pin pieces land. No cluster was changed by this
 run.
+
+Run 25660 (2026-11-15) resumed this after run 25431 failed the tests gate. Because `verify/scope-map.yaml`
+changed, the gate ran the whole offline suite, and two tests I had not run failed on the new ConfigMap ignore.
+`verify/test_drift_floor.py` requires every `ignoreDifferences` entry to have a row in `docs/floor.md`'s register
+of fields Argo CD does not put back, so the register now has a row for `evil-mcp-rugpull-config`'s
+`get_weather_mode`. `verify/test_c7_gateway_toggle.py` held `agentgateway-c7-config` as the only ConfigMap
+ai-layer may ignore, to keep an unnamed ignore from covering `agentgateway-config`. It now holds every ConfigMap
+ignore to a named set of the two, so that guarantee stands and nothing is ignored on `agentgateway-config`. Both
+pass, as do the other offline readers of `docs/floor.md`, the new test, `test_scope_tests.py` and the prose gate.
+This run had no cluster session either (`HECATON_CLUSTER_ENV` unset), so the "Not yet run on a cluster" line
+above stands unchanged.
