@@ -56682,4 +56682,11 @@ personal-knowledge already marks that KR done on the same record, so the run's r
 criteria and summary rather than as a `readings` entry: the previous attempt's report put it under `readings` and
 the report-schema gate refused it ("KR kubecon-na-burritobot is done").
 
-Live check skipped: the change touches only `facilitation/`, `PROJECT_STATE.md` and `decisions.md`.
+`verify/test_seg3_timing.py` read any run-through Date cell other than the literal "not yet run" as a run on record
+and then required segment 3's beat times, so the dropped run-throughs' "not run" note failed it. It now also takes
+a Date cell that starts "not run" as not run, still fails one that carries a Segment 3 time, and checks both cases on
+a copy of the record. The scoped `run-tests.sh` (164 of 481 offline tests, base 2f65237b) failed only on that test
+before the fix; `python3 verify/test_seg3_timing.py` passes after it, and the prose gate passes.
+
+Live check skipped: the change touches only `facilitation/`, `PROJECT_STATE.md`, `decisions.md` and a test no
+cluster runs.
