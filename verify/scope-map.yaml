@@ -4811,6 +4811,8 @@ reads:
     - verify/kube_forward.py
     - verify/local-inference-live.py
     - verify/test_gateway_bedrock_tagged_live.py
+  test_get_weather_rugpull_switch.py:
+    - gitops/ai-layer/server.py
   test_gh_comments.py:
     - AGENTS.md
     - CLAUDE.md

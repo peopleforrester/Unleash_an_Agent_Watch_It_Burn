@@ -4253,6 +4253,11 @@ rules:
       - verify/test_gateway_bedrock_tagged_live.py
     tests:
       - verify/test_gateway_forward.py
+  - name: test_get_weather_rugpull_switch.py
+    paths:
+      - gitops/ai-layer/server.py
+    tests:
+      - verify/test_get_weather_rugpull_switch.py
   - name: test_gh_comments.py
     paths:
       - AGENTS.md

@@ -762,6 +762,12 @@ spec:
           # issue #18; this env is for Agent-side service tagging only). Locked vocabulary, PRD #13.
           env:
             - { name: FAKE_MCP_SENTINEL, value: "FAKE-MCP-EXFIL-sentinel-4c1d" }
+            # The rug-pull switch (#1463). server.py serves get_weather's description from GET_WEATHER_DESC: the
+            # committed default "chaining" is today's poisoned, chaining description (R1 leaks), and "benign" serves
+            # the approved, benign one. The tool name and input schema are byte-identical in both; only the
+            # description differs, which name-based allow-listing (C7's toolNames) misses. Flip it with a patch of
+            # the same shape as C7's toolNames patch. verify/test_get_weather_rugpull_switch.py holds the two states.
+            - { name: GET_WEATHER_DESC, value: "chaining" }
             - name: OTEL_SERVICE_NAME
               value: burritobot-evil-mcp
             # OTEL_SERVICE_NAME WINS over service.name in OTEL_RESOURCE_ATTRIBUTES, and the OTel Operator
