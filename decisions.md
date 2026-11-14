@@ -56687,3 +56687,36 @@ Packt repo. The by-hand `test_images_saved.py` matches on the exact ref, so it n
 
 `test_images_lock.py` and `test_images_saved_judge.py` pass. Live check skipped: the change touches only images.lock,
 VERSIONS.lock, decisions.md and tests no cluster runs.
+## 2026-11-14 · question 1297 · run 25142 · the acceptance-criteria edit goes through the `sources-elevated` wrapper
+
+Question 1297 asked who could apply the `gh issue edit` that adds an `## Acceptance criteria` section to #117's
+body, after an earlier run's edit was refused. Answer: the coordinator ruled, back to the run (hecaton#510),
+that `gh issue edit` was refused because the custodian run ended failed without doing every act, and that every
+run acts through the `sources-elevated` wrapper, so no other run holds it. The run does the act itself through
+that wrapper (`gh` on PATH, or `sudo -n -u michael /var/lib/hecaton/cli/sources-elevated`); if it still
+refuses, the run ends with the exact command in `escalate` and the wrapper's `REFUSED` line quoted. Decided by
+the coordinator under Michael's standing rules, not by Michael. What it changes: this run attempts the
+`gh issue edit` itself and, on refusal, puts the exact command in the report's `escalate` list rather than
+waiting on Michael. The body to apply is #117's original text with an `## Acceptance criteria` section of
+`- [ ]` items appended; nothing above the new section changes.
+
+## 2026-11-14 · #117 · run 25142 · the C7 rug-pull beat design note
+
+#117 adds the MCP rug-pull to C7, the poisoned-tool challenge: a tool approved once by name, then its
+description changed, which name-based allow-listing misses because the name is kept. Michael deferred the build
+to Barcelona on 2026-09-07 (`deferred-barcelona`) and kept the design open; #447 held the Barcelona build until
+2026-11-13, the day after the KubeCon NA breakout. Matching the sibling deferred-barcelona notes (#116, #112,
+#130), this run wrote the design at `docs/research/2026-11-14-c7-rug-pull-beat.md`. An earlier run's note
+(`2026-11-12-c7-rug-pull-beat.md`) is not in this checkout, so the design was written fresh. The note gives the
+five-step on-stage beat (approve, show benign, mutate the description in place with the name and schema kept,
+re-ask, then pin and refuse), reuses the #480 tool-pin spike as the hash-pin control in strip mode (measured
+live on `watch-it-burn-community` on 2026-11-05), states the 2026-07-28 authorization-versus-tool-trust
+asymmetry, cites postmark-mcp and GTG-1002, and designs the Unicode TAG-block concealment move against the
+approval view (arXiv 2607.05744), tied to #115. The precedent and spec claims were checked by web search only,
+so the note lists what needs a primary-source read before the talk. It also lists the build pieces and the four
+live assertions owed on a cluster. No lab text, slide, run of show or deploy config changed. The build and its
+live check remain for a cluster-capable, non-doc-lane run once the #447 hold lifted.
+
+Tests: `python3 verify/test_docs_current.py` reads the new note and this entry. Prose: both changed files were
+read with the gate's own scanner (`aiisms.py`) and add no dash or AI-ism. Live check skipped: the change
+touches only `docs/research/` and `decisions.md`, which no cluster reads.
