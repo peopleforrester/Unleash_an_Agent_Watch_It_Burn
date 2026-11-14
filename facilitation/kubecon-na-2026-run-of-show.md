@@ -55,7 +55,7 @@ Dates are for people only:
 | Rehearsal with Whitney | Michael and Whitney | The calendar holds Wed 2026-10-28, 09:00 to 12:00 Central (kept by Michael, question 845 on #457) | If the cold read has not yet run against the live platform, it runs here; otherwise this is run-through 1. Either way it goes under "Run-through record" below |
 | Datadog sandbox org (abstract point 7) | Whitney | By 2026-11-08 | Both KubeCon clusters ship to Whitney's sandbox org (#629). A write application key from her user is in place, `./fleet.sh monitors --apply --session 2026-11-12T20:50Z/2026-11-12T21:20Z` has run with `WIB_FLEET_MONITORS_APP_KEY` (#485), and the room view is saved (#665) |
 | Two timed run-throughs | Michael and Whitney | By 2026-11-08 | Two full runs, demo included, each timed against the 30-minute slot, with the timings in the record below and what broke filed as issues here |
-| Delivered | Michael and Whitney | 2026-11-12 | The session runs live. Its slot and room are in conference-knowledge (`kubecon-na-2026`, `schedule`) |
+| Delivered | Michael and Whitney | 2026-11-12 | The session runs live. Its slot and room are in conference-knowledge (`kubecon-na-2026`, `schedule`). Done: delivered live on 2026-11-12, in the Delivered column of the record below (#616) |
 
 The Barcelona challenges wait until 2026-11-13.
 
@@ -184,15 +184,15 @@ Since #1109 each call is judged in its own chat, and all four passed on 2026-11-
 
 | | Run-through 1 | Run-through 2 | Delivered |
 |---|---|---|---|
-| Date | not yet run | not yet run | not yet run |
-| Presenters | | | |
-| Platform (clusters on stage, brought up with `fleet.sh` that session?) | | | |
-| Deck (rounds-agenticburn commit) | | | |
+| Date | not run: Michael dropped the two timed run-throughs on 2026-11-01 (#615) and ruled on 2026-11-08 that none is owed (#760) | not run (see Run-through 1) | 2026-11-12, delivered live (#616) |
+| Presenters | | | Michael Forrester and Whitney Lee, both on the recording's transcript, `transcripts/2026-11-12-kubecon-na-talk-burritobot-said-lets-dance.txt` (6aaaf09a) |
+| Platform (clusters on stage, brought up with `fleet.sh` that session?) | | | The room played attackme.burritobot.co (watch-it-burn-community): 1,380 requests, 29 attendees won Challenge 3 (hecaton#699). Bring-up not recorded |
+| Deck (rounds-agenticburn commit) | | | not recorded |
 | Community bot reset first (`reset-bot` read `$0.0000 over 0 requests`?) | | | |
 | Prompt wall empty first (`wall-check --empty` passed?) | | | |
 | Deployments page and beacon count at zero first (`start-check` passed? `desk-reset --tickets` used?) | | | |
 | Challenge traces checked first (`challenge_traces.py` GREEN? FAILs filed as) | | | |
-| Whole slot (target 30:00) | | | |
+| Whole slot (target 30:00) | | | not timed: the transcript carries no timestamps; the challenges ran through Challenge 4 and the close was cut short for time |
 | Demo, segments 2 to 5 (target 22:00) | | | |
 | Segment 1 (target 3:00) | | | |
 | Segment 2 (target 5:00) | | | |
@@ -201,7 +201,7 @@ Since #1109 each call is judged in its own chat, and all four passed on 2026-11-
 | Segment 5 (target 5:00) | | | |
 | Segment 6 (target 5:00) | | | |
 | Fallbacks driven (beat and script) | | | |
-| Findings filed (issue numbers) | | | |
+| Findings filed (issue numbers) | | | none filed from the session; the attendee feedback pull is hecaton#699 |
 
 **Cold read** (untimed; it is a read, not a run):
 
