@@ -1461,6 +1461,11 @@ reads:
     - verify/test_guard_mcp_both.py
   test_c7_output_guard.py:
     - gitops/ai-layer/resources.yaml
+  test_c7_rug_pull_mutation.py:
+    - challenges/03-bad-mcp-excessive-agency/toggle-rugpull-mutation-on.sh
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/server.py
+    - gitops/bootstrap/apps/ai-layer.yaml
   test_c7_sse_route_job.py:
     - agent/web-terminal
     - gitops/ai-layer/agentgateway.yaml

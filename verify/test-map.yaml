@@ -1350,6 +1350,14 @@ rules:
       - gitops/ai-layer/resources.yaml
     tests:
       - verify/test_c7_output_guard.py
+  - name: test_c7_rug_pull_mutation.py
+    paths:
+      - challenges/03-bad-mcp-excessive-agency/toggle-rugpull-mutation-on.sh
+      - gitops/ai-layer/resources.yaml
+      - gitops/ai-layer/server.py
+      - gitops/bootstrap/apps/ai-layer.yaml
+    tests:
+      - verify/test_c7_rug_pull_mutation.py
   - name: test_c7_sse_route_job.py
     paths:
       - agent/web-terminal

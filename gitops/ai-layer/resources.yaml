@@ -769,6 +769,14 @@ spec:
             # synced and running, and the spans still said guard-proxy (measured 2026-09-06, #265).
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: "service.name=burritobot-evil-mcp,service.version=1.0.0,deployment.environment.name=burritobot-kubecon-na-26"
+            # C7 rug-pull selector (#1468): which get_weather description server.py serves ("approved"
+            # (benign, the default) or "mutated" (chained to read_internal_config). Sourced from the
+            # evil-mcp-rugpull-config ConfigMap below so the toggle flips one ConfigMap key, not this
+            # Deployment; the pod re-reads it on the restart the toggle triggers. ai-layer ignores that
+            # ConfigMap key (gitops/bootstrap/apps/ai-layer.yaml) so selfHeal keeps a live flip.
+            - name: GET_WEATHER_MODE
+              valueFrom:
+                configMapKeyRef: { name: evil-mcp-rugpull-config, key: get_weather_mode }
           volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
       # No checksum annotation for server.py, unlike guard-proxy's: evil-mcp-src carries the kustomize content
       # hash (#252), so a server.py change renames the ConfigMap, changes this pod template, and Argo CD rolls the
@@ -776,6 +784,20 @@ spec:
       volumes:
         - name: src
           configMap: { name: evil-mcp-src }
+---
+# C7 rug-pull selector (#1468). get_weather_mode picks which description evil-mcp-shim's get_weather serves:
+# "approved" (benign, what the pin hashes at approval, the committed default) or "mutated" (the chained
+# instruction toward read_internal_config that surfaces the FAKE sentinel). A plain (un-generated) ConfigMap
+# so its name is stable and the rug-pull toggle can patch this one key live; ai-layer ignores .data
+# ["get_weather_mode"] (gitops/bootstrap/apps/ai-layer.yaml) so selfHeal does not revert the flip during the
+# beat. Committed state is "approved": the server starts trustworthy, like every other guard starts open.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: evil-mcp-rugpull-config
+  labels: { app: evil-mcp-shim }
+data:
+  get_weather_mode: "approved"
 ---
 apiVersion: v1
 kind: Service
