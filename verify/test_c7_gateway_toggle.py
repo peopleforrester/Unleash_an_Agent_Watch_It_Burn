@@ -62,8 +62,12 @@ c7_ignore = [i for i in ignores if i.get("kind") == "ConfigMap" and i.get("name"
 check("ai-layer ignores .data[\"config.yaml\"] on agentgateway-c7-config, and nothing else of it",
       len(c7_ignore) == 1 and c7_ignore[0].get("group") == "" and not c7_ignore[0].get("jsonPointers")
       and c7_ignore[0].get("jqPathExpressions") == ['.data["config.yaml"]'], f"{c7_ignore}")
-check("every ConfigMap ignore is named agentgateway-c7-config (an unnamed one would cover agentgateway-config)",
-      all(i.get("name") == "agentgateway-c7-config" for i in ignores if i.get("kind") == "ConfigMap"),
+# The ConfigMaps ai-layer may ignore, each by name: the C7 gateway rule's, and the C7 rug-pull switch's
+# get_weather_desc key on evil-mcp-rugpull-config (#1468), which is not gateway config.
+NAMED_CM_IGNORES = {"agentgateway-c7-config", "evil-mcp-rugpull-config"}
+check("every ConfigMap ignore is named, and only agentgateway-c7-config among gateway config (an unnamed one "
+      "would cover agentgateway-config)",
+      all(i.get("name") in NAMED_CM_IGNORES for i in ignores if i.get("kind") == "ConfigMap"),
       f"{[i for i in ignores if i.get('kind') == 'ConfigMap']}")
 check("nothing is ignored on agentgateway-config",
       not any(i.get("name") == "agentgateway-config" for i in ignores))

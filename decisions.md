@@ -56751,6 +56751,66 @@ operations by AI, as the report states them.
 Tests: `python3 verify/test_docs_current.py` reads the note and this entry; the prose gate was run with the
 gate's own scanner. Live check skipped: doc-only change to `docs/research/` and `decisions.md`, which no
 cluster reads.
+
+## 2026-11-14 · #1468 · run 25431 · C7 rug-pull: evil-mcp serves get_weather with an approved or a mutated description
+
+First build piece of the C7 rug-pull beat (`docs/research/2026-11-14-c7-rug-pull-beat.md`, "What the build
+must produce" row "Mutation switch"). `gitops/ai-layer/server.py` now carries two descriptions for
+`get_weather`: `APPROVED_GET_WEATHER_DESCRIPTION` (benign) and `MUTATED_GET_WEATHER_DESCRIPTION` (the chained
+instruction toward `read_internal_config` that surfaces the fake sentinel). The tool name and inputSchema are
+the same in both modes: a new `_apply_get_weather_mode` re-points only the registered tool's `description`,
+never its name or schema, which is the post-approval change a name-based allow-list is blind to.
+
+Default mode: `approved`. The committed `evil-mcp-rugpull-config` ConfigMap sets `get_weather_mode: approved`,
+and the decorator on `get_weather` carries the approved literal, so a fresh cluster and a standalone server
+start benign, the trustworthy state the hash-pin control hashes at approval. The existing C7 allow-list beat
+keeps working as before: its leak fires from the tool OUTPUT (unchanged here) once `read_internal_config` is
+on the agent's `toolNames`, not from the description, so a benign default description does not alter it. I
+confirmed no test asserts the deployed default description is the poisoned one; the allow-list tests key on
+`toolNames` and the tool output.
+
+The toggle's field: the `get_weather_mode` key of the `evil-mcp-rugpull-config` ConfigMap.
+`challenges/03-bad-mcp-excessive-agency/toggle-rugpull-mutation-on.sh` takes a required CONTEXT, patches that
+one key (`--on` sets `mutated`, `--off` restores `approved`), and restarts `evil-mcp-shim` so the server
+re-reads the selector. `gitops/bootstrap/apps/ai-layer.yaml` ignores only `.data["get_weather_mode"]` on that
+ConfigMap, a map-key ignore of the same shape as `agentgateway-c7-config`, so Argo CD selfHeal keeps the flip
+during the beat and needs no `repair_env_order` row (a map key is not a list element).
+
+I chose a ConfigMap data-key selector read through a `valueFrom` env rather than a directly-committed env
+`value:` so the Argo ignore stays off the Deployment's env array. An ignore into the env array would freeze
+that list's order under RespectIgnoreDifferences and would require a `fleet.sh` `ENV_ORDER_LISTS` row plus the
+hardcoded expectation in `verify/test_agent_tools_sync.py`; the map-key ignore avoids all of that and keeps
+the blast radius to `gitops/` and the baseline.
+
+`docs/research/2026-10-24-tool-pin-spike/baseline.json` now pins `get_weather`'s approved (benign) description
+and its recomputed sha256, so the pin, when a later child deploys it, hashes the approved definition and
+catches the mutated one. `verify/test_tool_pin.py` reads that baseline against `server.py`'s decorator and
+passes.
+
+Tests (offline, run once each here): `verify/test_c7_rug_pull_mutation.py` (new), `verify/test_tool_pin.py`,
+`verify/test_beat03_c7.py`, `verify/test_c7_teaching.py`, `verify/test_evil_tools_by_name.py`,
+`verify/test_challenge_fallbacks.py`, `verify/test_scope_tests.py`, and, because this change edits
+`ai-layer.yaml` and `resources.yaml`, `verify/test_agent_tools_sync.py`, `verify/test_ai_layer_rollout.py`,
+`verify/test_ai_layer_role_sync.py`, `verify/test_bootstrap_chart.py` and `verify/test_chat_path_ingress.py`,
+all green. `python3 verify/scope_tests.py write` added the new test's `scope-map.yaml` entry.
+
+Not yet run on a cluster: the live validation of the switch needs the change running, which reaches the
+clusters through Argo CD only after promotion, and a dispatched run never deploys. So the four live assertions
+in the design note ("Validation owed on a cluster": benign, rug-pull with pin off, rug-pull with pin on in
+strip mode, badge) and `bash verify/run-e2e.sh` are owed on `watch-it-burn-community` or
+`watch-it-burn-private` by the next run on the issue, once the pin pieces land. No cluster was changed by this
+run.
+
+Run 25660 (2026-11-15) resumed this after run 25431 failed the tests gate. Because `verify/scope-map.yaml`
+changed, the gate ran the whole offline suite, and two tests I had not run failed on the new ConfigMap ignore.
+`verify/test_drift_floor.py` requires every `ignoreDifferences` entry to have a row in `docs/floor.md`'s register
+of fields Argo CD does not put back, so the register now has a row for `evil-mcp-rugpull-config`'s
+`get_weather_mode`. `verify/test_c7_gateway_toggle.py` held `agentgateway-c7-config` as the only ConfigMap
+ai-layer may ignore, to keep an unnamed ignore from covering `agentgateway-config`. It now holds every ConfigMap
+ignore to a named set of the two, so that guarantee stands and nothing is ignored on `agentgateway-config`. Both
+pass, as do the other offline readers of `docs/floor.md`, the new test, `test_scope_tests.py` and the prose gate.
+This run had no cluster session either (`HECATON_CLUSTER_ENV` unset), so the "Not yet run on a cluster" line
+above stands unchanged.
 ## 2026-11-14 · #1463 · run 25299 · the get_weather rug-pull switch
 
 #1463 is the "Mutation switch" build piece of the C7 rug-pull beat
@@ -56805,51 +56865,31 @@ with `test_get_weather_rugpull_switch.py`, `test_c7_teaching.py`, `test_poisoned
 `test_scope_tests.py`. This run was again handed no cluster session (no `HECATON_CLUSTER_ENV`, no kubeconfig or AWS
 session in its run directory), so the live `tools/list` in each switch state is still owed, as above.
 
-## 2026-11-14 · #1468 · run 25431 · C7 rug-pull: evil-mcp serves get_weather with an approved or a mutated description
+## 2026-11-15 · #1468 · run 25660 · the #1468 toggle merged onto #1463's switch
 
-First build piece of the C7 rug-pull beat (`docs/research/2026-11-14-c7-rug-pull-beat.md`, "What the build
-must produce" row "Mutation switch"). `gitops/ai-layer/server.py` now carries two descriptions for
-`get_weather`: `APPROVED_GET_WEATHER_DESCRIPTION` (benign) and `MUTATED_GET_WEATHER_DESCRIPTION` (the chained
-instruction toward `read_internal_config` that surfaces the fake sentinel). The tool name and inputSchema are
-the same in both modes: a new `_apply_get_weather_mode` re-points only the registered tool's `description`,
-never its name or schema, which is the post-approval change a name-based allow-list is blind to.
+Staging moved while #1468 was in validation: run 25558 landed #1463, the same get_weather switch built from the
+same design note row, in `gitops/ai-layer/server.py`. The merge keeps #1463's server, its `GET_WEATHER_DESC` name,
+its values (`benign`, and `chaining`, the default for any other value) and its default, and drops #1468's own copy
+(`GET_WEATHER_MODE`, `approved`/`mutated`, `_apply_get_weather_mode`). So the #1468 entry above no longer holds on
+three points. The default mode is now `chaining`, the description evil-mcp served before either switch, which keeps
+the existing C7 allow-list beat byte-for-byte as it was, and is #1463's choice. The #480 spike's `baseline.json` is
+staging's again, pinning the chaining default, because #1463's `verify/test_tool_pin.py` pins the default. And the
+description-only difference between the two modes is held by #1463's `verify/test_get_weather_rugpull_switch.py`,
+so `verify/test_c7_rug_pull_mutation.py` now holds only what #1468 adds.
 
-Default mode: `approved`. The committed `evil-mcp-rugpull-config` ConfigMap sets `get_weather_mode: approved`,
-and the decorator on `get_weather` carries the approved literal, so a fresh cluster and a standalone server
-start benign, the trustworthy state the hash-pin control hashes at approval. The existing C7 allow-list beat
-keeps working as before: its leak fires from the tool OUTPUT (unchanged here) once `read_internal_config` is
-on the agent's `toolNames`, not from the description, so a benign default description does not alter it. I
-confirmed no test asserts the deployed default description is the poisoned one; the allow-list tests key on
-`toolNames` and the tool output.
+What #1468 adds on top of #1463 is the live half. #1463 committed `GET_WEATHER_DESC: chaining` as a literal env
+value and named the flip "a patch of the same shape as C7's toolNames patch" without writing it. Here the
+evil-mcp-shim Deployment takes `GET_WEATHER_DESC` from the `get_weather_desc` key of the `evil-mcp-rugpull-config`
+ConfigMap, committed `chaining`. The toggle's field is that key: `toggle-rugpull-mutation-on.sh` requires CONTEXT,
+writes `chaining` by default (the mutation, which is also the committed state) and `benign` with `--off` (the
+approve step), and restarts the pod. `gitops/bootstrap/apps/ai-layer.yaml` ignores `.data["get_weather_desc"]` alone,
+registered in `docs/floor.md`. The ignore stays on a ConfigMap key rather than on the Deployment's env list for the
+reason given above: an ignored env element would need a `repair_env_order` row. In the beat the facilitator runs
+`--off` first to show the approved description, then runs the script again to mutate in place.
 
-The toggle's field: the `get_weather_mode` key of the `evil-mcp-rugpull-config` ConfigMap.
-`challenges/03-bad-mcp-excessive-agency/toggle-rugpull-mutation-on.sh` takes a required CONTEXT, patches that
-one key (`--on` sets `mutated`, `--off` restores `approved`), and restarts `evil-mcp-shim` so the server
-re-reads the selector. `gitops/bootstrap/apps/ai-layer.yaml` ignores only `.data["get_weather_mode"]` on that
-ConfigMap, a map-key ignore of the same shape as `agentgateway-c7-config`, so Argo CD selfHeal keeps the flip
-during the beat and needs no `repair_env_order` row (a map key is not a list element).
-
-I chose a ConfigMap data-key selector read through a `valueFrom` env rather than a directly-committed env
-`value:` so the Argo ignore stays off the Deployment's env array. An ignore into the env array would freeze
-that list's order under RespectIgnoreDifferences and would require a `fleet.sh` `ENV_ORDER_LISTS` row plus the
-hardcoded expectation in `verify/test_agent_tools_sync.py`; the map-key ignore avoids all of that and keeps
-the blast radius to `gitops/` and the baseline.
-
-`docs/research/2026-10-24-tool-pin-spike/baseline.json` now pins `get_weather`'s approved (benign) description
-and its recomputed sha256, so the pin, when a later child deploys it, hashes the approved definition and
-catches the mutated one. `verify/test_tool_pin.py` reads that baseline against `server.py`'s decorator and
-passes.
-
-Tests (offline, run once each here): `verify/test_c7_rug_pull_mutation.py` (new), `verify/test_tool_pin.py`,
-`verify/test_beat03_c7.py`, `verify/test_c7_teaching.py`, `verify/test_evil_tools_by_name.py`,
-`verify/test_challenge_fallbacks.py`, `verify/test_scope_tests.py`, and, because this change edits
-`ai-layer.yaml` and `resources.yaml`, `verify/test_agent_tools_sync.py`, `verify/test_ai_layer_rollout.py`,
-`verify/test_ai_layer_role_sync.py`, `verify/test_bootstrap_chart.py` and `verify/test_chat_path_ingress.py`,
-all green. `python3 verify/scope_tests.py write` added the new test's `scope-map.yaml` entry.
-
-Not yet run on a cluster: the live validation of the switch needs the change running, which reaches the
-clusters through Argo CD only after promotion, and a dispatched run never deploys. So the four live assertions
-in the design note ("Validation owed on a cluster": benign, rug-pull with pin off, rug-pull with pin on in
-strip mode, badge) and `bash verify/run-e2e.sh` are owed on `watch-it-burn-community` or
-`watch-it-burn-private` by the next run on the issue, once the pin pieces land. No cluster was changed by this
-run.
+Tests after the merge: `verify/test_c7_rug_pull_mutation.py` (rewritten), #1463's
+`verify/test_get_weather_rugpull_switch.py`, `verify/test_tool_pin.py`, `verify/test_beat03_c7.py`,
+`verify/test_c7_teaching.py`, `verify/test_evil_tools_by_name.py`, `verify/test_challenge_fallbacks.py`,
+`verify/test_c7_gateway_toggle.py`, `verify/test_drift_floor.py`, `verify/test_agent_tools_sync.py` and
+`verify/test_scope_tests.py`. Not yet run on a cluster, as before: no cluster session in this run either, and the
+live `tools/list` in each state, flipped by the toggle, needs the change promoted through Argo CD first.
