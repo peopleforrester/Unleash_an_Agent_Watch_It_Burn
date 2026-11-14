@@ -18,8 +18,8 @@ Its last row, "Segment 3", is each column's total. This test holds:
      4dd5bbb0, the deck the rehearsal times, with the 326 words slides 30 to 42 then read.
   5. Michael and Whitney time segment 3 in a rehearsal, beat by beat, against that budget (#1297). The Rehearsal
      column is either empty on every row or an m:ss time on every row, never part-timed. It is tied to the
-     "Run-through record": once a run-through's Date row reads anything but "not yet run", or its Segment 3 row
-     holds a time, every beat must be timed; once the column is timed, its Segment 3 total must be the Segment 3
+     "Run-through record": once a run-through's Date row reads anything but "not yet run" or a "not run" note (the
+     two run-throughs were dropped on 2026-11-01, #615), or its Segment 3 row holds a time, every beat must be timed; once the column is timed, its Segment 3 total must be the Segment 3
      time of run-through 1 or 2. While the column is empty, the Timing paragraph must say it waits on a timed run;
      once it is timed, the paragraph may no longer say so. So the test is green while the rehearsal has not run
      and that is on record, and fails on a run-through recorded without its beat times.
@@ -46,6 +46,7 @@ RECORD_HEAD = "| | Run-through 1 | Run-through 2 | Delivered |"
 DATE_ROW = "Date"
 SEG3_ROW = "Segment 3 (target 5:00)"
 NOT_RUN = "not yet run"
+DROPPED = "not run"  # a run-through recorded as never run, with why (#615, #616)
 WAITS = "Rehearsal column waits on a later one"
 
 failures: list[str] = []
@@ -158,7 +159,7 @@ def rehearsal_verdicts(block: str, record: str) -> dict[str, bool]:
     seg3 = record_row(record, SEG3_ROW)
     out["the Run-through record has its Date and Segment 3 rows, one cell per run"] = len(dates) == 3 == len(seg3)
     runs = list(zip(dates[:2], seg3[:2]))
-    ran = [i for i, (d, t) in enumerate(runs) if d != NOT_RUN or t]
+    ran = [i for i, (d, t) in enumerate(runs) if not (d == NOT_RUN or d.startswith(DROPPED)) or t]
     out["a run-through on record has segment 3 timed beat by beat in the Rehearsal column"] = not ran or timed
     if timed:
         total = totals[0] if totals else ""
@@ -219,6 +220,13 @@ def rehearsal_cases(block: str, record: str) -> None:
     fails("a timed column with one beat emptied fails", with_rehearsal(timed, {beats[-1][0]: ""}), ran,
           "the Rehearsal column is timed on every beat or on none")
     fails("run-through 1 dated with no beat timed fails", block, with_record(record, DATE_ROW, 0, "2026-11-10"),
+          "a run-through on record has segment 3 timed beat by beat in the Rehearsal column")
+    dropped = with_record(with_record(record, DATE_ROW, 0, "not run: dropped (#615)"), DATE_ROW, 1, "not run")
+    check("both run-throughs recorded as not run, with no beat timed, passes",
+          rehearsal_verdicts(block, dropped).get(
+              "a run-through on record has segment 3 timed beat by beat in the Rehearsal column") is True)
+    fails("a run-through noted not run but with a Segment 3 time and no beat timed fails", block,
+          with_record(dropped, SEG3_ROW, 0, "5:10"),
           "a run-through on record has segment 3 timed beat by beat in the Rehearsal column")
     fails("run-through 2's Segment 3 time with no beat timed fails", block,
           with_record(record, SEG3_ROW, 1, "5:10"),
