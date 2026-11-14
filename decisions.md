@@ -56811,3 +56811,85 @@ ignore to a named set of the two, so that guarantee stands and nothing is ignore
 pass, as do the other offline readers of `docs/floor.md`, the new test, `test_scope_tests.py` and the prose gate.
 This run had no cluster session either (`HECATON_CLUSTER_ENV` unset), so the "Not yet run on a cluster" line
 above stands unchanged.
+## 2026-11-14 · #1463 · run 25299 · the get_weather rug-pull switch
+
+#1463 is the "Mutation switch" build piece of the C7 rug-pull beat
+(`docs/research/2026-11-14-c7-rug-pull-beat.md`, a child of #117). evil-mcp
+(`gitops/ai-layer/server.py`) served `get_weather` with one description, the poisoned one that chains to
+`read_internal_config`. The beat needs the same tool served first with an approved, benign description and then,
+name and schema kept, with the chaining one, so the room sees that a name-based allow-list (C7's `toolNames`)
+admits the mutated tool because the name did not move.
+
+What changed. `server.py` now holds two description constants and a selector read from the `GET_WEATHER_DESC` env
+var: `benign` serves the benign description, and any other value, or the var unset, serves the chaining description
+that evil-mcp served before, byte-for-byte. The `get_weather` function name and its `(city: str = "Salt Lake City")`
+signature, which is the input schema, are untouched, so only the description differs between the two states. The
+switch has its committed home in GitOps: the evil-mcp-shim Deployment (`gitops/ai-layer/resources.yaml`) sets
+`GET_WEATHER_DESC: chaining`, the default that reproduces today's beat, and a patch of the same shape as C7's
+`toolNames` patch flips it to `benign`.
+
+Default preserves today. The committed default is the chaining description, so R1 still leaks
+`FAKE-MCP-EXFIL-sentinel-4c1d` and R3 with the allow-list narrowed still does not. The tool output (the second
+tool's return and the poisoned output line) is unchanged; this piece changes the description alone, which is what
+the design note's table asks of the "Mutation switch".
+
+Tests. A new offline test, `verify/test_get_weather_rugpull_switch.py`, runs `server.py` in each switch state
+behind a fake FastMCP and holds that the default states (unset, `chaining`, and other values) serve the pre-switch
+chaining description byte-for-byte, that `benign` serves a weather description that does not name the second tool,
+that the two states share one name and one input schema and differ in the description alone, and that the sha256 of
+the canonical `{name, description, inputSchema}` differs between them, the quantity the #480 hash-pin spike pins.
+Its `verify/scope-map.yaml` entry was written by `python3 verify/scope_tests.py write`. The tests that read the
+changed files pass offline: `test_get_weather_rugpull_switch.py`, `test_c7_teaching.py` (which quotes the chaining
+description and output from `server.py`), `test_poisoned_server_one_copy.py`, `test_weather_tool_scope.py`,
+`test_c7_output_guard.py`, `test_beat03_c7.py`, `test_evil_tools_by_name.py` and `test_scope_tests.py`.
+`test_ai_layer_rollout.py` is a tools-tier check that renders the bundle with `kubectl kustomize` and the
+guard-proxy submodule, so it is left for the scoped tools-tier run that holds the pinned tools and the submodule.
+
+Not yet run on a cluster. This run was handed no cluster session: there is no `HECATON_CLUSTER_ENV`, and no
+kubeconfig or AWS session in the run directory, so the two clusters were not reachable (hecaton#508). The live
+`tools/list` from evil-mcp in each switch state is also a post-promotion check: the `benign` state needs the
+changed `server.py` running, which reaches a cluster only once the branch is promoted through Argo CD, and a run
+never deploys. So the live `tools/list` in the chaining and benign states, on `watch-it-burn-community` or
+`watch-it-burn-private`, leaving the cluster as found, is owed by the next run on the issue, one that holds the
+cluster session and runs after promotion.
+
+Run 25558 resumed this after run 25299 failed the tests gate, which ran the whole suite because the scope map
+changed. Two tests failed, both from this change. `test_round_names_retired.py` sweeps non-markdown files for the
+retired round wording, and the new comments in `server.py` and `resources.yaml` and the new test's docstring named
+the C7 leak and fix as R1 and R3; they now say "the C7 leak and fix". `test_tool_pin.py` read each `@mcp.tool`
+description with `ast.literal_eval`, which cannot read the call to the switch's selector; it now resolves a constant
+or a selector call to the description served at the default, the selector's else branch. The #480 spike's
+`baseline.json` pins the chaining description, which is still the default, so the pin needed no change. Both pass,
+with `test_get_weather_rugpull_switch.py`, `test_c7_teaching.py`, `test_poisoned_server_one_copy.py`,
+`test_weather_tool_scope.py`, `test_c7_output_guard.py`, `test_beat03_c7.py`, `test_evil_tools_by_name.py` and
+`test_scope_tests.py`. This run was again handed no cluster session (no `HECATON_CLUSTER_ENV`, no kubeconfig or AWS
+session in its run directory), so the live `tools/list` in each switch state is still owed, as above.
+
+## 2026-11-15 · #1468 · run 25660 · the #1468 toggle merged onto #1463's switch
+
+Staging moved while #1468 was in validation: run 25558 landed #1463, the same get_weather switch built from the
+same design note row, in `gitops/ai-layer/server.py`. The merge keeps #1463's server, its `GET_WEATHER_DESC` name,
+its values (`benign`, and `chaining`, the default for any other value) and its default, and drops #1468's own copy
+(`GET_WEATHER_MODE`, `approved`/`mutated`, `_apply_get_weather_mode`). So the #1468 entry above no longer holds on
+three points. The default mode is now `chaining`, the description evil-mcp served before either switch, which keeps
+the existing C7 allow-list beat byte-for-byte as it was, and is #1463's choice. The #480 spike's `baseline.json` is
+staging's again, pinning the chaining default, because #1463's `verify/test_tool_pin.py` pins the default. And the
+description-only difference between the two modes is held by #1463's `verify/test_get_weather_rugpull_switch.py`,
+so `verify/test_c7_rug_pull_mutation.py` now holds only what #1468 adds.
+
+What #1468 adds on top of #1463 is the live half. #1463 committed `GET_WEATHER_DESC: chaining` as a literal env
+value and named the flip "a patch of the same shape as C7's toolNames patch" without writing it. Here the
+evil-mcp-shim Deployment takes `GET_WEATHER_DESC` from the `get_weather_desc` key of the `evil-mcp-rugpull-config`
+ConfigMap, committed `chaining`. The toggle's field is that key: `toggle-rugpull-mutation-on.sh` requires CONTEXT,
+writes `chaining` by default (the mutation, which is also the committed state) and `benign` with `--off` (the
+approve step), and restarts the pod. `gitops/bootstrap/apps/ai-layer.yaml` ignores `.data["get_weather_desc"]` alone,
+registered in `docs/floor.md`. The ignore stays on a ConfigMap key rather than on the Deployment's env list for the
+reason given above: an ignored env element would need a `repair_env_order` row. In the beat the facilitator runs
+`--off` first to show the approved description, then runs the script again to mutate in place.
+
+Tests after the merge: `verify/test_c7_rug_pull_mutation.py` (rewritten), #1463's
+`verify/test_get_weather_rugpull_switch.py`, `verify/test_tool_pin.py`, `verify/test_beat03_c7.py`,
+`verify/test_c7_teaching.py`, `verify/test_evil_tools_by_name.py`, `verify/test_challenge_fallbacks.py`,
+`verify/test_c7_gateway_toggle.py`, `verify/test_drift_floor.py`, `verify/test_agent_tools_sync.py` and
+`verify/test_scope_tests.py`. Not yet run on a cluster, as before: no cluster session in this run either, and the
+live `tools/list` in each state, flipped by the toggle, needs the change promoted through Argo CD first.

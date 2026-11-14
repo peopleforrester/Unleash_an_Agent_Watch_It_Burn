@@ -1,16 +1,21 @@
-# ABOUTME: Offline checks for the C7 rug-pull mutation switch (#1468): evil-mcp's get_weather serves an
-# ABOUTME: approved or a mutated DESCRIPTION, name and inputSchema kept, selected live and ignored by Argo.
-"""The rug-pull beat (docs/research/2026-11-14-c7-rug-pull-beat.md) turns on a tool approved under one
-description and then served, same name and same schema, with a mutated description the name-based allow-list
-is blind to. This holds that gitops/ai-layer/server.py carries both descriptions, that the mutation changes
-ONLY the description (not the name or inputSchema), that the mutated one chains to read_internal_config, and
-that the selector is wired and the toggle flips it with an Argo CD ignore on just that field.
+# ABOUTME: Offline checks for the C7 rug-pull switch's live half (#1468): GET_WEATHER_DESC comes from one ConfigMap
+# ABOUTME: key, Argo CD ignores that key alone, and the toggle flips it between the two values server.py knows.
+"""#1463 gave gitops/ai-layer/server.py two get_weather descriptions chosen by GET_WEATHER_DESC ("benign", or the
+chaining default), and verify/test_get_weather_rugpull_switch.py holds that the two differ in the description alone and
+that the chaining one chains to the second tool. This file holds the part #1468 adds on top, the one the beat needs to
+flip the switch on a running cluster:
 
-No cluster and no `mcp` import here: server.py is read as source (AST), the way verify/test_tool_pin.py does,
-so the check runs in the offline tier.
+- evil-mcp-shim takes GET_WEATHER_DESC from the get_weather_desc key of the evil-mcp-rugpull-config ConfigMap, whose
+  committed value is "chaining", so the default C7 allow-list beat is unchanged;
+- the ai-layer Application ignores that one key and nothing else of the ConfigMap, so selfHeal keeps a live flip;
+- challenges/03-bad-mcp-excessive-agency/toggle-rugpull-mutation-on.sh requires CONTEXT, writes "chaining" by
+  default and "benign" with --off, and those are exactly the values server.py's switch tells apart.
+
+No cluster and no `mcp` import: server.py is read as source.
 """
 import ast
 import pathlib
+import re
 import sys
 
 import yaml
@@ -20,6 +25,7 @@ SERVER = REPO / "gitops/ai-layer/server.py"
 RESOURCES = REPO / "gitops/ai-layer/resources.yaml"
 AI_LAYER_APP = REPO / "gitops/bootstrap/apps/ai-layer.yaml"
 TOGGLE = REPO / "challenges/03-bad-mcp-excessive-agency/toggle-rugpull-mutation-on.sh"
+SWITCH_ENV, CM, KEY = "GET_WEATHER_DESC", "evil-mcp-rugpull-config", "get_weather_desc"
 
 failures: list[str] = []
 
@@ -30,122 +36,62 @@ def check(name: str, cond: bool, detail: str = "") -> None:
         failures.append(name)
 
 
+# --- What server.py's switch tells apart ----------------------------------------------------------------------
+print("== server.py's switch reads GET_WEATHER_DESC and serves benign only for 'benign' ==")
 tree = ast.parse(SERVER.read_text(encoding="utf-8"))
+selector = next((n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_get_weather_description"), None)
+check("server.py has the switch's selector, _get_weather_description()", selector is not None)
+compared = set()
+if selector is not None:
+    for sub in ast.walk(selector):
+        if isinstance(sub, ast.Compare) and isinstance(sub.left, ast.Call) and \
+                any(isinstance(a, ast.Constant) and a.value == SWITCH_ENV for a in sub.left.args):
+            compared |= {c.value for c in sub.comparators if isinstance(c, ast.Constant)}
+check(f"the selector compares {SWITCH_ENV} with 'benign' alone (every other value is the chaining default)",
+      compared == {"benign"}, str(compared))
 
-# --- Module string constants (APPROVED_/MUTATED_ descriptions) ------------------------------------------
-consts: dict[str, str] = {}
-for node in tree.body:
-    if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
-        try:
-            val = ast.literal_eval(node.value)
-        except (ValueError, TypeError):
-            continue
-        if isinstance(val, str):
-            consts[node.targets[0].id] = val
-
-print("== server.py defines both descriptions ==")
-check("APPROVED_GET_WEATHER_DESCRIPTION is a module string", "APPROVED_GET_WEATHER_DESCRIPTION" in consts)
-check("MUTATED_GET_WEATHER_DESCRIPTION is a module string", "MUTATED_GET_WEATHER_DESCRIPTION" in consts)
-if failures:
-    print(f"\nFAILED: {len(failures)} check(s): cannot read the descriptions")
-    sys.exit(1)
-APPROVED = consts["APPROVED_GET_WEATHER_DESCRIPTION"]
-MUTATED = consts["MUTATED_GET_WEATHER_DESCRIPTION"]
-
-# --- get_weather's decorator description and its signature ----------------------------------------------
-get_weather = next((n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "get_weather"), None)
-check("get_weather is a module-level function", get_weather is not None)
-deco_desc = None
-if get_weather is not None:
-    for dec in get_weather.decorator_list:
-        if isinstance(dec, ast.Call) and getattr(dec.func, "attr", "") == "tool":
-            deco_desc = next((ast.literal_eval(k.value) for k in dec.keywords if k.arg == "description"), None)
-# The decorator literal is what verify/test_tool_pin.py pins as the approved baseline, so it must be the
-# approved description verbatim: otherwise the pin and this switch would disagree on "approved".
-check("get_weather's @mcp.tool description is the approved description verbatim",
-      deco_desc == APPROVED, f"decorator={deco_desc!r}")
-
-# --- The mutation changes the description, not the name or the inputSchema -------------------------------
-print("== the mutation changes the description and nothing else ==")
-check("the two descriptions differ", APPROVED != MUTATED)
-# The name is a property of the one get_weather function; the inputSchema is derived from its one signature.
-# Neither can differ between modes because the switch only ever re-points the description. Assert the switch
-# code does exactly that: _apply_get_weather_mode assigns tool.description and no other tool attribute.
-applier = next((n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_apply_get_weather_mode"),
-               None)
-check("_apply_get_weather_mode exists", applier is not None)
-assigned_attrs: set[str] = set()
-if applier is not None:
-    for sub in ast.walk(applier):
-        if isinstance(sub, ast.Assign):
-            for tgt in sub.targets:
-                if isinstance(tgt, ast.Attribute):
-                    assigned_attrs.add(tgt.attr)
-check("the switch assigns only the tool's description (never name or inputSchema/parameters)",
-      assigned_attrs == {"description"}, f"assigned attributes: {sorted(assigned_attrs)}")
-# The one city parameter is shared by both modes (it is the single signature), so the inputSchema is identical.
-params = [a.arg for a in get_weather.args.args] if get_weather is not None else []
-check("get_weather keeps its single city parameter (one schema for both modes)", params == ["city"], str(params))
-
-# --- The mutated description carries the chain to read_internal_config -----------------------------------
-print("== the mutated description chains to read_internal_config, the approved one does not ==")
-check("the mutated description names read_internal_config", "read_internal_config" in MUTATED)
-check("the mutated description instructs calling it (the chain)",
-      "call" in MUTATED.lower() and "read_internal_config" in MUTATED)
-check("the approved description is benign: it does not name read_internal_config",
-      "read_internal_config" not in APPROVED, APPROVED)
-
-# --- The selector: env var or mounted file, default approved --------------------------------------------
-print("== the selector is an env var or a mounted file, defaulting to approved ==")
-src = SERVER.read_text(encoding="utf-8")
-check("the mode is read from the GET_WEATHER_MODE env var", 'os.environ.get("GET_WEATHER_MODE"' in src)
-check("the mode is read from a mounted file as well", "GET_WEATHER_MODE_FILE" in src and "read_text" in src)
-# The GET_WEATHER_DESCRIPTIONS mapping is keyed by the two modes; resolve its keys from the dict literal.
-desc_map = next((n.value for n in tree.body if isinstance(n, ast.Assign)
-                 and isinstance(n.targets[0], ast.Name) and n.targets[0].id == "GET_WEATHER_DESCRIPTIONS"), None)
-map_keys = {ast.literal_eval(k) for k in desc_map.keys} if isinstance(desc_map, ast.Dict) else set()
-check("the two modes are exactly approved and mutated", map_keys == {"approved", "mutated"}, str(map_keys))
-mode_fn = next((n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_get_weather_mode"), None)
-check("an unknown or absent selector defaults to approved",
-      mode_fn is not None and '"approved"' in ast.get_source_segment(src, mode_fn.body[-1]),
-      "the final return of _get_weather_mode should fall back to approved")
-
-# --- The selector is wired on the Deployment and committed approved -------------------------------------
-print("== resources.yaml wires the selector and commits approved ==")
+# --- The switch's live home ------------------------------------------------------------------------------------
+print("== resources.yaml sources the switch from one ConfigMap key, committed chaining ==")
 docs = [d for d in yaml.safe_load_all(RESOURCES.read_text(encoding="utf-8")) if d]
-cm = next((d for d in docs if d.get("kind") == "ConfigMap" and d["metadata"]["name"] == "evil-mcp-rugpull-config"),
-          None)
-check("the evil-mcp-rugpull-config ConfigMap exists", cm is not None)
-check("its committed get_weather_mode is approved (the benign default)",
-      cm is not None and cm.get("data", {}).get("get_weather_mode") == "approved",
-      str(cm.get("data") if cm else None))
+cm = next((d for d in docs if d.get("kind") == "ConfigMap" and d["metadata"]["name"] == CM), None)
+check(f"the {CM} ConfigMap exists", cm is not None)
+check(f"its one key is {KEY}, committed 'chaining' (the existing C7 beat's description)",
+      cm is not None and cm.get("data") == {KEY: "chaining"}, str(cm.get("data") if cm else None))
 shim = next((d for d in docs if d.get("kind") == "Deployment" and d["metadata"]["name"] == "evil-mcp-shim"), None)
-env = (shim["spec"]["template"]["spec"]["containers"][0].get("env") or []) if shim else []
-gw_env = next((e for e in env if e.get("name") == "GET_WEATHER_MODE"), None)
-check("evil-mcp-shim takes GET_WEATHER_MODE from that ConfigMap key",
-      gw_env is not None and (gw_env.get("valueFrom") or {}).get("configMapKeyRef", {})
-      == {"name": "evil-mcp-rugpull-config", "key": "get_weather_mode"}, str(gw_env))
+env = [e for c in (shim["spec"]["template"]["spec"]["containers"] if shim else []) for e in c.get("env") or []]
+switch = [e for e in env if e.get("name") == SWITCH_ENV]
+check(f"evil-mcp-shim sets {SWITCH_ENV} once, from {CM}'s {KEY} and not from a literal value",
+      len(switch) == 1 and "value" not in switch[0]
+      and (switch[0].get("valueFrom") or {}).get("configMapKeyRef") == {"name": CM, "key": KEY}, str(switch))
 
-# --- Argo CD ignores ONLY that field --------------------------------------------------------------------
-print("== the ai-layer Application ignores only the selector field ==")
+# --- Argo CD ignores that key alone ----------------------------------------------------------------------------
+print("== the ai-layer Application ignores that key and nothing else of the ConfigMap ==")
 app = next((d for d in yaml.safe_load_all(AI_LAYER_APP.read_text(encoding="utf-8"))
             if d and d.get("kind") == "Application"), None)
-ignores = (app["spec"].get("ignoreDifferences") or []) if app else []
-cm_ign = next((i for i in ignores if i.get("kind") == "ConfigMap" and i.get("name") == "evil-mcp-rugpull-config"),
-              None)
-check("there is an ignoreDifferences for the selector ConfigMap", cm_ign is not None)
-check("it ignores only the get_weather_mode data key",
-      cm_ign is not None and cm_ign.get("jqPathExpressions") == ['.data["get_weather_mode"]'], str(cm_ign))
+ignores = [i for i in ((app or {}).get("spec") or {}).get("ignoreDifferences") or []
+           if i.get("kind") == "ConfigMap" and i.get("name") == CM]
+check(f"exactly one ignoreDifferences entry names {CM}", len(ignores) == 1, str(ignores))
+check(f"it ignores .data[\"{KEY}\"] only", len(ignores) == 1 and ignores[0].get("group") == ""
+      and ignores[0].get("jqPathExpressions") == [f'.data["{KEY}"]'] and not ignores[0].get("jsonPointers"),
+      str(ignores))
+check("no ignore reaches the evil-mcp-shim Deployment's env (the flip is the ConfigMap's, not the env list's)",
+      not any(i.get("name") == "evil-mcp-shim" for i in ((app or {}).get("spec") or {}).get("ignoreDifferences") or []))
 
-# --- The toggle flips the selector, with CONTEXT and --off ----------------------------------------------
-print("== the toggle flips the selector from a required CONTEXT, with --off ==")
+# --- The toggle ------------------------------------------------------------------------------------------------
+print("== the toggle requires CONTEXT and writes the two values the switch knows ==")
 tog = TOGGLE.read_text(encoding="utf-8")
 check("the toggle requires CONTEXT", 'CONTEXT="${CONTEXT:?' in tog)
-check("the toggle patches the evil-mcp-rugpull-config ConfigMap's get_weather_mode key",
-      "patch configmap" in tog and "get_weather_mode" in tog and "evil-mcp-rugpull-config" in tog)
-check("the toggle has an --off that restores the approved description",
-      "--off" in tog and 'MODE="approved"' in tog)
-check("running it without --off mutates (MODE=mutated)", 'MODE="mutated"' in tog)
+check("every kubectl call names the context", all("--context" in ln or "KCTL[@]" in ln
+                                                  for ln in tog.splitlines() if re.match(r"\s*kubectl\b", ln)))
+check(f"it patches {CM}'s {KEY} key", "patch configmap" in tog and f'\\"{KEY}\\"' in tog and CM in tog)
+written = set(re.findall(r'^\s*MODE="(\w+)"', tog, re.M))
+check("it writes exactly 'chaining' and 'benign'", set(written) == {"chaining", "benign"}, str(set(written)))
+on_branch = re.search(r'if \[\[ "\$\{STATE\}" == "on" \]\]; then\n\s*MODE="(\w+)"', tog)
+check("running it without --off writes 'chaining' (the mutation, and the committed state)",
+      on_branch is not None and on_branch.group(1) == "chaining")
+check("--off writes 'benign' (the approved description)",
+      re.search(r'else\n\s*MODE="benign"', tog) is not None and "--off) STATE=\"off\"" in tog)
+check("it restarts evil-mcp-shim so the pod re-reads the key", "rollout restart" in tog and "evil-mcp-shim" in tog)
 
 print()
 if failures:
@@ -153,5 +99,5 @@ if failures:
     for f in failures:
         print(f"  - {f}")
     sys.exit(1)
-print("OK: the C7 rug-pull mutation switch changes only get_weather's description, chains when mutated, and")
-print("    is wired, defaulted approved, ignored by Argo on just that field, and flipped by the toggle.")
+print("OK: the rug-pull switch is set from one ConfigMap key, committed chaining, ignored alone by Argo CD, and the")
+print("    toggle flips it between the two values server.py tells apart.")

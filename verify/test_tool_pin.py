@@ -158,11 +158,30 @@ for name, entry in pinned.items():
           entry["sha256"] == tool_pin.definition_hash({"name": name, **{k: entry[k] for k in ("description", "inputSchema")}}))
 
 server = ast.parse((REPO / "gitops/ai-layer/server.py").read_text(encoding="utf-8"))
+# Module-level string constants and functions, so a description held in a constant, or chosen by a selector, resolves.
+# get_weather's is chosen by #1463's rug-pull switch, _get_weather_description(), whose return is
+# `benign if GET_WEATHER_DESC == "benign" else chaining`: the else branch is what evil-mcp serves by default, and the
+# default is what the baseline pins.
+CONSTS = {t.id: n.value.value for n in server.body if isinstance(n, ast.Assign) and isinstance(n.value, ast.Constant)
+          and isinstance(n.value.value, str) for t in n.targets if isinstance(t, ast.Name)}
+FUNCS = {n.name: n for n in server.body if isinstance(n, ast.FunctionDef)}
+
+
+def served_description(node: ast.expr) -> str:
+    """The description a decorator keyword serves with the switch at its default."""
+    if isinstance(node, ast.Name):
+        return CONSTS[node.id]
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in FUNCS:
+        ret = next(n for n in ast.walk(FUNCS[node.func.id]) if isinstance(n, ast.Return)).value
+        return served_description(ret.orelse if isinstance(ret, ast.IfExp) else ret)
+    return ast.literal_eval(node)
+
+
 served = {}
 for fn in (n for n in server.body if isinstance(n, ast.FunctionDef)):
     for dec in fn.decorator_list:
         if isinstance(dec, ast.Call) and getattr(dec.func, "attr", "") == "tool":
-            desc = next(ast.literal_eval(k.value) for k in dec.keywords if k.arg == "description")
+            desc = next(served_description(k.value) for k in dec.keywords if k.arg == "description")
             served[fn.name] = (desc, [a.arg for a in fn.args.args])
 check(f"the same tool names as server.py ({sorted(served)})", sorted(served) == sorted(pinned))
 for name, (desc, args) in served.items():

@@ -63,7 +63,7 @@ check("ai-layer ignores .data[\"config.yaml\"] on agentgateway-c7-config, and no
       len(c7_ignore) == 1 and c7_ignore[0].get("group") == "" and not c7_ignore[0].get("jsonPointers")
       and c7_ignore[0].get("jqPathExpressions") == ['.data["config.yaml"]'], f"{c7_ignore}")
 # The ConfigMaps ai-layer may ignore, each by name: the C7 gateway rule's, and the C7 rug-pull switch's
-# get_weather_mode key on evil-mcp-rugpull-config (#1468), which is not gateway config.
+# get_weather_desc key on evil-mcp-rugpull-config (#1468), which is not gateway config.
 NAMED_CM_IGNORES = {"agentgateway-c7-config", "evil-mcp-rugpull-config"}
 check("every ConfigMap ignore is named, and only agentgateway-c7-config among gateway config (an unnamed one "
       "would cover agentgateway-config)",
