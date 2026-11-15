@@ -57042,3 +57042,26 @@ the next run reads netcup's fleet.sh back. Criterion 2 needs a standby wave buil
 daily drift report after it. No session is scheduled, so it waits for the next one that runs `backups.py schedule`.
 
 **Live check.** Skipped: nothing the clusters run changed, no cluster is up, and this run wrote only this entry.
+## 2026-11-15 · #1377 · run 26804 · Netcup's two copies are moved aside, and the drift report is tested on that layout
+
+**Context.** Run 26116 escalated its guarded move-aside act (the entry above for run 26116). Read through `sources
+repo-ls` at 06:14Z on 2026-11-15, it has run: netcup's `infra/org/boundary/states/` holds only
+`accen-dev.tfstate.stale-1377`, and `infra/terraform/aws/network/` holds `terraform.tfstate.stale-1377` and
+`terraform.tfstate.backup`, with no `terraform.tfstate`. `bash verify/prior-drafts.sh` had nothing to port: every
+earlier run's commit on the issue is in staging. GitHub main is still b6a0edb9, 42 commits behind b113e537 (#1374's
+report change).
+
+**What this run adds.** `verify/test_drift_report.py` gains a case on netcup's own layout. With netcup's checkout
+holding a lab VPC copy (serial 1172, lineage 02c0c252) and a boundary copy (serial 2, lineage 6e926986) beside this
+checkout's, the report lists `lab VPC accen-dev` and `boundary accen-dev` under "Held on two hosts". With both
+renamed to `.stale-1377`, as the act left them, the report has no such section, and the home lab VPC and the boundary
+are each planned once, from this checkout's copies. The case runs the real rsync with the report's own filters, which
+copy only `*.tfstate` and `*.account`.
+
+**Criteria.** Criterion 1 is met. Netcup no longer holds either state under a name the report reads, so the report
+lists neither entry whichever code it runs: main's, which does not read netcup at all, or staging's, which reads it and
+skips `.stale-1377` (the new case). The 2026-11-13 and 2026-11-14 reports in #1441 list neither. Criterion 2 stands
+from run 20591 (ba634961): `bash verify/test_fleet_state_host.sh` passed again on this base, 44 passed, 0 failed.
+No standby is up now: the fleet was torn down on the night of 2026-11-12.
+
+**Live check.** Skipped: the change is a test under `verify/` that no cluster runs, and no cluster is up.

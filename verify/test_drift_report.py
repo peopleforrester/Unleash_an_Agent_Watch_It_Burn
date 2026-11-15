@@ -599,6 +599,36 @@ with tempfile.TemporaryDirectory(prefix="drift-test-") as tmp:
     env.write("fleet/states/watch-it-burn-attendee-001.tfstate", here)
     del env.fx["aws1-student31"]["clusters"][B01]
 
+    print("== netcup's copies of accen-dev's boundary and home lab VPC, held and then moved aside (#1377) ==")
+    # netcup's checkout, as before 2026-11-15: its own copies of the boundary and home-region lab VPC states this
+    # checkout plans, with netcup's lineages. Then as run 26116's act left it: both renamed to .stale-1377.
+    nc_vpc = nct / "aws/network/terraform.tfstate"
+    nc_bnd = nc / "infra/org/boundary/states/accen-dev.tfstate"
+    nc_vpc.write_text(json.dumps({**vpc_state("vpc-accen"), "serial": 1172, "lineage": "02c0c252-netcup"}))
+    nc_bnd.write_text(json.dumps({**tagged_state("aws_iam_policy", {"name": "watch-it-burn-permissions-boundary"}),
+                                  "serial": 2, "lineage": "6e926986-netcup"}))
+    rc, out = env.run("--remote", f"netcup={nc}")
+    copies = section(out, "## Held on two hosts")
+    check(f"held on both hosts, each is listed under 'Held on two hosts' with netcup's lineage (got {rc})",
+          rc == 2 and "`lab VPC accen-dev`: tanjiro-debian holds the copy planned" in copies
+          and "netcup holds another (serial 1172, lineage 02c0c252)" in copies
+          and "`boundary accen-dev`: tanjiro-debian holds the copy planned" in copies
+          and "netcup holds another (serial 2, lineage 6e926986)" in copies)
+    for s in (nc_vpc, nc_bnd):
+        s.rename(s.with_name(s.name + ".stale-1377"))
+    rc, out = env.run("--remote", f"netcup={nc}")
+    check(f"moved aside to .stale-1377, neither is listed and the section is gone (got {rc})",
+          "INCOMPLETE" not in out and "## Held on two hosts" not in out
+          and "lab VPC accen-dev`" not in out and "boundary accen-dev`" not in out)
+    check("and the home lab VPC and boundary are still planned once, from this checkout's copies",
+          len([c for c in env.calls("terraform") if "plan" in c
+               and any(x.endswith("aws/network/terraform.tfstate") for x in c)]) == 1
+          and len([c for c in env.calls("terraform") if "plan" in c
+                   and any(x.endswith("boundary/states/accen-dev.tfstate") for x in c)]) == 1
+          and not any(str(nc) in x for c in env.calls("terraform") for x in c))
+    for s in (nc_vpc, nc_bnd):
+        s.with_name(s.name + ".stale-1377").unlink()
+
     print("== --post keeps one running issue ==")
     env.fx = json.loads(json.dumps(FIXTURE))
     rc, out = env.run("--post")
