@@ -167,7 +167,26 @@ spec:
   lifecycle: production
   owner: platform-team
   system: burritobot
-  dependsOn: [component:workshop-mcp, component:evil-mcp]
+  dependsOn: [component:workshop-mcp, component:evil-mcp, component:tool-pin]
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: tool-pin
+  title: tool-pin
+  description: >-
+    The hash pin on evil-mcp's tool definitions (the Challenge 7 rug pull). agentgateway's pinned bind asks it about
+    every tool list and tool call, and it drops a tool whose description changed since approval.
+  annotations:
+    backstage.io/kubernetes-label-selector: app.kubernetes.io/name=tool-pin
+    backstage.io/kubernetes-namespace: agent
+    backstage.io/source-location: url:https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/blob/staging/gitops/ai-layer/tool-pin.yaml
+  tags: [guardrails, mcp]
+spec:
+  type: service
+  lifecycle: production
+  owner: platform-team
+  system: burritobot
 ---
 apiVersion: backstage.io/v1alpha1
 kind: Resource

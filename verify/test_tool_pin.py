@@ -412,10 +412,10 @@ check("it mounts tool-pin-baseline as a directory where PIN_BASELINE reads it",
       and {"name": "baseline", "mountPath": "/etc/tool-pin", "readOnly": True} in gpod["containers"][0]["volumeMounts"]
       and genv.get("PIN_BASELINE") == "/etc/tool-pin/baseline.json")
 egress = yaml.safe_load((REPO / "policies/network-policies/per-namespace/agent-allow-tool-pin-egress.yaml").read_text(encoding="utf-8"))
-check("on the admin profile's default-deny, tool-pin alone may reach 443, for its init container's pip install",
+check("on the admin profile's default-deny, tool-pin alone may reach 443, for its init container's wheel fetch",
       egress["spec"]["podSelector"] == {"matchLabels": {"app.kubernetes.io/name": "tool-pin"}}
       and egress["spec"]["egress"] == [{"ports": [{"protocol": "TCP", "port": 443}]}]
-      and gpod.get("initContainers", [{}])[0].get("command", [])[:4] == ["python", "-m", "pip", "install"])
+      and "/app/requirements.txt" in gpod.get("initContainers", [{}])[0].get("command", []))
 
 print("== bind 3004 in agentgateway-config is the spike's bind, failing closed ==")
 pinned = [b for b in committed["binds"] if b["port"] == gateway_bind.PINNED_PORT]
