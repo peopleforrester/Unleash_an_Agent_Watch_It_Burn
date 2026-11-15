@@ -56917,3 +56917,98 @@ Still owed, on the next run that holds the two clusters up and running the promo
 `evil-mcp-rugpull-config` ConfigMap's `get_weather_desc` to `benign`, a second `tools/list` showing the benign
 description under the same name and input schema, then the toggle put back to `chaining` to leave the cluster as
 found.
+## 2026-11-15 · #1377 · run 26116 · The fleet is down, so the move aside guards on AWS, not on netcup's checkout
+
+**Context.** Question 1206 held run 20604's act until GitHub main held ba634961 and #1376's guarded move had run on
+netcup. Neither has happened. At 02:00Z on 2026-11-15 GitHub main is still b6a0edb9 (from 2026-11-11), the compare
+of main against ba634961 still reads `ahead` by 44, and staging is 90 commits past main. Netcup's fleet.sh, read
+through `sources repo-grep`, still has no `read_home_lab_vpc_from_aws`. The run before this one (21434) ended on a
+workspace error in hecaton (its parent run's manifest was missing) before it did anything, so there was nothing of
+its to port; `bash verify/prior-drafts.sh 1377 origin/staging` printed NONE.
+
+**What changed since run 20623.** KubeCon NA 2026 ended on 2026-11-12, and the fleet was torn down that night.
+CloudTrail in accen-dev shows `nwuser` deleting the lab VPC between 00:37 and 00:42Z on 2026-11-13 and the
+`watch-it-burn-permissions-boundary` policy at 00:49Z; netcup's checkout holds the `*.final-destroy.log` files.
+Read live at 02:00Z through the `aws-env accen-dev` route (account 515966504359): `describe-vpcs --vpc-ids
+vpc-0607c27ee51fb233c` in us-west-2 returns `InvalidVpcID.NotFound`, `get-policy` on the boundary returns
+`NoSuchEntity`, and `eks list-clusters` is empty in us-west-2, us-east-1 and us-east-2. Netcup's two copies are now
+states of things that no longer exist. Its lab VPC copy (serial 1172, lineage 02c0c252) names one resource, that
+VPC; its boundary copy (serial 2, lineage 6e926986) names one managed resource, that policy. The guard on netcup's
+checkout was there to keep the backup schedule's us-west-2 standbys building from that lab VPC copy. With the VPC
+gone, a standby wave could not build from it, and the 22:50Z teardown was to remove the schedule's crontab lines.
+No run can read netcup's crontab, so the act checks for those lines itself.
+
+**The act, changed.** The watcher lock, process and rename steps are run 20604's. The guard on netcup's checkout
+now has a second way through: when fleet.sh and preflight.sh lack ba634961, the act still moves the copies aside if
+no `wib-backups` line is left in Michael's crontab, the accen-dev profile answers as account 515966504359, and every
+managed resource in each copy is gone from AWS (an `aws_vpc` answers `InvalidVpcID.NotFound`, an `aws_iam_policy`
+answers `NoSuchEntity`). Any other answer is `NOT YET`, exit 3, with nothing changed; a resource of any other type,
+or a copy that is not a readable state, is `REFUSED`, exit 1. Conflicts with an existing `.stale-1377` are now
+checked for both copies before either moves, where run 20604's act moved the first and then refused the second.
+`terraform.tfstate.backup` stays, as before. Tool `ssh`, no host, argv `bash`, `-c` and:
+
+```bash
+set -u
+cd ~/repos/talks/Unleash_an_Agent_Watch_It_Burn || exit 1
+f=infra/terraform/fleet/fleet.sh; p=infra/terraform/fleet/preflight.sh
+exec 9>>infra/terraform/fleet/logs/.backups-watch.lock
+flock -n 9 || { echo "NOT YET: a backups.py watcher holds infra/terraform/fleet/logs/.backups-watch.lock; nothing changed"; exit 3; }
+if ps -u "$(id -u)" -o args= | awk '{for(i=1;i<=2&&i<=NF;i++){n=$i;sub(/.*\//,"",n);if(n~/^(fleet\.sh|preflight\.sh|backups\.py)$/)f=1}}END{exit !f}'; then echo "NOT YET: a fleet.sh, backups.py or preflight.sh process is running as $(id -un); nothing changed"; exit 3; fi
+if grep -q 'read_home_lab_vpc_from_aws' "$f" && grep -q 'read from AWS by its tags' "$p"; then
+  echo "this checkout ($(git rev-parse --short HEAD)) holds #1377's change (ba634961): its standbys read the lab VPC from AWS"
+else
+  if crontab -l 2>/dev/null | grep -q 'wib-backups'; then echo "NOT YET: this checkout ($(git rev-parse --short HEAD)) lacks ba634961 and the '# wib-backups' crontab lines are installed, so a standby wave could still read the lab VPC state here; nothing changed"; exit 3; fi
+  acct=$(aws sts get-caller-identity --profile accen-dev --region us-west-2 --query Account --output text 2>&1)
+  [ "$acct" = 515966504359 ] || { echo "NOT YET: the accen-dev profile did not answer as account 515966504359 ($acct); nothing changed"; exit 3; }
+  for s in infra/org/boundary/states/accen-dev.tfstate infra/terraform/aws/network/terraform.tfstate; do
+    [ -e "$s" ] || continue
+    l=$(python3 -c 'import json,sys
+d=json.load(open(sys.argv[1]))
+for r in d.get("resources",[]):
+    if r.get("mode")!="managed": continue
+    for i in r.get("instances",[]):
+        a=i.get("attributes",{})
+        print(r["type"], a.get("arn") if r["type"]=="aws_iam_policy" else a.get("id"))' "$s") || { echo "REFUSED: $s could not be read as a state; nothing changed"; exit 1; }
+    while read -r t id; do
+      [ -n "$t" ] || continue
+      case "$t" in
+        aws_vpc) out=$(aws ec2 describe-vpcs --profile accen-dev --region us-west-2 --vpc-ids "$id" 2>&1); case "$out" in *InvalidVpcID.NotFound*) echo "gone from AWS: $t $id ($s)";; *) echo "NOT YET: $s names $t $id, which AWS still holds or did not answer for; nothing changed"; exit 3;; esac;;
+        aws_iam_policy) out=$(aws iam get-policy --profile accen-dev --region us-east-1 --policy-arn "$id" 2>&1); case "$out" in *NoSuchEntity*) echo "gone from AWS: $t $id ($s)";; *) echo "NOT YET: $s names $t $id, which AWS still holds or did not answer for; nothing changed"; exit 3;; esac;;
+        *) echo "REFUSED: $s holds $t $id, which this act does not check; nothing changed"; exit 1;;
+      esac
+    done <<<"$l"
+  done
+  echo "this checkout ($(git rev-parse --short HEAD)) lacks ba634961, but no wib-backups crontab line is installed and every resource both copies name is gone from AWS"
+fi
+for s in infra/org/boundary/states/accen-dev.tfstate infra/terraform/aws/network/terraform.tfstate; do
+  [ -e "$s" ] && [ -e "$s.stale-1377" ] && { echo "REFUSED: $s.stale-1377 already exists beside $s; nothing changed"; exit 1; }
+done
+moved=0
+for s in infra/org/boundary/states/accen-dev.tfstate infra/terraform/aws/network/terraform.tfstate; do
+  if [ -e "$s" ]; then
+    mv -n "$s" "$s.stale-1377" || exit 1; echo "moved $s -> $s.stale-1377"; moved=$((moved+1))
+  elif [ -e "$s.stale-1377" ]; then echo "already moved: $s.stale-1377"
+  else echo "neither $s nor $s.stale-1377 is here"; fi
+done
+echo "moved ${moved}; checkout at $(git rev-parse --short HEAD)"
+ls -la infra/org/boundary/states/ infra/terraform/aws/network/ | grep -E 'tfstate|/'
+```
+
+**Checked on scratch checkouts, nothing on a host.** Each case ran the script above with HOME at a scratch tree that
+held netcup's own two copies (read through `sources repo-cat`), fleet.sh and preflight.sh from 7783f256 or from this
+base, and stub `aws` and `crontab` commands. Old code, crontab clear, both resources gone: both copies moved,
+exit 0. Old code with a `wib-backups` crontab line: NOT YET, exit 3. VPC still present, VPC read failing on
+credentials, policy still present, profile answering as another account: each NOT YET, exit 3. Code at this base
+with the crontab line and both resources present: moved both, exit 0, as run 20604's act did. A `.stale-1377`
+already beside the lab VPC copy: REFUSED, exit 1, and neither copy moved. Both already moved: "already moved" for
+each, exit 0. A boundary copy that is not JSON, and a lab VPC copy with an extra `aws_subnet`: REFUSED, exit 1. A
+held watcher lock and a running `fleet.sh`: NOT YET, exit 3. Every refusal left all files where they were.
+
+**Criteria.** Criterion 2 stands as run 20591 left it (ba634961 on staging, `verify/test_fleet_state_host.sh` and its
+read-only live check); no standby is up now to build, and this run changed no code. Criterion 1 is not yet met. The
+2026-11-13 and 2026-11-14 drift reports (#1441) have no "Held on two hosts" section, but only because the report
+tanjiro-wsl2 runs is main's, which lacks #1374's change (b113e537) and so never reads netcup. Once the act above has
+run and main holds b113e537, the next daily report shows whether netcup still holds either copy.
+
+**Live check.** Skipped for the clusters: nothing they run changed, and no cluster is up. The AWS reads above were
+read-only.
