@@ -347,6 +347,26 @@ for name in saved:
 WINDOWS = {"devopsdays-portland-2026.txt": ["--start", "2026-08-26", "--end", "2026-09-10",
                                             "--event", "devopsdays-portland-2026"],
            "ai-engineer-worldsfair-2026.txt": ["--start", "2026-06-25", "--end", "2026-07-01"]}
+# Files whose every account was asked live (#872: run 25755 held all five profiles). Nothing in recorded/ covers their
+# windows, so there is no replay to hold them to; instead each account's block must be a live read.
+LIVE = {"kubecon-na-2026.txt": ["--start", "2026-10-24", "--end", "2026-11-13", "--event", "kubecon-na-2026"]}
+for f, window in LIVE.items():
+    text = (MEASURED / f).read_text() if (MEASURED / f).is_file() else ""
+    check(f"{f} is recorded", text.startswith("DELIVERY COST, MEASURED FROM COST EXPLORER IN EACH MEMBER ACCOUNT"))
+    check(f"{f} has no WINDOW CUTS SPEND line", text and "WINDOW CUTS SPEND" not in text)
+    check(f"{f} names its window and delivery", f"window: {window[1]} (incl) .. {window[3]} (excl)" in text
+          and f"\ndelivery: {window[5]}\n" in text, text[:200])
+    missing = [a for a in FLEET if summary_line(text, a) is None]
+    check(f"{f} measures every fleet account in fleet.sh", FLEET and not missing, missing)
+    check(f"{f} sums {len(FLEET)} accounts", f"all accounts ({len(FLEET)})" in text)
+    check(f"{f}: no account is read from recorded replies", "read from recorded" not in text)
+    live_tag = f"tag-filtered total (project=watch-it-burn, event={window[5]}): 0.00 USD"
+    check(f"{f}: every account's tag figure was asked live", text.count(live_tag) == len(FLEET), text.count(live_tag))
+    total = re.search(r"all accounts \(\d+\)\s+([\d,]+\.\d\d) USD", text)
+    lines = [summary_line(text, a) for a in FLEET]
+    check(f"{f}: the total is the sum of its account lines", total and all(lines) and abs(
+        sum(float(ln.split()[-2].replace(",", "")) for ln in lines) - float(total.group(1).replace(",", ""))) < 0.011,
+        total)
 for f, window in WINDOWS.items():
     text = (MEASURED / f).read_text() if (MEASURED / f).is_file() else ""
     check(f"{f} is recorded", text.startswith("DELIVERY COST, MEASURED FROM COST EXPLORER IN EACH MEMBER ACCOUNT"))

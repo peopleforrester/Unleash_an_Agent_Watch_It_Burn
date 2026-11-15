@@ -56917,3 +56917,61 @@ Still owed, on the next run that holds the two clusters up and running the promo
 `evil-mcp-rugpull-config` ConfigMap's `get_weather_desc` to `benign`, a second `tools/list` showing the benign
 description under the same name and input schema, then the toggle put back to `chaining` to leave the cluster as
 found.
+## 2026-11-15 · #872 · run 25755 · KubeCon NA's AWS cost, measured over the fleet's whole life
+
+`cost/measured/kubecon-na-2026.txt` is `teardown/delivery-cost.py --start 2026-10-24 --end 2026-11-13 --event
+kubecon-na-2026` with a live `--profile` for each of the five fleet accounts, saved unedited. It exited 0 and prints
+no WINDOW CUTS SPEND line. The figure is 1,185.37 USD of billed usage, tax left out: 1,183.38 on accen-dev, 1.42, 0.25,
+0.16 and 0.17 on aws1-student31 to 34. EKS cluster hours come to 1,028.3, so 1.15 USD per cluster hour. The tag-filtered
+total is 0.00 in every account, as before (#392). The run held all five profiles (`sources-elevated aws-env`, written to
+a credentials file under this run's `$TMPDIR`), so no account is read from `recorded/`.
+
+The window. CloudTrail `lookup-events` for `CreateCluster` and `DeleteCluster` in the five accounts, in us-west-2,
+us-east-1 and us-east-2 (the standby pool's regions in `backups.tsv`), from 2026-08-15:
+
+- After Portland, the last cluster before KubeCon was watch-it-burn-attendee-001, deleted 2026-09-19 16:56 UTC.
+  accen-dev then billed 0.03 USD a day through 2026-10-23.
+- The first KubeCon build is watch-it-burn-community with watch-it-burn-michael-admin at 2026-10-24 16:48 UTC, torn
+  down under two hours later. It was rebuilt on 2026-10-27 and again on 2026-10-28, when watch-it-burn-community and
+  watch-it-burn-private were created at 11:39 UTC. Those two lived to the session.
+- The standby pool's night-before wave came up on 2026-11-12 at 02:50 to 03:50 UTC and its six-hours wave at 14:50 to
+  15:44 UTC. The session was at 20:50 UTC. Teardown ran from 22:25 UTC, and the last `DeleteCluster` is
+  watch-it-burn-private at 23:37 UTC. No cluster is left in any of the five accounts in those three regions.
+- None of the KubeCon fleet ran in the student accounts. Their only clusters in the window are lab-platform's
+  (`labctl`, named `lab-*`) on 2026-10-26, which is 1.21 USD on aws1-student31 and 0.10 on aws1-student32.
+
+So the window is 2026-10-24 to 2026-11-13, end exclusive. The day before billed 0.03 USD and the day after 0.15.
+
+Which days are counted, and why. Every day of the fleet's life is counted, 2026-10-24 to 2026-11-12, as the issue
+asks and as Portland's file counted its eleven build days. The two clusters that served the session were built on
+2026-10-28 and kept up until it, and their run rate is a cost of the delivery. They also served development, and
+the bill cannot split the two: Cost Explorer in a member account is per account, and the `event` tag is inactive.
+A narrower window also fails the script's own check. Starting on 2026-10-28 leaves 2026-10-27's 11.73 USD outside,
+over 5 percent of the busiest day (192.54) and over the 1.00 USD floor, and starting on 2026-11-12 leaves 2026-11-11's
+63.41 USD. Both would print WINDOW CUTS SPEND.
+
+What the days hold, on accen-dev (Usage record type, by day and service, read the same session):
+
+| Days (UTC) | Usage | Of it, Amazon Bedrock | What ran |
+|---|---|---|---|
+| 2026-10-24 .. 10-27 | 14.78 USD | 0.76 | the first two builds of the pair, idle in between |
+| 2026-10-28 .. 11-11 | 976.06 USD | 441.94 | the pair up throughout, plus development |
+| 2026-11-12 | 192.54 USD | 42.84 | 15 standbys, the session, teardown |
+
+On a day with no other build and no model calls (2026-11-03) the pair cost 33.40 USD. Development on top of the pair
+in the middle phase: the standby pool's rehearsal (b01 to b12 and attendee-441, 2026-10-31, 120.73 USD that day),
+attendee-001 (2026-11-01 and 02), the `lab-pf-live-*` probes (2026-11-04, 05 and 07), attendee-099 (2026-11-06), and
+the agent's Bedrock calls, 156.81 USD on 2026-10-29, 60.62 on 10-31 and 39 to 48 a day from 11-06 to 11-09. A reader
+who wants the event alone has 192.54 USD on the session day; the 1,185.37 USD is what the delivery's fleet cost from
+its first build to its teardown, with that development inside it.
+
+Tax posted in the window and left out: 118.48 USD across the five (118.38 on accen-dev, October's bill).
+
+Test changes. `verify/test_delivery_cost.py` holds the new file to its window and delivery, every fleet account, the
+sum of its account lines, no WINDOW CUTS SPEND line, and a live tag read in every account. The replay against
+`recorded/` stays for the two files built from it, since `recorded/` does not cover this window.
+`verify/test_kubecon_cost_measured.py` now requires the KubeCon record; its branch that printed "not recorded yet"
+is gone. Both pass.
+
+Live check: this change touches only `cost/measured/`, two tests under `verify/` and this file, which no cluster
+runs, and the fleet is down; the issue's own live work was the Cost Explorer and CloudTrail reads above.

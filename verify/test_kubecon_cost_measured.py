@@ -17,7 +17,8 @@
 #      teardown/cost-report.sh print the non-zero tag-filtered figure, which is #392's literal Done-when on the day
 #      the payer activates the tags.
 #   3. Every file in cost/measured/ has a non-zero total and non-zero EKS cluster hours, both past deliveries are
-#      there, and a KubeCon record, once saved, names its event, covers the session day and measures every account.
+#      there, and the KubeCon record (#872, saved 2026-11-15) names its event, covers the session day and measures
+#      every account.
 #
 # The shim's data is synthetic and owned here; nothing reaches AWS (run-tests.sh stubs aws first on PATH, and this
 # test puts its own shim in front of that).
@@ -240,18 +241,16 @@ SESSION = re.search(r"30 minutes, Thursday (\d{4}-\d\d-\d\d)\.", ROS)
 if SESSION is None:
     sys.exit(f"anchor '30 minutes, Thursday <date>.' is not in {ROS_PATH.relative_to(REPO)}: reword this test")
 kubecon = MEASURED / f"{EVENT}.txt"
-if kubecon.is_file():
-    text = kubecon.read_text()
-    w = re.search(r"^window: (\S+) \(incl\) \.\. (\S+) \(excl\)", text, re.M)
-    check(f"{kubecon.name} names its delivery", f"\ndelivery: {EVENT}\n" in text, text[:300])
-    check(f"{kubecon.name}'s window takes in the session day {SESSION.group(1)}",
-          w is not None and w.group(1) <= SESSION.group(1) < w.group(2), w)
-    missing = [a for a in FLEET if not re.search(rf"^  {re.escape(a)}\s+\d{{12}}\s+[\d,]+\.\d\d USD$", text, re.M)]
-    check(f"{kubecon.name} measures every fleet account", not missing, missing)
-    check(f"{kubecon.name} has no WINDOW CUTS SPEND line", "WINDOW CUTS SPEND" not in text)
-else:
-    print(f"  ({kubecon.relative_to(REPO)} is not recorded yet: #872 records it once the fleet is down; the command"
-          " above is what it runs)")
+# Recorded by #872 (run 25755, 2026-11-15) once the fleet was down, so it is required from here on.
+check(f"{kubecon.name} is recorded", kubecon.is_file(), sorted(names))
+text = kubecon.read_text() if kubecon.is_file() else ""
+w = re.search(r"^window: (\S+) \(incl\) \.\. (\S+) \(excl\)", text, re.M)
+check(f"{kubecon.name} names its delivery", f"\ndelivery: {EVENT}\n" in text, text[:300])
+check(f"{kubecon.name}'s window takes in the session day {SESSION.group(1)}",
+      w is not None and w.group(1) <= SESSION.group(1) < w.group(2), w)
+missing = [a for a in FLEET if not re.search(rf"^  {re.escape(a)}\s+\d{{12}}\s+[\d,]+\.\d\d USD$", text, re.M)]
+check(f"{kubecon.name} measures every fleet account", not missing, missing)
+check(f"{kubecon.name} has no WINDOW CUTS SPEND line", text and "WINDOW CUTS SPEND" not in text)
 
 if failures:
     print(f"\n{len(failures)} check(s) failed: #392's third delivery would be costed by guesswork")

@@ -19,6 +19,7 @@ print a quietly lower figure. `verify/test_delivery_cost.py` checks each file he
 
 | Delivery | Window (UTC, end exclusive) | Accounts measured | Billed usage | EKS cluster hours | Per cluster hour |
 |---|---|---|---|---|---|
+| kubecon-na-2026 | 2026-10-24 .. 2026-11-13 | all five | 1,185.37 USD | 1,028.3 | 1.15 USD |
 | devopsdays-portland-2026 | 2026-08-26 .. 2026-09-10 | all five | 2,865.86 USD | 3,764.6 | 0.76 USD |
 | ai-engineer-worldsfair-2026 | 2026-06-25 .. 2026-07-01 | all five | 1,776.60 USD | 1,959.7 | 0.91 USD |
 
@@ -26,18 +27,24 @@ By account, in USD:
 
 | Delivery | accen-dev | aws1-student31 | aws1-student32 | aws1-student33 | aws1-student34 |
 |---|---|---|---|---|---|
+| kubecon-na-2026 | 1,183.38 | 1.42 | 0.25 | 0.16 | 0.17 |
 | devopsdays-portland-2026 | 2,104.01 | 260.90 | 154.84 | 162.11 | 183.99 |
 | ai-engineer-worldsfair-2026 | 787.39 | 249.39 | 245.85 | 245.33 | 248.64 |
 
 The five are the fleet accounts in `WIB_ATTENDEE_ACCOUNTS` (`infra/terraform/fleet/fleet.sh`), and
-`verify/test_delivery_cost.py` fails a file that leaves one out. Both files were written on 2026-11-05 by hecaton run
-17307: accen-dev asked live (its figures match run 17257's read of the same day to the cent), and the four student
+`verify/test_delivery_cost.py` fails a file that leaves one out. The Portland and World's Fair files were written on
+2026-11-05 by hecaton run 17307: accen-dev asked live (its figures match run 17257's read of the same day to the cent), and the four student
 accounts read from `recorded/`, below. Tax posted inside Portland's window, left out, is 306.08 USD across the five
 (206.97 on accen-dev, the rest on 2026-09-01 in the student accounts); the World's Fair window has none.
 
+KubeCon NA's file was written on 2026-11-15 by hecaton run 25755, which held all five profiles and asked every
+account live, so it reads nothing from `recorded/`. Its tax, 118.48 USD across the five (118.38 on accen-dev), is left
+out. The KubeCon fleet ran in accen-dev alone: the student accounts carry no KubeCon cluster, and their 2.00 USD is
+their idle run rate plus lab-platform's own test clusters (`labctl`, named `lab-*`) there on 2026-10-26.
+
 ## recorded/
 
-This run's session signs into accen-dev only. The four student accounts' Cost Explorer was read by escalation 809 of
+Run 17307's session signed into accen-dev only. The four student accounts' Cost Explorer was read by escalation 809 of
 hecaton run 17297, run in each account by a higher hecaton tier that holds its credentials on 2026-11-05 and posted on #392, one comment per
 account. Each `recorded/<profile>/` holds that comment's two replies byte for byte: `cost-by-service-record-type.json`
 (daily unblended cost by service and record type, 2026-06-24 .. 2026-09-12) and `eks-usage-by-usage-type.json` (daily
@@ -58,6 +65,15 @@ Why these windows:
   cluster, wib-137-probe at 2026-09-10 17:37 UTC, is post-delivery work on #137, and its days are not Portland's. The
   day before the window billed 0.08 USD and the day after 8.19 USD. The 550.88 USD in the issue is
   2026-09-06 .. 2026-09-12, which takes in the event days and the probe and misses the eleven days of build before.
+- **KubeCon NA.** CloudTrail in the five accounts, in us-west-2, us-east-1 and us-east-2 (the standby pool's three
+  regions), shows the first cluster built for KubeCon, watch-it-burn-community, at 2026-10-24 16:48 UTC. accen-dev had
+  billed 0.03 USD a day since 2026-09-20, with no cluster between the last post-Portland test build
+  (watch-it-burn-attendee-001, deleted 2026-09-19 16:56 UTC) and that build. The
+  last `DeleteCluster` is watch-it-burn-private at 2026-11-12 23:37 UTC, after the session (20:50 UTC that day). The
+  day before the window billed 0.03 USD and the day after 0.15 USD. The window holds development as well as the
+  delivery: watch-it-burn-community and watch-it-burn-private, built 2026-10-28, served both. decisions.md
+  (2026-11-15, #872) splits the 1,183.38 USD on accen-dev by phase: 14.78 USD of builds on 2026-10-24 .. 10-27, 976.06 USD
+  on 2026-10-28 .. 11-11 with the two clusters up, and 192.54 USD on the session day.
 - **AI Engineer World's Fair.** CloudTrail no longer reaches June, so the window is read from the daily bill alone.
   Usage rises on 2026-06-25, peaks at 395.75 USD on 2026-06-29 and is back to 0.08 USD on 2026-07-01. Development
   before it (2026-06-01 .. 2026-06-25) billed 24.69 USD, and the work after it up to the Portland build
@@ -83,5 +99,13 @@ teardown/delivery-cost.py --start 2026-06-25 --end 2026-07-01 \
 From a session holding all five profiles, give each as `--profile` instead.
 
 For KubeCon NA (2026-11-09 to 12), run it with `--event kubecon-na-2026` once the fleet is down, from the day its
-first cluster was built to the day after its last was torn down. Cost Explorer keeps 13 months of history in a member
+first cluster was built to the day after its last was torn down. As run on 2026-11-15, with all five profiles:
+
+```
+teardown/delivery-cost.py --start 2026-10-24 --end 2026-11-13 --event kubecon-na-2026 \
+  --profile accen-dev --profile aws1-student31 --profile aws1-student32 --profile aws1-student33 \
+  --profile aws1-student34 > cost/measured/kubecon-na-2026.txt
+```
+
+The next delivery uses the same shape. Cost Explorer keeps 13 months of history in a member
 account, so these windows can be read until about a year after each delivery, much longer than CloudTrail's 90 days.
