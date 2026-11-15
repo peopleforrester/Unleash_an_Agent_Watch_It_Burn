@@ -57012,3 +57012,33 @@ run and main holds b113e537, the next daily report shows whether netcup still ho
 
 **Live check.** Skipped for the clusters: nothing they run changed, and no cluster is up. The AWS reads above were
 read-only.
+## 2026-11-15 · #1376 · run 26157 · Past 23:30Z and the teardown: the guarded checkout move is escalated again, unchanged
+
+**Context.** Question 1205 asked for run 20601's guarded move again, with the same argv, at or after 2026-11-12T23:30Z
+once the 22:50Z teardown had run its `unschedule`, and for none before then. Run 20610 held the issue to 2026-11-13.
+The attempt before this run ended on a workspace error in hecaton (the manifest of its parent run 21430 was missing)
+before it did anything, so nothing in the repo caused it and there was nothing of its to port.
+`bash verify/prior-drafts.sh 1376 origin/staging` printed NONE: runs 20601, 20608 and 20610 are all in staging.
+
+**Read at about 02:06Z on 2026-11-15, through `sources repo-cat` and `repo-ls`, nothing changed.**
+- Netcup's `infra/terraform/fleet/fleet.sh` is 5,351 lines and hashes c6fa2087..., the same as 7783f256's, with no
+  `refresh-only` line. The checkout has not moved.
+- `logs/backups-down.log` shows the scheduled teardown starting at 2026-11-12T22:50:02Z (`fleet.sh instructors down
+  all` per region) and ending at 23:13:11Z. A few clusters failed to come down in that pass; run 26116 on #1377 read
+  `eks list-clusters` empty in us-west-2, us-east-1 and us-east-2 at 02:00Z today. The cron line chains
+  `backups.py unschedule` after the teardown with `;`, so it ran whatever the teardown returned. Its output goes to
+  cron, not to that log, and no run can read netcup's crontab, so the act's own crontab guard checks for it.
+- `logs/backups-watch.log` ends at 2026-11-12T20:42:28Z, so no watcher has run since.
+- GitHub main is still b6a0edb9, which holds 7f3cdb4a (#956) and whose fleet.sh has 2 `apply -refresh-only` lines.
+- conference-knowledge's `events/registry.yaml` lists no session after `kubecon-na-2026` (2026-11-09 to 11-12) for
+  this talk, so no standby wave is scheduled.
+
+**The act escalated here.** Run 20610's entry above holds it verbatim, and it goes back in `escalate` unchanged: tool
+`ssh`, no host, argv `bash`, `-c` and that script. Its time guard now passes; its crontab and lock guards still stop
+it, exit 3 with nothing changed, if either does not hold.
+
+**Criteria.** Neither is met yet. Criterion 1 is met once the act prints the move and 2 `apply -refresh-only` lines;
+the next run reads netcup's fleet.sh back. Criterion 2 needs a standby wave built from the moved checkout and the
+daily drift report after it. No session is scheduled, so it waits for the next one that runs `backups.py schedule`.
+
+**Live check.** Skipped: nothing the clusters run changed, no cluster is up, and this run wrote only this entry.
