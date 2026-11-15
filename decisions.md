@@ -57042,3 +57042,67 @@ the next run reads netcup's fleet.sh back. Criterion 2 needs a standby wave buil
 daily drift report after it. No session is scheduled, so it waits for the next one that runs `backups.py schedule`.
 
 **Live check.** Skipped: nothing the clusters run changed, no cluster is up, and this run wrote only this entry.
+
+## 2026-11-15 · #583 · run 26168 · Bedrock takes the escaped ARN through agentgateway: the passes recorded, and every Argo CD sync written with the app's own options
+
+**The answer.** Bedrock accepts the application inference profile ARN with its slash escaped as `%2F` in
+agentgateway's Converse path. `verify/test_gateway_bedrock_tagged_live.py` exited 0, with a 200 from Bedrock through
+agentgateway :3002 on the cluster's tagged ARN, on three dates:
+- 2026-11-01, on watch-it-burn-community, by five runs at hecaton's higher tier (14685, 15017, 15041, 15094, 15135).
+  That tier writes no repo files, so nothing here said so, and later dispatched runs kept reporting the call as owed.
+- 2026-11-04, on both KubeCon clusters, by run 16964: `BEDROCK_NOVA_MODEL` read
+  `arn:aws:bedrock:us-west-2:515966504359:application-inference-profile/5l72jg8rnz71` on community and
+  `.../application-inference-profile/88hce5o0zw45` on private, on every Ready gateway pod, and the 5-token completion
+  got a 200 with a choice in the reply.
+- 2026-11-05 at 05:46Z, on both clusters again, by the research run on the issue (pods agentgateway-66d77d546d-chnzw
+  and agentgateway-b49f45688-mq492), every check PASS.
+
+The deployed gateway is agentgateway v1.7.0, not the v1.5.0 the issue read, and the call goes over a port-forward
+(1181a88), not from inside workshop-agent. The "Not yet run on a cluster" notes in the 2026-10-31 and 2026-11-02 #583
+entries are done by these runs.
+
+**What wrote the system id over the pin on 2026-11-01.** Run 15801 found `us.amazon.nova-pro-v1:0` on the gateway on
+2026-11-02, and run 16964 traced it. agentgateway's ReplicaSet history dates the change to 16:36:53Z on community and
+16:44:03Z on private. ai-layer's managedFields show the by-hand recipe's last step (a `kubectl-patch` of
+`spec.syncPolicy.automated`) seconds before each, from the 2026-11-01 entry "Live rollout and verification of the
+chat batch on the two up clusters". That sync wrote `.operation` by hand without `RespectIgnoreDifferences`. Argo CD
+v3.5.x's controller reads that option from the operation alone (`controller/sync.go` SyncAppState); only auto-sync
+and the API server copy `.spec.syncPolicy.syncOptions` into it. So the sync applied git's system id over
+agentgateway's env and all four Bedrock ModelConfigs. `fleet.sh repair_failed_syncs` and `roll-console.sh` wrote the
+same kind of bare operation.
+
+**The fix, ported from run 16964's draft.** Run 16964 committed it on `agent/583-16062` (ae5a4596), and it never
+reached staging: the run failed hecaton's prose gate on one hype-verb word in its decisions.md entry. This run took
+the draft as `verify/draft-drift.sh` said (every drift an edit in place), against staging 1f670aef:
+- `fleet.sh sync <application> <cluster...>` is the by-hand sync. It writes `sync_operation_of`'s operation (the
+  app's own prune, syncOptions and retry, initiated by `fleet-sync`), refuses an app with an operation already
+  pending (the #679 trap), and waits for the result. `docs/GOTCHAS-FLEET-AND-DELIVERY.md` names it in place of
+  writing `.operation` by hand.
+- `repair_failed_syncs` and `roll-console.sh` carry the app's options. roll-console.sh does not sync a cluster whose
+  ai-layer options it cannot read. One behaviour change: an app with no automated policy is re-synced with prune off
+  rather than on; every Application in `gitops/bootstrap/apps/` sets `automated.prune: true`, so none of them changes.
+- Tests: the new `verify/test_fleet_sync.sh` and `verify/test_roll_console.sh`, a new check in
+  `verify/test_fleet_converge_repairs.sh` on the exact patch, and a section of `verify/test_agent_tools_sync.py` that
+  runs agentgateway's Deployment through the Argo CD port (a sync without the option applies the system id; the
+  `sync_operation_of` sync keeps the ARN).
+
+What differs from the draft: the only conflict was `fleet.sh`'s usage text, where staging had added the desk and
+beacon verbs since; both are kept. The two new tests now call `no_cloud_guard` (#859) like the other fleet tests,
+and end on its `no_cloud_clean` check. The draft's 9c3a5bdd (a cloud-free `test_presenter_student_retired.sh`) is
+dropped: staging made that test cloud-free another way in 041c7a6a. The draft's two decisions.md entries are folded
+into this one.
+
+**Tests run here.** `bash verify/test_fleet_sync.sh` 11 passed, `bash verify/test_roll_console.sh` 7 passed,
+`bash verify/test_fleet_converge_repairs.sh` 85 passed, `python3 verify/test_agent_tools_sync.py` all checks passed.
+`verify/scope-map.yaml` and `verify/test-map.yaml` carry the two new tests (`python3 verify/scope_tests.py write`).
+
+**Not yet run on a cluster.** No cluster is up: KubeCon NA 2026 ended on 2026-11-12 and the fleet was torn down that
+night (the #1463 and #1377 entries above), and this run had no cluster session. So `fleet.sh sync ai-layer
+<cluster>` with this commit, and `test_gateway_bedrock_tagged_live.py` after it, run on the next cluster bring-up:
+`CONTEXT=<ctx> python3 verify/test_gateway_bedrock_tagged_live.py` (`run-e2e.sh` picks it up). Run 16964 ran the same
+verb live from its draft on both clusters on 2026-11-04: both syncs Succeeded with ai-layer's four options, and the
+gateway env and all four ModelConfigs kept their ARNs.
+
+**Left open.** The pin still lives outside git, put back only by `fleet.sh converge`. Declaring the profile ARNs as
+lab-bootstrap chart values, so no sync path can undo them, is the research run's second option, and this run files it
+as its own issue.
