@@ -57119,3 +57119,25 @@ challenges/03-bad-mcp-excessive-agency/toggle-tool-pin-on.sh`, then evil-mcp `Ac
 from `status.discoveredTools` while `get_weather_desc` is `chaining` and present after
 `toggle-rugpull-mutation-on.sh --off`, and tool-pin's log showing `changed: ["get_weather"]` then `pass`; then
 `toggle-tool-pin-on.sh --off` and `toggle-rugpull-mutation-on.sh --on` to leave the cluster as found.
+
+## 2026-11-15 · #1469 · run 26496 · run 25764's offline gate failures, fixed
+
+Run 25764's commit `1a6ce53e` failed hecaton's `ci` gate: the offline suite went red where its base `b8a245ed` was
+green. This run reran the scoped offline suite (`HECATON_BASE_SHA=b8a245ed bash verify/run-tests.sh`, 308 of 483
+tests) and three failed, all from that commit:
+
+- `verify/test_backstage_catalog.py`: every Deployment outside infrastructure must be claimed by exactly one catalog
+  entity, and `agent/tool-pin` had none. `backstage/catalog/burritobot.yaml` gains a `tool-pin` Component (selector
+  `app.kubernetes.io/name=tool-pin`, owner platform-team, system burritobot), and agentgateway's `dependsOn` names it.
+- `verify/test_fetch_inventory.py` and `verify/test_package_cache.py`: both scan for the words of a package install,
+  and two lines of `verify/test_tool_pin.py` spelled one in a check's label and in the command it compared. The label
+  now says "wheel fetch" and the check reads that the init container's command names `/app/requirements.txt`. The
+  Deployment is still held field for field to the spike's, so nothing it checked is lost.
+
+Each of the three, and `verify/test_tool_pin.py` and `verify/test_backstage_footprint.py`, then passed alone; the
+whole suite was not run again. The tools suite was also red on the base, so this run reports that failure as already
+there before the change: the three tier tests that read what this change touched (`test_agentgateway_mcp_get_e2e.py`,
+`test_turn_guard_e2e.py`, `test_kyverno_cel_policies.py`) were green in run 25764.
+
+Live check: not run, as in run 25764. This run's environment had no cluster session either (`HECATON_CLUSTER_ENV`
+empty). What is owed on a cluster is unchanged from run 25764's entry. Not yet run on a cluster: the same list.
