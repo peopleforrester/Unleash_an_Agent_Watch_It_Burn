@@ -56893,3 +56893,27 @@ Tests after the merge: `verify/test_c7_rug_pull_mutation.py` (rewritten), #1463'
 `verify/test_c7_gateway_toggle.py`, `verify/test_drift_floor.py`, `verify/test_agent_tools_sync.py` and
 `verify/test_scope_tests.py`. Not yet run on a cluster, as before: no cluster session in this run either, and the
 live `tools/list` in each state, flipped by the toggle, needs the change promoted through Argo CD first.
+
+## 2026-11-15 · #1463 · run 25747 · the owed live tools/list check: no cluster is up to run it
+
+This run resumed #1463 to run its one open criterion, the live `tools/list` from evil-mcp in each switch state on
+`watch-it-burn-community` or `watch-it-burn-private`. All of #1463's code is staging's already
+(`gitops/ai-layer/server.py`, the `GET_WEATHER_DESC` env on the evil-mcp-shim Deployment and the
+`evil-mcp-rugpull-config` ConfigMap in `gitops/ai-layer/resources.yaml`, and
+`verify/test_get_weather_rugpull_switch.py`), merged by run 25558 and extended by #1468's run 25660, so this run
+changed no code and the offline tests that read those files are staging's. `HEAD` equals `origin/staging` at
+2381424f, so there is no diff to gate.
+
+Hecaton handed this run no cluster session: `HECATON_CLUSTER_ENV` is empty and the run directory holds no
+kubeconfig or AWS session file (hecaton#508). Using the `aws-env accen-dev` route named in the issue's access
+notes, this run found why there was nothing to hand over. In account 515966504359 a service control policy permits EKS in
+us-west-2, us-east-1 and us-east-2 only, and `aws eks list-clusters` returns an empty list in each of those three.
+No EKS cluster is up, so neither `watch-it-burn-community` nor `watch-it-burn-private` exists to probe. A dispatched
+run brings no cluster up or down, so the live check cannot run here. No cluster state changed this run.
+
+Still owed, on the next run that holds the two clusters up and running the promoted `server.py`: a live
+`tools/list` from evil-mcp in the committed `chaining` state (get_weather served with the chaining description, the
+`FAKE-MCP-EXFIL-sentinel-4c1d` leak unchanged) and, after `toggle-rugpull-mutation-on.sh --off` sets the
+`evil-mcp-rugpull-config` ConfigMap's `get_weather_desc` to `benign`, a second `tools/list` showing the benign
+description under the same name and input schema, then the toggle put back to `chaining` to leave the cluster as
+found.
