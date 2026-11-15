@@ -56917,3 +56917,48 @@ Still owed, on the next run that holds the two clusters up and running the promo
 `evil-mcp-rugpull-config` ConfigMap's `get_weather_desc` to `benign`, a second `tools/list` showing the benign
 description under the same name and input schema, then the toggle put back to `chaining` to leave the cluster as
 found.
+
+## 2026-11-15 · #532 · run 26114 · the harvester's interface confirmed from its source; the live `ingest pool` still has no pool to run on
+
+**The harvester, read at last.** Every run since #445 built `harvest_terminal_login` to the interface the issue
+stated, because `sources repo-cat` refused provisioning-agenticburn's `scripts/harvest_terminal_credential.sh` as
+"looks like a secret". This run read it through `gh api repos/peopleforrester/provisioning-agenticburn/contents/scripts/harvest_terminal_credential.sh`
+instead. Its only commit is 3462ba274d35 (2026-10-18), the commit the issue names, and provisioning-agenticburn
+main (990f0debc179) still holds it unchanged. It matches fleet.sh's call (`infra/terraform/fleet/fleet.sh`,
+`harvest_terminal_login`) on every point: usage `AWS_PROFILE=<acct> harvest_terminal_credential.sh <cluster-name>
+[region] [out-dir]`, region defaulting to us-west-2, AWS_PROFILE required from the environment, a name outside
+`watch-it-burn-*` refused, the Secret read as `agent/terminal-auth` key `TTYD_CREDENTIAL` through a private
+kubeconfig, the whole `user:password` written with a newline to `<out-dir>/<cluster>.terminal` at mode 0600, which
+fleet.sh's ingest reads with `head -1`, and exits 0 written, 3 Secret absent, 1 anything else, with any old
+`.terminal` removed first. Run offline in `$TMPDIR` with stub `aws` and `kubectl` and a stale `.terminal` placed
+before each case, it printed:
+
+    ok:      rc=0 file=600 agentic:agentic
+    missing: rc=3 file=absent  (no terminal-auth Secret ... the terminal is OPEN)
+    bare:    rc=1 file=absent  (TTYD_CREDENTIAL is not a single-line user:password pair)
+    unreach: rc=1 file=absent  (cannot reach watch-it-burn-attendee-001 in fleet-test)
+    noprof:  rc=1             (set AWS_PROFILE to the cluster account)
+
+So the shim `verify/test_fleet_terminal_harvest.sh` uses is faithful to the real script, and no fleet.sh change is
+needed. Nothing from provisioning-agenticburn is copied into this repo.
+
+**The live run still has nothing to run on.** Through the `aws-env accen-dev` route, `aws eks list-clusters`
+returned an empty list in us-west-2, us-east-1 and us-east-2 (account 515966504359), as run 25747 found for #1463
+hours earlier: no attendee cluster and not even the two KubeCon clusters are up. This run had no cluster session
+(`HECATON_CLUSTER_ENV` empty), and a dispatched run brings no cluster up. #655, which the 2026-10-31 question-961 plan
+had carry this issue's live run as its step 5, closed on 2026-11-03 on a scratch labctl database without that
+cluster, so nothing schedules an attendee pool now. In conference-knowledge `events/registry.yaml` no entry after
+kubecon-na-2026 (2026-11-09 to 11-12, no attendee lab) is a Watch It Burn workshop. What the live run would still
+show beyond #655's scratch import (real `fleet.sh ingest pool`, claims kept, logins merged) and this read is the
+harvester reading a real Secret on a real attendee cluster and the import into lab-platform's production database.
+
+**Issue body.** The issue had no checklist; this run added five acceptance criteria to it. The fifth, the
+harvester's interface, is met by the read above; the four live ones are not.
+
+**The previous attempt's failure was hecaton's.** It stopped before any work with "parent base: [Errno 2] No such
+file or directory: '/var/lib/hecaton/runs/21402/manifest.json'", a run directory hecaton had already retired. Nothing
+in this repo reads that path.
+
+**Not yet run on a cluster:** the live sequence in the 2026-10-31 #532 entry (`fleet.sh reconcile-pool`,
+`verify/fleet-hygiene.sh`, `fleet.sh ingest pool`, `labctl pool`, the agentic/agentic login), owed on the next
+attendee pool. No cluster state changed this run. Tests: none run; only decisions.md changed.
