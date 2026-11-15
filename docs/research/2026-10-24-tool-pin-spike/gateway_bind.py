@@ -9,6 +9,12 @@
 live-check.sh uses `extend`: a live cluster syncs from its own branch, so its gateway config can differ from this
 checkout's, and the check must add one bind to what is running rather than replace it with what is committed.
 
+Since #1469 the bind is committed: gitops/ai-layer/agentgateway.yaml carries bind 3004, this shape plus the 405 route
+for GET /mcp every MCP bind has (#1303), and verify/test_tool_pin.py holds the two equal. `cluster` therefore renders
+the layout this spike was written against, the committed config without bind 3004 (pre_promotion_config) plus the
+bind, and `extend` refuses a live config that already has it: on a cluster where the pin is in GitOps, live-check.sh
+would fight Argo CD over it, and challenges/03-bad-mcp-excessive-agency/toggle-tool-pin-on.sh is the action instead.
+
 The bind is its own port with one MCP target, so:
   - the target is the only backend, and the tool names reach kagent unprefixed (measured on the local
     bed, see README.md), which keeps get_weather's poisoned description pointing at real tool names;
@@ -68,11 +74,21 @@ def committed_config() -> tuple[dict, dict]:
     raise SystemExit(f"no agentgateway-config ConfigMap in {GATEWAY}")
 
 
+def pre_promotion_config() -> dict:
+    """The committed config without bind 3004: the gateway config of a cluster from before #1469 put the pin in GitOps,
+    the layout live-check.sh was written for."""
+    cfg = committed_config()[1]
+    cfg["binds"] = [b for b in cfg.get("binds", []) if b.get("port") != PINNED_PORT]
+    return cfg
+
+
 def cluster_config(cfg: dict | None = None) -> dict:
-    """The committed config, or the given one, plus the pinned bind."""
-    cfg = committed_config()[1] if cfg is None else cfg
+    """The pre-#1469 config, or the given one, plus the pinned bind."""
+    cfg = pre_promotion_config() if cfg is None else cfg
     if PINNED_PORT in [b.get("port") for b in cfg.get("binds", [])]:
-        raise SystemExit(f"the gateway config already has a bind on {PINNED_PORT}; restore it before adding the pin")
+        raise SystemExit(f"the gateway config already has a bind on {PINNED_PORT}: either an earlier check left it "
+                         "(restore that first) or the pin is in GitOps since #1469 (use "
+                         "challenges/03-bad-mcp-excessive-agency/toggle-tool-pin-on.sh, not this check)")
     cfg["binds"].append(pinned_bind(
         PINNED_PORT,
         "http://evil-mcp-shim.agent.svc.cluster.local:8000/mcp",

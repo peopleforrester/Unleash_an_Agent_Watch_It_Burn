@@ -13,9 +13,10 @@
 #   guard-proxy --:3000--> agentgateway --:8080--> workshop-agent --:3002--> agentgateway (gateway-* ModelConfigs)
 #   kagent namespace --:8080--> workshop-agent (the controller's A2A proxy behind the kagent UI)
 # The other agentgateway binds stay open to every pod, because their callers are wider than one label:
-#   * :3001 and :3003 are the MCP fronts. workshop-agent calls them, the kagent controller lists their tools from
-#     the RemoteMCPServer urls, and C7's fallback (challenges/03-bad-mcp-excessive-agency/fallback.curl.sh) calls
-#     :3003 from the web terminal. A tool call reaches a tool server, not a model.
+#   * :3001, :3003 and :3004 are the MCP fronts. workshop-agent calls them, the kagent controller lists their tools
+#     from the RemoteMCPServer urls, and C7's fallback (challenges/03-bad-mcp-excessive-agency/fallback.curl.sh) calls
+#     :3003 from the web terminal. :3004 is evil-mcp through the tool-pin processor (#1469), dialled once the rug-pull
+#     beat's toggle-tool-pin-on.sh repoints evil-mcp's url there. A tool call reaches a tool server, not a model.
 #   * :15021 and :15022 are the two containers' readiness listeners (the liveness probes' ports).
 # Kubelet probes come from the node, which the VPC CNI's policy agent admits by itself, so :3000's readiness probe
 # needs no rule here. Any port not named below is closed: agentgateway's stats (:15020) has no scraper.
@@ -49,6 +50,7 @@ spec:
     - ports:
         - { protocol: TCP, port: 3001 }
         - { protocol: TCP, port: 3003 }
+        - { protocol: TCP, port: 3004 } # #1469: evil-mcp through tool-pin, the url toggle-tool-pin-on.sh sets
         - { protocol: TCP, port: 15021 }
         - { protocol: TCP, port: 15022 }
 ---

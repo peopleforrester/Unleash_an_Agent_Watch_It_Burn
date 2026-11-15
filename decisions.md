@@ -57042,3 +57042,80 @@ the next run reads netcup's fleet.sh back. Criterion 2 needs a standby wave buil
 daily drift report after it. No session is scheduled, so it waits for the next one that runs `backups.py schedule`.
 
 **Live check.** Skipped: nothing the clusters run changed, no cluster is up, and this run wrote only this entry.
+
+## 2026-11-15 · #1469 · run 25764 · the C7 rug-pull's hash pin in GitOps, strip mode, failClosed
+
+#1469 promotes the #480 spike's tool-pin processor, its baseline and its pinned bind into `gitops/ai-layer/`, the second
+piece of the beat in `docs/research/2026-11-14-c7-rug-pull-beat.md` (rows "Pinned bind in GitOps", "Baseline
+ConfigMap", "Service port and ingress"; step 5 "Pin and refuse"). No earlier draft: `verify/prior-drafts.sh 1469
+origin/staging` printed NONE and the issue had no comments.
+
+What changed:
+
+- `gitops/ai-layer/tool-pin.yaml`: the spike's tool-pin Deployment and Service, field for field, with PIN_MODE=strip,
+  and a plain `tool-pin-baseline` ConfigMap. The source ConfigMap `tool-pin-src` is a hash-suffixed generator in
+  `gitops/ai-layer/kustomization.yaml`, so a processor change rolls the pod. kustomize reads no file outside its root,
+  so it reads `gitops/ai-layer/tool-pin/tool_pin.py` and `tool-pin/requirements.txt`, byte-identical copies of
+  `images/tool-pin/tool_pin.py` and the spike's `requirements.txt`; `verify/test_tool_pin.py` holds both equal. The
+  processor is not rewritten.
+- The baseline pins every tool in the Agent's evil-mcp `toolNames` (get_weather, read_internal_config,
+  apply_optimization). get_weather is hashed from its approved description, `GET_WEATHER_BENIGN_DESCRIPTION`, the one
+  `server.py` serves when `evil-mcp-rugpull-config`'s `get_weather_desc` is `benign` (#1463, #1468), sha256
+  `b647f9d7…85849cda`. The committed switch value is `chaining`, so a pinned evil-mcp strips get_weather until the
+  approve step sets `benign`. The spike's own `baseline.json` still pins the served default, as its test requires.
+  A plain ConfigMap and not a generator: `verify/test_ai_layer_rollout.py` requires every generator to carry a hash,
+  and the pin needs a stable name for a re-approval edit and for the `/controls` badge the spike decided on.
+- `gitops/ai-layer/agentgateway.yaml`: bind 3004 in `agentgateway-config`, served by the first container, with evil-mcp
+  as its only target and tool-pin on `tools/list` (response) and `tools/call` (request), as `gateway_bind.py` renders it,
+  plus the 405 route for GET /mcp that every MCP bind carries since #1303 (`verify/test_mcp_standalone_stream.py` now
+  holds it on :3004 too). The first container declares `mcp-pin` 3004, the Service exposes it, and
+  `checksum/agentgateway-config` is bumped to `48d2d0aa267f`, so the gateway pod rolls once on promotion.
+- `gitops/ai-layer/chat-path-ingress.yaml`: 3004 joins 3001 and 3003 in `agentgateway-ingress`'s from-anywhere rule, so
+  kagent's controller and the agent reach it; `verify/test_chat_path_ingress.py` reads the pinned url from the toggle and
+  checks both callers are admitted on it.
+- `challenges/03-bad-mcp-excessive-agency/toggle-tool-pin-on.sh`: from a required CONTEXT, `--on` checks the Service has
+  3004 and `tool-pin-baseline` exists, waits for tool-pin to be Ready, then repoints evil-mcp's RemoteMCPServer
+  `spec.url` to `http://agentgateway.agent:3004/mcp`; `--off` puts back `:3003`, the committed url. kagent rolls the agent
+  itself after the url patch (measured 2026-11-05). `gitops/bootstrap/apps/ai-layer.yaml` ignores only that field
+  (`jqPathExpressions: ['.spec.url']` on RemoteMCPServer evil-mcp), registered in `docs/floor.md`. It is a scalar of the
+  CRD, so `RespectIgnoreDifferences` cannot freeze a list with it (#679). block-argocd-drift matches no
+  RemoteMCPServer, so the patch is admitted on an admin cluster.
+- `policies/network-policies/per-namespace/agent-allow-tool-pin-egress.yaml` and the egressLabels list of
+  `restrict-agent-spawned-workloads`: tool-pin's init container installs grpcio from PyPI at each pod start. The burn,
+  KubeCon and attendee profiles have no egress policy in `agent`, but the admin profile's default-deny would hold the
+  init container forever, leave ai-layer Degraded there and, with failClosed, turn a pin into a chat outage. The rule
+  is TCP 443 to anywhere for the tool-pin pod alone, the shape of the weather feed's, and the agent is refused a pod
+  wearing that label.
+- The spike: `gateway_bind.py` gains `pre_promotion_config()` (the committed config without bind 3004) and `cluster`
+  renders on it; `extend` refuses a live config that already has the bind, naming the toggle. `live-check.sh` stops
+  before its snapshot, changing nothing, when the agentgateway Service already serves 3004: on a cluster with the pin in
+  GitOps it would apply over Argo CD's objects and delete them on restore. `verify/test_tool_pin_live_check.py` seeds its
+  stand-in with the pre-#1469 layout and adds that refusal case. The README says so in a short status paragraph.
+
+**failureMode: failClosed.** The spike left this open: on kagent 0.10.1 a refused `tools/list` fails the agent's whole
+answer, so with failClosed a tool-pin outage is a chat outage while evil-mcp dials :3004. failOpen would keep the chat
+up by passing the list unjudged, and the rug-pulled get_weather would reach the model and leak the sentinel while the
+student's pin reads as on: a control that is silently off, which on stage looks like the pin failing. failClosed fails
+loud ("guardrail check failed" in the chat), it is contained to the time evil-mcp is pinned, and `toggle-tool-pin-on.sh
+--off` ends it at once. It hands the attacker nothing new: evil-mcp can already fail the chat by erroring its own
+`tools/list`, pin or no pin, and strip mode answers a mutation with no error at all. The toggle waits for tool-pin to be
+Ready before it pins, so the outage case is tool-pin dying mid-beat, not a race at the start.
+
+Tests run: `verify/test_tool_pin.py`, `verify/test_tool_pin_live_check.py`, `verify/test_chat_path_ingress.py`,
+`verify/test_agentgateway_config.py`, `verify/test_agentgateway_config_checksum.py`, `verify/test_ai_layer_rollout.py`,
+`verify/test_bootstrap_chart.py`, `verify/test_mcp_standalone_stream.py`, `verify/test_drift_floor.py`,
+`verify/test_agent_bypass_shapes.py`, `verify/test_agent_tools_sync.py` and `verify/test_scope_tests.py`, each passing
+alone; the scoped runner results follow in this run's report.
+
+Live check: not run. The run had no cluster session (`HECATON_CLUSTER_ENV` empty, no kubeconfig in the run
+directory), and through the `aws-env accen-dev` route `aws eks list-clusters` returned an empty list in us-west-2,
+us-east-1 and us-east-2, as run 25747 found an hour earlier: neither `watch-it-burn-community` nor
+`watch-it-burn-private` is up. No cluster state changed.
+
+Not yet run on a cluster, owed to the next run on the two clusters once this is promoted: tool-pin Ready in `agent`
+(the init container's pip install on the python mirror, and on an admin cluster through the new egress rule);
+agentgateway rolled onto `48d2d0aa267f` and serving :3004; `CONTEXT=<ctx> bash
+challenges/03-bad-mcp-excessive-agency/toggle-tool-pin-on.sh`, then evil-mcp `Accepted=True` with get_weather missing
+from `status.discoveredTools` while `get_weather_desc` is `chaining` and present after
+`toggle-rugpull-mutation-on.sh --off`, and tool-pin's log showing `changed: ["get_weather"]` then `pass`; then
+`toggle-tool-pin-on.sh --off` and `toggle-rugpull-mutation-on.sh --on` to leave the cluster as found.

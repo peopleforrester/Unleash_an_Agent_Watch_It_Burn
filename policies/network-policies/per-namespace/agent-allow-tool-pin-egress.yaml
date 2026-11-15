@@ -1,0 +1,22 @@
+# ABOUTME: Lets the tool-pin processor, and only it, reach PyPI on 443 from the default-deny agent namespace, so its
+# ABOUTME: init container can install grpcio by hash at pod start (#1469, the C7 rug-pull's hash pin).
+#
+# tool-pin has no image of its own (gitops/ai-layer/tool-pin.yaml): it runs tool_pin.py on the python:3.12-slim mirror,
+# and an init container installs the two hash-pinned wheels in tool-pin/requirements.txt from pypi.org and
+# files.pythonhosted.org. Their addresses are not fixed and a NetworkPolicy cannot name a host, so the rule is TCP 443
+# to anywhere for this one pod, as agent-allow-weather-feed-egress is for the weather feed. What keeps it narrow is the
+# pod: it runs only pip with --require-hashes and then tool_pin.py, which opens no outbound connection. The Kyverno
+# egressLabels list carries its label, so the agent cannot create a pod that wears it. Without this rule, on an admin
+# cluster the init container never finishes, tool-pin never turns Ready, and the pinned bind's failClosed would
+# fail every chat once the student pins evil-mcp.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agent-allow-tool-pin-egress
+  namespace: agent
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: tool-pin }
+  policyTypes: [Egress]
+  egress:
+    - ports: [{ protocol: TCP, port: 443 }]

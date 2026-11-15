@@ -7,8 +7,9 @@ or workshop-agent :8080) over agent-allow-intra-namespace, all around guard-prox
 gitops/ai-layer/chat-path-ingress.yaml admits those ports only from the hop before them. A rule like that can fail
 two ways and both look the same on stage, a chat that hangs: it shuts out a real caller (guard-proxy, the agent,
 the kagent controller, the C7 fallback in the web terminal), or it leaves the bypass open. So each caller is read
-from where it is decided (guard-proxy's AGENT_URL, the gateway-* ModelConfigs, the RemoteMCPServer urls, the
-agentgateway :3000 backend, the C7 fallback's GATEWAY) and evaluated against the rules, and so is the bypass pod.
+from where it is decided (guard-proxy's AGENT_URL, the gateway-* ModelConfigs, the RemoteMCPServer urls, the url the
+C7 rug-pull's toggle-tool-pin-on.sh repoints evil-mcp to (#1469), the agentgateway :3000 backend, the C7 fallback's
+GATEWAY) and evaluated against the rules, and so is the bypass pod.
 Offline: YAML only. verify/test_llm_bypass_live.py reads the same rules off a live cluster and sends the packets.
 """
 from __future__ import annotations
@@ -153,6 +154,18 @@ for d in mcp:
     # The agent calls the tools; the kagent controller lists them from this url; neither reaches a model.
     for who, labels, ns in (("the agent's pod", agent_labels, NS), ("the kagent namespace", *KAGENT)):
         check(f"RemoteMCPServer {d['metadata']['name']} (:{port}) admits {who}", gw(port, labels, ns))
+# The pinned bind (#1469): committed, evil-mcp dials :3003; the rug-pull beat's student action repoints it at :3004,
+# where tool-pin judges its tools. Then the same two callers dial :3004: kagent's controller to list, the agent to call.
+toggle = (REPO / "challenges/03-bad-mcp-excessive-agency/toggle-tool-pin-on.sh").read_text()
+m = re.search(r'^readonly PINNED_URL="([^"]+)"', toggle, re.M)
+check("toggle-tool-pin-on.sh names the pinned url it repoints evil-mcp to", bool(m))
+pinned_port = port_of(m.group(1)) if m else 0
+check(f"the pinned url is agentgateway :3004 ({m.group(1) if m else None})",
+      bool(m) and urlparse(m.group(1)).hostname.split(".")[0] == "agentgateway" and pinned_port == 3004)
+for who, labels, ns in (("the agent's pod", agent_labels, NS), ("the kagent namespace", *KAGENT)):
+    check(f"evil-mcp pinned (:{pinned_port}) admits {who}", gw(pinned_port, labels, ns))
+check(f"the pinned bind's port is a declared agentgateway container port ({sorted(gw_ports.values())})",
+      pinned_port in gw_ports.values())
 fallback = (REPO / "challenges/03-bad-mcp-excessive-agency/fallback.curl.sh").read_text()
 m = re.search(r'^readonly GATEWAY="([^"]+)"', fallback, re.M)
 check("the C7 fallback names the gateway it calls from the web terminal", bool(m))

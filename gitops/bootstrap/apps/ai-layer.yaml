@@ -153,6 +153,16 @@ spec:
       name: evil-mcp-rugpull-config
       jqPathExpressions:
         - '.data["get_weather_desc"]'
+    # C7 rug-pull's pin (#1469): the student's action is repointing evil-mcp at agentgateway :3004, where tool-pin
+    # strips a tool whose definition changed since approval. challenges/03-bad-mcp-excessive-agency/toggle-tool-pin-on.sh
+    # patches this one field live (:3003 <-> :3004). Ignore ONLY .spec.url so selfHeal keeps the pin; the rest of the
+    # RemoteMCPServer (protocol, timeout) still syncs from git. A scalar field of the CRD, not an array element, so
+    # RespectIgnoreDifferences applies it as it is and it cannot freeze a list (#679).
+    - group: kagent.dev
+      kind: RemoteMCPServer
+      name: evil-mcp
+      jqPathExpressions:
+        - '.spec.url'
     # C8 (#111 SA-token theft): agent-sa's Role ships BROAD (secrets get/list namespace-wide), the
     # vulnerability the attack exploits. The STUDENT applies a scoped Role (get on the recipe Secret by
     # name, no list); ignore drift on .rules so selfHeal keeps the tightened rules instead of reverting
@@ -187,10 +197,9 @@ spec:
       - Force=true
       # RespectIgnoreDifferences: honor the ignoreDifferences (guard-proxy env, the Bedrock ModelConfigs' model
       # and region, agentgateway's BEDROCK_NOVA_MODEL and BEDROCK_REGION, agentgateway-c7-config's config.yaml,
-      # evil-mcp-rugpull-config's get_weather_desc, the workshop-agent Role's rules) on SYNC too, not just on
-      # diff. Without it a sync re-applies the committed spec and can revert a live toggle (found 2026-07-10
-      # for kyverno-policies). It is safe for
-      # every ignore above: none reaches into an array element of a CRD, the shape that froze the Agent's
+      # evil-mcp-rugpull-config's get_weather_desc, evil-mcp's RemoteMCPServer url, the workshop-agent Role's rules)
+      # on SYNC too, not just on diff. Without it a sync re-applies the committed spec and can revert a live toggle
+      # (found 2026-07-10 for kyverno-policies). It is safe for every ignore above: none reaches into an array element of a CRD, the shape that froze the Agent's
       # tools (#679). The env entries ignored by name on guard-proxy and agentgateway freeze their list's ORDER at
       # the live one, which fleet.sh repair_env_order puts back (#679). verify/test_agent_tools_sync.py fails on a
       # CRD array ignore, and on an ignored list element that repair_env_order has no row for.

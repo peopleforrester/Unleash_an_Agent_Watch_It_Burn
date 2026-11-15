@@ -14,7 +14,10 @@ file. What is held here:
   watch-it-burn-community on 2026-11-05) is restarted onto the pinned config, and restarted again by restore;
 - `restore` exits 1 and keeps its snapshot when the cluster does not match it;
 - `setup` changes nothing when the public host is not answering 200 or the context is unknown, and will not take a
-  second snapshot over the first.
+  second snapshot over the first;
+- since #1469 put the pin in GitOps (bind 3004, its Service and ingress ports, tool-pin), `setup` changes nothing on a
+  cluster that carries it. The other cases run on the layout from before #1469, the one the check was written for:
+  the committed gateway config, Service and agentgateway-ingress with :3004 taken out.
 """
 from __future__ import annotations
 
@@ -38,6 +41,8 @@ GATEWAY = REPO / "gitops/ai-layer/agentgateway.yaml"
 CONTEXT = "watch-it-burn-community-test"
 PINNED = "http://agentgateway.agent:3004/mcp"
 ORIGINAL_URL = "http://agentgateway.agent:3003/mcp"
+sys.path.insert(0, str(SPIKE))
+import gateway_bind  # noqa: E402
 
 failures: list[str] = []
 
@@ -48,12 +53,18 @@ def check(name: str, cond: bool) -> None:
         failures.append(name)
 
 
-def cluster() -> dict:
+def cluster(promoted: bool = False) -> dict:
+    """The objects the check touches, as committed (promoted) or as on a cluster from before #1469 (the default)."""
     docs = [d for d in yaml.safe_load_all(GATEWAY.read_text(encoding="utf-8")) if d]
     gw_cm = next(d for d in docs if d["kind"] == "ConfigMap" and d["metadata"]["name"] == "agentgateway-config")
     gw_svc = next(d for d in docs if d["kind"] == "Service" and d["metadata"]["name"] == "agentgateway")
     ingress = next(d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/chat-path-ingress.yaml").read_text(encoding="utf-8"))
                    if d and d["metadata"]["name"] == "agentgateway-ingress")
+    if not promoted:
+        gw_cm["data"]["config.yaml"] = yaml.safe_dump(gateway_bind.pre_promotion_config(), sort_keys=False)
+        gw_svc["spec"]["ports"] = [p for p in gw_svc["spec"]["ports"] if p["port"] != gateway_bind.PINNED_PORT]
+        for rule in ingress["spec"]["ingress"]:
+            rule["ports"] = [p for p in rule.get("ports", []) if p["port"] != gateway_bind.PINNED_PORT]
     server = (REPO / "gitops/ai-layer/server.py").read_text(encoding="utf-8")
     automated = {"prune": True, "selfHeal": True}
 
@@ -111,7 +122,7 @@ def as_found(st: dict) -> dict:
 
 
 class Bed:
-    def __init__(self, root: pathlib.Path):
+    def __init__(self, root: pathlib.Path, promoted: bool = False):
         self.root = root
         self.bin = root / "bin"
         self.bin.mkdir(parents=True)
@@ -119,7 +130,7 @@ class Bed:
             shutil.copy(SHIM, self.bin / name)
             (self.bin / name).chmod((self.bin / name).stat().st_mode | stat.S_IXUSR)
         self.state_file = root / "cluster.json"
-        self.before = cluster()
+        self.before = cluster(promoted)
         self.state_file.write_text(json.dumps(self.before))
         self.snap = root / "snap"
 
@@ -261,6 +272,21 @@ with tempfile.TemporaryDirectory() as d:
     r = bed.live("run", CONTEXT="some-other-cluster")
     check("when the context is not in the kubeconfig", r.returncode == 1 and "no context some-other-cluster" in r.stderr
           and bed.st()["events"] == [])
+
+    print("== on a cluster where the pin is in GitOps (#1469), setup changes nothing ==")
+    committed = cluster(promoted=True)["objects"]
+    check("the committed layout serves :3004: the Service port, a bind in agentgateway-config, the ingress port",
+          3004 in [p["port"] for p in committed["agent/Service/agentgateway"]["spec"]["ports"]]
+          and 3004 in [b["port"] for b in yaml.safe_load(committed["agent/ConfigMap/agentgateway-config"]["data"]["config.yaml"])["binds"]]
+          and any({"protocol": "TCP", "port": 3004} in r.get("ports", [])
+                  for r in committed["agent/NetworkPolicy/agentgateway-ingress"]["spec"]["ingress"]))
+    bed = Bed(pathlib.Path(d) / "h", promoted=True)
+    r = bed.live("run")
+    out = r.stdout + r.stderr
+    check("run stops before the snapshot, naming #1469 and the toggle, with no event and no restore"
+          + ("" if r.returncode == 1 else f" (exit {r.returncode}; tail: {out[-300:]!r})"),
+          r.returncode == 1 and "the pin is in GitOps since #1469" in out and "toggle-tool-pin-on.sh" in out
+          and bed.st()["events"] == [] and not (bed.snap / "snapshot.done").exists() and "restore (exit" not in out)
 
     print("== when kagent rolls the agent itself ==")
     bed = Bed(pathlib.Path(d) / "f")

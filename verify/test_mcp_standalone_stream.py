@@ -43,6 +43,9 @@ AI_LAYER_APP = REPO / "gitops/bootstrap/apps/ai-layer.yaml"
 CONFIGMAPS = ("agentgateway-config", "agentgateway-c7-config")
 # The binds that front an MCP server, and the server each fronts (the RemoteMCPServer urls in resources.yaml).
 MCP_BINDS = {("agentgateway-config", 3001): "workshop-mcp", ("agentgateway-c7-config", 3003): "evil-mcp"}
+# The C7 rug-pull's pinned bind (#1469): evil-mcp through tool-pin. No RemoteMCPServer dials it as committed (the
+# student's toggle-tool-pin-on.sh repoints evil-mcp's url there), so it is held to the 405 but not to a committed url.
+PINNED_BINDS = {("agentgateway-config", 3004): "evil-mcp"}
 # go-sdk v1.6.1's default maxRetries is 5, so the session fails on the sixth cut.
 CUTS = 6
 # A session that holds a stream must outlast a stage day and the rehearsal the day before it.
@@ -129,7 +132,7 @@ if failures:
     sys.exit(1)
 
 print("== each MCP bind serves MCP POSTs and answers the standalone GET /mcp with 405 ==")
-for (cm, port), target in MCP_BINDS.items():
+for (cm, port), target in {**MCP_BINDS, **PINNED_BINDS}.items():
     problems = bind_problems(cfgs[cm], port, target)
     check(f"{cm} :{port} ({target})", not problems, "; ".join(problems))
 
@@ -160,14 +163,16 @@ for label, mutate in (
      lambda c: routes(c["agentgateway-c7-config"], 3003)[-1]["matches"][0].pop("method")),
     ("the 3001 bind's MCP route limited to GET",
      lambda c: routes(c["agentgateway-config"], 3001)[0].update({"matches": [{"method": "GET"}]})),
+    ("the 405 route taken off the pinned 3004 bind",
+     lambda c: next(b for b in c["agentgateway-config"]["binds"] if b["port"] == 3004)["listeners"][0]["routes"].pop()),
 ):
     broken = copy.deepcopy(cfgs)
     try:
         mutate(broken)
-    except (IndexError, KeyError) as e:
+    except (IndexError, KeyError, StopIteration) as e:
         check(f"{label}: the control could edit the committed config", False, f"{type(e).__name__}: {e}")
         continue
-    caught = any(bind_problems(broken[cm], port, target) for (cm, port), target in MCP_BINDS.items())
+    caught = any(bind_problems(broken[cm], port, target) for (cm, port), target in {**MCP_BINDS, **PINNED_BINDS}.items())
     check(f"{label} is caught", caught)
 for text, want in (("30s", 30.0), ("12h", 43200.0), ("1h30m", 5400.0), ("500ms", 0.5), ("12 h", None), ("", None)):
     check(f"a duration of {text!r} reads as {want}", seconds(text) == want)

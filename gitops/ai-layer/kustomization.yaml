@@ -17,6 +17,7 @@ resources:
   - kubearmor-ordering-gate.yaml # wave -1 Job (a PreSync hook until #898): wait for KubeArmor webhook Ready so workshop-mcp is admitted+annotated for enforcement
   - otel-ordering-gate.yaml # wave -1 Job (a PreSync hook until #898): wait for the OTel operator webhook + Instrumentation so BurritoBot is admitted instrumented
   - c7-sse-route.yaml # #1323: one-shot Job that adds the 405 GET /mcp route to a live agentgateway-c7-config built before #1303, keeping its rule line
+  - tool-pin.yaml # #1469: the C7 rug-pull hash pin (tool-pin processor, strip mode, and its baseline) behind agentgateway :3004
 
 configMapGenerator:
   - name: guard-proxy-src
@@ -28,6 +29,12 @@ configMapGenerator:
   - name: evil-mcp-src
     files:
       - server.py
+  - name: tool-pin-src
+    files:
+      # The C7 rug-pull's processor (#1469). Copies of images/tool-pin/tool_pin.py and the #480 spike's requirements.txt,
+      # because kustomize reads no file outside this directory; verify/test_tool_pin.py holds them byte-identical.
+      - tool_pin.py=tool-pin/tool_pin.py
+      - requirements.txt=tool-pin/requirements.txt
   - name: weather-feed-src
     files:
       - weather_feed.py # C7's live weather (#642): the one agent pod with internet egress

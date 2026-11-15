@@ -1619,6 +1619,7 @@ rules:
       - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
       - challenges/03-bad-mcp-excessive-agency/fallback.curl.sh
       - challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh
+      - challenges/03-bad-mcp-excessive-agency/toggle-tool-pin-on.sh
       - cost
       - cost/**
       - docs/admin-console.md
@@ -2570,6 +2571,7 @@ rules:
       - backstage/**
       - challenges/01-cncf-wall
       - challenges/01-cncf-wall/**
+      - challenges/03-bad-mcp-excessive-agency/toggle-tool-pin-on.sh
       - cost
       - cost/**
       - docs/admin-console.md
@@ -8510,6 +8512,7 @@ rules:
   - name: test_tool_pin.py
     paths:
       - CLAUDE.md
+      - challenges/03-bad-mcp-excessive-agency/toggle-tool-pin-on.sh
       - docs/research/2026-10-24-tool-pin-spike
       - docs/research/2026-10-24-tool-pin-spike/**
       - gitops
@@ -8538,6 +8541,7 @@ rules:
     paths:
       - agent
       - agent/**
+      - challenges/03-bad-mcp-excessive-agency/toggle-tool-pin-on.sh
       - docs/research/2026-10-24-tool-pin-spike
       - docs/research/2026-10-24-tool-pin-spike/**
       - gitops/ai-layer/agentgateway.yaml

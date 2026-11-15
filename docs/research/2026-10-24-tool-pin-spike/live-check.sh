@@ -134,6 +134,13 @@ setup() {
     "${KCTL[@]}" get remotemcpserver evil-mcp >/dev/null
     # The guardrails are props (CLAUDE.md): selfHeal would revert every change below within seconds.
     "${ARGO[@]}" get "${ROOT}" >/dev/null || die "no ${ROOT} on ${CONTEXT}; nothing else would hold ai-layer paused"
+    # Since #1469 the bind, its Service port, its ingress port and tool-pin itself are in GitOps. On a cluster that
+    # carries them this check would apply over Argo CD's objects and then delete them on restore, so it stops before
+    # the snapshot, changing nothing. There the student's action is the url alone (toggle-tool-pin-on.sh).
+    [[ -e "${STATE}/snapshot.done" ]] && die "${STATE} holds a snapshot from an earlier setup; run restore first"
+    if "${KCTL[@]}" get svc agentgateway -o jsonpath='{.spec.ports[*].port}' | grep -qw 3004; then
+        die "agentgateway on ${CONTEXT} already serves :3004: the pin is in GitOps since #1469, so this check would fight Argo CD; pin with challenges/03-bad-mcp-excessive-agency/toggle-tool-pin-on.sh instead"
+    fi
     snapshot
     local app
     for app in "${APPS[@]}"; do

@@ -29,6 +29,14 @@ and strip mode works as on the bed. Deny mode does not: the cluster's kagent is 
 a JSON-RPC error on one toolset's `tools/list` fails the whole chat answer. See "The cluster check, 2026-11-05". The
 badge decision follows from it: the badge reads the pin's wiring, and the pin runs in strip mode.
 
+**Promoted to GitOps on 2026-11-15 (#1469).** `gitops/ai-layer/tool-pin.yaml` carries this directory's Deployment and
+Service unchanged, with PIN_MODE=strip, and a `tool-pin-baseline` ConfigMap that pins evil-mcp's three tools, `get_weather`
+from its approved (benign) description. `gitops/ai-layer/agentgateway.yaml` carries bind 3004 as `gateway_bind.py`
+renders it, failClosed, plus the 405 route for GET /mcp, with its Service and ingress ports. The student's action is
+`challenges/03-bad-mcp-excessive-agency/toggle-tool-pin-on.sh`, which repoints evil-mcp's url. `live-check.sh` now stops
+before its snapshot on a cluster that carries the pin, since it would apply over Argo CD's objects and then delete them
+on restore; it runs only on a cluster from before #1469.
+
 ## What is here
 
 | File | What it is |

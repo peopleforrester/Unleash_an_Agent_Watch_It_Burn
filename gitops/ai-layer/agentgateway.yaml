@@ -28,6 +28,10 @@
 #     C7's rogue tools are reached through the gateway. That bind is served by the agentgateway-c7 container
 #     from its own ConfigMap (see both below for why). Its mcpAuthorization rule is committed 'true', so it
 #     gates nothing yet; the 3001 rule below gates only workshop-mcp.
+#   - :3004 evil-mcp again, through the tool-pin processor (#1469, the C7 rug-pull's hash pin from the #480 spike).
+#     Nothing dials it until the student repoints evil-mcp's RemoteMCPServer url from :3003 to :3004
+#     (challenges/03-bad-mcp-excessive-agency/toggle-tool-pin-on.sh). It is a bind in agentgateway-config, served by
+#     the first container, so it stays in GitOps: the student changes the one url field, never this config.
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -62,7 +66,7 @@ spec:
       # ignores drift on it. A C7 rule flip must never roll this pod. verify/test_agentgateway_config_checksum.py
       # fails when the value is not sha256(config.yaml)[:12], and prints the value to set.
       annotations:
-        checksum/agentgateway-config: "6139fe59af94"
+        checksum/agentgateway-config: "48d2d0aa267f"
     spec:
       serviceAccountName: agentgateway
       automountServiceAccountToken: false
@@ -103,6 +107,7 @@ spec:
             - { name: proxy, containerPort: 3000 } # A2A reverse proxy -> workshop-agent
             - { name: mcp, containerPort: 3001 }    # MCP front -> workshop-mcp
             - { name: llm, containerPort: 3002 }
+            - { name: mcp-pin, containerPort: 3004 } # MCP front -> evil-mcp-shim through tool-pin (#1469)
             - { name: ready, containerPort: 15021 } # agentgateway built-in readiness listener (verified live)
           securityContext:
             allowPrivilegeEscalation: false
@@ -179,6 +184,8 @@ spec:
     - { name: llm, port: 3002, targetPort: llm }
     # C7's rogue MCP server (#514), served by the agentgateway-c7 container.
     - { name: mcp-c7, port: 3003, targetPort: mcp-c7 }
+    # C7's rug-pull pin (#1469): evil-mcp through the tool-pin processor, served by the first container.
+    - { name: mcp-pin, port: 3004, targetPort: mcp-pin }
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -301,6 +308,48 @@ data:
               # (name, provider, hostOverride, pathOverride, pathPrefix, tokenize, policies...). This is
               # what redirects the OpenAI provider at a local vLLM instead of api.openai.com.
               hostOverride: vllm-qwen3.agent.svc.cluster.local:8000
+    # C7's rug-pull pin (#1469, promoted from docs/research/2026-10-24-tool-pin-spike/gateway_bind.py, which
+    # verify/test_tool_pin.py holds this bind to). One target, so the tool names reach kagent unprefixed and
+    # get_weather's description still names tools that exist. tool-pin (tool-pin.yaml) judges each tools/list on the
+    # way back and strips a tool whose definition hash is not pinned; it refuses a tools/call on the way in for a
+    # tool the last list did not approve, because stripping a tool from the list does not stop a direct call to it.
+    #
+    # failClosed (decisions.md, #1469). A tool-pin outage refuses this bind's tools/list, and on kagent 0.10.1 a
+    # refused tools/list fails the agent's whole answer, so while evil-mcp dials :3004 a dead tool-pin is a chat
+    # outage, the error showing as "guardrail check failed". failOpen would keep the chat up by passing the list
+    # unjudged: the rug-pulled get_weather would reach the model and leak the sentinel with the pin reading on, a
+    # control that is off while it looks on. The outage is loud and toggle-tool-pin-on.sh --off ends it; the
+    # attacker gains nothing from it, since evil-mcp can already fail the chat by erroring its own tools/list.
+    - port: 3004
+      listeners:
+      - name: evil-mcp-pinned
+        protocol: HTTP
+        routes:
+        - name: evil-mcp-pinned
+          policies:
+            mcpGuardrails:
+              processors:
+              - kind: remote
+                host: tool-pin.agent.svc.cluster.local:9001
+                failureMode: failClosed
+                methods:
+                  tools/list: response
+                  tools/call: request
+          backends:
+          - mcp:
+              targets:
+              - name: evil-mcp
+                mcp:
+                  host: http://evil-mcp-shim.agent.svc.cluster.local:8000/mcp
+        # No standalone SSE stream (#1303), as on the 3001 bind above, which says why.
+        - name: no-standalone-sse
+          matches:
+          - method: GET
+            path:
+              pathPrefix: /mcp
+          policies:
+            directResponse:
+              status: 405
 
 ---
 # C7's gateway config (#514), read by the agentgateway-c7 container. One bind, one target: a lone target is

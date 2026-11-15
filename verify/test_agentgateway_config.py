@@ -113,11 +113,16 @@ except Invalid as e:
     check(f"the whole config validates ({e})", False)
 
 print("== the validator is not vacuous ==")
-# Negative controls, one per mistake that actually crash-looped a cluster.
+# Negative controls, one per mistake that actually crash-looped a cluster. Each edits the bedrock backend of the
+# inference bind, found by its port: since #1469 the pinned evil-mcp bind (:3004) follows it in the list.
+def bedrock_ai(c: dict) -> dict:
+    return next(b for b in c["binds"] if b["port"] == 3002)["listeners"][0]["routes"][0]["backends"][0]["ai"]
+
+
 for label, mutate in (
-    ("an unknown backend key is rejected", lambda c: c["binds"][-1]["listeners"][0]["routes"][0]["backends"][0]["ai"].update({"host": "x"})),
-    ("a bedrock provider without a region is rejected", lambda c: c["binds"][-1]["listeners"][0]["routes"][0]["backends"][0]["ai"]["provider"]["bedrock"].pop("region")),
-    ("an auth block on a provider is rejected", lambda c: c["binds"][-1]["listeners"][0]["routes"][0]["backends"][0]["ai"].update({"auth": {"aws": {}}})),
+    ("an unknown backend key is rejected", lambda c: bedrock_ai(c).update({"host": "x"})),
+    ("a bedrock provider without a region is rejected", lambda c: bedrock_ai(c)["provider"]["bedrock"].pop("region")),
+    ("an auth block on a provider is rejected", lambda c: bedrock_ai(c).update({"auth": {"aws": {}}})),
 ):
     broken = yaml.safe_load(cm["data"]["config.yaml"])
     mutate(broken)
