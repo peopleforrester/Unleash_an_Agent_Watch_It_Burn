@@ -56917,3 +56917,30 @@ Still owed, on the next run that holds the two clusters up and running the promo
 `evil-mcp-rugpull-config` ConfigMap's `get_weather_desc` to `benign`, a second `tools/list` showing the benign
 description under the same name and input schema, then the toggle put back to `chaining` to leave the cluster as
 found.
+
+## 2026-11-15 · #1474 · run 25819 · a test for the rug-pull switch's GitOps half
+
+Test review run 25612 found that `verify/test_get_weather_rugpull_switch.py` (#1463) checked only `server.py`, which it
+ran with `GET_WEATHER_DESC` set by hand, and never opened the GitOps side of the switch. #1468 then added
+`verify/test_c7_rug_pull_mutation.py`, which reads that side as text: the ConfigMap, the Argo CD ignore and the
+toggle's `MODE=` lines. Neither test linked the two halves, so nothing checked that the value GitOps commits, or the
+value the toggle's patch writes, reaches `server.py` and serves the intended description.
+
+This run adds that link as a new section of `verify/test_get_weather_rugpull_switch.py`. It checks that evil-mcp-shim
+is the only workload in `gitops/ai-layer/resources.yaml` that sets `GET_WEATHER_DESC`, that the var comes from a
+ConfigMap key and not a literal, and that `server.py` names the var in one place. It then runs
+`challenges/03-bad-mcp-excessive-agency/toggle-rugpull-mutation-on.sh` with no argument, `--on` and `--off` against a
+fake kubectl first on PATH that records every call. Each run must name the context, send one merge patch to that key
+of that ConfigMap in the bundle's namespace (`agent`, from `kustomization.yaml`) and nothing else, and restart
+evil-mcp-shim. The test applies each patch to the committed ConfigMap, resolves the Deployment's env from the result,
+and runs `server.py` with it. The committed state and `--on` serve the chaining description byte for byte, `--off`
+serves the benign one, and all three serve one tool name and one input schema.
+
+Mutations made by hand and put back, each of which failed the test: the ConfigMap committed `benign`; `--off` writing
+`approved`; the patch writing another key; the toggle aimed at another ConfigMap; the env set as a literal; and the
+input schema's default made to depend on the description. `python3 verify/scope_tests.py write` added the toggle,
+`resources.yaml` and `kustomization.yaml` to the test's entries in `verify/scope-map.yaml` and `verify/test-map.yaml`.
+Tests run: `test_get_weather_rugpull_switch.py`, `test_scope_tests.py`, `test_test_map.py`,
+`test_poisoned_server_one_copy.py` and `test_round_names_retired.py`, all passing.
+
+No live check: the change touches only a test under `verify/` and the two maps, which no cluster runs.

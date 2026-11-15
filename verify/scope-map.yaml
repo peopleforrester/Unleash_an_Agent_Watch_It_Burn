@@ -4817,6 +4817,9 @@ reads:
     - verify/local-inference-live.py
     - verify/test_gateway_bedrock_tagged_live.py
   test_get_weather_rugpull_switch.py:
+    - challenges/03-bad-mcp-excessive-agency/toggle-rugpull-mutation-on.sh
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/server.py
   test_gh_comments.py:
     - AGENTS.md

@@ -4263,6 +4263,9 @@ rules:
       - verify/test_gateway_forward.py
   - name: test_get_weather_rugpull_switch.py
     paths:
+      - challenges/03-bad-mcp-excessive-agency/toggle-rugpull-mutation-on.sh
+      - gitops/ai-layer/kustomization.yaml
+      - gitops/ai-layer/resources.yaml
       - gitops/ai-layer/server.py
     tests:
       - verify/test_get_weather_rugpull_switch.py
