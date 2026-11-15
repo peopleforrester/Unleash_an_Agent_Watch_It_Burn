@@ -207,11 +207,15 @@ attendee = profile == "attendee"
 check("the tempo Application is present on admin and full, absent on attendee", ("tempo" in argo_apps) != attendee,
       f"profile={profile} tempo={'tempo' in argo_apps}")
 for uid in DATASOURCES:
-    status, body = fetch(f"https://grafana-{host}/api/datasources/uid/{uid}/health", auth=("admin", gpw))
     if uid == "tempo" and attendee:
-        check("attendee: Grafana has no tempo data source, since the cluster has no Tempo", status == 404,
-              f"HTTP {status}: {body[:200]}")
+        # Absence is read on the plain GET by uid, not on /health (#544). Grafana 13.2.2's
+        # CheckDatasourceHealthWithUID answers a uid it does not have with 500 "Unable to load datasource
+        # metadata"; only GetDataSourceByUID answers 404 "Data source not found" (pkg/api/datasources.go).
+        status, body = fetch(f"https://grafana-{host}/api/datasources/uid/{uid}", auth=("admin", gpw))
+        check("attendee: Grafana has no tempo data source, since the cluster has no Tempo",
+              status == 404 and "not found" in body.lower(), f"HTTP {status}: {body[:200]}")
         continue
+    status, body = fetch(f"https://grafana-{host}/api/datasources/uid/{uid}/health", auth=("admin", gpw))
     try:
         ok = json.loads(body).get("status") == "OK"
     except ValueError:

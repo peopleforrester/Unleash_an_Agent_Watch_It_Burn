@@ -56917,3 +56917,56 @@ Still owed, on the next run that holds the two clusters up and running the promo
 `evil-mcp-rugpull-config` ConfigMap's `get_weather_desc` to `benign`, a second `tools/list` showing the benign
 description under the same name and input schema, then the toggle put back to `chaining` to leave the cluster as
 found.
+
+## 2026-11-15 · #544 · run 26115 · the attendee tempo check reads Grafana's GET by uid, and no cluster is up for the live half
+
+**Why the previous attempt failed.** Hecaton stopped it before it ran: its workspace step could not read the parent
+base manifest `/var/lib/hecaton/runs/21404/manifest.json`. That is hecaton's workspace, not this repo, so nothing here
+changed for it. This run started from staging `b8a245ed`. `bash verify/prior-drafts.sh 544 origin/staging` printed
+NONE: every #544 draft is in staging or followed there by later #544 work.
+
+**What changed.** `verify/test_service_hosts_live.py` read "no tempo data source" on an attendee cluster from
+`GET /api/datasources/uid/tempo/health` and wanted 404. Grafana 13.2.2, the tag `gitops/bootstrap/apps/prometheus.yaml`
+pins, answers that path for a uid it does not have with 500 "Unable to load datasource metadata":
+`CheckDatasourceHealthWithUID` in `pkg/api/datasources.go` at tag v13.2.2, read from GitHub this run, returns 500 on
+any lookup error but access denied. Only `GetDataSourceByUID`, the plain `GET /api/datasources/uid/<uid>`, answers 404
+"Data source not found". The research run on #544 saw both answers on watch-it-burn-private on 2026-11-05. So the first
+right attendee cluster would have failed the test. The attendee branch now requests the plain GET and passes on a 404
+whose body says "not found"; prometheus and, off attendee, tempo are still read on `/health` and must answer OK. The
+new offline `verify/test_service_hosts_tempo_absent.py` holds that branch, and holds the Grafana version its comment
+names to the pinned tag, so a Grafana bump points back at the two handlers. It fails on the old branch (4 checks) and
+passes on the new one. The scope and test maps carry its entry.
+
+**The live half.** Hecaton handed this run no cluster session (`HECATON_CLUSTER_ENV` unset, no kubeconfig). Through
+the `aws-env accen-dev` route, `aws eks list-clusters` in account 515966504359 returned an empty list in us-west-2,
+us-east-1 and us-east-2, the regions its service control policy permits. No cluster is up, so neither
+watch-it-burn-private nor an attendee cluster could be probed, and a run brings none up. No cluster state changed.
+
+**The admin half stands on unchanged source.** The 2026-11-05 research read on watch-it-burn-private (issue comment
+6658742575) found the tempo Application Synced Healthy with sources `tempo 3.0.0` and `gitops/tempo`, the
+`monitoring/tempo-grafana-datasource` ConfigMap labelled `grafana_datasource=1`, Grafana 13.2.2 answering 200
+`{"status":"OK"}` on `/api/datasources/uid/tempo/health`, and `CONTEXT=watch-it-burn-private python3
+verify/test_service_hosts_live.py` printing "All live service-host checks passed." No commit since 2026-11-05 touches
+`gitops/tempo/`, `gitops/bootstrap/apps/tempo.yaml` or `gitops/bootstrap/apps/prometheus.yaml`. That read predates
+this change, which touches only the attendee branch of the test.
+
+**What the attendee half should expect on today's staging.** `values-attendee.yaml` lists 31 app files and no tempo or
+falco-talon; with the root and the files' extra Application documents that renders 36 Applications, the count
+`verify/test_fleet_contract.py` holds (the issue's 36 is current again after #874 and #959). The attendee collector is
+`otel-collector-attendee` on `gitops/otel-collector/values-dual.yaml`, which keeps `otlp_grpc/tempo` under exporters
+and out of every trace pipeline. The collector's config changed since the 2026-11-05 read: #1328 and #1332 moved
+`transform/coc_mask` into its own `otel-collector-coc-mask` ConfigMap, loaded with a further `--config`, so point 2
+reads both files loading.
+
+**What still names Tempo or Talon on an attendee cluster.** Loki's TraceID derived field is gone with Loki (#474).
+In `observability-idp/grafana/dashboards/agent-observability.yaml` the `session` variable (line 70) and the traces
+panel and four guardrail-beat tables (lines 100 to 148) are bound to data source uid `tempo`, which an attendee Grafana
+does not have, so they show a data-source error there; the file's header comment (line 5) still says the uid is pinned
+in `prometheus.yaml`, where #475 moved it to `gitops/tempo/grafana-datasource.yaml`. Falcosidekick's Talon output
+(`gitops/bootstrap/apps/falcosidekick.yaml`, `talon.address`) is set on every profile, so each CRITICAL event on an
+attendee cluster logs a failed Talon post; the Datadog output is separate and unaffected. Both stay as #475 chose.
+
+**Not yet run on a cluster.** On watch-it-burn-private, once this change is promoted: `CONTEXT=watch-it-burn-private
+python3 verify/test_service_hosts_live.py`, and the plain GET for an unknown uid answering 404. On an attendee-profile
+cluster, which only a fleet bring-up makes: points 1 and 2 and `CONTEXT=<attendee> python3
+verify/test_service_hosts_live.py`.

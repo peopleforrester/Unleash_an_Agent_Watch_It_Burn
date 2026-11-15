@@ -8684,6 +8684,48 @@ reads:
     - facilitation/kubecon-na-2026-run-of-show.md
   test_seg3_timing.py:
     - facilitation/kubecon-na-2026-run-of-show.md
+  test_service_hosts_tempo_absent.py:
+    - CLAUDE.md
+    - agent
+    - agent/*
+    - agent/console
+    - agent/desk-report-token
+    - backstage
+    - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - cost
+    - docs/admin-console.md
+    - gitops/ai-layer
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/console.conf
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/bootstrap/apps/prometheus.yaml
+    - gitops/workshop-agent/agent.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/datadog-fleet
+    - infra/org/boundary
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network
+    - infra/terraform/fleet
+    - infra/terraform/fleet/backups.py
+    - infra/terraform/fleet/backups.tsv
+    - infra/terraform/fleet/check-tls.sh
+    - infra/terraform/fleet/event.sh
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/logs
+    - infra/terraform/fleet/preflight.sh
+    - infra/terraform/fleet/providers/*.sh
+    - infra/terraform/fleet/providers/aws.sh
+    - infra/terraform/fleet/providers/azure.sh
+    - infra/terraform/fleet/providers/gcp.sh
+    - infra/terraform/fleet/providers/local.sh
+    - infra/terraform/fleet/roster.tsv
+    - infra/terraform/fleet/scheduled-up.sh
+    - scripts/harvest_cluster_access.sh
+    - scripts/harvest_terminal_credential.sh
+    - scripts/push_vtt_aws_creds.sh
+    - scripts/reload-routes.sh
+    - verify/test_service_hosts_live.py
   test_service_links.py:
     - CLAUDE.md
     - agent
