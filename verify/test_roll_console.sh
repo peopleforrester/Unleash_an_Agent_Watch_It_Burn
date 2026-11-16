@@ -11,6 +11,7 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROLL="${HERE}/../infra/terraform/fleet/roll-console.sh"
+export TMPDIR="${TMPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp}"; mkdir -p "${TMPDIR}"  # never the system temp dir, RAM on netcup (#1261)
 T="$(mktemp -d)"; trap 'rm -rf "${T}"' EXIT
 SHIM="${T}/bin"; mkdir -p "${SHIM}"; CALLS="${T}/calls"
 fail=0; pass=0

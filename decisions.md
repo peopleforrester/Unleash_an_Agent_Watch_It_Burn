@@ -57043,7 +57043,7 @@ daily drift report after it. No session is scheduled, so it waits for the next o
 
 **Live check.** Skipped: nothing the clusters run changed, no cluster is up, and this run wrote only this entry.
 
-## 2026-11-15 · #583 · run 26168 · Bedrock takes the escaped ARN through agentgateway: the passes recorded, and every Argo CD sync written with the app's own options
+## 2026-11-15 · #583 · runs 26168 and 29302 · Bedrock takes the escaped ARN through agentgateway: the passes recorded, and every Argo CD sync written with the app's own options
 
 **The answer.** Bedrock accepts the application inference profile ARN with its slash escaped as `%2F` in
 agentgateway's Converse path. `verify/test_gateway_bedrock_tagged_live.py` exited 0, with a 200 from Bedrock through
@@ -57095,6 +57095,18 @@ into this one.
 **Tests run here.** `bash verify/test_fleet_sync.sh` 11 passed, `bash verify/test_roll_console.sh` 7 passed,
 `bash verify/test_fleet_converge_repairs.sh` 85 passed, `python3 verify/test_agent_tools_sync.py` all checks passed.
 `verify/scope-map.yaml` and `verify/test-map.yaml` carry the two new tests (`python3 verify/scope_tests.py write`).
+
+**Why run 26168's commit did not land, and the fix (run 29302, 2026-11-16).** Hecaton's `ci` gate failed the offline
+suite on it, where the base passed. Two of the suite's audits failed, both on the port itself, and the four tests above
+pass alone, so that run never saw it. `verify/test_no_system_temp_paths.py`: the two new shell tests call a bare
+`mktemp -d` and never set the checkout fallback (#1261). Each now opens with the repo's
+`export TMPDIR="${TMPDIR:-<checkout>/tmp}"` line. `verify/test_no_cloud_by_hand.sh`: `test_agent_tools_sync.py` now
+runs fleet.sh (its `sync_operation_of` section), so it must set up `no_cloud` (#859). It now calls
+`no_cloud.setup()` and ends with the `offline means offline` check. Rerun alone after the fix: both audits pass
+(`test_no_cloud_by_hand.sh` 23 passed), as do `test_agent_tools_sync.py`, `test_fleet_sync.sh` 11 passed,
+`test_roll_console.sh` 7 passed, `test_scope_tests.py` and `test_test_map.py`. The gate's tools tier also failed on the
+untouched base 1f670aef, so this change did not cause that failure. The scoped tier (14 tests that read fleet.sh and
+roll-console.sh) is left to validation. Live check: skipped, as no cluster is up and this run had no cluster session.
 
 **Not yet run on a cluster.** No cluster is up: KubeCon NA 2026 ended on 2026-11-12 and the fleet was torn down that
 night (the #1463 and #1377 entries above), and this run had no cluster session. So `fleet.sh sync ai-layer

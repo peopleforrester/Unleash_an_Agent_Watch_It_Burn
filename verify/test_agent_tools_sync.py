@@ -51,6 +51,11 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from bootstrap_chart import (APPS, IMAGE_REGISTRY, LAB_PLATFORM_GHCR, REPO, REVISION, app_names,  # noqa: E402
                              c7_control, for_c7_control, profiles, without_front_door)
 
+# Offline means offline (#859): the fleet.sh run below gets aws, kubectl, eksctl, terraform and helm as stubs that log
+# the call and fail, even when the test is run by hand (verify/no_cloud.py). The last check reads the log.
+import no_cloud  # noqa: E402
+no_cloud.setup()
+
 failures: list[str] = []
 
 
@@ -656,6 +661,13 @@ for profile in profiles():
                           f"repair_env_order orders ({e[:60]}...)", covered)
 check("and every row of repair_env_order is a list some profile does ignore an element of",
       {(r[0], r[1]) for r in order_rows} == seen_elements, str(sorted(seen_elements)))
+
+print()
+print("== offline means offline ==")
+_calls = no_cloud.calls()
+check("no check above called aws, kubectl, eksctl, terraform or helm", not _calls)
+if _calls:
+    print("".join(f"        {line}\n" for line in _calls.splitlines()), end="")
 
 print()
 if failures:
