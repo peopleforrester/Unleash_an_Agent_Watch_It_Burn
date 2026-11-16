@@ -56,6 +56,16 @@ import e2e_image  # noqa: E402
 
 failures: list[str] = []
 
+# The gate's own variables, which e2e-image.sh run forwards into the container as `-e NAME=value` (#1319). The gate's
+# HECATON_TEST_FILES is one path per line, so a stand-in runtime that logs its arguments on one line splits there,
+# and every check that reads the `run` line past the split fails (#1481). Each launcher run here starts without them.
+GATE_VARS = ("HECATON_BASE_SHA", "HECATON_TEST_FILES")
+
+
+def own_env(*drop: str) -> dict[str, str]:
+    """This process's environment less the gate's variables and `drop`: a check reads alike on the gate and off it."""
+    return {k: v for k, v in os.environ.items() if k not in (*GATE_VARS, *drop)}
+
 
 def check(name: str, ok: bool, detail: str = "") -> None:
     print(f"  {'PASS' if ok else 'FAIL'}  {name}" + (f"  ({detail})" if detail and not ok else ""))
@@ -198,7 +208,7 @@ with tempfile.TemporaryDirectory() as tmp:
     for tool in ("curl", "wget"):
         (fakebin / tool).write_text(f'#!/bin/sh\necho "{tool} $*" >> "{log}"\nexit 1\n')
         (fakebin / tool).chmod(0o755)
-    env = {k: v for k, v in os.environ.items() if k != "HECATON_BASE_SHA"}
+    env = own_env()
     env.update(WIB_E2E_TOOLS=str(t), PATH=f"{fakebin}:{os.environ['PATH']}")
     r = subprocess.run(["bash", str(HERE / "run-e2e-tools.sh")], capture_output=True, text=True, env=env,
                        timeout=120)
@@ -273,8 +283,7 @@ exit 3
         host_path = path_without(tuple(rt for rt in RUNTIMES if rt != runtime), t)
         cache = artifact_cache.scratch_dir("e2e-image-host-")
         tools_before = (HERE / ".tools").exists()
-        env = {k: v for k, v in os.environ.items()
-               if k not in ("HECATON_BASE_SHA", "HECATON_TEST_FILES", "WIB_E2E_TOOLS", "WIB_CONTAINER_RUNTIME")}
+        env = own_env("WIB_E2E_TOOLS", "WIB_CONTAINER_RUNTIME")
         env.update(PATH=f"{fakebin}:{host_path}", TMPDIR=str(t), WIB_ARTIFACT_CACHE=str(cache),
                    HECATON_TOOLS_CACHE="")
         # A runner that went back to downloading would reach the network through the artifact cache's own urllib, not
@@ -374,7 +383,7 @@ exit 3
             (fakebin / name).write_text(body)
             (fakebin / name).chmod(0o755)
         cache = artifact_cache.scratch_dir("e2e-image-test-")
-        env = {**os.environ, "PATH": f"{fakebin}:{os.environ['PATH']}",
+        env = {**own_env(), "PATH": f"{fakebin}:{os.environ['PATH']}",
                "WIB_ARTIFACT_CACHE": str(cache), "HECATON_TOOLS_CACHE": ""}
         try:
             r = subprocess.run(["bash", str(HERE / "e2e-image.sh"), "run", *tests], capture_output=True, text=True, env=env,
@@ -469,7 +478,7 @@ with tempfile.TemporaryDirectory() as tmp:
     cache = artifact_cache.scratch_dir("e2e-image-test-")
     try:
         r = subprocess.run(["bash", str(t / "co" / "verify" / "e2e-image.sh"), "run"], capture_output=True, text=True,
-                           timeout=120, env={**os.environ, "PATH": f"{t / 'bin'}:{os.environ['PATH']}",
+                           timeout=120, env={**own_env(), "PATH": f"{t / 'bin'}:{os.environ['PATH']}",
                                              "WIB_ARTIFACT_CACHE": str(cache), "HECATON_TOOLS_CACHE": ""})
     finally:
         shutil.rmtree(cache, ignore_errors=True)
@@ -520,7 +529,7 @@ def copier(state: str, tools_txt: str = TOOLS_TXT, drop: str | None = None
         for name, body in stubs.items():
             (fakebin / name).write_text(body)
             (fakebin / name).chmod(0o755)
-        env = {k: v for k, v in os.environ.items() if k != "WIB_CONTAINER_RUNTIME"}
+        env = own_env("WIB_CONTAINER_RUNTIME")
         env.update(PATH=f"{fakebin}:{os.environ['PATH']}", TMPDIR=str(t), PODMAN_LOG=str(log), PODMAN_STATE=state,
                    PODMAN_IMAGE=str(image))
         r = subprocess.run(["bash", str(HERE / "e2e-image.sh"), "tools", str(dest)], capture_output=True, text=True,
@@ -590,7 +599,7 @@ def builder(named: str | None) -> tuple[subprocess.CompletedProcess, str]:
         for name in ("podman", "docker"):
             (fakebin / name).write_text(f'#!/bin/sh\necho "{name} $*" >> "{log}"\nexit 0\n')
             (fakebin / name).chmod(0o755)
-        env = {k: v for k, v in os.environ.items() if k != "WIB_CONTAINER_RUNTIME"}
+        env = own_env("WIB_CONTAINER_RUNTIME")
         env["PATH"] = f"{fakebin}:{os.environ['PATH']}"
         if named is not None:
             env["WIB_CONTAINER_RUNTIME"] = named

@@ -57042,3 +57042,37 @@ the next run reads netcup's fleet.sh back. Criterion 2 needs a standby wave buil
 daily drift report after it. No session is scheduled, so it waits for the next one that runs `backups.py schedule`.
 
 **Live check.** Skipped: nothing the clusters run changed, no cluster is up, and this run wrote only this entry.
+## 2026-11-17 · #1481 · run 32321 · Segment 3's slide 20 and slide 26 Say lines follow the deck, and test_e2e_image.py stops failing on the gate's own variables
+
+**The run of show.** rounds `a7fdca8` (rounds-agenticburn#126) added one sentence to two of the deck's Say lines, and
+`facilitation/kubecon-na-2026-run-of-show.md` quotes both word for word. Slide 20 (`#/19`) now says "The beacon,
+agenticburn.com/beacon, is our own page outside the cluster, and it counts what arrives." after "...Convince
+BurritoBot to send customer data off of the cluster.", and slide 26 (`#/25`) opens with "BurritoBot will send the data
+if the request sounds like official work. So try giving it ...". Both quotes were read from the deck commit's own
+patch on GitHub and again from `attendee.html` at the deck's head, which is still `a7fdca8`, and each names the rounds
+commit, as the segment's other deck changes do. The document follows the live deck; it is not frozen as delivered
+(#1422 synced it to a deck change made after the talk), so the issue's other way out does not apply. No test or
+script reads the old words (`git grep` over `verify` and `scripts`).
+
+**Why the same edit failed the tests gate in run 32072.** Hecaton's selector reaches `verify/test_e2e_image.py` from
+both changed files (through `verify/test-map.yaml`, `verify/scope_tests.py` and `verify/run-e2e-tools.sh`). Its
+section 5 ran `e2e-image.sh run` with this process's whole environment, and on the gate that holds
+`HECATON_TEST_FILES`, one path per line. The launcher forwards it as `-e HECATON_TEST_FILES=...`, the podman stand-in
+logs its arguments on one line, and the log line split at the first newline, so five checks reading the `podman run`
+line past the split failed: the lock's tag, the checkout mount, `--userns=keep-id`, and both runner-tail checks. Any
+change the selector routes to this test failed there, whatever it changed. The test now starts every launcher run
+from `own_env()`, this environment without `HECATON_BASE_SHA` and `HECATON_TEST_FILES`, as `host_runner()` already
+did (Tests own their inputs). A real podman takes the value as one argument, so the launcher is unchanged.
+
+**What this run checked.** In this worktree, with `HECATON_BASE_SHA` set and three lines in `HECATON_TEST_FILES`:
+staging's `verify/test_e2e_image.py` printed "FAILED: 5 check(s)" and exited 1, and the changed one printed 108 PASS
+and "All e2e image checks passed.", exit 0. `python3 verify/scope_tests.py write` changed nothing and `check` printed
+"0 problems in verify/scope-map.yaml", so the map needs no new entry.
+
+**What differs from the draft.** Run 32161 made this change on hecaton's doc lane, whose lane gate moved it off that
+lane because it edits `verify/`, so nothing landed. Its commit `1616f84e` was cut from the staging this run started
+on and `verify/draft-drift.sh` read it CLEAN, so the run-of-show edit and the test fix are that commit's, unchanged.
+This entry replaces the draft's: it adds the read of the deck's head and the failure reproduced in the worktree, where
+the draft, with no git on the doc lane, used a scratch copy.
+
+**Live check.** Skipped: nothing the clusters run changed; the run of show, this entry and an offline test changed.
