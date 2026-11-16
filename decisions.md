@@ -57042,3 +57042,51 @@ the next run reads netcup's fleet.sh back. Criterion 2 needs a standby wave buil
 daily drift report after it. No session is scheduled, so it waits for the next one that runs `backups.py schedule`.
 
 **Live check.** Skipped: nothing the clusters run changed, no cluster is up, and this run wrote only this entry.
+
+## 2026-11-16 · #647 · run 29093 · The post-talk purge cannot run: teardown force-deleted its keys on 2026-11-13
+
+**The attempt before this one.** It ended on a workspace error in hecaton (`setfacl: Option -m: Invalid argument`
+while granting a pool user access to the workspace) before it did anything, so nothing in the repo caused it and
+there was nothing of its to port. `bash verify/prior-drafts.sh 647 origin/staging` printed NONE: runs 10438, 12512,
+15814, 17362 and 18508 are all in staging. Criteria 1 and 2 stand as run 18508 recorded them on 2026-11-08.
+
+**What happened to the purge.** The talk ended 2026-11-12T21:20Z, so this run went to do the purge. With the accen-dev
+session (`sources-elevated aws-env accen-dev`, account 515966504359, written to a credentials file in the run's own
+scratch), `python3 verify/dd_purge_public.py --profile accen-dev --from 2026-10-28` printed `cannot read
+watch-it-burn/datadog ... ResourceNotFoundException` and exit 1. CloudTrail in us-west-2 shows `nwuser` calling
+`DeleteSecret` on `watch-it-burn/datadog` at 2026-11-13T00:39:17Z and on `watch-it-burn/provisioning-admin-token` a
+second later, both with `forceDeleteWithoutRecovery: true` from aws-cli 2.37.5: that is `fleet.sh reap-secrets`
+("Force-delete every watch-it-burn/* secret"). `list-secrets --include-planned-deletion` is empty in us-west-2,
+us-east-1 and us-east-2, and the account's service control policy denies `ListSecrets` in every other region, so
+no copy is left to restore. That secret was the purge's only key source: the read pair, the `write-app-key` (Michael's
+`wib-fleet-monitors` key in Whitney's org) and the org uuid `5a6c3583-157d-11f0-845c-2241f983918a`. Nothing was
+read from or deleted in Whitney's org. The browser route to Michael's Chrome on Tanjiro answered `FAIL browser read:
+fetch failed`, and its driver refuses a destructive click in any case.
+
+**Retention.** Datadog's docs (Data Retention Periods; Agent Observability Data Governance) give Agent Observability
+spans 15 days by default, longer only with a paid add-on, and an annotated span 90 days from its annotation. They give
+APM indexed spans 15 or 30 days by plan, 30 under the intelligent retention filter. So without a purge the room's
+Agent Observability spans are gone by about 2026-11-27 (the talk day plus 15 days), and its APM spans by about
+2026-12-12 at most, unless her org has an add-on or annotated a span. Something still has to read the org to show it.
+
+**What this run changed.** The run-of-show's Teardown section listed `reap-secrets` above the purge with no order
+between them, and that is how the keys went first. Its `reap-secrets` step now says never to run it before the purge
+and the #1344 stage-object removal after it have printed their results, since both read `watch-it-burn/datadog` and
+`reap-secrets` deletes it with no recovery window. `verify/test_purge_647_record.py` holds that wording. With the
+run-of-show change taken back out it fails one check, "the reap-secrets step holds it until after the purge".
+`verify/test_collector_pii_scrub.py`, which reads the purge step, still passes. The #1344 removal
+(`infra/datadog-room/stage_views.py remove`) reads the same secret, so it cannot run now either.
+
+**What is escalated.** The secret is put back from the keys Michael holds, and then the next run runs the purge as
+the run-of-show's step says and posts the result on #647. The act, tool `ssh` with no host, refuses (exit 3, nothing
+changed) unless `~/secrets/projects/watch-it-burn-datadog.json` on netcup holds the secret's fields (`api-key`,
+`app-key`, `write-app-key`, `org`, `site`), and refuses (exit 1) unless the accen-dev profile answers as account
+515966504359. It never prints a key.
+
+**Tests.** `python3 verify/test_purge_647_record.py` and `python3 verify/test_collector_pii_scrub.py` pass. No
+dependency was added.
+
+**Live check.** None ran on a cluster: no cluster is up (`eks list-clusters` was empty on 2026-11-15, #1377's entry),
+and this change touches only the run-of-show, a test under `verify/` and this entry. Not yet run: `python3
+verify/dd_purge_public.py --profile accen-dev --from 2026-10-28 --apply`, then `--verify` until it exits 0, then the
+#647 comment, then `python3 verify/test_dd_purge_public_live.py`, all once the secret is back.

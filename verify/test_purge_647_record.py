@@ -17,6 +17,8 @@ verify/purge_647.py's two verdicts. This test holds those verdicts:
 - The live test uses both verdicts on #647, runs --verify on the comment's window and on wib-pii-scrub-check, and is
   in run-e2e.sh's suite but not the promotion gate's tools tier, since it is red until the purge after the talk.
 - The run-of-show's Teardown purge step asks for the lines the comment verdict reads, and names the live test.
+- Its reap-secrets step waits for the purge: on 2026-11-13 reap-secrets force-deleted watch-it-burn/datadog, the
+  purge's only key source, before the purge ran (#647, run 29093).
 """
 from __future__ import annotations
 
@@ -184,6 +186,10 @@ step = purge.flat(next((b for b in SHOW.split("\n- ") if b.startswith("Purge the
 check("the run-of-show has the Teardown purge step", bool(step))
 for need in ("Sent", "Window", "APM", "Purged:", purge.CHECK_SERVICE, "verify/test_dd_purge_public_live.py", "#647"):
     check(f"the purge step names {need}", need in step)
+reap = purge.flat(next((b for b in SHOW.split("\n- ") if b.startswith("The Datadog pool secret")), ""))
+check("the run-of-show has the Teardown reap-secrets step", bool(reap))
+check("the reap-secrets step holds it until after the purge, since it deletes the purge's keys",
+      all(need in reap for need in ("never before the purge", "watch-it-burn/datadog", "no recovery window")), reap)
 check("the purge's issue is #647", purge.ISSUE.endswith("#647"))
 check("the talk ends 2026-11-12T21:20Z, the 13:50 MST start and 30 minutes",
       purge.TALK_END.isoformat() == "2026-11-12T21:20:00+00:00")

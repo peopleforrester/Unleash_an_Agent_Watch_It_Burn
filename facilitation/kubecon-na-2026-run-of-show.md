@@ -2949,7 +2949,11 @@ hosts at peak, down to 1 within three hours).
 - Sweep any stranded load balancers a failed teardown left behind:
   `infra/terraform/fleet/fleet.sh reap-lbs` (dry run unless `WIB_APPLY=1`).
 - The Datadog pool secret is deliberately not destroyed by `down all`; use
-  `fleet.sh reap-secrets` only when the pool itself is finished with.
+  `fleet.sh reap-secrets` only when the pool itself is finished with, and never
+  before the purge below and the stage-object removal after it have printed their
+  results. Both read their Datadog keys from `watch-it-burn/datadog`, and
+  `reap-secrets` force-deletes it with no recovery window. On 2026-11-13 it ran at
+  00:39Z, before either step, and the purge had no key left to run with (#647).
 - Purge the room's data from Whitney's sandbox org, as promised on the planning call
   (#647): every `burritobot-public` trace, whatever the scrub caught. No sign-in to
   her org is needed. With the accen-dev session,
