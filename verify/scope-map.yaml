@@ -3114,6 +3114,12 @@ reads:
     - teardown/delivery-cost-estimate.py
     - verify/fixtures/delivery-cost
     - verify/fixtures/delivery-cost/common/pricing/AmazonEC2.json
+  test_dependabot_floors_1475.py:
+    - docs/research/2026-10-30-argo-sync-replay/go.mod
+    - images/watch-it-burn-backstage/package.json
+    - images/watch-it-burn-backstage/yarn.lock
+    - images/web-terminal/requirements.in
+    - images/web-terminal/requirements.txt
   test_deploy_app_errors.py:
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py

@@ -2723,6 +2723,15 @@ rules:
       - verify/fixtures/delivery-cost/**
     tests:
       - verify/test_delivery_cost_estimate.py
+  - name: test_dependabot_floors_1475.py
+    paths:
+      - docs/research/2026-10-30-argo-sync-replay/go.mod
+      - images/watch-it-burn-backstage/package.json
+      - images/watch-it-burn-backstage/yarn.lock
+      - images/web-terminal/requirements.in
+      - images/web-terminal/requirements.txt
+    tests:
+      - verify/test_dependabot_floors_1475.py
   - name: test_deploy_app_errors.py
     paths:
       - gitops/ai-layer/tool_audit.py

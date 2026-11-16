@@ -57042,3 +57042,68 @@ the next run reads netcup's fleet.sh back. Criterion 2 needs a standby wave buil
 daily drift report after it. No session is scheduled, so it waits for the next one that runs `backups.py schedule`.
 
 **Live check.** Skipped: nothing the clusters run changed, no cluster is up, and this run wrote only this entry.
+
+## 2026-11-16 · #1475 · run 29136 · Dependabot sweep: 24 of the 29 alerts cleared, soupsieve waits on the notebook's Python, opentelemetry-api on the llm-guard repo
+
+**Context.** `repo-management alerts` filed #1475 on 2026-11-16 with 29 open alerts (4 high, 20 medium, 5 low). Each
+read `open` through the alerts API at the start of the run. `bash verify/prior-drafts.sh 1475 origin/staging` printed
+NONE.
+
+**Cleared (24 alerts).**
+- `images/watch-it-burn-backstage`: the `resolutions` move node-forge 1.4.2 to 1.4.3 (alerts 288 to 291), hono
+  4.13.13 to 4.13.18 (297 to 301), `@hono/node-server` 2.1.5 to 2.1.8 (292, 293) and basic-ftp 6.2.1 to 6.2.6 (295,
+  296), and a new one puts fast-xml-parser at 5.12.0 (287). 5.12.1 is three days old, and the app's
+  `npmMinimalAgeGate` quarantined it. @aws-sdk/xml-builder 3.972.30 pins fast-xml-parser 5.7.3 exactly; its later
+  releases drop the dependency, but they move the AWS SDK along with them. `yarn up -R isomorphic-git` took the
+  scaffolder's `^1.23.0` to 1.44.13 (284 to 286).
+- minimatch (alert 279, every release from 7.0.0 up to 11.0.1) has its fix only in the 11 major, and 9.x and 10.x
+  carry no backport. The resolutions move `minimatch@^9.0.4`, `@^10.2.1` and `@^10.2.2` onto 11.0.8. minimatch 11 turns
+  each magic portion of a pattern into a `Matcher` object in place of a `RegExp`. glob 10 to 13 test each portion with
+  `instanceof RegExp`, so on minimatch 11 they would match nothing and raise no error. glob 14 is the first to read
+  Matchers, so the six glob 10 and 13 descriptors resolve to glob 14.0.6 as well. The run read the Backstage code that
+  calls minimatch 9 or 10 directly (backend-defaults' URL readers, auth-backend's origin patterns, mcp-actions,
+  eslint-plugin, typescript-estree, ts-morph): each uses `new Minimatch(...)` and `match()` or `minimatch()`, which
+  11 keeps. None calls `makeRe`, `regexp` or `matchOne`, which 11 removes. glob 7 and 8 stay on minimatch 3 and 5,
+  which the advisory does not cover.
+- `images/web-terminal`: jupyterlab 4.6.3 to 4.6.6, the latest 4.6.x (alerts 280 to 283), and tornado 6.6 to 6.6.1
+  (306). `requirements.in` gains a `tornado>=6.6.1` floor, and the lock was regenerated with its own uv command plus
+  `-P jupyterlab -P tornado`, so no other package moved. jupyter-collaboration stays 5.0.1.
+- `docs/research/2026-10-30-argo-sync-replay/go.mod`: `go get go.opentelemetry.io/otel/trace@v1.47.0` moved otel, metric
+  and trace to 1.47.0 (304), with go-logr 1.4.4 and go.yaml.in/yaml/v3 3.0.5 beside them. `go mod tidy` added otel/log
+  1.47.0. The module builds against v3.5.7's gitops-engine tree, which replay.sh clones.
+
+**Not cleared (5 alerts).**
+- soupsieve 2.10 (alerts 294 and 303, both high, and 302). Every soupsieve release that fixes any of the three (3.0.2
+  and later) requires Python 3.11.5. The notebook venv is made from bookworm's python3, 3.11.2, so uv finds no
+  solution. Fixing it means a newer interpreter for `/opt/jupyter`, either a pinned python-build-standalone 3.11 or a
+  move of the base to trixie. That change is filed as a follow-up and kept out of this lock sweep.
+- opentelemetry-api 1.33.1 (alert 305) is in `images/llm-guard/src/pyproject.toml`, inside the submodule built from
+  llm-guard-cpu-offline. That repo raises the same alert as its own alert 2. Its pin moves there first, and then this
+  repo's submodule pointer follows. Filed as a follow-up.
+- deepmerge 4.3.1 (alert 261, low): no fixed release, as on 2026-11-04. Deferred, not dismissed.
+
+**Test added.** `verify/test_dependabot_floors_1475.py` reads the three manifests. It checks that every copy the
+Backstage lock resolves of the seven npm packages is outside its advisory's range, that no glob below 14 resolves
+onto minimatch 11 or later, that package.json carries the minimatch and glob resolutions together, that jupyterlab
+is 4.6.4 or later and tornado 6.6.1 or later (with the `.in` floor), and that otel/trace is v1.47.0 or later. Against
+the lock as it was before this change, it failed 7 checks. With glob 14.0.6's entry relabelled 13.0.6, it failed
+the glob check. On the change, all 17 pass.
+
+**Checked (run 29136).** In the Backstage app, with `package_cache.py node-env`'s cache: `yarn install --immutable
+--mode=skip-build` (5 platform-conditional packages match `conditional-checksums.lock`), `yarn tsc`, `CI=true yarn
+test` (1 suite, 1 test, found through jest's glob 14) and `yarn build:backend` (a 759-entry bundle), each exit 0.
+A node script run against the installed tree found the catalog's `examples/*.yaml` and `examples/**/template.yaml`
+through plugin-catalog-backend's glob. It matched a `**` path with backend-defaults' Minimatch, and matched an
+origin pattern with auth-backend's `nocase` and `noglobstar` options. `yarn npm audit --all --recursive` no longer
+lists isomorphic-git, node-forge, hono, @hono/node-server, basic-ftp, fast-xml-parser, minimatch or glob 10/13. It
+still lists deepmerge and elliptic (no fix), and react-router 6 and zod 3, which GitHub does not raise here. `go
+build` of the replay module exit 0. `python3 verify/test_dependabot_floors_1475.py` exit 0. Per the run's governance,
+the scoped suites are left to the dispatcher's validation.
+
+**Live check.** None ran: this run was handed no cluster session (no `KUBECONFIG`, no `HECATON_CLUSTER_ENV`), and
+run 26116 read the fleet down on 2026-11-15. The change reaches a cluster only when the Backstage and web-terminal
+images are rebuilt and rolled.
+
+**Not yet run on a cluster.** On the next cluster that runs the rebuilt images: the Backstage catalog shows its 45
+entities with no processing errors and guest sign-in works. The web terminal's JupyterLab loads with the collaboration
+extension.
