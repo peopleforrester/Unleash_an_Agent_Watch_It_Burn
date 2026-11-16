@@ -112,6 +112,8 @@ RUN set -eux; \
 # requires jupyterlab>=4.6.0, so pinning 4.5 today resolves collaboration back to 4.4.2 and holds both
 # packages a generation behind. Verified by resolving both sets: 4.5.10 forces collaboration 4.4.2;
 # 4.6.3 takes 5.0.1 with every extension below resolving cleanly. Re-check before changing either pin.
+# 2026-11-16 (#1475): JupyterLab moved to 4.6.6, the latest 4.6.x, past four advisories that end at 4.6.3; the lock
+# still resolves jupyter-collaboration 5.0.1 and every extension below with it.
 #
 # Node 22 is here for the notebook's JS extensions.
 # code-server's sha256 is the digest GitHub's release API gives its linux-amd64 tarball, read 2026-11-09. Node is

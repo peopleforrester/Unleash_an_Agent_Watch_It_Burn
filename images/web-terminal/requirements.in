@@ -8,12 +8,17 @@
 # Python 3.11 is bookworm's python3, which the Dockerfile's Debian snapshot installs. Wheels only, so no build backend
 # is fetched unhashed at build time. jupyterlab and jupyter-collaboration are held where the Dockerfile's comment says
 # (collaboration 5.x needs jupyterlab>=4.6); the rest took the latest release that resolved on 2026-11-09.
-jupyterlab==4.6.3
+# On 2026-11-16 (#1475) jupyterlab moved to 4.6.6, the latest 4.6.x, past the advisories that end at 4.6.3, and the
+# tornado floor below holds jupyter-server's tornado past its advisory (6.6.0 and before) when the lock is regenerated.
+# soupsieve stays at 2.10: every release that fixes its advisories (3.0.2 on) needs Python 3.11.5, and bookworm's
+# python3 is 3.11.2, so that fix waits on the venv's interpreter moving.
+jupyterlab==4.6.6
 jupyter-collaboration==5.0.1
 jupyter-resource-usage
 jupyterlab-git
 jupyterlab_execute_time
 ipywidgets
 boto3
+tornado>=6.6.1
 # pip itself, in place of the upgrade to whatever was latest that the venv used to take.
 pip
