@@ -57095,3 +57095,66 @@ attendee cluster logs a failed Talon post; the Datadog output is separate and un
 python3 verify/test_service_hosts_live.py`, and the plain GET for an unknown uid answering 404. On an attendee-profile
 cluster, which only a fleet bring-up makes: points 1 and 2 and `CONTEXT=<attendee> python3
 verify/test_service_hosts_live.py`.
+
+## 2026-11-15 · #1476 · run 29186 · #544's attendee tempo check, ported from run 26115, and what failed its ci gate
+
+**Where this came from.** `bash verify/prior-drafts.sh 544 origin/staging` printed START from `origin/agent/544-26115`,
+CLEAN with a decisions.md APPEND. Its one commit, 0e9c2a28, cherry-picked onto staging `1f670aef` with no conflict, and
+its run 26115 entry above is kept as that run wrote it. `python3 verify/scope_tests.py write` left both maps unchanged,
+so the draft's scope-map and test-map entries for `verify/test_service_hosts_tempo_absent.py` are current. Nothing in the
+test or the live check changed from the draft. What differs from the draft's record is in the last two paragraphs.
+
+**What failed run 26115's ci gate.** The gate is the `verify-suites` workflow on Tanjiro's runner. On 0e9c2a28 (Actions
+run 43665835276) the offline job passed in 3m33s and the e2e tools job failed in 27 seconds, in its
+`bash verify/run-e2e-tools.sh` step, exit 1. The draft did not cause that. The same job fails in 28 to 72 seconds on
+every push from staging `2f65237b` (2026-11-13) on that selects a tier test: staging `b8a245ed`, the draft's base
+(run 43656554973, 41s), staging `1f670aef`, this run's base (run 43666358299, 37s), and the agent branches of #1468,
+#872, #1469, #1474, #583, #1377, #616 and #647. A doc-only push, which selects no tier test, still passes it
+(`agent/616-24601`, run 43777732800). The job's log needs a signed-in GitHub, which this run does not have, so the
+failing check is not named here; the read is escalated in the report. The draft selects four tier tests,
+`test_iam_policy_structural.py`, `test_image_version_tags.py`, `test_kyverno_counter_fix_cache.py` and
+`test_wib_digests_signed.py`, because they read `verify/scope-map.yaml` and `verify/test-map.yaml`, which any new test
+changes. So this change does not fix that failure and cannot: it is red on staging's own tip, and it is #1331's
+(the open issue on staging's red CI). This run's port goes through the same job and will read red there until #1331
+is fixed. The scoped tier could not run on this host either: rootless podman here has no subuid range for the run
+user, so the pull of `ghcr.io/peopleforrester/wib-e2e-tools:51ec299b51b3558f-6970efce` failed on unpacking
+(`lchown /etc/gshadow: invalid argument`, log `$TMPDIR/e2e-tools.log`). The tag itself is on ghcr.io and pulls
+anonymously, so a missing image is not the cause on the runner.
+
+**Tests this run ran.** `python3 verify/test_service_hosts_tempo_absent.py` passes (6 checks). Run on a copy holding
+staging `1f670aef`'s `verify/test_service_hosts_live.py`, the old `/health`-404 branch, it fails 4 checks and exits 1.
+`python3 verify/test_test_map.py` and `python3 verify/test_scope_tests.py` pass. The scoped
+`HECATON_BASE_SHA=1f670aef bash verify/run-tests.sh` ran 132 of 484 offline tests: ALL OFFLINE RENDER-GATE TESTS GREEN,
+exit 0. The prose gate passes.
+
+**What still names Tempo or Talon on an attendee cluster, on staging `1f670aef`.** The attendee profile ships the
+agent-observability dashboard (`grafana-dashboards`, `gitops/bootstrap/values-attendee.yaml` line 61, sourcing
+`observability-idp/grafana/dashboards` at `gitops/bootstrap/apps/grafana-dashboards.yaml` line 17) and has no
+Tempo data source, so in `observability-idp/grafana/dashboards/agent-observability.yaml`:
+- the `session` variable is bound to data source uid `tempo` (lines 70 and 71);
+- the "Agent traces" panel (title line 98, data source lines 100 and 102) and the four guardrail-beat panels under the
+  "Traces" row (line 109) are bound to uid `tempo`: C5 (lines 117, 120, 122), C6 (130, 133, 135), C7 (143, 146, 148)
+  and C7's other half (156, 159, 161). On an attendee Grafana they show a data-source error. The run 26115 entry
+  reads "the traces panel and four guardrail-beat tables (lines 100 to 148)"; on today's file the four beat panels run
+  to line 161, with the traces panel ahead of them.
+- the header comment is stale in two places: line 5 says the Tempo uid is pinned in `prometheus.yaml`, where #475 moved
+  it to `gitops/tempo/grafana-datasource.yaml` (uid at line 22) and `gitops/bootstrap/apps/prometheus.yaml` lines 76 to
+  79 say it is not there; lines 13 and 14 say the collector feeds Tempo with or without a Datadog key, which the
+  attendee overlay `gitops/otel-collector/values-dual.yaml` (lines 32 and 33) does not. The view is for the private
+  admin cluster (lines 7 to 11, since #687 each challenge's trace right after its attack), not the segment 6 view the
+  issue names.
+- Loki's TraceID derived field is gone with Loki (#474): `git grep -i 'loki\|derivedFields'` under `gitops/` and
+  `observability-idp/` finds only prose saying Loki is gone (`gitops/bootstrap/apps/prometheus.yaml` line 79,
+  `gitops/ai-layer/web/platform.html` line 21, `observability-idp/README.md` line 6), and no derived field.
+- Falcosidekick (`falcosidekick`, `gitops/bootstrap/values-attendee.yaml` line 59) sets `talon.address`
+  `http://falco-talon.falco.svc.cluster.local:2803` on every profile (`gitops/bootstrap/apps/falcosidekick.yaml`
+  lines 36 and 37). The attendee profile leaves falco-talon out, so each CRITICAL event's Talon post finds no Service and
+  Sidekick logs a failed output; its comment (lines 33 to 35) and `values-attendee.yaml` lines 33 to 36 already say so.
+  The Datadog output is separate and unaffected.
+
+All four stay as #475 chose; this change records them and edits none.
+
+**Live check.** Skipped: no cluster runs `verify/test_service_hosts_live.py`, `verify/test_service_hosts_tempo_absent.py`
+or the maps, and this change touches nothing else the clusters run. Not yet run on a cluster, as the run 26115 entry
+names: `CONTEXT=watch-it-burn-private python3 verify/test_service_hosts_live.py` once promoted, and the same on an
+attendee-profile cluster, which only a fleet bring-up makes.
