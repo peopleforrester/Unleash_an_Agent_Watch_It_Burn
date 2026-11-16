@@ -57107,3 +57107,26 @@ images are rebuilt and rolled.
 **Not yet run on a cluster.** On the next cluster that runs the rebuilt images: the Backstage catalog shows its 45
 entities with no processing errors and guest sign-in works. The web terminal's JupyterLab loads with the collaboration
 extension.
+
+## 2026-11-16 · #1475 · run 29516 · The resumed sweep: why run 29136 stopped, and the opentelemetry follow-up corrected
+
+**Why run 29136 stopped.** Its work and report were complete: commits a9a11db1 and af6365ef, and a report that
+hecaton posted to the issue. Hecaton then ended the run `executor-error` with `HTTP Error 403: Forbidden`. Neither of the
+report's two follow-ups exists on GitHub: there is no soupsieve issue here and none in llm-guard-cpu-offline. So the
+403 most likely came when hecaton filed them after the report, and one of the two was in another repo. Nothing in the
+repo's code caused it. This run filed both itself with `gh` and lists no follow-ups in its report, so hecaton files
+nothing for this issue: #1480 (the notebook venv's Python, for soupsieve alerts 294, 302 and 303) and
+peopleforrester/llm-guard-cpu-offline#19 (OpenTelemetry, for alert 305 here and alert 2 there).
+
+**The opentelemetry follow-up, corrected.** Run 29136's draft asked llm-guard-cpu-offline to edit
+`src/pyproject.toml`. That repo keeps that file exactly as upstream wrote it and moves pins through `overrides.txt`
+(its #13 moved the OpenTelemetry set to 1.45.1 that way, and its alert 1 was then dismissed as reading the
+unchanged file). #19 asks for the same route at 1.45.2 and 0.66b2, all released 2026-10-29. Dependabot reads alert
+305 from the submodule's unchanged `src/pyproject.toml`, so moving the submodule pointer after #19 lands puts 1.45.2
+in the built image but may leave alert 305 open. This run's rules forbid dismissing it, so the run that moves the
+pointer records the alert as deferred.
+
+**Tests.** No code changed in this run. `python3 verify/test_dependabot_floors_1475.py` was run again on the branch.
+`python3 verify/prose_gate.py` covers this entry.
+
+**Live check.** Skipped: this entry is the only change, and no cluster session was handed to the run.
