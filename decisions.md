@@ -57042,3 +57042,25 @@ the next run reads netcup's fleet.sh back. Criterion 2 needs a standby wave buil
 daily drift report after it. No session is scheduled, so it waits for the next one that runs `backups.py schedule`.
 
 **Live check.** Skipped: nothing the clusters run changed, no cluster is up, and this run wrote only this entry.
+## 2026-11-16 · #1376 · run 29888 · Netcup's checkout now holds #956's settle step; no standby wave is scheduled to test the second criterion
+
+**Context.** The attempt before this run failed on hecaton's side: its workspace setup stopped on a `setfacl -m`
+argument error before the run started, so nothing in the repo caused it and there was nothing of its to port.
+`bash verify/prior-drafts.sh 1376 origin/staging` printed NONE.
+
+**Read at about 06:20Z on 2026-11-16, through `sources repo-cat`, `repo-ls` and `gh`.**
+- Netcup's `infra/terraform/fleet/fleet.sh` is 5,998 lines and hashes 2391bd9f..., byte for byte the same as GitHub
+  main's (b6a0edb9). It has the two `apply -refresh-only` lines, at 2163 (the cluster settle after each cluster apply)
+  and 3317 (the lab VPC). Run 26157's guarded move has run: criterion 1 is met. The `.git` directory is refused to
+  `repo-cat`, so the HEAD commit itself was not read; the file is the evidence.
+- `logs/backups-*.log` have no line after 2026-11-12T23:13:11Z, so no standby wave has run since the move.
+- The daily drift reports of 2026-11-13, 11-14 and 11-15 at 11:17Z (#1441) each list two drifted states, `lab VPC
+  accen-dev` and `boundary accen-dev`, and no standby, because every standby came down at the 22:50Z teardown.
+- conference-knowledge's `events/registry.yaml` marks all three sessions of this talk delivered and lists none
+  after `kubecon-na-2026`, so no `backups.py schedule` is coming.
+
+**Criterion 2** asks for the first drift report after the next standby wave, and none is scheduled. Whether the issue
+closes on criterion 1, the cause it names being gone, or stays open until a later session's wave, is a ruling this
+run asks for rather than makes.
+
+**Live check.** Skipped: nothing the clusters run changed, and no cluster is up. The reads above were read-only.
