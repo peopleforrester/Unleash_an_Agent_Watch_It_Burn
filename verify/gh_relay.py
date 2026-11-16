@@ -9,8 +9,8 @@ naming what was refused, so the container cannot reach the host's gh for a write
 the server starts (the hecaton wrapper on a dispatched run, the runner's gh with the job's GH_TOKEN in CI); none is a
 failure before any test runs.
 
-The socket is made mode 0600 in a directory the caller made. The server runs until it is stopped; verify/e2e-image.sh
-stops it when the container ends.
+The socket is made mode 0600 in a directory the caller made, whose path may be longer than a socket address holds
+(#1481). The server runs until it is stopped; verify/e2e-image.sh stops it when the container ends.
 """
 from __future__ import annotations
 
@@ -55,10 +55,19 @@ def serve(path: str, gh: str) -> None:
     class Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
         daemon_threads = True
 
+    # A Unix socket's address holds 107 bytes, and verify/e2e-image.sh makes the socket's directory under TMPDIR, whose
+    # length the caller's host decides: hecaton's gate has a temp root of 53 characters plus its pool's name, and past
+    # 107 the bind failed with "AF_UNIX path too long" and the launcher with it (#1481). So the socket is bound by its
+    # name from inside its directory, which serves a path of any length; the container reaches it at /run/wib-gh. No
+    # request is served until the directory is the starting one again, so the host's gh runs where the relay started.
+    directory, name = os.path.split(os.path.abspath(path))
+    started_in = os.getcwd()
     old = os.umask(0o177)
     try:
-        server = Server(path, Handler)
+        os.chdir(directory)
+        server = Server(name, Handler)
     finally:
+        os.chdir(started_in)
         os.umask(old)
     print(f"gh relay: serving `gh issue view` from {gh} at {path}", flush=True)
     server.serve_forever()

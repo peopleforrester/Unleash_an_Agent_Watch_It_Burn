@@ -8,7 +8,10 @@ What it holds:
     4 of a gh with no token included, which verify/gh_comments.py reads as "no token";
   - any other gh call (`gh api`, `gh issue comment`, `gh pr view`) fails with exit code 1 and a line naming what was
     refused, and the host gh never runs for it;
-  - the client with no socket exits 4 naming where it looked, and the server with no gh on PATH fails before serving.
+  - the client with no socket exits 4 naming where it looked, and the server with no gh on PATH fails before serving;
+  - a socket whose path is longer than a Unix socket address holds (107 bytes) is served all the same, and the host's
+    gh still runs in the directory the relay started in (#1481). verify/e2e-image.sh makes the socket under TMPDIR,
+    and hecaton's gate has a temp root whose length goes with its pool's name; the long path here is this test's own.
 """
 from __future__ import annotations
 
@@ -79,6 +82,42 @@ echo "a warning on stderr" >&2
             check(f"`gh {' '.join(refused)}` is refused with exit code 1, naming it",
                   r.returncode == 1 and "only `gh issue view` is relayed" in r.stderr, f"{r.returncode} {r.stderr}")
         check("and the host gh ran for none of them", log.read_text() == calls, log.read_text())
+    finally:
+        server.terminate()
+        server.wait(timeout=10)
+
+    # A socket path past the 107 bytes a Unix socket address holds (#1481). The relay is started in `started`, and the
+    # client reaches the socket by its name from inside its directory, as the container does by its short mount path.
+    deep = t / ("a-temp-root-longer-than-a-socket-address-holds-" + "x" * 80)
+    deep.mkdir()
+    started = t / "started-here"
+    started.mkdir()
+    cwd_log = t / "gh.cwd"
+    recorder = t / "gh-cwd"
+    recorder.write_text(f'#!/bin/sh\npwd > "{cwd_log}"\necho \'{{"comments": []}}\'\n')
+    recorder.chmod(0o755)
+    long_sock = deep / "gh.sock"
+    check("the long socket path is longer than a Unix socket address holds", len(os.fsencode(long_sock)) > 107,
+          str(len(os.fsencode(long_sock))))
+    server = subprocess.Popen([sys.executable, str(SERVER), "serve", str(long_sock), "--gh", str(recorder)],
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=started)
+    try:
+        for _ in range(100):
+            if long_sock.exists() or server.poll() is not None:
+                break
+            time.sleep(0.05)
+        check("the relay serves a socket whose path is longer than that", long_sock.exists() and server.poll() is None,
+              server.stderr.read()[-600:] if server.poll() is not None else "no socket yet")
+        check("and that socket is the user's alone", long_sock.exists() and (long_sock.stat().st_mode & 0o077) == 0,
+              oct(long_sock.stat().st_mode) if long_sock.exists() else "")
+        r = subprocess.run([sys.executable, str(CLIENT), "issue", "view", "1481", "-R", "o/r", "--json", "comments"],
+                           capture_output=True, text=True, cwd=deep, timeout=60,
+                           env={**os.environ, "WIB_GH_SOCKET": "gh.sock"})
+        check("`gh issue view` is answered through it", r.returncode == 0 and '"comments"' in r.stdout,
+              f"{r.returncode} {r.stdout} {r.stderr}")
+        check("and the host's gh ran in the directory the relay started in, not the socket's",
+              cwd_log.exists() and cwd_log.read_text().strip() == str(started.resolve()),
+              cwd_log.read_text() if cwd_log.exists() else "the host gh never ran")
     finally:
         server.terminate()
         server.wait(timeout=10)

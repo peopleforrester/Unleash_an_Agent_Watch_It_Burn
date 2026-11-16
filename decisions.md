@@ -57042,3 +57042,61 @@ the next run reads netcup's fleet.sh back. Criterion 2 needs a standby wave buil
 daily drift report after it. No session is scheduled, so it waits for the next one that runs `backups.py schedule`.
 
 **Live check.** Skipped: nothing the clusters run changed, no cluster is up, and this run wrote only this entry.
+
+## 2026-11-16 · #1481 · run 32300 · Segment 3's slide 20 and slide 26 Say lines follow the deck, and the gh relay serves a socket under a temp root of any length
+
+**The run of show.** rounds `a7fdca8` (rounds-agenticburn#126) added one sentence to two of the deck's Say lines, and
+`facilitation/kubecon-na-2026-run-of-show.md` quotes both word for word. Slide 20 (`#/19`) now says "The beacon,
+agenticburn.com/beacon, is our own page outside the cluster, and it counts what arrives." after "...Convince
+BurritoBot to send customer data off of the cluster.", and slide 26 (`#/25`) opens with "BurritoBot will send the data
+if the request sounds like official work. So try giving it ...". Both were read from the commit's patch on GitHub and
+again from `attendee.html` at the deck's head today (lines 426, 427 and 491), and each quote names the rounds commit,
+as the segment's other deck changes do. The document follows the live deck; it is not frozen as delivered, so the
+issue's other way out does not apply. No test or script reads the old words (`git grep` over `verify` and `scripts`).
+
+**Why run 32072's edit failed the tests gate.** The gate ran 472 of 649 test files for it, since a change to
+`decisions.md` reaches 458 of them, and `verify/test_e2e_image.py` alone failed. The cause is the length of the gate's
+temp root, which the test did not own. The gate runs the tests with TMPDIR at
+`<pool home>/checks/check-<12 hex>/tmp`, 53 characters plus the pool's name. Section 4b of the test gives
+`run-e2e-tools.sh` a temp directory of its own inside that (12 more), `e2e-image.sh run` makes the gh relay's
+directory there with `mktemp -d` (15 more), and the socket is `gh.sock` in it (8 more). A Unix socket address holds
+107 bytes. So from a pool whose name has 20 characters or more, `gh_relay.py` ended with
+`OSError: AF_UNIX path too long`, the launcher with "the gh relay exited before it served", and four checks of 4b
+failed. `claude-performantpro-8` has 22 characters, `claude-certkraken-9` 19 and `claude-gmail-7` 14, so one change
+passed or failed by the pool its gate ran in. Hecaton records the same failure, this test alone, for runs 21454 and
+22646 (#1412) and 24631 (#616), on changes that touched none of it.
+
+Reproduced on the unchanged test: a shared clone of the candidate, the gate's environment (`env -i`, its PATH,
+`HECATON_BASE_SHA`, `HECATON_TEST_FILES` naming the test) and `bash verify/run-tests.sh`. With a TMPDIR of 72
+characters it printed ALL OFFLINE RENDER-GATE TESTS GREEN; with 73, and with 75 (this pool's length), the four checks
+FAILED and it exited 1. Hecaton's record of the four gate runs names the test and keeps none of its `FAIL` lines, so
+the pools of the three earlier runs were not read; their failure is the same test alone, and that is all that is
+known of them.
+
+**Run 32161 found a second defect.** It read the cause as the gate's `HECATON_TEST_FILES`
+reaching the test and splitting the podman stand-in's one-line log. On the gate that cannot happen: `run-tests.sh`
+unsets `HECATON_BASE_SHA` and `HECATON_TEST_FILES` before it runs any test, and with both set and two files listed it
+ran the unchanged test green here. The defect it fixed is real for a test run by hand with both exported
+(`python3 verify/test_e2e_image.py` then prints 5 checks FAILED, reproduced here), so its `own_env()` change is kept
+as it was: every launcher run in the test starts without the two variables, as `host_runner()` already did. With
+that change alone the gate would have failed again from this pool.
+
+**The fix.** `verify/gh_relay.py` binds the socket by its name from inside its directory and goes back to the
+directory it started in before it serves, so a socket path of any length is served and the host's gh still runs
+where the relay started. The container reaches the socket at `/run/wib-gh`, as before. `gh_relay.py` is not in the
+image's build context, and `python3 verify/e2e_image.py ref` prints the same tag before and after.
+
+**Tests.** `verify/test_gh_relay.py` gains five checks on a socket path of more than 107 bytes that the test makes
+itself: the relay serves it, mode 0600, `gh issue view` is answered through it, and the host's gh ran in the
+directory the relay started in. `verify/test_e2e_image.py` gains one: `e2e-image.sh run` with a TMPDIR that long
+still starts the relay and the container. With the old `gh_relay.py` put back, four of the five and that one failed;
+with the fix both tests pass (21 and 109 checks), and the gate reproduction above with a TMPDIR of 75 characters is
+green. `python3 verify/scope_tests.py write` changed nothing. The 177 offline tests and 3 tier tests the change
+selects are left to validation.
+
+**What differs from the draft** (`origin/agent/1481-32161`, clean against staging). The run-of-show edit and
+`own_env()` are the draft's, unchanged. Its entry here is replaced by this one, since it named the wrong cause. The
+relay fix and the six checks are new.
+
+**Live check.** Skipped: nothing the clusters run changed; the run of show, this entry, the relay and two offline
+tests changed.
