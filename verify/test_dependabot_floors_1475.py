@@ -9,6 +9,10 @@
   Moving minimatch 9 and 10 to 11 is what moved glob 10 and 13 to 14 in package.json's resolutions; this holds the
   two in step: each glob entry in the lock whose minimatch dependency resolves to 11 or later is glob 14 or later.
 - images/web-terminal/requirements.txt (and requirements.in): jupyterlab 4.6.4 or later, tornado 6.6.1 or later.
+- #1480 moved the notebook venv onto python-build-standalone's CPython 3.11.18, so soupsieve could leave 2.10: the
+  lock holds soupsieve 4.0.0 or later and requirements.in its floor (alerts 294, 302, 303), the lock was compiled for
+  that interpreter's version, and the Dockerfile builds the venv from a CPython of 3.11.5 or later, pinned by version
+  and sha256, the release soupsieve 3.0.2 and later need.
 - docs/research/2026-10-30-argo-sync-replay/go.mod: go.opentelemetry.io/otel/trace 1.47.0 or later.
 """
 from __future__ import annotations
@@ -25,6 +29,7 @@ YARN_LOCK = APP / "yarn.lock"
 PACKAGE_JSON = APP / "package.json"
 REQ_TXT = REPO / "images/web-terminal/requirements.txt"
 REQ_IN = REPO / "images/web-terminal/requirements.in"
+DOCKERFILE = REPO / "images/web-terminal/Dockerfile"
 GO_MOD = REPO / "docs/research/2026-10-30-argo-sync-replay/go.mod"
 
 failures: list[str] = []
@@ -122,6 +127,32 @@ check("requirements.txt: tornado at 6.6.1 or later (alert 306)",
 floor = re.search(r"^tornado>=(\S+)", REQ_IN.read_text(encoding="utf-8"), re.M)
 check("requirements.in holds tornado's floor at 6.6.1, so a regenerated lock keeps it",
       bool(floor) and ver(floor.group(1)) >= (6, 6, 1), floor.group(0) if floor else "no tornado>= line")
+
+sou = re.search(r"^soupsieve==(\S+)", req_txt, re.M)
+check("requirements.txt: soupsieve at 4.0.0 or later (alerts 294, 302, 303)",
+      bool(sou) and ver(sou.group(1)) >= (4, 0, 0), sou.group(0) if sou else "no soupsieve== line")
+req_in = REQ_IN.read_text(encoding="utf-8")
+sfloor = re.search(r"^soupsieve>=(\S+)", req_in, re.M)
+check("requirements.in holds soupsieve's floor at 4.0.0, so a regenerated lock keeps it",
+      bool(sfloor) and ver(sfloor.group(1)) >= (4, 0, 0), sfloor.group(0) if sfloor else "no soupsieve>= line")
+
+print("== the notebook venv's interpreter (#1480) ==")
+dockerfile = DOCKERFILE.read_text(encoding="utf-8")
+args = dict(re.findall(r"^ARG (\w+)=(\S+)$", dockerfile, re.M))
+py = args.get("PYTHON_VERSION", "")
+check(f"the Dockerfile pins the venv's CPython at 3.11.5 or later ({py or 'no PYTHON_VERSION ARG'})",
+      bool(re.fullmatch(r"\d+\.\d+\.\d+", py)) and ver(py) >= (3, 11, 5))
+check("the CPython's sha256 is pinned and checked on the line after its download",
+      bool(re.fullmatch(r"[0-9a-f]{64}", args.get("PYTHON_SHA256", "")))
+      and bool(re.search(r'curl -fsSL -o "\$d/python\.tar\.gz" "https://github\.com/astral-sh/python-build-standalone/'
+                         r'releases/download/\$\{PYTHON_BUILD_STANDALONE_RELEASE\}/cpython-\$\{PYTHON_VERSION\}[^"]+"; \\\n'
+                         r'\s+echo "\$\{PYTHON_SHA256\}  \$d/python\.tar\.gz" \| sha256sum -c -', dockerfile)))
+check("the venv is built from that CPython, not bookworm's python3",
+      "/opt/python/bin/python3 -m venv /opt/jupyter" in dockerfile
+      and not re.search(r"^\s+python3 -m venv /opt/jupyter", dockerfile, re.M))
+cmd = re.search(r"--python-version (\S+)", req_in)
+check(f"requirements.in's uv command locks for that interpreter's version ({cmd.group(1) if cmd else 'none'})",
+      bool(cmd) and cmd.group(1) == py)
 
 print("== the argo-sync-replay go.mod ==")
 gomod = GO_MOD.read_text(encoding="utf-8")

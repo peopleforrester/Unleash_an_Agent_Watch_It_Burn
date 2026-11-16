@@ -1,17 +1,19 @@
 # ABOUTME: The notebook venv's top-level packages; requirements.txt is their full lock, every wheel by version and sha256.
 # ABOUTME: Regenerate the lock with the command below and commit both; the Dockerfile installs only the lock (#1273).
 #
-#   uv pip compile images/web-terminal/requirements.in --python-version 3.11 \
+#   uv pip compile images/web-terminal/requirements.in --python-version 3.11.18 \
 #     --python-platform x86_64-unknown-linux-gnu --generate-hashes --only-binary :all: --no-header \
 #     -o images/web-terminal/requirements.txt
 #
-# Python 3.11 is bookworm's python3, which the Dockerfile's Debian snapshot installs. Wheels only, so no build backend
-# is fetched unhashed at build time. jupyterlab and jupyter-collaboration are held where the Dockerfile's comment says
-# (collaboration 5.x needs jupyterlab>=4.6); the rest took the latest release that resolved on 2026-11-09.
+# Python 3.11.18 is the python-build-standalone CPython the Dockerfile fetches by version and sha256 and builds the
+# venv from (#1480); bookworm's own python3 is 3.11.2, older than soupsieve's floor below needs. Wheels only, so no
+# build backend is fetched unhashed at build time. jupyterlab and jupyter-collaboration are held where the
+# Dockerfile's comment says (collaboration 5.x needs jupyterlab>=4.6); the rest took the latest release that resolved
+# on 2026-11-09.
 # On 2026-11-16 (#1475) jupyterlab moved to 4.6.6, the latest 4.6.x, past the advisories that end at 4.6.3, and the
 # tornado floor below holds jupyter-server's tornado past its advisory (6.6.0 and before) when the lock is regenerated.
-# soupsieve stays at 2.10: every release that fixes its advisories (3.0.2 on) needs Python 3.11.5, and bookworm's
-# python3 is 3.11.2, so that fix waits on the venv's interpreter moving.
+# On 2026-11-16 (#1480) the venv's interpreter moved to 3.11.18, and the soupsieve floor below holds nbconvert's and
+# beautifulsoup4's soupsieve past its advisories (fixed in 3.0.2 and 4.0.0), releases that need Python 3.11.5 or later.
 jupyterlab==4.6.6
 jupyter-collaboration==5.0.1
 jupyter-resource-usage
@@ -20,5 +22,6 @@ jupyterlab_execute_time
 ipywidgets
 boto3
 tornado>=6.6.1
+soupsieve>=4.0.0
 # pip itself, in place of the upgrade to whatever was latest that the venv used to take.
 pip

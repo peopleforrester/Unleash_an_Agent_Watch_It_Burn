@@ -2728,6 +2728,7 @@ rules:
       - docs/research/2026-10-30-argo-sync-replay/go.mod
       - images/watch-it-burn-backstage/package.json
       - images/watch-it-burn-backstage/yarn.lock
+      - images/web-terminal/Dockerfile
       - images/web-terminal/requirements.in
       - images/web-terminal/requirements.txt
     tests:

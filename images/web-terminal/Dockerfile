@@ -137,14 +137,29 @@ RUN set -eux; \
     rm -rf "$d"; \
     code-server --version; node --version
 
-# Debian bookworm marks its python externally-managed (PEP 668), so the notebook stack lives in its own
-# venv rather than fighting the system interpreter. requirements.txt is the whole stack, pip included, each package by
-# version and the sha256 of its wheels (requirements.in holds the top-level list and the command that locks it).
+# The notebook stack lives in its own venv, built from a CPython of its own rather than bookworm's python3, which
+# stays for the shell's scripts. bookworm's python3 is 3.11.2, and every soupsieve release past its advisories (3.0.2
+# on, which nbconvert and beautifulsoup4 pull in) needs 3.11.5 or later (#1480). The interpreter is
+# python-build-standalone's CPython 3.11.18 from its 20261110 release, the latest 3.11 on 2026-11-16. Its sha256 is
+# the line the release's SHA256SUMS gives for the x86_64-unknown-linux-gnu install_only_stripped tarball, which matched
+# the digest GitHub's release API gives that asset. The build fails if the venv's interpreter is older than 3.11.5.
+# requirements.txt is the whole stack, pip included, each package by version and the sha256 of its wheels
+# (requirements.in holds the top-level list and the command that locks it, for this interpreter's version).
 # --require-hashes fails on any package the lock does not name, and --only-binary keeps an sdist's build backend from
 # being fetched unhashed.
+ARG PYTHON_BUILD_STANDALONE_RELEASE=20261110
+ARG PYTHON_VERSION=3.11.18
+ARG PYTHON_SHA256=3288c54cea3db350052019b3f8b558dd8a3da8afa6fda573f5fd2bcb37635b4a
 COPY requirements.txt /opt/jupyter-requirements.txt
 RUN set -eux; \
-    python3 -m venv /opt/jupyter; \
+    d="$(mktemp -d)"; \
+    curl -fsSL -o "$d/python.tar.gz" "https://github.com/astral-sh/python-build-standalone/releases/download/${PYTHON_BUILD_STANDALONE_RELEASE}/cpython-${PYTHON_VERSION}%2B${PYTHON_BUILD_STANDALONE_RELEASE}-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz"; \
+    echo "${PYTHON_SHA256}  $d/python.tar.gz" | sha256sum -c -; \
+    mkdir /opt/python; \
+    tar -xzf "$d/python.tar.gz" -C /opt/python --strip-components=1 --no-same-owner; \
+    rm -rf "$d"; \
+    /opt/python/bin/python3 -m venv /opt/jupyter; \
+    /opt/jupyter/bin/python -c 'import sys; v = sys.version_info[:3]; print(*v, sep="."); assert v >= (3, 11, 5), v'; \
     /opt/jupyter/bin/pip install --no-cache-dir --require-hashes --only-binary :all: -r /opt/jupyter-requirements.txt; \
     /opt/jupyter/bin/jupyter --version
 

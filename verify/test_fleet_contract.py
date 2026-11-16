@@ -522,7 +522,8 @@ check("code-server pinned to an exact version", bool(re.search(r"CODE_SERVER_VER
 lines = DOCKERFILE.splitlines()
 args = dict(re.findall(r"^ARG (\w+)=(\S+)$", DOCKERFILE, re.M))
 downloads = [(i, m) for i, l in enumerate(lines) if (m := re.search(r'\bcurl -fsSL -o "([^"]+)" "([^"]+)"', l))]
-check(f"the web-terminal Dockerfile downloads nine tools ({len(downloads)})", len(downloads) == 9)
+check(f"the web-terminal Dockerfile downloads ten tools, the notebook's CPython among them ({len(downloads)})",
+      len(downloads) == 10)
 unchecked = []
 for i, m in downloads:
     nxt = lines[i + 1] if i + 1 < len(lines) else ""

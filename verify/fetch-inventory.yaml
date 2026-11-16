@@ -262,10 +262,10 @@ sites:
     pin: images/web-terminal/Dockerfile (DEBIAN_SNAPSHOT, the snapshot.debian.org time the base image names; apt checks each package's sha256 against the snapshot's signed index)
     cached: false
   - match: releases/download/|dl\.k8s\.io/release/|awscli\.amazonaws\.com/awscli-exe|get\.helm\.sh/helm-|nodejs\.org/dist/
-    lines: 9
+    lines: 10
     class: pinned
     kind: tool
-    pin: images/web-terminal/Dockerfile (ttyd 1.7.7 in its URL, and the _VERSION and _SHA256 ARGs of kubectl, the AWS CLI, helm, eksctl, k9s, yq, code-server and Node; each download is checked with sha256sum -c)
+    pin: images/web-terminal/Dockerfile (ttyd 1.7.7 in its URL, and the _VERSION and _SHA256 ARGs of kubectl, the AWS CLI, helm, eksctl, k9s, yq, code-server, Node and the notebook venv's python-build-standalone CPython; each download is checked with sha256sum -c)
     cached: false
   - match: pip install
     lines: 1
@@ -898,6 +898,11 @@ sites:
     lines: 1
     class: loopback
     why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_dependabot_floors_1475.py:
+  - match: curl -fsSL
+    lines: 1
+    class: none
+    why: a regex the test matches against the web-terminal Dockerfile's CPython download line (#1480); the test fetches nothing
   verify/test_desk_remote_reports.py:
   - match: urlopen
     lines: 2

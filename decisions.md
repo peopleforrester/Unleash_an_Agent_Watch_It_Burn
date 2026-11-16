@@ -57130,3 +57130,47 @@ pointer records the alert as deferred.
 `python3 verify/prose_gate.py` covers this entry.
 
 **Live check.** Skipped: this entry is the only change, and no cluster session was handed to the run.
+
+## 2026-11-16 · #1480 · run 29529 · The notebook venv moves to a pinned CPython 3.11.18, and soupsieve to 4.1.1
+
+**What changed.** The web-terminal Dockerfile now downloads python-build-standalone's CPython 3.11.18 (release
+20261110, the x86_64-unknown-linux-gnu `install_only_stripped` tarball) into `/opt/python` and builds `/opt/jupyter`
+from it. Bookworm's own python3 (3.11.2) stays, for the scripts the shell runs. The download is pinned like Node and
+code-server: `PYTHON_VERSION`, `PYTHON_BUILD_STANDALONE_RELEASE` and `PYTHON_SHA256` ARGs, with `sha256sum -c` on the
+line after the download. The sha256 (3288c54c...) is the line the release's SHA256SUMS gives for that file, and it
+matched the digest GitHub's release API gives the asset. The build also asserts that the venv's interpreter is 3.11.5
+or later. This is the issue's option 1. The base image and apt stay as they were. It kept 3.11, not 3.12, so every
+other wheel in the lock stays the same and only soupsieve moves.
+
+**The lock.** `requirements.in` gains `soupsieve>=4.0.0`, and its uv command now names `--python-version 3.11.18`.
+`uv pip compile` with `-P soupsieve` moved only soupsieve, from 2.10 to 4.1.1. Running the file's own command again,
+exactly as written, left the lock byte for byte the same. That clears Dependabot alerts 294 (GHSA-mmhr-3c5m-f64f), 302
+(GHSA-7g44-g9rc-x53w) and 303 (GHSA-6655-6qjp-jx7x).
+
+**Built on #1475's draft.** `verify/test_dependabot_floors_1475.py` and the jupyterlab 4.6.6 and tornado 6.6.1 lock
+had not reached staging: runs 29136 and 29516 on #1475 ended `executor-error` after their work was done. `prior-drafts.sh
+1475` called the draft `origin/agent/1475-29136` CLEAN against staging at the same base (1f670aef), so this branch
+fast-forwarded onto it (a9a11db1, af6365ef, 768be5a5) and builds on top. Those three keep their own SHAs here,
+so promoting #1475's branch first or this one first lands them once.
+
+**Tests.** `verify/test_dependabot_floors_1475.py` gains six checks: soupsieve is 4.0.0 or later in the lock
+and as the floor in `requirements.in`; the Dockerfile pins the CPython at 3.11.5 or later with a 64-hex sha256 checked
+on the line after its download; the venv is built from `/opt/python`, not bookworm's python3; and the uv command's
+`--python-version` equals `PYTHON_VERSION`. All 23 checks pass. `verify/test_fleet_contract.py` counts ten downloads
+in the Dockerfile, up from nine, and passes. `verify/fetch-inventory.yaml` counts ten pinned download lines for the
+Dockerfile and lists the new test's regex line as `class: none`, and `verify/test_fetch_inventory.py` passes. The scope
+and test maps record that the test now reads the Dockerfile.
+
+**Image build.** `podman build images/web-terminal` exited 0 on this host. The CPython's `sha256sum -c` printed OK,
+the venv reported 3.11.18, and pip installed the whole lock with `--require-hashes`, soupsieve 4.1.1, jupyterlab 4.6.6
+and jupyter-collaboration 5.0.1 among them. `pip check` found no broken requirements. In a container from that image
+(no network), `jupyter lab` with `base_url=/jupyter` answered `/jupyter/api/status`. The server log said
+`jupyter_server_ydoc | extension was successfully loaded`. `jupyter labextension list` showed
+`@jupyter/collaboration-extension v5.0.4` and `@jupyter/docprovider-extension v5.0.4` enabled and OK. `/jupyter/lab`
+returned 200 with both extensions in its page config. A PUT to `/jupyter/api/collaboration/session/x.txt` returned 201
+with a fileId and sessionId. The container and the local image were removed afterwards.
+
+**Live check.** None ran: this run was handed no cluster session (no `KUBECONFIG`, no `HECATON_CLUSTER_ENV`).
+
+**Not yet run on a cluster.** Once the web-terminal image is rebuilt from staging and rolled, the attendee console's
+Notebook tab loads JupyterLab with the collaboration extension, as the local container did.
