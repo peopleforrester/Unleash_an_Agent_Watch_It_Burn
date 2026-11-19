@@ -57240,3 +57240,30 @@ named none, `await_argo_settled` with a 60 s budget returned after its one read 
 wave's `backups-<wave>.log` should show every ModelConfig pinned in `instructors up` and the converge either
 CONVERGED or naming its unhealthy apps (`unhealthy=[...]`, #1375). Netcup's checkout moves after 23:30Z (#1376), and
 no wave is scheduled after today's.
+
+## 2026-11-19 · #1383 · run 34145 · Run 20656's draft ported; its tests gate failed on one comment's "three rounds"
+
+**Context.** `bash verify/prior-drafts.sh 1383 origin/staging` printed START from `origin/agent/1383-20656`
+(3e77d039), CLEAN apart from a decisions.md append, so it was cherry-picked whole. Hecaton's comment named only the
+`tests` gate as the failure. The scoped `run-tests.sh` (`HECATON_BASE_SHA` at this run's base, 240 offline tests)
+failed one: `test_round_names_retired.py`, which sweeps every tracked non-markdown file for round wording and found
+`infra/terraform/fleet/fleet.sh:3869: 'three rounds'` in the draft's new comment above `await_argo_settled`. The
+comment now says "the three converge passes". Nothing else in the draft changed; its design, tests and decisions.md
+entry above stand as written.
+
+**Tests.** `python3 verify/test_round_names_retired.py` passes after the reword. Run once on this branch:
+`test_fleet_converge_repairs.sh`, `test_pin_bedrock_profiles.sh`, `test_backups.py`, `test_fleet_apply_failure_exit.sh`,
+`test_fleet_exit_codes.sh`, `test_platform_floor.sh`, `test_scope_tests.py` and `test_test_map.py`, all passing;
+`scope_tests.py check` reports 0 problems. Every other test of the 240 passed in the scoped run before the reword.
+
+**Live check.** Not run: this run was handed no cluster session (`HECATON_CLUSTER_ENV` and `KUBECONFIG` unset, and
+neither KubeCon context exists in its kubeconfig). Run 20656's read-only check on watch-it-burn-private stands.
+
+**Criterion 1 has no wave to confirm it.** conference-knowledge's `events/registry.yaml` marks all three sessions of
+this talk delivered and lists none after `kubecon-na-2026`, and netcup's `logs/backups-*.log` have no line after
+2026-11-12T23:13:11Z (#1376, run 29888). No private standby build will run to name its apps from a log, so whether
+the issue closes on the cause found in Datadog and fixed here is asked, as #1376's question 1847 asked for its own
+second criterion.
+
+**Not yet run on a cluster.** A private standby build and converge from a checkout holding this change, as run
+20656's entry says.

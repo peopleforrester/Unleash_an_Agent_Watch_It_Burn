@@ -3866,8 +3866,9 @@ argo_syncs_in_flight() {
 # CD still has syncs in flight on this cluster, so a cluster still working through its sync waves is judged once they
 # end rather than in the middle. The 2026-11-12 night-before wave's private standbys (#1383) were judged 9 to 11
 # minutes after their bootstrap, with kubearmor, kyverno, cert-manager and prometheus still waiting in their syncs on
-# their CRDs' health and ai-layer on its kubearmor-gate Job (their Argo CD logs in Datadog), and the three rounds 30 s
-# apart ended about 4.5 minutes later at apps 38/40 and 39/40. The community standbys, 24 apps, had settled by then.
+# their CRDs' health and ai-layer on its kubearmor-gate Job (their Argo CD logs in Datadog), and the three converge
+# passes 30 s apart ended about 4.5 minutes later at apps 38/40 and 39/40. The community standbys, 24 apps, had
+# settled by then.
 # A running cluster has nothing in flight, so this returns at once; and with WIB_CONVERGE_SETTLE unset (0) it never waits.
 await_argo_settled() {
     local name="$1" kcfg="$2" apps busy said=0 until="${WIB_CONVERGE_SETTLE_UNTIL:-0}"
