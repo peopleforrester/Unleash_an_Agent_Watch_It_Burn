@@ -57127,3 +57127,23 @@ closes on criterion 1, the cause it names being gone, or stays open until a late
 run asks for rather than makes.
 
 **Live check.** Skipped: nothing the clusters run changed, and no cluster is up. The reads above were read-only.
+
+## 2026-11-19 · #1376 · run 34140 · question 1847: close on criterion 1
+
+**Question 1847.** With netcup's checkout holding #956's settle step, should #1376 close even though no standby wave is
+coming to test it? Run 29888 asked it; its entry above is cherry-picked here (8e447d5b, which never reached staging
+only because that run ended needs-decision). `bash verify/prior-drafts.sh 1376 origin/staging` called it CLEAN, an
+append to decisions.md alone.
+
+**Answer.** Close it on criterion 1. Decided by hecaton's research under Michael's standing rules, not by Michael.
+
+**What it changes.** #1376 closes with criterion 1 met and criterion 2 accepted as moot: the cause the issue names,
+netcup's checkout older than #956, is gone, and the settle step is covered offline by `verify/test_drift_settle.py`
+and `verify/test_fleet_settle_after_apply.sh`. No standby wave is scheduled, since all three sessions of this talk are
+delivered. If a drift report after a later session's wave lists a standby as drifted, a new issue is filed for it
+and this one stays closed.
+
+**Read again at 2026-11-19 through `sources repo-cat`.** Netcup's `infra/terraform/fleet/fleet.sh` is still 5,998
+lines with SHA-256 2391bd9f64ba, the same as GitHub main's, and holds `apply -refresh-only` at lines 2163 and 3317.
+
+**Live check.** Skipped: only decisions.md changed, nothing the clusters run. Tests: none run, no code changed.
