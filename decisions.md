@@ -57147,3 +57147,20 @@ and this one stays closed.
 lines with SHA-256 2391bd9f64ba, the same as GitHub main's, and holds `apply -refresh-only` at lines 2163 and 3317.
 
 **Live check.** Skipped: only decisions.md changed, nothing the clusters run. Tests: none run, no code changed.
+
+## 2026-11-19 · #1482 · run 34142 · the base already keeps its temp files out of /tmp
+
+**What the issue asked.** PRD 526 of llm-coding-workflow asks every repo to keep its temp files in its own
+git-ignored `tmp/`. `tmp-inventory` listed 36 lines naming a system temp directory, read from two older checkouts
+(`talks/wib-1079-repin` and the lab system's `stack/unleashed`), not from staging.
+
+**What staging already holds.** #1315 (cebbb7b4, 2026-11-10) gave each of those lines a `tmp-ok:` reason or moved its
+write under the checkout's `tmp/`, and #1317 (b94840e1) added `verify/test_sk_tmp_check_e2e.py`, which runs the
+checker live. `.gitignore` line 14 (`/tmp/`) covers the repo's `tmp/`.
+
+**Checked in this run on afa601fc.** scripts-knowledge's `bin/sk-tmp-check`, read through `sources repo-cat` and run
+from the repo root, printed `sk-tmp-check: 0 findings in 898 files`. `python3 verify/test_no_system_temp_paths.py`
+exited 0. `git check-ignore -v tmp/x` named `.gitignore:14:/tmp/`. `bash verify/prior-drafts.sh 1482 origin/staging`
+printed NONE. No code changed, so this entry is the run's only commit.
+
+**Live check.** Skipped: only decisions.md changed, nothing the clusters run.
