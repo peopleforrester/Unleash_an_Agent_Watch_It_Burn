@@ -57087,3 +57087,21 @@ in this repo reads that path.
 **Not yet run on a cluster:** the live sequence in the 2026-10-31 #532 entry (`fleet.sh reconcile-pool`,
 `verify/fleet-hygiene.sh`, `fleet.sh ingest pool`, `labctl pool`, the agentic/agentic login), owed on the next
 attendee pool. No cluster state changed this run. Tests: none run; only decisions.md changed.
+
+## 2026-11-19 · #532 · run 34136 · question 1573: not asked, the repo is held until the Zurich talk is delivered
+
+**Question 1573.** Should #532, the live run of `fleet.sh ingest pool`, be closed now as covered, or held open until
+the next attendee fleet is up? Run 26114 asked it, with a first decision inside it: whether question 961's go to build
+one attendee cluster still covers #532.
+
+**Answer.** Not asked: this repo is held (operator: Michael 2026-11-17: Zurich talk is the only priority until
+delivery 11-20; coordinator). Nothing more is done on it until that changes; a run then asks again if it still needs
+to. Decided by hecaton's standing rule hecaton#289 under Michael's standing rules, not by Michael. Michael did not
+answer question 1573; no ruling on close, hold or a new cluster exists.
+
+**What it changes.** Nothing in how #532 stands: the issue stays open and the question goes back to Michael after the
+hold lifts (on or after 2026-11-21). This run cherry-picked run 26114's draft (518f22a0, its decisions.md entry above,
+which never reached staging only because that run ended needs-decision); `bash verify/prior-drafts.sh 532
+origin/staging` called it CLEAN, an append to decisions.md alone. No fleet.sh change, no AWS or cluster read, and no
+live check: the hold covers that work, and nothing the clusters run changed. Criterion 5, the harvester interface, is
+met by 26114's read; criteria 1 to 4 are still owed on a live attendee pool.
