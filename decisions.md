@@ -57164,3 +57164,19 @@ exited 0. `git check-ignore -v tmp/x` named `.gitignore:14:/tmp/`. `bash verify/
 printed NONE. No code changed, so this entry is the run's only commit.
 
 **Live check.** Skipped: only decisions.md changed, nothing the clusters run.
+
+## 2026-11-21 · #532 · run 35880 · question 1573 asked again now the Zurich hold is over; still no attendee pool
+
+**Why again.** Run 34136 held question 1573 under hecaton#289 because Michael had put this repo on hold until the
+Zurich talk was delivered on 2026-11-20. That date has passed, so this run asks it again, in the same shape run 26114
+gave it: close #532 as covered, hold it for the next attendee fleet, or build one attendee cluster now for it.
+
+**Read this run, 2026-11-21.** Through the `aws-env accen-dev` route (account 515966504359), `aws eks list-clusters`
+returned an empty list in us-west-2, us-east-1 and us-east-2, so no attendee cluster is up and neither KubeCon cluster
+is either. `HECATON_CLUSTER_ENV` is empty. In conference-knowledge `events/registry.yaml` the three events tied to
+this repo (aiewf-2026-watch-it-burn, devopsdays-portland-2026, kubecon-na-2026) are all delivered, and no later entry
+names this workshop, so nothing schedules an attendee pool.
+
+**What it changes.** Nothing in the code: no fleet.sh change, no AWS write and no cluster read beyond the list above,
+so no live check was owed. Criterion 5, the harvester interface, stays met by run 26114's read; criteria 1 to 4 still
+need a live attendee pool. Tests: none run; only decisions.md changed.
