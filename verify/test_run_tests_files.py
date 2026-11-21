@@ -1,19 +1,23 @@
 #!/usr/bin/env python3
 # ABOUTME: Holds run-tests.sh to HECATON_TEST_FILES (#1319): set, it runs exactly the files listed, still setting e2e
-# ABOUTME: files aside and under no_cloud_run; unset or blank, it runs every offline test as before. AGENTS.md declares it.
+# ABOUTME: files aside and under no_cloud_run, never asking scope_tests.py; unset or blank, it runs every offline test as
+# ABOUTME: before. AGENTS.md declares its Test files and, on that promise, scope_tests.py as its Test selector (#1483).
 """Offline. Hecaton's tests gate works out which of the offline suite's files read a change and passes them to
 run-tests.sh in HECATON_TEST_FILES, one repo path per line (hecaton#623). The real run-tests.sh, no-cloud.sh and
 ensure-submodules.sh are copied into a fixture repo with four tests: two offline Python tests, one offline shell test
 and one marked `# SUITE: e2e`. Each offline test prints where `aws` resolves and whether either scoping variable
 reached it.
 
-1. AGENTS.md declares `Test files: `verify/test_*.py verify/test_*.sh`` beside its Test command, as the gate reads it.
+1. AGENTS.md declares `Test files: `verify/test_*.py verify/test_*.sh`` beside its Test command, as the gate reads it,
+   and `Test selectors: `verify/scope_tests.py`` beside that (#1483, hecaton#669).
 2. Unset, and set to blank lines alone, run-tests.sh runs every offline test and sets the e2e one aside.
 3. Set, it runs exactly the files listed, once each however often listed, with HECATON_BASE_SHA ignored even when it
    names no commit; a listed e2e file is set aside, and a list of e2e files alone runs nothing and passes, where an
    empty suite with the variable unset fails NO TESTS FOUND.
 4. Each listed test runs under no_cloud_run (aws is the no-cloud stub) and sees neither variable; a failing listed test
    fails the run; a listed path that is not a test file of the suite fails the run naming it, and runs nothing.
+5. The promise the Test selectors line makes: with a stub selector in the fixture that records each call, run-tests.sh
+   calls it with HECATON_BASE_SHA set and the list unset, and never with the list set, HECATON_BASE_SHA set or not.
 """
 from __future__ import annotations
 
@@ -53,6 +57,16 @@ at = next((i for i, ln in enumerate(lines) if ln.startswith("Test command:")), -
 check("the Test files line sits beside the Test command line",
       at >= 0 and any(ln.startswith("Test files:") for ln in lines[max(at - 2, 0):at + 3]))
 runner = (VERIFY / "run-tests.sh").read_text(encoding="utf-8")
+# The selector's name is read from the runner, not spelled here: a test that spells it reads as running it, and the
+# scope map would then run this test on every change.
+called = re.findall(r'python3 "\$\{SCRIPT_DIR\}/([\w.-]+\.py)" select offline', runner)
+SELECTOR = called[0] if len(set(called)) == 1 else ""
+check(f"run-tests.sh calls one selector script, with `select offline` (got {sorted(set(called))})", bool(SELECTOR))
+sel_line = declared(agents, "Test selectors")
+check(f"AGENTS.md declares that selector, verify/{SELECTOR}, on its Test selectors line (got {sel_line!r})",
+      bool(SELECTOR) and sel_line == f"verify/{SELECTOR}")
+check("the Test selectors line sits beside the Test files line",
+      any(ln.startswith("Test selectors:") for ln in lines[max(at - 1, 0):at + 4]))
 check("the globs are the ones run-tests.sh discovers by",
       '"${SCRIPT_DIR}"/test_*.py "${SCRIPT_DIR}"/test_*.sh' in runner)
 
@@ -153,6 +167,30 @@ with tempfile.TemporaryDirectory() as t:
     rc, out = run(failing, "verify/test_alpha.py")
     check(f"the failing test not listed: it does not run and the run passes (exit {rc})",
           rc == 0 and ran(out) == ["test_alpha.py"], out)
+
+    print("== the selector is asked only when HECATON_TEST_FILES is unset (the Test selectors promise) ==")
+    sel = tmp / "selector"
+    fixture(sel)
+    calls = tmp / "selector-calls.log"
+    (sel / "verify" / SELECTOR).write_text(
+        "import sys\n"
+        f"open({str(calls)!r}, 'a').write(' '.join(sys.argv[1:]) + '\\n')\n"
+        "print('FULL')\n")
+
+    def calls_made() -> list[str]:
+        made = calls.read_text().splitlines() if calls.exists() else []
+        calls.unlink(missing_ok=True)
+        return made
+
+    rc, out = run(sel, None, base="0" * 40)
+    made = calls_made()
+    check(f"list unset, HECATON_BASE_SHA set: the selector is asked once, and every offline test runs ({made}, exit {rc})",
+          rc == 0 and made == ["select offline"] and ran(out) == ALL, out)
+    for base in ("0" * 40, None):
+        rc, out = run(sel, "verify/test_alpha.py", base=base)
+        made = calls_made()
+        check(f"list set, HECATON_BASE_SHA {'set' if base else 'unset'}: the selector is never asked ({made}, exit {rc})",
+              rc == 0 and made == [] and ran(out) == ["test_alpha.py"], out)
 
     empty = tmp / "empty"
     (empty / "verify").mkdir(parents=True)

@@ -57164,3 +57164,29 @@ exited 0. `git check-ignore -v tmp/x` named `.gitignore:14:/tmp/`. `bash verify/
 printed NONE. No code changed, so this entry is the run's only commit.
 
 **Live check.** Skipped: only decisions.md changed, nothing the clusters run.
+
+## 2026-11-21 · #1483 · run 37133 · scope_tests.py declared as the Test command's selector
+
+**What the issue asked.** Hecaton's tests gate counted every file `verify/scope_tests.py` spells as read by the Test
+command, because `verify/run-tests.sh` names it, so every `kustomization.yaml` change ran the whole offline suite.
+Since hecaton#669 the gate leaves out what a declared selection-only helper reads. AGENTS.md now carries
+`Test selectors: verify/scope_tests.py` (in backticks) on the line after `Test files:`, with a sentence in the
+paragraph below on what it promises.
+
+**The promise the line makes.** `run-tests.sh` runs `scope_tests.py` only to choose its tests, and only when
+`HECATON_TEST_FILES` is unset or blank. When the variable names files, the runner runs exactly those and never calls
+`scope_tests.py`: on 1a533315 the `if` at lines 73-74 of `verify/run-tests.sh` takes the listed branch, a no-op, and
+the one call, `python3 "${SCRIPT_DIR}/scope_tests.py" select offline` at line 76, sits in the `elif` for
+`HECATON_BASE_SHA`. If `run-tests.sh` ever calls `scope_tests.py` with the variable set, the line comes out of
+AGENTS.md.
+
+**How it is held.** `verify/test_run_tests_files.py` now reads the selector's name from the runner's own call, checks
+AGENTS.md declares that path on a `Test selectors:` line beside `Test files:`, and puts a stub selector in its fixture
+that records each call: list unset with `HECATON_BASE_SHA` set, it is asked once (`select offline`); list set, with
+`HECATON_BASE_SHA` set or not, it is never asked. The test reads the name from the runner rather than spelling it, so
+the scope map does not take it for a test that runs `scope_tests.py` on every change; `scope_tests.py write` left both
+maps unchanged. A mutation that made the listed branch call the selector failed the two "never asked" checks, and the
+real runner passes all of them.
+
+**Live check.** Skipped: only AGENTS.md, decisions.md and a test under `verify/` changed, nothing the clusters run.
+Tests: `python3 verify/test_run_tests_files.py` passed.
