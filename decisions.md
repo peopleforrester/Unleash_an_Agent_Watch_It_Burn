@@ -57231,3 +57231,25 @@ section. If a live ingest on that fleet fails, a new issue is filed for it and t
 
 **Live check.** Skipped: only decisions.md changed, nothing the clusters run, and no cluster is up in account
 515966504359. Tests: the prose gate, `python3 verify/prose_gate.py` against origin/staging.
+
+## 2026-11-22 · #1484 · run 37540 · the go-live checklist gains the live `ingest pool` and claimed-login check
+
+**What changed.** `docs/GO-LIVE-CHECKLIST.md` section 2 has a new step after the presenter's claim dogfood, the
+live check question 2345 moved off #532 onto the next real fleet. It lists the pool with `labctl pool --customer
+agenticburn --event "$WIB_EVENT"`, runs `fleet.sh reconcile-pool` (dry-run) and `fleet.sh ingest pool`, lists the pool
+again and diffs the two sorted listings, so a name or claim that moved shows as a diff line. Then it compares one
+claimed row's terminal login with that cluster's `agent/terminal-auth` Secret.
+
+**Why the login is read from the claim page.** `labctl pool` prints only `cluster_name,state,region,reserved_for,
+claimed_by` and `labctl export` no login (both read from lab-platform `cmd/labctl/pool.go` and `export.go`). The pool
+hands a login out on the claim page's card, and lab-platform `docs/provisioning.md` ("Claiming by email") says an
+address entered again gets its claim back and the card again. So the step re-enters the presenter's `+student`
+address, reads the login silently at a prompt, and compares its sha256 with the Secret's decoded `TTYD_CREDENTIAL`,
+printing `LOGIN MATCHES` or `LOGIN DIFFERS` and neither value. The kubeconfig goes to an isolated file per the repo's
+kube-context rules. `agentic` / `agentic` is named as what attendee clusters enforce, as `verify/test_admin_actions.sh`
+holds for `terminal-password`. #1434, still open, rewrites the same section's merge_pool lines; this step sits after
+them and touches none of them, so either can land first.
+
+**Live check.** Skipped: only docs and decisions.md changed, nothing the clusters run, and the step needs an
+attendee pool that does not exist. Tests: no test reads the checklist (`git grep GO-LIVE-CHECKLIST -- verify scripts`
+finds none); the prose gate, `python3 verify/prose_gate.py` against origin/staging, passes.

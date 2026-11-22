@@ -202,6 +202,54 @@ uv run --with playwright python verify/browser-smoke.py hexhen-zelda sorcerizo-g
       outside the default account, and a dual-shipping check that passed on a stale glob. Each one is in
       the attendee's path and none in a presenter's own. The cluster claimed here is that presenter's seat
       for the day; keep it.
+- [ ] **Re-ingest the imported pool and check one claimed row's terminal login** (#1484, from #532). Run
+      this once the attendee pool is imported into lab-platform and the presenter's claim above holds a
+      row. `fleet.sh ingest pool` has run on a scratch labctl database (#655, run 16719) but never against
+      a real pool or a real `agent/terminal-auth` Secret, so this is its first live run. It needs labctl
+      on the PATH, `DATABASE_URL` for lab-platform's database, `USER`, and `WIB_EVENT` set to the event
+      the pool was imported into.
+
+```bash
+# the pool as imported, then the ghost check, then the re-ingest, then the pool again
+P="$(mktemp -d)"   # the listing carries attendee addresses; delete the directory when done
+labctl pool --customer agenticburn --event "$WIB_EVENT" | sort >"$P/before.csv"
+infra/terraform/fleet/fleet.sh reconcile-pool      # dry-run: names any ghost row, deregisters nothing
+infra/terraform/fleet/fleet.sh ingest pool         # re-imports every row the pool lists, claimed ones included
+labctl pool --customer agenticburn --event "$WIB_EVENT" | sort >"$P/after.csv"
+diff "$P/before.csv" "$P/after.csv" && echo "POOL NAMES AND CLAIMS UNCHANGED"
+```
+
+- [ ] `reconcile-pool` printed `pool: all N row(s) name a live cluster`. A `GHOST` line is a row whose
+      cluster is gone; settle it as the hygiene step above says before going on.
+- [ ] `ingest pool` printed `re-ingesting N row(s)`, the same N, and exited 0 with no `ingest:<name>`
+      failure. Each row is an update, never an add (`0 added, 1 updated`).
+- [ ] `POOL NAMES AND CLAIMS UNCHANGED`. Any diff line is a cluster that left or joined the pool, or a
+      claim that moved to another address or state; stop and find out why before the doors open.
+
+```bash
+# one claimed row's terminal login, as the claim page hands it out, against its cluster's Secret.
+# CLUSTER is the presenter's claimed cluster from the step above; PROFILE is the fleet account it is in.
+CLUSTER=<claimed cluster>; PROFILE=<its account's profile>; REGION=us-west-2
+KCFG="$P/$CLUSTER.kubeconfig"
+AWS_PROFILE="$PROFILE" aws eks update-kubeconfig --kubeconfig "$KCFG" --name "$CLUSTER" \
+  --region "$REGION" --alias "$CLUSTER"
+want="$(KUBECONFIG="$KCFG" AWS_PROFILE="$PROFILE" kubectl --context "$CLUSTER" -n agent \
+  get secret terminal-auth -o jsonpath='{.data.TTYD_CREDENTIAL}' | base64 -d | sha256sum)"
+read -rsp 'terminal login from the claim card, as user:password: ' got; echo
+[[ "$(printf '%s' "$got" | sha256sum)" == "$want" ]] && echo "LOGIN MATCHES" || echo "LOGIN DIFFERS"
+unset got want
+```
+
+- [ ] Enter the presenter's `+student` address on the claim page again. It brings back the same cluster
+      (lab-platform's `claim_environment` returns an address's existing claim) and its card shows the
+      terminal login, now from the row `ingest pool` just wrote. Type that login at the prompt; it is
+      read silently and compared by digest, so neither value is printed or kept in shell history.
+- [ ] `LOGIN MATCHES`. On an attendee cluster the Secret enforces `agentic` / `agentic`, so that is what
+      the card shows. `LOGIN DIFFERS` means a claimed attendee holds a login the terminal refuses:
+      `infra/terraform/fleet/fleet.sh terminal-password <cluster>` rewrites the Secret to its role's
+      login, then rerun `ingest pool` and this check.
+- [ ] Open `/terminal/` from the card's lab link with that login and get a shell, so the check covers
+      what ttyd takes, not only what the Secret holds. Then `rm -rf "$P"`.
 
 ### 3. Attendee access at the door
 - [ ] start.agenticburn.com / QR index reachable and points at the provisioning page.
