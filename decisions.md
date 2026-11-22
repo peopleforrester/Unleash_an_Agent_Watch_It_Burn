@@ -57190,6 +57190,7 @@ real runner passes all of them.
 
 **Live check.** Skipped: only AGENTS.md, decisions.md and a test under `verify/` changed, nothing the clusters run.
 Tests: `python3 verify/test_run_tests_files.py` passed.
+
 ## 2026-11-21 · #532 · run 35880 · question 1573 asked again now the Zurich hold is over; still no attendee pool
 
 **Why again.** Run 34136 held question 1573 under hecaton#289 because Michael had put this repo on hold until the
@@ -57205,3 +57206,28 @@ names this workshop, so nothing schedules an attendee pool.
 **What it changes.** Nothing in the code: no fleet.sh change, no AWS write and no cluster read beyond the list above,
 so no live check was owed. Criterion 5, the harvester interface, stays met by run 26114's read; criteria 1 to 4 still
 need a live attendee pool. Tests: none run; only decisions.md changed.
+
+## 2026-11-22 · #532 · run 37536 · question 2345: close it as covered
+
+**Question 2345.** Should #532, the live run of `fleet.sh ingest pool`, be closed now as covered, held open until the
+next attendee fleet is up, or served by building one attendee cluster now? Run 35880 asked it (question 1573 asked
+again after the Zurich hold); its entry above is cherry-picked here from 23e33b27, which never reached staging only
+because that run ended needs-decision. `bash verify/prior-drafts.sh 532 origin/staging` called it CLEAN, an append to
+decisions.md alone.
+
+**Answer.** Close it as covered. Decided by hecaton's research under Michael's standing rules, not by Michael.
+
+**What it changes.** #532 closes with criterion 5 met (run 26114, the harvester interface read from
+provisioning-agenticburn's `scripts/harvest_terminal_credential.sh` at 3462ba274d35 and run offline) and criteria 1 to 4
+accepted as moot, as #1376's criterion 2 was under question 1847. Every part of `ingest pool` except a real
+`agent/terminal-auth` Secret read and the production import has run for real: #655's run 16719 drove the real
+`fleet.sh ingest pool` against the real labctl on a scratch database, and claims and logins held. Building a cluster
+for it would go against Michael's ruling of 2026-11-02 (hecaton#496, #809) that runs use the two clusters up and need
+no third; question 961's attendee cluster of 2026-10-31 came before that ruling and was never built. No Watch It Burn
+workshop is booked in conference-knowledge `events/registry.yaml`, so no attendee pool is coming. The live check moves
+to the next real fleet: a follow-up asks for `fleet.sh ingest pool`, and a check that a claimed row hands out the login
+its cluster's Secret enforces, on `docs/GO-LIVE-CHECKLIST.md`, alongside #1434's rewrite of that checklist's pool
+section. If a live ingest on that fleet fails, a new issue is filed for it and this one stays closed.
+
+**Live check.** Skipped: only decisions.md changed, nothing the clusters run, and no cluster is up in account
+515966504359. Tests: the prose gate, `python3 verify/prose_gate.py` against origin/staging.
