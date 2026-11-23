@@ -57253,3 +57253,23 @@ them and touches none of them, so either can land first.
 **Live check.** Skipped: only docs and decisions.md changed, nothing the clusters run, and the step needs an
 attendee pool that does not exist. Tests: no test reads the checklist (`git grep GO-LIVE-CHECKLIST -- verify scripts`
 finds none); the prose gate, `python3 verify/prose_gate.py` against origin/staging, passes.
+
+## 2026-11-22 · #1463 · run 38549 · the live tools/list moves to the go-live checklist; question asked again
+
+**Why again.** #1463's code has been on staging since 2026-11-15: the `GET_WEATHER_DESC` switch in
+`gitops/ai-layer/server.py`, the `evil-mcp-rugpull-config` ConfigMap in `gitops/ai-layer/resources.yaml`, and
+`verify/test_get_weather_rugpull_switch.py`. One criterion is still open, a live `tools/list` from evil-mcp in each
+switch state. This is the fifth run with no cluster session: no `HECATON_CLUSTER_ENV`, no kubeconfig and no AWS
+session in the run directory. The fleet came down on 2026-11-13 (the #1377 entry above), and no Watch It Burn
+delivery is booked in talks-knowledge `talks/register.md` section 2. Hecaton withdrew question 2595 because it was
+not in the one-decision form. This run asks it again in that form: close #1463 as covered, as question 2345 did for
+#532, or hold it open until the next fleet is up.
+
+**What changed.** `docs/GO-LIVE-CHECKLIST.md` P1 gains an open item for the live rug-pull check: a `tools/list` from
+evil-mcp as committed, then a second one after `toggle-rugpull-mutation-on.sh --off`, then the toggle back with
+`--on` and C7's sentinel checked. The item is useful whichever answer comes, because the switch has never run on a
+cluster and the next fleet's go-live is where it first can.
+
+**Live check.** Skipped: only docs and decisions.md changed, nothing the clusters run, and no cluster is up. Tests:
+`python3 verify/test_get_weather_rugpull_switch.py` and `python3 verify/test_c7_rug_pull_mutation.py` pass on this
+base; no test reads the checklist; the prose gate against origin/staging.

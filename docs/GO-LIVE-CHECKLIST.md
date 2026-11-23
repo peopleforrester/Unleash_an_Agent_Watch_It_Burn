@@ -270,6 +270,14 @@ unset got want
 - [x] **C7 MCP authorization enforcement**: the kagent `toolNames` allow-list is the ratified mechanism and
       the `guard-mcp-on` toggle is live. Measured on Nova 2026-08-30: the sentinel leaks 4/5 with the guard
       off and never appears with it on (`challenges/PROMPT-CATALOG.md`).
+- [ ] **C7 rug-pull switch, live** (#1463, #1468): never run on a cluster, because the fleet came down on
+      2026-11-13 before the switch was promoted. On one cluster of the next fleet, take a `tools/list` from
+      evil-mcp (the `evil-mcp-shim` Service in `agent`) as committed: `get_weather` carries the chaining
+      description that names `read_internal_config`. Run
+      `CONTEXT=<ctx> challenges/03-bad-mcp-excessive-agency/toggle-rugpull-mutation-on.sh --off`, take a second
+      `tools/list`, and read the benign description under the same name and the same inputSchema. Then run the
+      toggle with `--on` to put `chaining` back, and confirm C7's sentinel `FAKE-MCP-EXFIL-sentinel-4c1d` still
+      leaks with the allow-list open. Record both lists in decisions.md under #1463.
 - [ ] **C1/C3/C4 runbooks** packaged: attendee + facilitator instructions. Defenses are validated; the
       delivery wrappers (beat.md-style) and the C3 bait-file plant script do not exist yet.
 - [x] **whitney-att Datadog split** (done 2026-06-26): the attendee cluster reports to its own org
