@@ -57308,3 +57308,26 @@ reading in its report's criteria and summary.
 
 Live check skipped: the change touches only `facilitation/`, `PROJECT_STATE.md`, `decisions.md` and a test no
 cluster runs.
+
+## 2026-11-23 · #1319 · run 40239 · the gate's own scope function reads `ran 159 of 649 test files` for platform-baseline.yaml
+
+**Where it stood.** Staging already carries the issue's first two criteria: e69de4ef and 39614971 (run 20175) made
+`verify/run-tests.sh` run exactly the files `HECATON_TEST_FILES` names and declared `Test files:` and `Test map:` in
+AGENTS.md, and eabfd440 (#1483) added `Test selectors:`. The coordinator dropped draft `agent/1319-20239` for that
+reason. Only the third criterion, a candidate changing one config file reading `ran N of M test files`, was never
+recorded as seen. This run changes no code.
+
+**What the gate reads now.** A probe commit, made with `git commit-tree` off this run's base 19e64a1e and never put on
+a branch, appends one comment line to `platform-baseline.yaml`. Hecaton's deployed `testscope.scope` (release
+6c6c1b241d1c, the function `validate.scoped_tests` calls), given the base's AGENTS.md declaration, returned the command
+`bash verify/run-tests.sh` with `HECATON_TEST_FILES` set and the detail `ran 159 of 649 test files, those the change
+reaches through imports, conftest files and named paths (changed path: test files: platform-baseline.yaml: 159)`. The
+159 are the 86 tests the Test map's `always` rule adds for any path (they scan the whole tree) and the tests whose code,
+or a helper it runs, names the file, `test_platform_baseline.py` and `test_platform_baseline_sister.py` among them. M is
+649, every file the `Test files:` globs match, e2e ones included. Run 20175's forecast was 86 of 613; the suite and the
+map have grown since.
+
+**Tests.** `python3 verify/test_run_tests_files.py` passed: listed files run alone, `# SUITE: e2e` files are set aside,
+the unset variable runs every offline test and fails NO TESTS FOUND on an empty suite. No test changed.
+
+Live check skipped: only decisions.md changed, which no cluster runs.
