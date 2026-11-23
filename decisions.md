@@ -57308,3 +57308,160 @@ reading in its report's criteria and summary.
 
 Live check skipped: the change touches only `facilitation/`, `PROJECT_STATE.md`, `decisions.md` and a test no
 cluster runs.
+
+## 2026-11-08 · #1120 · run 18529 · The pinned Playwright Chromium and its Debian libraries come from the host artifact cache by their SHA-256
+
+**What changed.** Part of #1115. `verify/playwright_browsers.py` no longer runs `playwright install`, and
+`verify/ci_chromium_libs.py` no longer runs apt. Each archive and each package is pinned by SHA-256 in a checked-in
+lock and taken from the host artifact cache #1117 built (`verify/artifact_cache.py`), which re-checks the sum on every
+hit, goes to the network only on a miss, and fails on a mismatch without fetching again. `prior-drafts.sh 1120
+origin/staging` printed NONE, and the issue's comments name no commits, so this starts from staging `50cadee3`.
+
+**The browsers.** `verify/playwright-browsers.lock` names the Playwright pin (1.64.1) and, for each archive the dry run
+lists for `install chromium` on linux x86_64, its install directory, the zip's SHA-256 and its CDN URL: `chromium-1248`,
+`chromium_headless_shell-1248` and `ffmpeg-1013`. Playwright's CDN publishes no sum, so `python3
+verify/playwright_browsers.py lock` downloads each zip, hashes it, writes the lock and leaves the zip in the cache. A
+missing browser is now unpacked from the cached zip into a temp directory beside its install location, with each
+member's mode and its symlinks kept and any member that would land outside refused; INSTALLATION_COMPLETE is written
+last, as Playwright does, and the directory is renamed into place under an `flock` on the browsers directory, so two
+tests at once unpack it once. A location without the marker is an unfinished unpack and is replaced. The check that
+`run-e2e-tools.sh` runs first now also fails, by name, a listed browser the lock does not pin or pins at another URL,
+installed or not, so a Playwright bump without a new lock fails before any test. Unpacked from the cache, the three
+directories hold the same files as Playwright's own install in `/var/lib/hecaton/ms-playwright` (`diff -rq`), apart from
+`DEPENDENCIES_VALIDATED` and Chromium's `extensions` directory, which Chromium writes at launch, and the headless shell
+launched from them (`launched: ok 156.0.8078.4`). Playwright's `.links` file for browser cleanup is not written: this
+host sets `PLAYWRIGHT_SKIP_BROWSER_GC=1`, and nothing on Tanjiro's runner runs that cleanup.
+
+**The libraries.** `verify/chromium-libs.lock` pins 54 Debian 13 amd64 packages, each with its version, the SHA-256
+Debian's Packages index gives its .deb, a snapshot.debian.org URL and its depends. `verify/chromium_libs_lock.py write`
+reads trixie, trixie-updates and trixie-security at snapshot `20261107T000000Z`: each InRelease is checked with gpgv
+against `/usr/share/keyrings/debian-archive-keyring.gpg`, and each `main/binary-amd64/Packages.xz` comes through the
+cache by the sum that signed InRelease gives it. From the roots (the soname table's packages and the four font
+packages) it follows Pre-Depends and Depends, not Recommends, and leaves out the base system: Priority required and
+Essential packages and what they need. That base came to the 78 packages a bare `debian:trixie` image holds, exactly,
+once a virtual name met by a package already in the set (awk, by mawk) was no longer resolved to the first provider by
+name (gawk). The 54 are exactly what `apt-get -s --no-install-recommends install` of the same roots picks in that image.
+snapshot.debian.org keeps every version it has seen, so a pin does not go missing when Debian moves past it, as
+deb.debian.org's pool does at a point release; the cost is that a security update reaches the job only when the lock is
+written again. At run time `ci_chromium_libs.py` checks the host is Debian trixie amd64, reads `dpkg-query` for what the
+host has installed and provides, resolves the wanted packages through the lock's depends (a group is met by any
+alternative the host has, else its first pinned one), takes each .deb from the cache and unpacks it with `dpkg-deb -x`.
+A package the lock does not pin, a host of another release or architecture, or a .deb that does not match fails by
+name. A version constraint in a depends is not kept, since the lock and the host come from one release.
+
+**Live check, this run.** In a bare `docker.io/library/debian:trixie` container under rootless podman, as this host's
+user (`--userns=keep-id`), with uv-managed Python 3.13.16 and uv mounted read-only, the host's `/etc/ssl` mounted for
+its certificates (the bare image has none, and the first attempt failed every HTTPS fetch on that), an empty
+`WIB_ARTIFACT_CACHE` and an empty `PLAYWRIGHT_BROWSERS_PATH`: `ci_chromium_libs.py` installed the three browsers from the
+cache, found the 21 libraries missing and no fonts, unpacked 54 packages, and the shell rendered its page, in 89 s with
+57 fetch-log lines (3 zips, 54 .debs, all `ok`). A second run on the same cache with a new browsers directory and a new
+job directory did the same in 13 s and left the fetch log at 57 lines, so a warm cache fetched no browser or package.
+With that run's LD_LIBRARY_PATH and FONTCONFIG_FILE, the four Playwright tests Tanjiro failed under #1047 passed in the
+container (`FALLBACK DECK GREEN`, `All rendered guardrails-heading checks passed.`, `The iPad prompt sheet carries every
+/kubecon prompt, in order.`, `All rendered mobile-title checks passed.`), the fallback deck with PyYAML 6.0.3 as the
+workflow's venv has it, and the fetch log stayed at 57. On this host, which has every library and fonts, the
+prerequisite check `python3 verify/playwright_browsers.py` exited 0.
+
+**Tests.** `verify/test_playwright_browsers.py` now serves fixture zips from a file server on 127.0.0.1 with a lock of
+its own and a cache root outside every worktree. It covers a miss (each zip asked for once, one `ok` fetch-log line
+each, modes and a symlink kept, no temp directory left), a hit (a fresh browsers directory with the server stopped:
+no request, the log unchanged), a cached zip that no longer matches (named with both sums, no request, no browser), a
+download that does not match, a URL or directory the lock does not pin, a lock for another Playwright, a malformed or
+missing lock, a member that would escape, an unfinished location replaced, and that no script, test or workflow runs
+`playwright install`. `verify/test_ci_chromium_libs.py` drops the apt checks and adds the dpkg-query parsing, the
+resolver, the writer's closure and base on a fixture Packages index, the checked-in lock (closed, every root pinned,
+at the snapshot, in the writer's form, and every package reached from a bare host), and unpack's miss, hit and
+mismatch with fixture .debs it builds with `dpkg-deb --build`. With the cache bypassed in `install()`, 9 checks of the
+browser test fail; with the host's packages ignored in `resolve()`, the libraries test fails. `verify/test_e2e_tools_tier.py`
+gives its scratch checkouts a lock pinning its fixture listing. In `verify/scope-map.yaml`, `playwright-browsers.lock`
+joins `full` beside `playwright_browsers.py`, `test_ci_chromium_libs.py` gets the entry `scope_tests.py write` produced
+(it had none), and `test_playwright_browsers.py`'s entry gains what `write` found plus the lock and the cache helper.
+The rest of what `write` produced was other tests' existing drift and is not in this change.
+
+**Not yet run on a cluster.** Nothing here runs on a cluster: the change touches only `verify/` and a workflow comment,
+which no cluster runs, so no live cluster check applies. What only Tanjiro shows is the verify-suites e2e tools job on
+the promoted commit, whose `Chromium's libraries and fonts, unpacked for this job` step fills
+`$RUNNER_TOOL_CACHE/wib-artifacts` on its first run and, on the next, should add no `cdn.playwright.dev` or
+`snapshot.debian.org` line to that cache's `fetch.log`.
+
+No dependency was added: the writer uses gpgv, dpkg and the Debian keyring the host has, and the runtime uses dpkg-query
+and dpkg-deb, which every Debian host has.
+
+**Suite results, run 18529.** On `29b8e7bc`, with no `HECATON_BASE_SHA`, so the whole suite, and
+`PLAYWRIGHT_BROWSERS_PATH` set to a new empty directory so the tier itself had to install the browsers,
+`bash verify/run-e2e-tools.sh` printed `352 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
+`84 checks ran (the offline suite and 83 tier tests) in 19m31s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`, with `test_playwright_browsers.py`, `test_ci_chromium_libs.py`, `test_e2e_tools_tier.py` and the four
+Playwright tests green among them. The tier unpacked `chromium-1248`, `chromium_headless_shell-1248` and `ffmpeg-1013`
+into that directory from the cache. The host cache's fetch log held 6 `cdn.playwright.dev` and `snapshot.debian.org`
+lines before the run (the three zips and three Packages indexes the two lock writers fetched) and 6 after, so the tier
+made no network fetch of a browser or a library package. The 39 other lines it added are this pool's first fetch of
+the E2E tools and the pinned charts, whose cache was empty, which #1118 covers. The prose gate printed `prose gate:
+pass`. The log is `/var/lib/hecaton/runs/18529/e2e-tools-1.log`.
+
+## 2026-11-23 · #1120 · run 40196 · Run 18529's draft ported onto staging 19e64a1e, with the image's browsers from the lock
+
+**Why again.** Run 18529's draft (the two entries above, kept as it wrote them) was held by coordinator review run
+18565 as weakened tests: `test_playwright_browsers.py` had dropped the case that a browsers directory which does not
+exist yet, under a writable one, is installable, with no replacement. `bash verify/prior-drafts.sh 1120 origin/staging`
+named `origin/agent/1120-18529` with 7 drift lines, all edits in place. The draft's net change (`git diff 3c630161
+77ec7ae2`, its tip already merged with #1121's package cache) was applied three-way onto staging `19e64a1e`.
+
+**What differs from the draft.**
+
+- The dropped case is back, on the `Case` helper with the fixture lock: a browsers directory under `not-yet/` that does
+  not exist passes `check()`, and `ensure()` then makes it and unpacks both fixture browsers from the cache with no
+  request. A second case holds the other side: the same under a directory this user cannot write is named, with its
+  owner and mode, and nothing is fetched.
+- Since #1359 the CI e2e job runs no `ci_chromium_libs.py` step, and since #1188 the tier runs inside the
+  wib-e2e-tools image. So the draft's verify-suites.yml comment is dropped, the workflow stays as staging has it, and
+  `ci_chromium_libs.py`'s docstring says no workflow runs it now. Its merge keeps #1252's measured fonts: the font
+  packages it may now want (`fonts-dejavu-core`, `fonts-liberation`, `fonts-noto-color-emoji`) are all in
+  `chromium-libs.lock`, so they come from the cache too.
+- The image's browsers. `verify/e2e-image/Containerfile` ran `playwright install --with-deps chromium`, a browser fetch
+  outside the cache with no checked-in sum. It now runs `playwright install-deps chromium` (the same apt packages
+  and fonts, so the measured widths do not move), then `playwright_browsers.py install`, a new verb that is
+  `ensure()`: each zip `playwright-browsers.lock` pins comes through `artifact_cache.get_retrying` by its SHA-256 and
+  is unpacked into `/opt/ms-playwright`; then the bare prerequisite check runs, so a build with a missing or unpinned
+  browser fails. `playwright_browsers.py` and the lock join the build inputs: `e2e_image.py`'s `CONTEXT_FILES`,
+  `.dockerignore`, `build-e2e-tools-image.yml`'s path filter, and the sets `test_e2e_image.py` and
+  `test_e2e_tools_tier.py` hold. The image tag moves to `51ec299b51b3558f-2d40e5c6`.
+- `test_playwright_browsers.py`'s repo-wide check that nothing runs `playwright install` now reads the Containerfile
+  too, tells `install-deps` from `install`, and requires the image to copy the lock in and run
+  `playwright_browsers.py install`.
+- The fetch inventory, which came after the draft: `ci_chromium_libs.py`'s apt entries become one `pinned` entry,
+  `playwright_browsers.py`'s `playwright install` entry becomes the cached `get_retrying` and the lock writer's CDN
+  read, `chromium_libs_lock.py` and `playwright-browsers.lock` get entries, and the Containerfile's `playwright install`
+  entry becomes `playwright install-deps` (live, the apt archive at build time, as its other apt line is). A .deb is
+  not any kind the inventory had, so `os-package` joins `PINNED_KINDS`.
+
+**Tests, run alone.** `test_playwright_browsers.py`, `test_ci_chromium_libs.py`, `test_e2e_image.py`,
+`test_e2e_tools_tier.py`, `test_fetch_inventory.py`, `test_scope_tests.py`, `test_test_map.py`,
+`test_workflow_artifact_cache.py` and `test_no_system_temp_paths.py` passed; `fetch_inventory.py check` printed `every
+call site classed` and `scope_tests.py check` printed `0 problems`. `scope_tests.py write` added the two locks and
+`chromium_libs_lock.py` to the tests that read them. `test_e2e_tools_tier.py` first failed on its scratch image
+inputs, which lacked the two new build files; it copies them now.
+
+**The image, built here.** `bash verify/e2e-image.sh build` built `51ec299b51b3558f-2d40e5c6` with exit 0. Its build
+cache was empty, so the three zips were fetched and checked against the lock's sums there, which shows the pins still
+match Playwright's CDN. In the image, `chromium-1248`, `chromium_headless_shell-1248` and `ffmpeg-1013` each hold
+`INSTALLATION_COMPLETE`, and the headless shell prints `Google Chrome for Testing 156.0.8078.4`.
+
+**The warm fetch log.** With that image on the host, `bash verify/e2e-image.sh run` on the eight Playwright tier
+tests (`test_chat_pane_overlap_e2e.py`, `test_chat_phone_screen_e2e.py`, `test_chat_wide_font_e2e.py`,
+`test_fallback_deck_e2e.py`, `test_guardrails_heading_e2e.py`, `test_kubecon_private_banner_e2e.py`,
+`test_kubecon_prompt_sheet_e2e.py`, `test_mobile_titles_e2e.py`) printed `8 checks ran (the 8 tier tests named, no
+offline suite) in 1m25s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The host cache's `fetch.log` held 220 lines
+before and the same 220 after, none of them `cdn.playwright.dev` or `snapshot.debian.org`: no browser or library
+package was fetched. The CI e2e job runs the same command in the same image, so it fetches none either. On a host
+outside the image, `ensure()` is the draft's path, measured by run 18529 above.
+
+**Not run.** The whole tools tier and the offline suite were not run here; validation runs the tests the change
+selects. `ci_chromium_libs.py` was not run in a bare Debian container again: no workflow runs it now, and its merge with
+#1252 is held by `test_ci_chromium_libs.py`.
+
+**Live check.** None on a cluster: the change touches `verify/` and a workflow no cluster runs.
+
+**Ordering on staging.** As with #1361, the promotion gate pulls `51ec299b51b3558f-2d40e5c6` from ghcr.io, which
+exists only after `build-e2e-tools-image.yml` has pushed it from staging. A gate that starts before that push fails as
+"E2E TOOLS IMAGE MISSING"; the next gate run after the push pulls it.
