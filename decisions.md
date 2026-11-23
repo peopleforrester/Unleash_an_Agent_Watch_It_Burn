@@ -57331,3 +57331,24 @@ map have grown since.
 the unset variable runs every offline test and fails NO TESTS FOUND on an empty suite. No test changed.
 
 Live check skipped: only decisions.md changed, which no cluster runs.
+## 2026-11-23 · #441 · run 40214 · no cluster to run the E2E suite on, so the choice goes to the coordinator
+
+**Read this run.** Hecaton handed this run no cluster session: `HECATON_CLUSTER_ENV` and `KUBECONFIG` are empty, the
+run directory holds no kubeconfig or AWS session, and `aws eks list-clusters` here answers `NoCredentials`. Run 35880
+read `aws eks list-clusters` empty in us-west-2, us-east-1 and us-east-2 on 2026-11-21, after the fleet was torn down
+on the night of 2026-11-13 (the #1377 entry of 2026-11-15). The talk register in talks-knowledge (section 2, read at
+68ca0e52) lists all three events as delivered and names no later one, so no fleet is coming.
+
+**Earlier drafts.** `bash verify/prior-drafts.sh 441 origin/staging` printed START on `origin/agent/441-15747`
+(6066317d, which renames `verify/test_backups_promotion_live.py` out of run-e2e.sh's glob and points the suite at
+watch-it-burn-private). The coordinator dropped that draft on the issue, so this run ports nothing from it.
+`verify/test_backups_promotion_live.py` is still in the glob on staging; whether it leaves the glob is part of the
+same choice, since run-e2e.sh cannot be green with it in.
+
+**What it changes.** Nothing in the code. A run never creates a cluster (Michael's ruling of 2026-11-02, hecaton#496,
+#809), so #441 cannot move here. The run asks the coordinator one question, in the shape question 2345 gave #532:
+close #441 as moot with its live run moved to `docs/GO-LIVE-CHECKLIST.md` for the next fleet, hold it until a fleet is
+up, or build one attendee cluster for it. The issue body gains its acceptance criteria through an escalated
+`gh issue edit`.
+
+**Live check.** Skipped: only decisions.md changed, and no cluster is up in account 515966504359.
