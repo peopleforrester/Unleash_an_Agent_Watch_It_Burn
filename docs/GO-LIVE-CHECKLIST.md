@@ -178,6 +178,34 @@ uv run --with playwright python verify/browser-smoke.py hexhen-zelda sorcerizo-g
       come up in one ~30-min window, not five serial batches.
 - [ ] A real dry-run before the day: at minimum 50 in one account end-to-end, ideally a 10-cluster
       cross-account smoke.
+- [ ] **Run the live E2E suite green on the first attendee cluster the fleet brings up** (#441, question 2715).
+      `verify/run-e2e.sh` has never run green: no run could, because runs bring no cluster up and the fleet
+      was torn down on 2026-11-13. It runs run-all.sh's beats on the attendee cluster (Beat 1 flips Kyverno
+      between Audit and Enforce, Beat 2 drives the live guard-proxy), every `# SUITE: e2e` check in `verify/`
+      (the kubectl, helm and node renders, the live Datadog checks), the doc-link fetches, and Backstage's
+      footprint and Playwright tests. Run it days before the doors open, not on the morning, since the beats
+      change the cluster while they run. Each prerequisite it lacks is named before anything runs. Until
+      `verify/test_backups_promotion_live.py` leaves its glob (the follow-up of #441), that one check needs the
+      standbys only `backups.py up` creates and fails without them; read it apart from the rest.
+
+```bash
+# an isolated kubeconfig per cluster; no context is read from ~/.kube/config
+CLUSTER=<first attendee cluster>; PROFILE=<its account's profile>; REGION=us-west-2
+K="$(mktemp -d)"
+AWS_PROFILE="$PROFILE" aws eks update-kubeconfig --kubeconfig "$K/e2e.kubeconfig" --name "$CLUSTER" \
+  --region "$REGION" --alias "$CLUSTER"
+for c in watch-it-burn-community watch-it-burn-private; do   # both are in accen-dev
+  AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig "$K/e2e.kubeconfig" --name "$c" \
+    --region "$REGION" --alias "$c"
+done
+KUBECONFIG="$K/e2e.kubeconfig" CONTEXT="$CLUSTER" COMMUNITY_CONTEXT=watch-it-burn-community \
+  PRIVATE_CONTEXT=watch-it-burn-private IAM_PIPELINE_PROFILE=accen-dev IAM_PIPELINE_REGION="$REGION" \
+  DRIFT_PROFILE="$PROFILE" ATTENDEE_CLUSTER="$CLUSTER" bash verify/run-e2e.sh; echo "exit=$?"
+```
+
+- [ ] `exit=0`. Fix each check that fails in the repo, record the run's output and the fixes in decisions.md,
+      and leave the cluster as found (run-all.sh's beats put Kyverno and the guard-proxy back). Then
+      `rm -rf "$K"`.
 
 ### 2. The real attendee pool (the committed pool.csv is a placeholder)
 - [ ] Per-attendee AWS keys: scoped IAM users/keys for ~250 attendees (or a per-cluster-scoped scheme).

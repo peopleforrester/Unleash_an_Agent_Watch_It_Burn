@@ -57352,3 +57352,25 @@ up, or build one attendee cluster for it. The issue body gains its acceptance cr
 `gh issue edit`.
 
 **Live check.** Skipped: only decisions.md changed, and no cluster is up in account 515966504359.
+
+## 2026-11-23 · #441 · run 40406 · question 2715: close as moot, move the run to the go-live checklist
+
+**Question 2715.** Should #441, running the live end-to-end suite `verify/run-e2e.sh` green on a cluster, be closed
+as moot, held until a cluster is up, or served by building one attendee cluster now? Run 40214 asked it (its entry
+above): no cluster is up in account 515966504359 since the 2026-11-13 teardown, a run never creates one, and no
+Watch It Burn workshop is booked.
+
+**Answer.** Close as moot, move the run to the go-live checklist. Decided by hecaton's research under Michael's
+standing rules, not by Michael.
+
+**What it changes.** `docs/GO-LIVE-CHECKLIST.md` section 1 gains a step after the fleet dry-run: run
+`verify/run-e2e.sh` on the first attendee cluster the next fleet brings up, with an isolated kubeconfig and every
+context named (CONTEXT, COMMUNITY_CONTEXT, PRIVATE_CONTEXT, the IAM pipeline and drift profiles), days before the
+doors open since run-all.sh's beats change the cluster, then fix what fails and record it here. The step names
+`verify/test_backups_promotion_live.py` as the one check that fails without `backups.py up`'s standbys until it
+leaves the suite's glob; a follow-up of #441 asks for that move and a test holding it, which the coordinator's drop
+of draft 6066317d left as a separate call. #441 closes with its three criteria accepted as moot: the suite was not
+run, no failure was fixed, and no cluster was used. If the next fleet's run fails, a new issue is filed for it.
+
+**Live check.** Skipped: only `docs/GO-LIVE-CHECKLIST.md` and decisions.md changed, nothing the clusters run, and no
+cluster is up. Tests: the prose gate against origin/staging.
