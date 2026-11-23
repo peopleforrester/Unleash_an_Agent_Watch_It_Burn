@@ -18,6 +18,7 @@ rules:
       - verify/package_cache.py
       - verify/python.lock
       - verify/playwright_browsers.py
+      - verify/playwright-browsers.lock
       - verify/bootstrap_chart.py
       - verify/collector_render.py
       - .gitmodules
@@ -330,6 +331,7 @@ rules:
       - verify/artifact-cache.sh
       - verify/artifact_cache.py
       - verify/package_cache.py
+      - verify/playwright-browsers.lock
       - verify/playwright_browsers.py
       - verify/python.lock
       - verify/run-e2e-tools.sh
@@ -420,6 +422,7 @@ rules:
       - verify/e2e-tools.lock
       - verify/failover_drill.py
       - verify/package_cache.py
+      - verify/playwright-browsers.lock
       - verify/playwright_browsers.py
       - verify/python.lock
       - verify/test_failover_drill.py
@@ -1249,6 +1252,7 @@ rules:
       - verify/no_cloud.py
       - verify/nova_replies.py
       - verify/package_cache.py
+      - verify/playwright-browsers.lock
       - verify/playwright_browsers.py
       - verify/python.lock
       - verify/registry_allowlist.py
@@ -1686,8 +1690,11 @@ rules:
       - scripts/audience-qr.py
       - verify/artifact-cache.sh
       - verify/artifact_cache.py
+      - verify/chromium-libs.lock
+      - verify/chromium_libs_lock.py
       - verify/ci_chromium_libs.py
       - verify/package_cache.py
+      - verify/playwright-browsers.lock
       - verify/playwright_browsers.py
       - verify/python.lock
     tests:
@@ -3335,6 +3342,7 @@ rules:
       - verify/artifact_cache.py
       - verify/browser-smoke.py
       - verify/package_cache.py
+      - verify/playwright-browsers.lock
       - verify/playwright_browsers.py
       - verify/python.lock
     tests:
@@ -5362,6 +5370,7 @@ rules:
       - verify/kubecon_probe.py
       - verify/nova_replies.py
       - verify/package_cache.py
+      - verify/playwright-browsers.lock
       - verify/playwright_browsers.py
       - verify/python.lock
       - verify/registry_allowlist.py
@@ -6476,13 +6485,20 @@ rules:
       - verify/test_platform_floor.sh
   - name: test_playwright_browsers.py
     paths:
+      - .github/workflows
+      - .github/workflows/**
+      - .github/workflows/**/*.yml
+      - .github/workflows/**/*.yml/**
       - facilitation/kubecon-na-2026-audience-qr.svg
       - gitops/ai-layer/web/burritbot.html
       - gitops/ai-layer/web/event.js
       - images/llm-guard
       - images/llm-guard/**
       - images/workshop-mcp/Dockerfile
-      - scripts/audience-qr.py
+      - scripts
+      - scripts/**
+      - scripts/**/*
+      - scripts/**/*/**
       - verify
       - verify/**
       - verify/**/*.py
@@ -6794,6 +6810,7 @@ rules:
       - verify/no-cloud.sh
       - verify/no_cloud.py
       - verify/package_cache.py
+      - verify/playwright-browsers.lock
       - verify/playwright_browsers.py
       - verify/python.lock
       - verify/registry_allowlist.py
@@ -6878,6 +6895,7 @@ rules:
       - verify/artifact-cache.sh
       - verify/artifact_cache.py
       - verify/package_cache.py
+      - verify/playwright-browsers.lock
       - verify/playwright_browsers.py
       - verify/prompts_wall_suite.py
       - verify/python.lock
@@ -8021,6 +8039,7 @@ rules:
       - verify/kubecon_probe.py
       - verify/nova_replies.py
       - verify/package_cache.py
+      - verify/playwright-browsers.lock
       - verify/playwright_browsers.py
       - verify/python.lock
       - verify/registry_allowlist.py
@@ -8500,6 +8519,7 @@ rules:
       - verify/artifact-cache.sh
       - verify/artifact_cache.py
       - verify/package_cache.py
+      - verify/playwright-browsers.lock
       - verify/playwright_browsers.py
       - verify/probe_pod.py
       - verify/python.lock
@@ -8996,6 +9016,7 @@ rules:
       - verify/artifact-cache.sh
       - verify/artifact_cache.py
       - verify/package_cache.py
+      - verify/playwright-browsers.lock
       - verify/playwright_browsers.py
       - verify/python.lock
       - verify/test_weather_feed_e2e.py

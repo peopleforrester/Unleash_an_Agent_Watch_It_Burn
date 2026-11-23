@@ -29,6 +29,8 @@ on:
       - 'verify/python.lock'
       - 'verify/package_cache.py'
       - 'verify/artifact_cache.py'
+      - 'verify/playwright_browsers.py'
+      - 'verify/playwright-browsers.lock'
       - 'scripts/ghcr_version_tag.py'
       - '.github/workflows/build-e2e-tools-image.yml'
 

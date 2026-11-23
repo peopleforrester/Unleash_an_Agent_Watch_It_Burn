@@ -13,8 +13,9 @@ is gone, and what runs them on the host copies them out of the image with `verif
 The runner's own checks run as inside the image: WIB_E2E_TOOLS names a scratch directory holding the fixture lock's
 tools.txt and binaries, as verify/e2e-image/install.sh writes them. run-e2e-tools.sh stops on an image of another lock
 or a missing prerequisite before any test runs, and that includes Playwright browsers that are missing from a
-directory `playwright install` cannot write (#658), with `uv` stubbed to list them. `curl` is a stub that logs any
-call and fails, and the artifact cache's fetch log is read back, so a run that reached for a download is caught.
+directory this user cannot write (#658), with `uv` stubbed to list them and a lock of its own pinning them (#1120).
+`curl` is a stub that logs any call and fails, and the artifact cache's fetch log is read back, so a run that reached
+for a download is caught.
 
 run-e2e.sh, the by-hand live suite, takes the same binaries in its prerequisite check (#585): it runs
 `e2e-image.sh tools verify/.tools`, real, in a scratch copy with a podman stand-in whose image is the scratch tool
@@ -333,18 +334,22 @@ def scratch(tmp: pathlib.Path, lock: str, scripts: tuple[pathlib.Path, ...]) -> 
     vdir.mkdir(parents=True, exist_ok=True)
     helpers = ((VERIFY / "tf_plugin_cache.py", VERIFY / "artifact_cache.py", VERIFY / "e2e_image.py")
                if RUNNER in scripts else ()) + \
-        ((VERIFY / "e2e_image.py",) if IMAGE_SH in scripts else ())
+        ((VERIFY / "e2e_image.py",) if IMAGE_SH in scripts else ()) + \
+        ((VERIFY / "artifact_cache.py",) if BROWSERS in scripts else ())
     for s in scripts + tuple(dict.fromkeys(h for h in helpers if h not in scripts)):
         shutil.copy2(s, vdir / s.name)
     if BROWSERS in scripts:
         # playwright_browsers.py runs playwright through package_cache.py's `run playwright --` prefix (#1121). The
         # stand-in makes that prefix the stubbed `uv` alone, which answers the dry run, so no environment is built.
         (vdir / "package_cache.py").write_text(STUB_PACKAGE_CACHE)
+        # playwright_browsers.py fails a listed browser its lock does not pin (#1120); this pins uv_listing()'s two.
+        (vdir / "playwright-browsers.lock").write_text(BROWSER_LOCK)
     (vdir / "e2e-tools.lock").write_text(lock)
     if RUNNER in scripts or IMAGE_SH in scripts:
         # e2e_image.py names the image it wants from the lock and the build inputs, so those come too.
         shutil.copytree(VERIFY / "e2e-image", vdir / "e2e-image", dirs_exist_ok=True)
-        for name in ("python.lock", "package_cache.py", "artifact_cache.py", ".dockerignore"):
+        for name in ("python.lock", "package_cache.py", "artifact_cache.py", "playwright_browsers.py",
+                     "playwright-browsers.lock", ".dockerignore"):
             if not (vdir / name).exists():
                 shutil.copy2(VERIFY / name, vdir / name)
         image_tools(tmp, lock)
@@ -415,12 +420,17 @@ NODE22 = '#!/bin/sh\ncase "$1" in -p) echo 22 ;; --version) echo v22.11.0 ;; esa
 PREREQS = {"jq": "#!/bin/sh\nexit 0\n", "openssl": "#!/bin/sh\nexit 0\n", "xz": "#!/bin/sh\nexit 0\n"}
 
 
+LISTED_DIRS = ("chromium-9", "ffmpeg-9")
+# The scratch checkout's PLAYWRIGHT is the package_cache.py stand-in's pin, so the lock names that one.
+BROWSER_LOCK = ("playwright " + re.search(r'"playwright==([^"]+)"', STUB_PACKAGE_CACHE).group(1)
+                + "\n" + "".join(f"{d} {'0' * 64} https://fixture.invalid/{d}\n" for d in LISTED_DIRS))
+
+
 def uv_listing(browsers: pathlib.Path, installed: bool) -> str:
     """A uv whose `playwright install --dry-run chromium` lists two browsers under browsers, installed or not."""
     browsers.mkdir(parents=True, exist_ok=True)
     listing = ""
-    for name, d in (("Chrome for Testing 1 (playwright chromium v9)", "chromium-9"),
-                    ("FFmpeg (playwright ffmpeg v9)", "ffmpeg-9")):
+    for name, d in zip(("Chrome for Testing 1 (playwright chromium v9)", "FFmpeg (playwright ffmpeg v9)"), LISTED_DIRS):
         if installed:
             (browsers / d).mkdir(exist_ok=True)
             (browsers / d / "INSTALLATION_COMPLETE").touch()

@@ -37,8 +37,10 @@ CONTAINERFILE = IMAGE_DIR / "Containerfile"
 DOCKERIGNORE = VERIFY / ".dockerignore"
 REPOSITORY = "ghcr.io/peopleforrester/wib-e2e-tools"
 # What the build reads from its context (verify/), besides e2e-image/ itself: the Python pins the image installs PyYAML
-# and Playwright from, through the repo's own hash-checked installer (#1121).
-CONTEXT_FILES = ("python.lock", "package_cache.py", "artifact_cache.py")
+# and Playwright from, through the repo's own hash-checked installer (#1121), and the browser lock and the module that
+# unpacks Playwright's Chromium from it (#1120).
+CONTEXT_FILES = ("python.lock", "package_cache.py", "artifact_cache.py", "playwright_browsers.py",
+                 "playwright-browsers.lock")
 TOOL_LINE = re.compile(r"^RUN /usr/local/lib/wib-e2e/install\.sh tool (.*)$")
 
 

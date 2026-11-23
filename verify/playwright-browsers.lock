@@ -1,0 +1,12 @@
+# ABOUTME: The browser archives the pinned Playwright lists for `install chromium` on linux x86_64, each pinned by the
+# ABOUTME: SHA-256 of its zip (#1120). playwright_browsers.ensure() unpacks a missing one from the host artifact cache.
+#
+# The first data line names the Playwright pin the archives belong to. Then one archive a line: the install directory
+# Playwright reads under PLAYWRIGHT_BROWSERS_PATH, the SHA-256 of the zip, and the download URL the dry run names.
+# Written by `python3 verify/playwright_browsers.py lock`, which downloads each zip and hashes it, since Playwright's
+# CDN publishes no sum. A browser the dry run lists that is not here, or is here at another URL, fails the tier's
+# prerequisite check by name; nothing falls back to `playwright install`.
+playwright 1.64.1
+chromium-1248 43fd31766c7533a02dda2ded5ad50c2f861cd5400be7509c0abad71129f79d79 https://cdn.playwright.dev/builds/cft/156.0.8078.4/linux64/chrome-linux64.zip
+ffmpeg-1013 ee986434d158f74fb5d9c5ff1092026ceedb63f324fe90b5be89460926b7b679 https://cdn.playwright.dev/dbazure/download/playwright/builds/ffmpeg/1013/ffmpeg-linux.zip
+chromium_headless_shell-1248 c3e50596aef52c58f8fda3c6b3411c33d34c88b177b3ed1c2243359fd3b8ba20 https://cdn.playwright.dev/builds/cft/156.0.8078.4/linux64/chrome-headless-shell-linux64.zip

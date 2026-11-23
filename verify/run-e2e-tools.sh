@@ -152,8 +152,9 @@ if [[ "${need_tools}" -eq 1 ]] && command -v node >/dev/null 2>&1; then
         missing+=("node $(node --version 2>/dev/null) is on PATH; the node harnesses run on Node 24 or later")
     fi
 fi
-# The Playwright tests' browsers, checked once (#658). `playwright install` locks the browsers directory even when
-# nothing is missing, and where that directory is not writable it retries for about 8 minutes per test before it fails.
+# The Playwright tests' browsers, checked once (#658): each pinned in playwright-browsers.lock (#1120), and installed
+# or in a directory this user can unpack it into from the artifact cache. `playwright install` is never run: it locks
+# the browsers directory even when nothing is missing, and where that is not writable it retried for about 8 minutes.
 if [[ "${need_tools}" -eq 1 ]] && command -v uv >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
     if ! pw="$(python3 "${SCRIPT_DIR}/playwright_browsers.py" 2>&1)"; then
         while IFS= read -r line; do

@@ -111,9 +111,11 @@ check("its first part is the lock's SHA-256", tag.startswith(lock_sha[:16] + "-"
 check("the reference is ghcr.io/peopleforrester/wib-e2e-tools:<tag>",
       e2e_image.ref() == f"ghcr.io/peopleforrester/wib-e2e-tools:{tag}")
 inputs = {p.relative_to(HERE).as_posix() for p in e2e_image.build_inputs()}
-check("the build inputs are e2e-image/, the three Python pin files and .dockerignore",
+check("the build inputs are e2e-image/, the three Python pin files, the browser lock and its module (#1120), and "
+      ".dockerignore",
       inputs == {"e2e-image/Containerfile", "e2e-image/install.sh", "e2e-image/gh", "python.lock",
-                 "package_cache.py", "artifact_cache.py", ".dockerignore"}, str(sorted(inputs)))
+                 "package_cache.py", "artifact_cache.py", "playwright_browsers.py", "playwright-browsers.lock",
+                 ".dockerignore"}, str(sorted(inputs)))
 ignore = e2e_image.DOCKERIGNORE.read_text(encoding="utf-8")
 check(".dockerignore lets in exactly those", e2e_image.dockerignore_problems(ignore) == [])
 check(".dockerignore that also lets in .tools fails", e2e_image.dockerignore_problems(ignore + "!.tools/\n") != [])

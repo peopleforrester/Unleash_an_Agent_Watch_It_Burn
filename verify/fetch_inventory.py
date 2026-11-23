@@ -109,7 +109,7 @@ CLASSES = {
     "none": ("why",),
 }
 PINNED_KINDS = ("tool", "terraform-provider", "helm-chart", "browser", "python-package", "node-package",
-                "container-image", "git-commit", "release-file", "cache-fill")
+                "container-image", "git-commit", "release-file", "cache-fill", "os-package")
 LIVE_KINDS = ("cluster", "lab-endpoint", "registry", "saas-api", "upstream-index", "github", "public-web")
 
 # Drift on a file fails once the file was last changed under this rule; owed() reads it in each commit's copy of this

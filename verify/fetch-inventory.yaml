@@ -7,8 +7,8 @@
 # of its file that matches it, and `lines` is how many lines the entry claims, so a new call site always changes a count.
 #
 #   pinned    kind (tool, terraform-provider, helm-chart, browser, python-package, node-package, container-image,
-#             git-commit, release-file, cache-fill), pin (the file holding the pin), cached (true when the fetch goes through the
-#             host artifact cache of #1117 today)
+#             git-commit, release-file, cache-fill, os-package), pin (the file holding the pin), cached (true when the fetch goes
+#             through the host artifact cache of #1117 today)
 #   live      kind (cluster, lab-endpoint, registry, saas-api, upstream-index, github, public-web), target
 #   loopback  why: a server on 127.0.0.1, or a repository on this host, that the test made itself
 #   none      why: the line names the command and runs none
@@ -389,6 +389,22 @@ sites:
     lines: 1
     class: none
     why: the usage comment
+  verify/chromium_libs_lock.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: upstream-index
+    target: snapshot.debian.org's InRelease for trixie, trixie-updates and trixie-security at the lock's snapshot, each checked with gpgv, read when `chromium_libs_lock.py write` rewrites chromium-libs.lock
+  - match: artifact_cache\.get_retrying
+    lines: 1
+    class: pinned
+    kind: release-file
+    pin: the SHA-256 the gpgv-checked InRelease gives each suite's Packages.xz, read to write chromium-libs.lock
+    cached: true
+  - match: .
+    lines: 1
+    class: none
+    why: the docstring naming the apt-get install the lock's closure follows
   verify/desk_coc_live.py:
   - match: urlopen
     lines: 2
@@ -407,6 +423,11 @@ sites:
     lines: 1
     class: none
     why: comments, docstrings or messages that name the command; none runs it
+  verify/playwright-browsers.lock:
+  - match: .
+    lines: 1
+    class: none
+    why: a comment saying nothing falls back to `playwright install`
   verify/stage_switch_run.py:
   - match: /controls
     lines: 1
@@ -531,15 +552,16 @@ sites:
     pin: verify/ci-uv.sh (UV_SHA256, uv's release archive from Astral's mirror, in place of astral-sh/setup-uv, #1331)
     cached: true
   verify/ci_chromium_libs.py:
-  - match: '"-q", "(update|download)"'
-    lines: 2
-    class: live
-    kind: upstream-index
-    target: Debian's archive at deb.debian.org for the runner's own release, as it stands when verify-suites.yml runs (the package lists, then the .debs the shell lacks, each checked by apt against the signed index)
+  - match: artifact_cache\.get_retrying
+    lines: 1
+    class: pinned
+    kind: os-package
+    pin: verify/chromium-libs.lock (each Debian 13 .deb by the SHA-256 the signed Packages index gives it, at a snapshot.debian.org URL, #1120)
+    cached: true
   - match: .
-    lines: 6
+    lines: 2
     class: none
-    why: '`playwright install --dry-run` lists where the browsers go and downloads nothing; `apt-get -s install` resolves against the lists the update fetched and downloads nothing; the rest are docstrings and messages naming the command'
+    why: '`playwright install --dry-run` lists where the browsers go and downloads nothing; the other is the docstring naming the apt-get the script no longer runs'
   verify/datadog-orgs.sh:
   - match: api.datadoghq.com
     lines: 2
@@ -588,16 +610,15 @@ sites:
     kind: tool
     pin: verify/e2e-tools.lock (crane's row, its SHA-256 checked by install.sh at build)
     cached: false
-  - match: playwright install
+  - match: -- playwright install-deps
     lines: 1
-    class: pinned
-    kind: browser
-    pin: verify/python.lock (the playwright release, which names its Chromium build; --with-deps installs its libraries from the apt archive)
-    cached: false
+    class: live
+    kind: upstream-index
+    target: Debian's apt archive for the base image's trixie release as it stands at build time (the libraries and fonts the pinned Playwright names for Chromium); the browsers themselves come from playwright-browsers.lock through playwright_browsers.py install (#1120)
   - match: .
-    lines: 2
+    lines: 4
     class: none
-    why: a comment naming curl, and uv venv, which makes an environment from the Python installed above and fetches nothing
+    why: comments naming curl, `playwright install-deps` and `playwright install`, and uv venv, which makes an environment from the Python installed above and fetches nothing
   verify/e2e-image/install.sh:
   - match: curl -fsSL
     lines: 1
@@ -792,14 +813,19 @@ sites:
     kind: cluster
     target: a service on a workshop cluster, reached through a kubectl port-forward on 127.0.0.1
   verify/playwright_browsers.py:
-  - match: '"install", \*BROWSERS\]'
+  - match: artifact_cache\.get_retrying
     lines: 1
     class: pinned
     kind: browser
-    pin: verify/python.lock (the playwright release, which names its Chromium build)
-    cached: false
+    pin: verify/playwright-browsers.lock (each zip the pinned Playwright lists for chromium, by its SHA-256, #1120)
+    cached: true
+  - match: artifact_cache\.get\(sha, b\.url
+    lines: 1
+    class: live
+    kind: upstream-index
+    target: Playwright's CDN (cdn.playwright.dev), each zip the dry run names, downloaded as it stands to hash it when `playwright_browsers.py lock` writes playwright-browsers.lock
   - match: .
-    lines: 10
+    lines: 7
     class: none
     why: docstrings and messages, and `playwright install --dry-run`, which downloads nothing
   verify/presenter_ticket_live.py:
@@ -1180,11 +1206,6 @@ sites:
     lines: 4
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
-  verify/test_ci_chromium_libs.py:
-  - match: .
-    lines: 2
-    class: none
-    why: messages on the apt output the test feeds ci_chromium_libs.py as text; nothing here runs apt
   verify/test_collector_act2_redaction_e2e.py:
   - match: urlopen
     lines: 1
@@ -1685,7 +1706,7 @@ sites:
     cached: true
   verify/test_playwright_browsers.py:
   - match: .
-    lines: 12
+    lines: 13
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   verify/test_preflight_boundary.sh:

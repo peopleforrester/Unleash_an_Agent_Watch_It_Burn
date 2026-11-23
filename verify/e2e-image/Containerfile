@@ -50,15 +50,20 @@ RUN /usr/local/lib/wib-e2e/install.sh tool weaver v0.24.2 e5508316149b01cac325bd
 RUN /usr/local/lib/wib-e2e/install.sh tool agentgateway v1.7.0 1b2fc01a2de29ca113bbb6258b5cae7b1eb3c724071c09d687a449132f2f42f8 https://github.com/agentgateway/agentgateway/releases/download/v1.7.0/agentgateway-linux-amd64 -
 RUN /usr/local/lib/wib-e2e/install.sh tool caddy v2.11.4 527fbf917c39189a1e3b31d34fa955601680b2d5c8055d2a87b8b9588dec7bb9 https://github.com/caddyserver/caddy/releases/download/v2.11.4/caddy_2.11.4_linux_amd64.tar.gz caddy
 
-# PyYAML for the suites' python3, and Playwright's Chromium with the libraries and fonts it needs, each from
-# python.lock through verify/package_cache.py's hash-checked, offline install (#1121). The build's artifact root is
-# thrown away; at run time the host's is mounted.
-COPY python.lock package_cache.py artifact_cache.py /tmp/wib-build/
+# PyYAML for the suites' python3, and Playwright, each from python.lock through verify/package_cache.py's hash-checked,
+# offline install (#1121). `playwright install-deps chromium` puts in the Debian libraries and fonts the pinned
+# Playwright names for Chromium, through apt, as the line above does for the image's own tools. The browsers are not
+# fetched by `playwright install`: playwright_browsers.py takes each zip playwright-browsers.lock pins from the artifact
+# cache, checked against its SHA-256, and unpacks it into PLAYWRIGHT_BROWSERS_PATH (#1120). The build's artifact root
+# is thrown away; at run time the host's is mounted.
+COPY python.lock package_cache.py artifact_cache.py playwright_browsers.py playwright-browsers.lock /tmp/wib-build/
 RUN export WIB_ARTIFACT_CACHE=/tmp/wib-build/cache \
     && uv venv --no-config --python 3.13 /opt/wib-e2e-tools/py \
     && python3_=/opt/wib-e2e-tools/py/bin/python \
     && "${python3_}" /tmp/wib-build/package_cache.py install pyyaml --python "${python3_}" \
-    && "${python3_}" /tmp/wib-build/package_cache.py run playwright -- playwright install --with-deps chromium \
+    && "${python3_}" /tmp/wib-build/package_cache.py run playwright -- playwright install-deps chromium \
+    && "${python3_}" /tmp/wib-build/playwright_browsers.py install \
+    && "${python3_}" /tmp/wib-build/playwright_browsers.py \
     && rm -rf /tmp/wib-build /var/lib/apt/lists/* \
     && chmod -R a+rX /opt/ms-playwright
 
