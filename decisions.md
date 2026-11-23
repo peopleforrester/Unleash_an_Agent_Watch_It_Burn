@@ -57284,3 +57284,27 @@ before the fix; `python3 verify/test_seg3_timing.py` passes after it, and the pr
 
 Live check skipped: the change touches only `facilitation/`, `PROJECT_STATE.md`, `decisions.md` and a test no
 cluster runs.
+
+## 2026-11-23 · #616 · run 39174 · M7 ported from run 24631; the reading still waits on hecaton#803
+
+Run 24631's three commits (f3a29c0c, fa130cd1, 81a7d046) never reached staging: its report ended partial, and
+hecaton then marked the run failed on its `tests` gate without quoting the output. `verify/prior-drafts.sh 616
+origin/staging` read the draft CLEAN against staging 6f4b4f1e (staging only appended to decisions.md), so this run
+cherry-picked all three unchanged, as d5c82b6b, ad76d290 and 8a55c818, the entries above included.
+
+The tests that read the changed paths pass on this base. Run with `HECATON_TEST_FILES`: the 72 offline tests that
+spell `kubecon-na-2026-run-of-show.md`, `PROJECT_STATE.md` or `test_seg3_timing`, with test_scope_tests.py and
+test_test_map.py, all green; and the 64 further offline tests that spell `decisions.md`, all green. The E2E-suite
+files among them were set aside by `run-tests.sh` as usual. So the earlier gate failure does not reproduce here; the
+draft's base was 2f65237b, 19 commits behind the staging that run 24631's gate read.
+
+The reading stays `kubecon-na-burritobot = 1`, evidence
+https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/blob/6aaaf09aab531c20087271c9f3ae88bbb1f923eb/transcripts/2026-11-12-kubecon-na-talk-burritobot-said-lets-dance.txt.
+Hecaton's deployed `report_errors` (release 6c6c1b241d1c, `loops/milestones.py`) still refuses a done report on a
+spec milestone with no `readings`, and still refuses a `readings` entry whose KR is not `active` ("KR ... is done").
+The talks grouping's okr notes of 2026-11-23 list `kubecon-na-burritobot` as done and say #616 closes through the
+spec's rule with its reading line. So this run ends partial again with its wait on hecaton#803, and carries the
+reading in its report's criteria and summary.
+
+Live check skipped: the change touches only `facilitation/`, `PROJECT_STATE.md`, `decisions.md` and a test no
+cluster runs.
