@@ -8818,6 +8818,7 @@ rules:
       - docs/DESIGN-GLANCE.md
       - docs/RUN-OF-SHOW-2026-08.md
       - docs/admin-console.md
+      - facilitation/kubecon-na-2026-run-of-show.md
       - gitops
       - gitops/**
       - gitops/**/*.yaml
@@ -8854,6 +8855,8 @@ rules:
       - observability-idp/**
       - policies
       - policies/**
+      - railway
+      - railway/**
       - scripts/harvest_cluster_access.sh
       - scripts/harvest_cluster_access.sh/**
       - scripts/harvest_terminal_credential.sh

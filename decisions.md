@@ -57374,3 +57374,23 @@ run, no failure was fixed, and no cluster was used. If the next fleet's run fail
 
 **Live check.** Skipped: only `docs/GO-LIVE-CHECKLIST.md` and decisions.md changed, nothing the clusters run, and no
 cluster is up. Tests: the prose gate against origin/staging.
+
+## 2026-11-24 · #1485 · run 40921 · the failover drill leaves run-e2e.sh's glob
+
+**What.** `verify/test_backups_promotion_live.py` is now `verify/backups-promotion-live.py`, with no `# SUITE: e2e`
+line. It needs the 15 standbys of both waves, clusters only `backups.py up` creates, and it moves attackme and
+burritobot-private for a few minutes each, so in run-e2e.sh's `test_*` glob it was red on every suite run made
+without them. It is run by hand in the run of show's rehearsal, like `local-inference-live.py`. The run of show,
+PROJECT_STATE.md, `verify/fetch-inventory.yaml` and run-e2e.sh's header name it by the new name, and the go-live
+checklist's live E2E step (added by run 40406 for #441) now says the drill is out of the suite instead of "until it
+leaves its glob". `verify/test_verify_harness.py` holds the move: the drill is the non-`test_` file, and no `test_*`
+file under `verify/` carries its old name or its check of all 17 consoles.
+
+**What differs from draft 6066317d** (agent/441-15747). The rename, the file's header and the check in
+`test_verify_harness.py` are ported. The draft's other half, running the suite on watch-it-burn-private and its admin-profile check, is not:
+question 2715 moved the run to the next fleet's first attendee cluster, which the checklist already names. The
+inventory entry is new, since `fetch-inventory.yaml` (#1116) came after the draft.
+
+**Live check.** Skipped: the change is a rename under `verify/` that no cluster runs, its offline test, and docs.
+Tests: `test_verify_harness.py`, `test_scope_tests.py`, `test_test_map.py`, `test_fetch_inventory.py`, all pass; the
+prose gate passes against origin/staging.

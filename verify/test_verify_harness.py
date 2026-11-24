@@ -69,6 +69,18 @@ check(f"the render and live checks are in the E2E suite ({', '.join(e2e)})",
 renderers = [p.name for p in VERIFY.glob("test_*.py") if p.name not in e2e
              and any(f'["{t}",' in p.read_text() for t in ("kubectl", "helm", "node"))]
 check(f"no light-suite test runs kubectl, helm or node ({', '.join(renderers) or 'none'})", not renderers)
+# The failover drill needs the 15 standbys only `backups.py up` creates and moves the room's hostnames, so it is run by
+# hand and kept out of run-e2e.sh's test_* glob, or the suite could never be green on the one cluster CONTEXT names
+# (#441, #1485). Matched on the drill's own check of all 17 consoles too, so a copy under a test_* name is caught. The
+# anchor is built in two halves so this file does not match it.
+drill = VERIFY / "backups-promotion-live.py"
+anchor = "all 17 consoles " + "pass (two roster clusters, 15 standbys)"
+globbed = sorted(p.name for p in [*VERIFY.glob("test_*.py"), *VERIFY.glob("test_*.sh")]
+                 if p.name.startswith("test_backups_promotion") or anchor in p.read_text())
+check(f"the failover drill is backups-promotion-live.py, out of run-e2e.sh's test_* glob ({', '.join(globbed) or 'none in it'})",
+      drill.is_file() and anchor in drill.read_text() and not globbed)
+check("the run of show's rehearsal runs the drill by its new name",
+      "python3 verify/backups-promotion-live.py" in (REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text())
 for sh in sorted(VERIFY.glob("*.sh")):
     ok = subprocess.run(["bash", "-n", str(sh)], capture_output=True).returncode == 0
     check(f"bash -n clean: {sh.name}", ok)

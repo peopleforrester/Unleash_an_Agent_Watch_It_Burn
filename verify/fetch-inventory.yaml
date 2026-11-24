@@ -435,6 +435,12 @@ sites:
     lines: 1
     class: none
     why: the tool check's list of commands it needs
+  verify/backups-promotion-live.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: lab-endpoint
+    target: a workshop host's /healthz
   verify/beat-02.sh:
   - match: in_cluster_curl curl
     lines: 2
@@ -1099,12 +1105,6 @@ sites:
     lines: 1
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
-  verify/test_backups_promotion_live.py:
-  - match: urlopen
-    lines: 1
-    class: live
-    kind: lab-endpoint
-    target: a workshop host's /healthz
   verify/test_burritobot_cluster_live.py:
   - match: .
     lines: 1

@@ -184,9 +184,9 @@ uv run --with playwright python verify/browser-smoke.py hexhen-zelda sorcerizo-g
       between Audit and Enforce, Beat 2 drives the live guard-proxy), every `# SUITE: e2e` check in `verify/`
       (the kubectl, helm and node renders, the live Datadog checks), the doc-link fetches, and Backstage's
       footprint and Playwright tests. Run it days before the doors open, not on the morning, since the beats
-      change the cluster while they run. Each prerequisite it lacks is named before anything runs. Until
-      `verify/test_backups_promotion_live.py` leaves its glob (the follow-up of #441), that one check needs the
-      standbys only `backups.py up` creates and fails without them; read it apart from the rest.
+      change the cluster while they run. Each prerequisite it lacks is named before anything runs. The
+      failover drill is not in it: `verify/backups-promotion-live.py` needs the 15 standbys only `backups.py up`
+      creates, so it left the suite's `test_*` glob (#1485) and runs by hand in the run of show's rehearsal.
 
 ```bash
 # an isolated kubeconfig per cluster; no context is read from ~/.kube/config

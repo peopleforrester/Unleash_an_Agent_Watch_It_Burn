@@ -6,6 +6,9 @@
 #            DRIFT_PROFILE=<aws-profile> ATTENDEE_CLUSTER=<cluster> COMMUNITY_CONTEXT=<kube-context> \
 #            PRIVATE_CONTEXT=<kube-context> [NAMESPACE=agent] bash verify/run-e2e.sh
 #
+# The failover drill of #643 is not in the test_* glob below: it needs the 15 standbys only `backups.py up` creates,
+# so it is backups-promotion-live.py, run by hand in the run of show's rehearsal (#441, #1485).
+#
 # The KubeCon probe's Challenge 3 beat (test_kubecon_c3_live.py, #807) runs on the live public bot, not the attendee
 # cluster, so it needs COMMUNITY_CONTEXT, the kube-context of the community cluster (attackme). It spends one model
 # call there and removes the Joker it lands.
