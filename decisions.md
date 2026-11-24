@@ -57308,3 +57308,25 @@ reading in its report's criteria and summary.
 
 Live check skipped: the change touches only `facilitation/`, `PROJECT_STATE.md`, `decisions.md` and a test no
 cluster runs.
+
+## 2026-11-24 · #616 · run 41157 · question 2659: fix hecaton to accept the reading
+
+**Question 2659.** How should milestone M7 of the BurritoBot talk close, given that the key result it reports on,
+`kubecon-na-burritobot`, is already marked done in okrs.yaml? Run 39230 asked it after run 39223's done report was
+refused by hecaton's report gate with "readings/0: KR kubecon-na-burritobot is done". The other option was to close
+#616 by hand without a reading.
+
+**Answer.** Fix hecaton to accept the reading. Decided by hecaton's research under Michael's standing rules, not by
+Michael. The research found the fix already made in hecaton#803 (closed 2026-11-23): `resolve()` in hecaton's
+`loops/milestones.py` reads a KR whose status is active or done, and still refuses a dropped KR or one okrs.yaml
+lacks. The report gate and the closing-comment reader both use it.
+
+**What it changes.** Nothing in this repo: M7's records were already on staging (transcript 6aaaf09a; d5c82b6b,
+ad76d290, 8a55c818, 19e64a1e). This run reports #616 done with its reading in `readings`:
+`kubecon-na-burritobot = 1`, evidence
+https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/blob/6aaaf09aab531c20087271c9f3ae88bbb1f923eb/transcripts/2026-11-12-kubecon-na-talk-burritobot-said-lets-dance.txt.
+The KR stays done; the reading is recorded as the milestone's close. The hecaton copy on this run's lane (release
+6c6c1b241d1c) still has the old check, so if the gate that reads this report runs that release, it refuses the report
+again until the fix is deployed there.
+
+Live check skipped: only decisions.md changed, nothing the clusters run.
